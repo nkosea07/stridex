@@ -34,6 +34,10 @@ This checks:
 
 The shared contract publishes these anonymous spectator paths:
 
+- Current consumer: the public spectator web experience.
+- Future consumers may reuse these keys if they expose the same anonymous spectator surface.
+- Responses on these endpoints must remain limited to spectator-safe, public-safe fields only.
+
 - `publicRaceHub`: `/public/races/:raceId/hub`
 - `publicRaceLive`: `/public/races/:raceId/tracking/live`
 - `publicRaceSearch`: `/public/races/:raceId/tracking/search`
