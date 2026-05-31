@@ -9,24 +9,47 @@ import { PublicLeaderboard } from '@/components/public/PublicLeaderboard'
 import { PublicAthleteCard } from '@/components/public/PublicAthleteCard'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import type { PublicRaceHubLoaderData } from '@/router/publicLoaders'
 
-export function PublicRaceHubPage() {
-  const { raceId } = useParams<{ raceId: string }>()
+interface PublicRaceHubPageProps {
+  raceId?: string
+  initialData?: PublicRaceHubLoaderData
+}
+
+export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRaceHubPageProps = {}) {
+  const params = useParams<{ raceId: string }>()
+  const raceId = routeRaceId ?? params.raceId
   const location = useLocation()
   const searchSectionRef = useRef<HTMLElement | null>(null)
-  const [hub, setHub] = useState<PublicRaceHub | null>(null)
-  const [athletes, setAthletes] = useState<PublicAthleteSummary[]>([])
-  const [liveAthletes, setLiveAthletes] = useState<PublicAthleteSummary[]>([])
-  const [liveCount, setLiveCount] = useState(0)
+  const hasInitialData = initialData?.raceId === raceId
+  const [hub, setHub] = useState<PublicRaceHub | null>(initialData?.hub ?? null)
+  const [athletes, setAthletes] = useState<PublicAthleteSummary[]>(initialData?.liveAthletes ?? [])
+  const [liveAthletes, setLiveAthletes] = useState<PublicAthleteSummary[]>(initialData?.liveAthletes ?? [])
+  const [liveCount, setLiveCount] = useState(initialData?.liveAthletes.length ?? 0)
   const [query, setQuery] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(!hasInitialData)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const trimmedQuery = query.trim()
   const returnTo = `${location.pathname}${location.search}${location.hash}`
 
   useEffect(() => {
+    if (!hasInitialData || !initialData) return
+
+    setHub(initialData.hub)
+    setLiveAthletes(initialData.liveAthletes)
+    setLiveCount(initialData.liveAthletes.length)
+    setAthletes(initialData.liveAthletes)
+    setIsLoading(false)
+  }, [hasInitialData, initialData])
+
+  useEffect(() => {
     if (!raceId) return
+
+    if (hasInitialData) {
+      setIsLoading(false)
+      return
+    }
 
     let cancelled = false
 
@@ -58,7 +81,7 @@ export function PublicRaceHubPage() {
     return () => {
       cancelled = true
     }
-  }, [raceId])
+  }, [hasInitialData, raceId])
 
   useEffect(() => {
     if (!raceId || isLoading) return

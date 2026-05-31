@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import type { PublicAthleteTrackingLoaderData } from '@/router/publicLoaders'
 
 function formatPredictedFinish(value?: string) {
   if (!value) return '---'
@@ -31,14 +32,35 @@ function statusTone(status: string) {
   }
 }
 
-export function PublicAthleteTrackingPage() {
-  const { raceId, participantId } = useParams<{ raceId: string; participantId: string }>()
+interface PublicAthleteTrackingPageProps {
+  raceId?: string
+  participantId?: string
+  initialData?: PublicAthleteTrackingLoaderData
+}
+
+export function PublicAthleteTrackingPage({
+  raceId: routeRaceId,
+  participantId: routeParticipantId,
+  initialData,
+}: PublicAthleteTrackingPageProps = {}) {
+  const params = useParams<{ raceId: string; participantId: string }>()
+  const raceId = routeRaceId ?? params.raceId
+  const participantId = routeParticipantId ?? params.participantId
   const location = useLocation()
   const requestIdRef = useRef(0)
-  const [tracking, setTracking] = useState<PublicAthleteTracking | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const hasInitialData = initialData?.raceId === raceId && initialData?.participantId === participantId
+  const [tracking, setTracking] = useState<PublicAthleteTracking | null>(initialData?.tracking ?? null)
+  const [isLoading, setIsLoading] = useState(!hasInitialData)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const returnTo = `${location.pathname}${location.search}${location.hash}`
+
+  useEffect(() => {
+    if (!hasInitialData || !initialData) return
+
+    requestIdRef.current += 1
+    setTracking(initialData.tracking)
+    setIsLoading(false)
+  }, [hasInitialData, initialData])
 
   const loadTracking = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (!raceId || !participantId) return
@@ -74,12 +96,17 @@ export function PublicAthleteTrackingPage() {
   useEffect(() => {
     if (!raceId || !participantId) return
 
+    if (hasInitialData) {
+      setIsLoading(false)
+      return
+    }
+
     void loadTracking('initial')
 
     return () => {
       requestIdRef.current += 1
     }
-  }, [loadTracking, participantId, raceId])
+  }, [hasInitialData, loadTracking, participantId, raceId])
 
   const recentSplits = useMemo(() => tracking?.splits.slice(-6).reverse() ?? [], [tracking])
 
