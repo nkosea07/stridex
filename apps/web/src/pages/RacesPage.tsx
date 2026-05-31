@@ -197,7 +197,7 @@ export function RacesPage() {
           <Card
             key={race.id}
             className="group cursor-pointer transition-all hover:border-primary/50"
-            onClick={() => navigate(`/races/${race.id}`)}
+            onClick={() => navigate(`/admin/races/${race.id}`)}
           >
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
@@ -219,7 +219,7 @@ export function RacesPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/races/${race.id}`) }}>
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/admin/races/${race.id}`) }}>
                       <Eye className="mr-2 h-4 w-4" />
                       View Details
                     </DropdownMenuItem>
