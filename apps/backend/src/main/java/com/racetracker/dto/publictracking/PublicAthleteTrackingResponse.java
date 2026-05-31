@@ -1,7 +1,6 @@
 package com.racetracker.dto.publictracking;
 
 import com.racetracker.dto.tracking.CheckpointSplitDto;
-import com.racetracker.dto.tracking.ParticipantTrackPointDto;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -23,5 +22,4 @@ public class PublicAthleteTrackingResponse {
     private String predictedFinishTime;
     private BigDecimal distanceRemaining;
     private List<CheckpointSplitDto> splits = new ArrayList<>();
-    private List<ParticipantTrackPointDto> locations = new ArrayList<>();
 }

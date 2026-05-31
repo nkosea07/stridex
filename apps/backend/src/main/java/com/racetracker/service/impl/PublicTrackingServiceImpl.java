@@ -4,7 +4,6 @@ import com.racetracker.dto.publictracking.PublicAthleteTrackingResponse;
 import com.racetracker.dto.publictracking.PublicRaceAthleteSummaryResponse;
 import com.racetracker.dto.publictracking.PublicRaceHubResponse;
 import com.racetracker.dto.tracking.CheckpointSplitDto;
-import com.racetracker.dto.tracking.ParticipantTrackPointDto;
 import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.model.CheckpointRecord;
 import com.racetracker.model.GpsLocation;
@@ -24,16 +23,22 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 public class PublicTrackingServiceImpl implements PublicTrackingService {
 
     private static final int HUB_LEADERBOARD_LIMIT = 10;
+    private static final EnumSet<Participant.ParticipantStatus> PUBLICLY_RELEVANT_STATUSES = EnumSet.of(
+        Participant.ParticipantStatus.STARTED,
+        Participant.ParticipantStatus.FINISHED,
+        Participant.ParticipantStatus.DNF,
+        Participant.ParticipantStatus.DISQUALIFIED
+    );
 
     private final RaceRepository raceRepository;
     private final ParticipantRepository participantRepository;
@@ -80,7 +85,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
             ? participantRepository.searchPublicByRaceId(raceId, query.trim())
             : participantRepository.findByRaceId(raceId);
 
-        return buildAthleteSummaries(raceId, participants);
+        return buildAthleteSummaries(raceId, participants, !hasText(query));
     }
 
     @Override
@@ -90,7 +95,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
         Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
 
-        PublicRaceAthleteSummaryResponse summary = buildAthleteSummaries(raceId, List.of(participant)).stream()
+        PublicRaceAthleteSummaryResponse summary = buildAthleteSummaries(raceId, List.of(participant), false).stream()
             .findFirst()
             .orElseGet(() -> buildAthleteSummary(participant, null, List.of(), raceId));
 
@@ -107,16 +112,6 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
 
         List<CheckpointRecord> records = checkpointRecordRepository.findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participantId, raceId);
         response.setSplits(buildSplits(participant, records));
-        response.setLocations(
-            gpsLocationRepository.findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participantId, raceId).stream()
-                .map(location -> new ParticipantTrackPointDto(
-                    location.getLatitude(),
-                    location.getLongitude(),
-                    location.getRecordedAt() != null ? location.getRecordedAt().toString() : null
-                ))
-                .toList()
-        );
-
         return response;
     }
 
@@ -138,7 +133,11 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
         return race;
     }
 
-    private List<PublicRaceAthleteSummaryResponse> buildAthleteSummaries(UUID raceId, List<Participant> participants) {
+    private List<PublicRaceAthleteSummaryResponse> buildAthleteSummaries(
+        UUID raceId,
+        List<Participant> participants,
+        boolean liveOnly
+    ) {
         if (participants.isEmpty()) {
             return List.of();
         }
@@ -155,6 +154,9 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
                 .findTopByParticipantIdAndRaceIdOrderByRecordedAtDesc(participant.getId(), raceId)
                 .orElse(null);
             List<CheckpointRecord> records = recordsByParticipant.getOrDefault(participant.getId(), List.of());
+            if (liveOnly && !isPubliclyRelevant(participant, latest, records)) {
+                continue;
+            }
             summaries.add(buildAthleteSummary(participant, latest, records, raceId));
         }
 
@@ -163,6 +165,12 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
                 .comparing((PublicRaceAthleteSummaryResponse row) -> row.getDistanceRemaining() == null ? BigDecimal.valueOf(Double.MAX_VALUE) : row.getDistanceRemaining())
                 .thenComparing(row -> row.getParticipantName() == null ? "" : row.getParticipantName()))
             .toList();
+    }
+
+    private boolean isPubliclyRelevant(Participant participant, GpsLocation latest, List<CheckpointRecord> records) {
+        return latest != null
+            || !records.isEmpty()
+            || (participant.getStatus() != null && PUBLICLY_RELEVANT_STATUSES.contains(participant.getStatus()));
     }
 
     private PublicRaceAthleteSummaryResponse buildAthleteSummary(
