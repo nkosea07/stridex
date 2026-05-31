@@ -7,7 +7,6 @@ import com.racetracker.dto.tracking.CheckpointSplitDto;
 import com.racetracker.security.JwtAuthenticationFilter;
 import com.racetracker.service.PublicTrackingService;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -15,7 +14,6 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -56,9 +54,6 @@ class PublicTrackingControllerWebMvcTest {
         response.setLeaderboard(List.of(athlete));
 
         when(publicTrackingService.getRaceHub(raceId)).thenReturn(response);
-
-        Method getHub = PublicTrackingController.class.getMethod("getHub", UUID.class);
-        org.assertj.core.api.Assertions.assertThat(getHub.isAnnotationPresent(PreAuthorize.class)).isFalse();
 
         mockMvc.perform(get("/v1/public/races/{raceId}/hub", raceId))
             .andExpect(status().isOk())

@@ -58,4 +58,10 @@ class PublicTrackingControllerSecurityTest {
         mockMvc.perform(get("/v1/public/races/{raceId}/hub", raceId))
             .andExpect(status().isOk());
     }
+
+    @Test
+    void liveTrackingRoute_stillRejectsAnonymousAccessWhenFiltersAreEnabled() throws Exception {
+        mockMvc.perform(get("/v1/races/{raceId}/tracking/live", UUID.randomUUID()))
+            .andExpect(status().isForbidden());
+    }
 }

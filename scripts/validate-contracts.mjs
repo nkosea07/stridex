@@ -132,8 +132,8 @@ assert(
   'packages/contracts/index.js mobile.defaultApiRoot is out of sync with contract.json.',
 );
 assert(
-  backendSecurity.includes('apiPrefix + "/public/races/**"'),
-  'SecurityConfig must allow anonymous versioned public spectator routes via apiPrefix + "/public/races/**".',
+  /requestMatchers\s*\(\s*HttpMethod\.GET\s*,\s*apiPrefix \+ "\/public\/races\/\*\*"\s*\)/.test(backendSecurity),
+  'SecurityConfig must allow anonymous versioned public spectator routes with a GET-scoped apiPrefix matcher.',
 );
 
 if (errors.length > 0) {
