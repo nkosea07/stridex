@@ -55,6 +55,12 @@ Web surface for both public spectators and authenticated race operations:
 - Mapbox GL JS
 - Recharts
 
+Modernization status:
+- `apps/web` remains a Vite-based app, now wired through React Router route modules.
+- The first modernization target is the public spectator web surface, especially `/race/:raceId` and `/race/:raceId/athlete/:participantId`.
+- Route modules live under `apps/web/app/` and continue to render most UI from `apps/web/src/`.
+- Deeper prerender and SSR work is intentionally deferred to a later plan.
+
 ### Mobile App (React Native Expo)
 **Location:** `apps/mobile/`
 
@@ -199,6 +205,16 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```bash
 cd apps/web
 pnpm dev
+```
+
+Current web runtime commands:
+```bash
+cd apps/web
+pnpm dev
+pnpm typegen
+pnpm test
+pnpm build
+pnpm preview
 ```
 
 ### Mobile Development

@@ -68,6 +68,14 @@ The public spectator path is now:
 
 Keep this phase intentionally narrow. Premium mobile fan experiences and RFID/device ingest remain later-phase work and are out of scope here.
 
+### Web Modernization Direction
+
+The web app is moving toward React Router route-managed data loading so routing, loader lifecycles, and revalidation for the public spectator surface are owned by route modules instead of ad hoc page bootstrapping. This keeps data requirements close to the route boundary and makes the public web surface easier to evolve without rewriting the rest of `apps/web`.
+
+Current route modules live in `apps/web/app/`, with most reusable UI, page composition, API clients, and shared logic still living in `apps/web/src/`.
+
+This foundation does not include deeper prerender or SSR rollout, broad admin/operator data-loading refactors, or non-web modernization work. Those remain deferred to later modernization plans.
+
 ---
 
 ## Backend Implementation Tasks
