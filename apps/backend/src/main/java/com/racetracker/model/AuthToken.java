@@ -26,7 +26,7 @@ public class AuthToken {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false, unique = true, length = 255)
+    @Column(nullable = false, unique = true, length = 1024)
     private String token;
 
     @Enumerated(EnumType.STRING)
@@ -46,6 +46,7 @@ public class AuthToken {
 
     public enum TokenType {
         EMAIL_VERIFICATION,
-        PASSWORD_RESET
+        PASSWORD_RESET,
+        REFRESH
     }
 }

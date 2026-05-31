@@ -86,7 +86,7 @@ public class AuthServiceImpl implements AuthService {
         User saved = userRepository.save(user);
         issueEmailVerificationToken(saved);
 
-        return buildAuthResponse(saved);
+        return buildVerificationRequiredResponse(saved);
     }
 
     @Override
@@ -98,6 +98,7 @@ public class AuthServiceImpl implements AuthService {
         if (user != null) {
             ensureAccountNotLocked(user);
             ensureRateLimitNotExceeded(user);
+            ensureEmailVerified(user);
         }
 
         try {
@@ -117,37 +118,48 @@ public class AuthServiceImpl implements AuthService {
         }
 
         resetFailedLoginState(user);
-        return buildAuthResponse(user);
+        return buildAuthenticatedResponse(user);
     }
 
     @Override
+    @Transactional
     public AuthResponse refreshToken(String refreshToken) {
         if (!jwtService.hasTokenType(refreshToken, JwtService.TOKEN_TYPE_REFRESH)) {
             throw new UnauthorizedException("Invalid refresh token");
         }
 
-        String email;
-        try {
-            email = jwtService.extractUsername(refreshToken);
-        } catch (Exception ex) {
+        AuthToken storedToken = authTokenRepository.findByTokenAndTokenTypeAndConsumedAtIsNull(
+                refreshToken,
+                AuthToken.TokenType.REFRESH
+            )
+            .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
+
+        if (storedToken.getExpiresAt().isBefore(OffsetDateTime.now())) {
+            storedToken.setConsumedAt(OffsetDateTime.now());
+            authTokenRepository.save(storedToken);
             throw new UnauthorizedException("Invalid refresh token");
         }
 
-        User user = userRepository.findByEmailIgnoreCase(email)
-            .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
+        User user = storedToken.getUser();
+        ensureUserCanReceiveSession(user);
 
-        org.springframework.security.core.userdetails.UserDetails userDetails =
-            new org.springframework.security.core.userdetails.User(
-                user.getEmail(),
-                user.getPasswordHash(),
-                java.util.List.of()
-            );
+        org.springframework.security.core.userdetails.UserDetails userDetails = new org.springframework.security.core.userdetails.User(
+            user.getEmail(),
+            user.getPasswordHash(),
+            Boolean.TRUE.equals(user.getIsActive()) && Boolean.TRUE.equals(user.getEmailVerified()),
+            true,
+            true,
+            true,
+            java.util.List.of()
+        );
 
         if (!jwtService.isTokenValid(refreshToken, userDetails)) {
             throw new UnauthorizedException("Invalid refresh token");
         }
 
-        return buildAuthResponse(user);
+        storedToken.setConsumedAt(OffsetDateTime.now());
+        authTokenRepository.save(storedToken);
+        return buildAuthenticatedResponse(user);
     }
 
     @Override
@@ -170,6 +182,7 @@ public class AuthServiceImpl implements AuthService {
         User user = token.getUser();
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         resetFailedLoginState(user);
+        invalidateOutstandingTokens(user.getId(), AuthToken.TokenType.REFRESH);
         userRepository.save(user);
     }
 
@@ -228,6 +241,15 @@ public class AuthServiceImpl implements AuthService {
             .build();
     }
 
+    private AuthToken createRefreshToken(User user, String refreshToken) {
+        return AuthToken.builder()
+            .user(user)
+            .token(refreshToken)
+            .tokenType(AuthToken.TokenType.REFRESH)
+            .expiresAt(jwtService.extractExpiration(refreshToken))
+            .build();
+    }
+
     private AuthToken consumeValidToken(String rawToken, AuthToken.TokenType expectedType) {
         AuthToken authToken = authTokenRepository.findByToken(rawToken)
             .orElseThrow(() -> new UnauthorizedException("Invalid or expired token"));
@@ -256,6 +278,18 @@ public class AuthServiceImpl implements AuthService {
         }
         if (!active.isEmpty()) {
             authTokenRepository.saveAll(active);
+        }
+    }
+
+    private void ensureEmailVerified(User user) {
+        if (!Boolean.TRUE.equals(user.getEmailVerified())) {
+            throw new UnauthorizedException("Email verification required");
+        }
+    }
+
+    private void ensureUserCanReceiveSession(User user) {
+        if (!Boolean.TRUE.equals(user.getIsActive()) || !Boolean.TRUE.equals(user.getEmailVerified())) {
+            throw new UnauthorizedException("Invalid refresh token");
         }
     }
 
@@ -331,10 +365,24 @@ public class AuthServiceImpl implements AuthService {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 
-    private AuthResponse buildAuthResponse(User user) {
+    private AuthResponse buildVerificationRequiredResponse(User user) {
+        return AuthResponse.builder()
+            .token(null)
+            .refreshToken(null)
+            .requiresEmailVerification(true)
+            .user(userMapper.toDto(user))
+            .build();
+    }
+
+    private AuthResponse buildAuthenticatedResponse(User user) {
+        invalidateOutstandingTokens(user.getId(), AuthToken.TokenType.REFRESH);
+        String refreshToken = jwtService.generateRefreshToken(user);
+        authTokenRepository.save(createRefreshToken(user, refreshToken));
+
         return AuthResponse.builder()
             .token(jwtService.generateAccessToken(user))
-            .refreshToken(jwtService.generateRefreshToken(user))
+            .refreshToken(refreshToken)
+            .requiresEmailVerification(false)
             .user(userMapper.toDto(user))
             .build();
     }

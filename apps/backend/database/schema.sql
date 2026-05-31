@@ -39,12 +39,14 @@ CREATE TABLE refresh_tokens (
                                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TYPE auth_token_type AS ENUM ('EMAIL_VERIFICATION', 'PASSWORD_RESET');
+CREATE TYPE auth_token_type AS ENUM ('EMAIL_VERIFICATION', 'PASSWORD_RESET', 'REFRESH');
+
+ALTER TYPE auth_token_type ADD VALUE IF NOT EXISTS 'REFRESH';
 
 CREATE TABLE auth_tokens (
                              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                              user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-                             token VARCHAR(255) UNIQUE NOT NULL,
+                             token VARCHAR(1024) UNIQUE NOT NULL,
                              token_type auth_token_type NOT NULL,
                              expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
                              consumed_at TIMESTAMP WITH TIME ZONE,
