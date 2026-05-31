@@ -21,6 +21,19 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
     List<Participant> findByRaceId(UUID raceId);
 
     @EntityGraph(attributePaths = {"race", "category", "user"})
+    @Query("""
+        select p
+        from Participant p
+        where p.race.id = :raceId
+          and (
+            lower(concat(coalesce(p.firstName, ''), ' ', coalesce(p.lastName, ''))) like lower(concat('%', :query, '%'))
+            or lower(coalesce(p.bibNumber, '')) like lower(concat('%', :query, '%'))
+          )
+        order by p.bibNumber asc, p.registeredAt asc
+    """)
+    List<Participant> searchPublicByRaceId(@Param("raceId") UUID raceId, @Param("query") String query);
+
+    @EntityGraph(attributePaths = {"race", "category", "user"})
     Optional<Participant> findByRaceIdAndId(UUID raceId, UUID id);
 
     @EntityGraph(attributePaths = {"race", "category", "user"})
