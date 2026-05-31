@@ -21,6 +21,31 @@ const getLiveAthletesMock = vi.mocked(publicTrackingApi.getLiveAthletes)
 const searchAthletesMock = vi.mocked(publicTrackingApi.searchAthletes)
 const getAthleteTrackingMock = vi.mocked(publicTrackingApi.getAthleteTracking)
 
+type PublicRaceLoaderArgs = Parameters<typeof publicRaceRouteModule.clientLoader>[0]
+type PublicAthleteLoaderArgs = Parameters<typeof publicAthleteRouteModule.clientLoader>[0]
+
+function createRaceLoaderArgs(params: PublicRaceLoaderArgs['params']): PublicRaceLoaderArgs {
+  return {
+    params,
+    request: new Request(`http://localhost/race/${params.raceId}`),
+    context: undefined as never,
+    serverLoader: async () => undefined,
+    url: new URL(`http://localhost/race/${params.raceId}`),
+    pattern: '/race/:raceId',
+  } as PublicRaceLoaderArgs
+}
+
+function createAthleteLoaderArgs(params: PublicAthleteLoaderArgs['params']): PublicAthleteLoaderArgs {
+  return {
+    params,
+    request: new Request(`http://localhost/race/${params.raceId}/athlete/${params.participantId}`),
+    context: undefined as never,
+    serverLoader: async () => undefined,
+    url: new URL(`http://localhost/race/${params.raceId}/athlete/${params.participantId}`),
+    pattern: '/race/:raceId/athlete/:participantId',
+  } as PublicAthleteLoaderArgs
+}
+
 describe('public route loaders', () => {
   afterEach(() => {
     vi.clearAllMocks()
@@ -33,7 +58,9 @@ describe('public route loaders', () => {
         request: new Request('http://localhost/race'),
         context: undefined as never,
         serverLoader: async () => undefined,
-      }),
+        url: new URL('http://localhost/race'),
+        pattern: '/race/:raceId',
+      } as unknown as PublicRaceLoaderArgs),
     ).rejects.toMatchObject({
       status: 404,
       statusText: '',
@@ -47,7 +74,9 @@ describe('public route loaders', () => {
         request: new Request('http://localhost/race/demo/athlete'),
         context: undefined as never,
         serverLoader: async () => undefined,
-      }),
+        url: new URL('http://localhost/race/demo/athlete'),
+        pattern: '/race/:raceId/athlete/:participantId',
+      } as unknown as PublicAthleteLoaderArgs),
     ).rejects.toMatchObject({
       status: 404,
       statusText: '',
@@ -78,12 +107,7 @@ describe('public route loaders', () => {
       },
     ])
 
-    const initialData = await publicRaceRouteModule.clientLoader({
-      params: { raceId: 'demo' },
-      request: new Request('http://localhost/race/demo'),
-      context: undefined as never,
-      serverLoader: async () => undefined,
-    })
+    const initialData = await publicRaceRouteModule.clientLoader(createRaceLoaderArgs({ raceId: 'demo' }))
 
     render(
       <MemoryRouter initialEntries={['/race/demo']}>
@@ -122,12 +146,9 @@ describe('public route loaders', () => {
       splits: [],
     })
 
-    const initialData = await publicAthleteRouteModule.clientLoader({
-      params: { raceId: 'demo', participantId: 'athlete-1' },
-      request: new Request('http://localhost/race/demo/athlete/athlete-1'),
-      context: undefined as never,
-      serverLoader: async () => undefined,
-    })
+    const initialData = await publicAthleteRouteModule.clientLoader(
+      createAthleteLoaderArgs({ raceId: 'demo', participantId: 'athlete-1' }),
+    )
 
     render(
       <MemoryRouter initialEntries={['/race/demo/athlete/athlete-1']}>
