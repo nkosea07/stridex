@@ -8,6 +8,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
+function getSafePublicReturnPath(value: unknown) {
+  if (typeof value !== 'string') return undefined
+  if (!value.startsWith('/') || value.startsWith('//')) return undefined
+
+  const path = value.split(/[?#]/, 1)[0]
+  const isRaceHub = /^\/race\/[^/]+$/.test(path)
+  const isAthletePage = /^\/race\/[^/]+\/athlete\/[^/]+$/.test(path)
+
+  return isRaceHub || isAthletePage ? value : undefined
+}
+
 export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -17,9 +28,7 @@ export function LoginPage() {
   const location = useLocation()
   const locationState = location.state as { from?: string; reason?: string } | null
   const unauthorizedReason = locationState?.reason === 'unauthorized'
-  const returnTo = typeof locationState?.from === 'string' && locationState.from.startsWith('/') && !locationState.from.startsWith('//')
-    ? locationState.from
-    : undefined
+  const returnTo = getSafePublicReturnPath(locationState?.from)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

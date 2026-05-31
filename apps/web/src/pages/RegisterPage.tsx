@@ -8,6 +8,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { authApi } from '@/lib/api'
 import { toast } from 'sonner'
 
+function getSafePublicReturnPath(value: unknown) {
+  if (typeof value !== 'string') return undefined
+  if (!value.startsWith('/') || value.startsWith('//')) return undefined
+
+  const path = value.split(/[?#]/, 1)[0]
+  const isRaceHub = /^\/race\/[^/]+$/.test(path)
+  const isAthletePage = /^\/race\/[^/]+\/athlete\/[^/]+$/.test(path)
+
+  return isRaceHub || isAthletePage ? value : undefined
+}
+
 export function RegisterPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -26,9 +37,7 @@ export function RegisterPage() {
   }
 
   const fromState = (location.state as { from?: string } | null)?.from
-  const returnTo = typeof fromState === 'string' && fromState.startsWith('/') && !fromState.startsWith('//')
-    ? fromState
-    : undefined
+  const returnTo = getSafePublicReturnPath(fromState)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
