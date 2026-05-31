@@ -5,14 +5,13 @@ import routes from '../../app/routes'
 import Root from '../../app/root'
 import type { RouteConfigEntry } from '@react-router/dev/routes'
 import type { RouteObject } from 'react-router-dom'
-import type { ComponentType } from 'react'
 
 const routeModules = import.meta.glob('../../app/**/*.tsx', { eager: true }) as Record<
   string,
-  { default?: ComponentType }
+  { default?: RouteObject['Component'] }
 >
 
-function getRouteModule(file: string) {
+function getRouteModule(file: string): NonNullable<RouteObject['Component']> {
   const routeModule = routeModules[`../../app/${file}`]
 
   if (!routeModule?.default) {
@@ -23,12 +22,23 @@ function getRouteModule(file: string) {
 }
 
 function toRouteObjects(config: RouteConfigEntry[]): RouteObject[] {
-  return config.map((entry) => ({
-    path: entry.path,
-    index: entry.index,
-    Component: getRouteModule(entry.file),
-    children: entry.children ? toRouteObjects(entry.children) : undefined,
-  }))
+  return config.map((entry) => {
+    const Component = getRouteModule(entry.file)
+    const children = entry.children ? toRouteObjects(entry.children) : undefined
+
+    if (entry.index) {
+      return {
+        index: true,
+        Component,
+      }
+    }
+
+    return {
+      path: entry.path,
+      Component,
+      children,
+    }
+  })
 }
 
 const runtimeRoutes: RouteObject[] = [
