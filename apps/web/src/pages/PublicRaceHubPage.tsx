@@ -39,9 +39,11 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
     setHub(initialData.hub)
     setLiveAthletes(initialData.liveAthletes)
     setLiveCount(initialData.liveAthletes.length)
-    setAthletes(initialData.liveAthletes)
+    if (!trimmedQuery) {
+      setAthletes(initialData.liveAthletes)
+    }
     setIsLoading(false)
-  }, [hasInitialData, initialData])
+  }, [hasInitialData, initialData, trimmedQuery])
 
   useEffect(() => {
     if (!raceId) return

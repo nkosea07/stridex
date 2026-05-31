@@ -26,6 +26,34 @@ describe('public route loaders', () => {
     vi.clearAllMocks()
   })
 
+  it('throws a 404 response when the race hub loader is missing race params', async () => {
+    await expect(
+      publicRaceRouteModule.clientLoader({
+        params: {},
+        request: new Request('http://localhost/race'),
+        context: undefined as never,
+        serverLoader: async () => undefined,
+      }),
+    ).rejects.toMatchObject({
+      status: 404,
+      statusText: '',
+    })
+  })
+
+  it('throws a 404 response when the athlete loader is missing route params', async () => {
+    await expect(
+      publicAthleteRouteModule.clientLoader({
+        params: { raceId: 'demo' },
+        request: new Request('http://localhost/race/demo/athlete'),
+        context: undefined as never,
+        serverLoader: async () => undefined,
+      }),
+    ).rejects.toMatchObject({
+      status: 404,
+      statusText: '',
+    })
+  })
+
   it('loads race hub data through the route loader without duplicate initial transport calls', async () => {
     expect(typeof publicRaceRouteModule.clientLoader).toBe('function')
 
