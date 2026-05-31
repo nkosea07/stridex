@@ -14,6 +14,10 @@ import { API_CONTRACT, getVersionedApiBase } from '@race-tracker/contracts';
 
 const API_ROOT = process.env.EXPO_PUBLIC_API_URL || API_CONTRACT.mobile.defaultApiRoot;
 const API_BASE_URL = getVersionedApiBase(API_ROOT);
+type SessionAuthResponse = AuthResponse & {
+  token: string;
+  refreshToken: string;
+};
 
 type PageResponse<T> = {
   content: T[];
@@ -52,14 +56,17 @@ class ApiClient {
   }
 
   // Auth endpoints
-  async login(email: string, password: string): Promise<AuthResponse> {
+  async login(email: string, password: string): Promise<SessionAuthResponse> {
     const response = await this.request<AuthResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
+    if (!response.token || !response.refreshToken) {
+      throw new Error('Login did not return a valid session');
+    }
     await AsyncStorage.setItem('auth_token', response.token);
     await AsyncStorage.setItem('refresh_token', response.refreshToken);
-    return response;
+    return response as SessionAuthResponse;
   }
 
   async register(userData: RegisterRequest): Promise<AuthResponse> {
@@ -75,8 +82,15 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    await AsyncStorage.setItem('auth_token', response.token);
-    await AsyncStorage.setItem('refresh_token', response.refreshToken);
+
+    if (response.token && response.refreshToken) {
+      await AsyncStorage.setItem('auth_token', response.token);
+      await AsyncStorage.setItem('refresh_token', response.refreshToken);
+    } else {
+      await AsyncStorage.removeItem('auth_token');
+      await AsyncStorage.removeItem('refresh_token');
+    }
+
     return response;
   }
 

@@ -27,11 +27,33 @@ export const useAuthStore = create<AuthState>((set) => ({
   register: async (userData) => {
     try {
       set({ isLoading: true });
-      const { user, token, refreshToken } = await api.register(userData);
-      await AsyncStorage.setItem('auth_token', token);
-      await AsyncStorage.setItem('refresh_token', refreshToken);
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-      set({ user, token, refreshToken, isAuthenticated: true, isLoading: false });
+      const response = await api.register(userData);
+
+      if (response.token && response.refreshToken) {
+        await AsyncStorage.setItem('auth_token', response.token);
+        await AsyncStorage.setItem('refresh_token', response.refreshToken);
+        await AsyncStorage.setItem('user', JSON.stringify(response.user));
+        set({
+          user: response.user,
+          token: response.token,
+          refreshToken: response.refreshToken,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      } else {
+        await AsyncStorage.removeItem('auth_token');
+        await AsyncStorage.removeItem('refresh_token');
+        await AsyncStorage.removeItem('user');
+        set({
+          user: null,
+          token: null,
+          refreshToken: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
+      }
+
+      return response;
     } catch (error) {
       set({ isLoading: false });
       throw error;

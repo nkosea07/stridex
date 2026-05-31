@@ -15,8 +15,9 @@ export interface User {
 }
 
 export interface AuthResponse {
-  token: string;
-  refreshToken: string;
+  token?: string | null;
+  refreshToken?: string | null;
+  requiresEmailVerification?: boolean;
   user: User;
 }
 
@@ -190,7 +191,7 @@ export interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (userData: RegisterRequest) => Promise<void>;
+  register: (userData: RegisterRequest) => Promise<AuthResponse>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<void>;
 }

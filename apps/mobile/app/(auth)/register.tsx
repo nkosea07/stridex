@@ -39,22 +39,32 @@ export default function RegisterScreen() {
     setIsLoading(true);
     try {
       console.log('[Register] Calling authStore.register...');
-      await register({ 
+      const response = await register({
         firstName: firstName.trim(), 
         lastName: lastName.trim(), 
         email: email.trim(), 
         phone: phone.trim(), 
         password 
       });
+
+      if (response.requiresEmailVerification || !response.token) {
+        console.log('[Register] Verification required. Redirecting to login...');
+        Alert.alert(
+          'Verify Your Email',
+          'Account created. Please verify your email before signing in.',
+          [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }],
+        );
+        return;
+      }
+
       console.log('[Register] Registration successful. Navigating to (tabs)...');
-      
       setTimeout(() => {
         router.replace('/(tabs)');
       }, 0);
       
     } catch (error: any) {
       console.error('[Register] Registration failed:', error);
-      Alert.alert('Error', 'Registration failed. Please try again.');
+      Alert.alert('Error', error?.message || 'Registration failed. Please try again.');
     } finally {
       console.log('[Register] Registration process completed');
       setIsLoading(false);
