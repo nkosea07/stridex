@@ -54,7 +54,8 @@ public class SecurityConfig {
                     apiPrefix + "/auth/forgot-password",
                     apiPrefix + "/auth/reset-password",
                     apiPrefix + "/auth/verify-email",
-                    apiPrefix + "/auth/resend-verification"
+                    apiPrefix + "/auth/resend-verification",
+                    apiPrefix + "/public/races/**"
                 ).permitAll()
                 .requestMatchers("/ws/**").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()

@@ -25,8 +25,19 @@ This checks:
 
 - `racetracker.api.version` in backend matches contract `apiVersion`.
 - Backend security routes are not hardcoded to `/v1`.
+- Backend public spectator allowlist uses the versioned `apiPrefix`.
 - Web/mobile API clients import and use `@race-tracker/contracts`.
 - Shared contract package values are synchronized with `contract.json`.
+- Public endpoint keys stay aligned across `contract.json`, `index.js`, and `index.d.ts`.
+
+## Public Spectator Endpoint Keys
+
+The shared contract publishes these anonymous spectator paths:
+
+- `publicRaceHub`: `/public/races/:raceId/hub`
+- `publicRaceLive`: `/public/races/:raceId/tracking/live`
+- `publicRaceSearch`: `/public/races/:raceId/tracking/search`
+- `publicAthleteTracking`: `/public/races/:raceId/tracking/athletes/:participantId`
 
 ## Changing API Version
 
@@ -34,4 +45,3 @@ This checks:
 2. Update backend `racetracker.api.version` in `apps/backend/src/main/resources/application.yml`.
 3. Run `pnpm contracts:validate`.
 4. Run app builds/tests.
-

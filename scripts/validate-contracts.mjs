@@ -9,6 +9,14 @@ const backendSecurityPath = path.join(root, 'apps/backend/src/main/java/com/race
 const webApiPath = path.join(root, 'apps/web/src/lib/api.ts');
 const mobileApiPath = path.join(root, 'apps/mobile/lib/api.ts');
 const contractPackagePath = path.join(root, 'packages/contracts/index.js');
+const contractTypesPath = path.join(root, 'packages/contracts/index.d.ts');
+
+const requiredPublicEndpointKeys = [
+  'publicRaceHub',
+  'publicRaceLive',
+  'publicRaceSearch',
+  'publicAthleteTracking',
+];
 
 const errors = [];
 
@@ -85,6 +93,32 @@ assert(
 );
 
 const contractPackage = read(contractPackagePath);
+const contractTypes = read(contractTypesPath);
+
+for (const endpointKey of requiredPublicEndpointKeys) {
+  assert(
+    Object.hasOwn(contract.endpoints, endpointKey),
+    `packages/contracts/contract.json is missing endpoints.${endpointKey}.`,
+  );
+}
+
+for (const [endpointKey, endpointPath] of Object.entries(contract.endpoints)) {
+  assert(
+    contractPackage.includes(`${endpointKey}: '${endpointPath}'`),
+    `packages/contracts/index.js endpoints.${endpointKey} is out of sync with contract.json.`,
+  );
+}
+
+const endpointKeyMatches = contractTypes.matchAll(/^\s+\|\s+'([^']+)'/gm);
+const typeEndpointKeys = new Set(Array.from(endpointKeyMatches, (match) => match[1]));
+
+for (const endpointKey of requiredPublicEndpointKeys) {
+  assert(
+    typeEndpointKeys.has(endpointKey),
+    `packages/contracts/index.d.ts is missing EndpointKey "${endpointKey}".`,
+  );
+}
+
 assert(
   contractPackage.includes(`apiVersion: ${contract.apiVersion}`),
   'packages/contracts/index.js apiVersion is out of sync with contract.json.',
@@ -97,6 +131,10 @@ assert(
   contractPackage.includes(`defaultApiRoot: '${contract.mobile.defaultApiRoot}'`),
   'packages/contracts/index.js mobile.defaultApiRoot is out of sync with contract.json.',
 );
+assert(
+  backendSecurity.includes('apiPrefix + "/public/races/**"'),
+  'SecurityConfig must allow anonymous versioned public spectator routes via apiPrefix + "/public/races/**".',
+);
 
 if (errors.length > 0) {
   console.error('Contract validation failed:\n');
@@ -107,4 +145,3 @@ if (errors.length > 0) {
 }
 
 console.log('Contract validation passed.');
-

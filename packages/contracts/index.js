@@ -17,6 +17,10 @@ export const API_CONTRACT = {
     racesList: '/races',
     raceById: '/races/:id',
     raceRegister: '/races/:id/participants/register',
+    publicRaceHub: '/public/races/:raceId/hub',
+    publicRaceLive: '/public/races/:raceId/tracking/live',
+    publicRaceSearch: '/public/races/:raceId/tracking/search',
+    publicAthleteTracking: '/public/races/:raceId/tracking/athletes/:participantId',
     myRegistrations: '/participants/my-registrations',
     trackingLocation: '/tracking/:raceId/location',
     trackingCheckpoint: '/tracking/:raceId/checkpoint',
@@ -29,4 +33,3 @@ export function getVersionedApiBase(apiRoot) {
   const root = (apiRoot || API_CONTRACT.mobile.defaultApiRoot).replace(/\/+$/, '');
   return `${root}/v${API_CONTRACT.apiVersion}`;
 }
-

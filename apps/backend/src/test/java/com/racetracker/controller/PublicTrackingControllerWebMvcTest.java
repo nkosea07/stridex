@@ -40,7 +40,7 @@ class PublicTrackingControllerWebMvcTest {
     private JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Test
-    void getHub_allowsAnonymousAccess() throws Exception {
+    void getHub_returnsPayloadInControllerSlice() throws Exception {
         UUID raceId = UUID.randomUUID();
 
         PublicRaceAthleteSummaryResponse athlete = new PublicRaceAthleteSummaryResponse();

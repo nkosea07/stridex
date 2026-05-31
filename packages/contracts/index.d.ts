@@ -7,6 +7,10 @@ export type EndpointKey =
   | 'racesList'
   | 'raceById'
   | 'raceRegister'
+  | 'publicRaceHub'
+  | 'publicRaceLive'
+  | 'publicRaceSearch'
+  | 'publicAthleteTracking'
   | 'myRegistrations'
   | 'trackingLocation'
   | 'trackingCheckpoint'
@@ -28,4 +32,3 @@ export interface ApiContract {
 
 export const API_CONTRACT: ApiContract;
 export function getVersionedApiBase(apiRoot?: string): string;
-

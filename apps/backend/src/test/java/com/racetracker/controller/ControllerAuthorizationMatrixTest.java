@@ -73,6 +73,13 @@ class ControllerAuthorizationMatrixTest {
     }
 
     @Test
+    void publicTrackingControllerHasNoMethodGuards() {
+        assertThat(Arrays.stream(PublicTrackingController.class.getDeclaredMethods())
+            .noneMatch(method -> method.isAnnotationPresent(PreAuthorize.class)))
+            .isTrue();
+    }
+
+    @Test
     void notificationControllerGuards() {
         assertGuard(NotificationController.class, "list", "isAuthenticated()");
         assertGuard(NotificationController.class, "markRead", "isAuthenticated()");
