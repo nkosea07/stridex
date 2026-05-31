@@ -3,6 +3,9 @@ import type {
   Participant, 
   Checkpoint, 
   CheckpointRecord,
+  PublicAthleteSummary,
+  PublicAthleteTracking,
+  PublicRaceHub,
   RaceCategory,
   RaceResult,
   DashboardStats,
@@ -45,6 +48,44 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
     headers: {
       'Content-Type': 'application/json',
       ...(token && { Authorization: `Bearer ${token}` }),
+      ...options?.headers,
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'An error occurred' }))
+    throw new ApiError(response.status, error.message)
+  }
+
+  return response.json()
+}
+
+function buildContractPath(
+  template: string,
+  params: Record<string, string | number>,
+  query?: Record<string, string | number | null | undefined>,
+) {
+  const path = Object.entries(params).reduce(
+    (value, [key, replacement]) => value.replace(`:${key}`, encodeURIComponent(String(replacement))),
+    template,
+  )
+
+  const searchParams = new URLSearchParams()
+  for (const [key, value] of Object.entries(query ?? {})) {
+    if (value !== null && value !== undefined && String(value).length > 0) {
+      searchParams.set(key, String(value))
+    }
+  }
+
+  const search = searchParams.toString()
+  return search ? `${path}?${search}` : path
+}
+
+async function fetchPublicApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
       ...options?.headers,
     },
   })
@@ -245,6 +286,28 @@ export const trackingApi = {
 // Dashboard API
 export const dashboardApi = {
   getStats: () => fetchApi<DashboardStats>('/dashboard/stats'),
+}
+
+export const publicTrackingApi = {
+  getRaceHub: (raceId: string) =>
+    fetchPublicApi<PublicRaceHub>(
+      buildContractPath(API_CONTRACT.endpoints.publicRaceHub, { raceId }),
+    ),
+
+  getLiveAthletes: (raceId: string) =>
+    fetchPublicApi<PublicAthleteSummary[]>(
+      buildContractPath(API_CONTRACT.endpoints.publicRaceLive, { raceId }),
+    ),
+
+  searchAthletes: (raceId: string, query: string) =>
+    fetchPublicApi<PublicAthleteSummary[]>(
+      buildContractPath(API_CONTRACT.endpoints.publicRaceSearch, { raceId }, { q: query }),
+    ),
+
+  getAthleteTracking: (raceId: string, participantId: string) =>
+    fetchPublicApi<PublicAthleteTracking>(
+      buildContractPath(API_CONTRACT.endpoints.publicAthleteTracking, { raceId, participantId }),
+    ),
 }
 
 import { Client } from '@stomp/stompjs'

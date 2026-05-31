@@ -25,6 +25,12 @@ const UserDashboardPage = lazy(() =>
   import('@/pages/UserDashboardPage').then((m) => ({ default: m.UserDashboardPage })),
 )
 const UserStatsPage = lazy(() => import('@/pages/UserStatsPage').then((m) => ({ default: m.UserStatsPage })))
+const PublicRaceHubPage = lazy(() =>
+  import('@/pages/PublicRaceHubPage').then((m) => ({ default: m.PublicRaceHubPage })),
+)
+const PublicAthleteTrackingPage = lazy(() =>
+  import('@/pages/PublicAthleteTrackingPage').then((m) => ({ default: m.PublicAthleteTrackingPage })),
+)
 
 function HomeRedirect() {
   const { isLoading, isAuthenticated, user } = useAuth()
@@ -49,6 +55,8 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
+          <Route path="/race/:raceId" element={<PublicRaceHubPage />} />
+          <Route path="/race/:raceId/athlete/:participantId" element={<PublicAthleteTrackingPage />} />
           <Route
             path="/admin"
             element={

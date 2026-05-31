@@ -179,3 +179,46 @@ export interface LiveTrackingData {
   distanceRemaining?: number
   averagePace?: string
 }
+
+export interface PublicAthleteSummary {
+  participantId: string
+  participantName: string
+  bibNumber?: string
+  status: ParticipantStatus | string
+  lastCheckpoint?: string
+  elapsedTime?: string
+  averagePace?: string
+  predictedFinishTime?: string
+  distanceRemaining?: number
+}
+
+export interface PublicRaceHub {
+  raceId: string
+  raceName: string
+  status: RaceStatus | string
+  raceDate?: string
+  city?: string
+  country?: string
+  distanceKm?: number
+  bannerImageUrl?: string
+  logoUrl?: string
+  leaderboard: PublicAthleteSummary[]
+}
+
+export interface PublicCheckpointSplit {
+  name?: string
+  time?: string
+}
+
+export interface PublicAthleteTracking {
+  participantId: string
+  participantName: string
+  bibNumber?: string
+  status: ParticipantStatus | string
+  lastCheckpoint?: string
+  elapsedTime?: string
+  averagePace?: string
+  predictedFinishTime?: string
+  distanceRemaining?: number
+  splits: PublicCheckpointSplit[]
+}
