@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, RefreshCcw, Trophy } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useParams } from 'react-router-dom'
+import { RefreshCcw, Search, Trophy } from 'lucide-react'
 import { publicTrackingApi } from '@/lib/api'
 import type { PublicAthleteSummary, PublicRaceHub } from '@/types'
 import { PublicRaceHero } from '@/components/public/PublicRaceHero'
@@ -12,8 +12,10 @@ import { toast } from 'sonner'
 
 export function PublicRaceHubPage() {
   const { raceId } = useParams<{ raceId: string }>()
+  const searchSectionRef = useRef<HTMLElement | null>(null)
   const [hub, setHub] = useState<PublicRaceHub | null>(null)
   const [athletes, setAthletes] = useState<PublicAthleteSummary[]>([])
+  const [liveAthletes, setLiveAthletes] = useState<PublicAthleteSummary[]>([])
   const [liveCount, setLiveCount] = useState(0)
   const [query, setQuery] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -26,72 +28,81 @@ export function PublicRaceHubPage() {
 
     let cancelled = false
 
-    const load = async (mode: 'initial' | 'refresh' | 'search') => {
-      const shouldShowQuery = mode === 'search' && trimmedQuery.length > 0
-
+    void (async () => {
       try {
-        if (mode === 'initial') {
-          setIsLoading(true)
-        } else if (mode === 'refresh') {
-          setIsRefreshing(true)
-        } else {
-          setIsSearching(true)
-        }
-
-        const [hubData, liveData, rows] = await Promise.all([
+        setIsLoading(true)
+        const [hubData, liveData] = await Promise.all([
           publicTrackingApi.getRaceHub(raceId),
           publicTrackingApi.getLiveAthletes(raceId),
-          shouldShowQuery
-            ? publicTrackingApi.searchAthletes(raceId, trimmedQuery)
-            : publicTrackingApi.getLiveAthletes(raceId),
         ])
 
         if (cancelled) return
 
         setHub(hubData)
+        setLiveAthletes(liveData)
         setLiveCount(liveData.length)
-        setAthletes(rows)
+        setAthletes(liveData)
       } catch {
         if (!cancelled) {
-          toast.error(mode === 'search' ? 'Failed to refresh athlete results' : 'Failed to load the public race hub')
+          toast.error('Failed to load the public race hub')
         }
       } finally {
         if (!cancelled) {
-          if (mode === 'initial') {
-            setIsLoading(false)
-          } else if (mode === 'refresh') {
-            setIsRefreshing(false)
-          } else {
-            setIsSearching(false)
-          }
+          setIsLoading(false)
         }
       }
-    }
-
-    if (!hub) {
-      void load('initial')
-    } else {
-      const timer = window.setTimeout(() => {
-        void load('search')
-      }, 180)
-
-      return () => {
-        cancelled = true
-        window.clearTimeout(timer)
-      }
-    }
+    })()
 
     return () => {
       cancelled = true
     }
-  }, [hub, raceId, trimmedQuery])
+  }, [raceId])
+
+  useEffect(() => {
+    if (!raceId || isLoading) return
+
+    if (!trimmedQuery) {
+      return
+    }
+
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          setIsSearching(true)
+          const rows = await publicTrackingApi.searchAthletes(raceId, trimmedQuery)
+
+          if (!cancelled) {
+            setAthletes(rows)
+          }
+        } catch {
+          if (!cancelled) {
+            toast.error('Failed to refresh athlete results')
+          }
+        } finally {
+          if (!cancelled) {
+            setIsSearching(false)
+          }
+        }
+      })()
+    }, 180)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [isLoading, raceId, trimmedQuery])
+
+  useEffect(() => {
+    if (trimmedQuery || isLoading) return
+    setAthletes(liveAthletes)
+  }, [isLoading, liveAthletes, trimmedQuery])
 
   const leaderboard = useMemo(() => hub?.leaderboard ?? [], [hub])
 
   const handleRefresh = async () => {
     if (!raceId) return
 
-    let cancelled = false
     try {
       setIsRefreshing(true)
       const [hubData, liveData, rows] = await Promise.all([
@@ -102,17 +113,14 @@ export function PublicRaceHubPage() {
           : publicTrackingApi.getLiveAthletes(raceId),
       ])
 
-      if (cancelled) return
-
       setHub(hubData)
+      setLiveAthletes(liveData)
       setLiveCount(liveData.length)
       setAthletes(rows)
     } catch {
       toast.error('Failed to refresh public race data')
     } finally {
-      if (!cancelled) {
-        setIsRefreshing(false)
-      }
+      setIsRefreshing(false)
     }
   }
 
@@ -147,13 +155,14 @@ export function PublicRaceHubPage() {
     <div className="min-h-screen bg-[linear-gradient(180deg,_#020617,_#0f172a_36%,_#e2e8f0_36%,_#f8fafc_100%)]">
       <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-8">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <Link
-            to={`/race/${raceId}`}
+          <button
+            type="button"
+            onClick={() => searchSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-200 backdrop-blur-sm"
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Race Hub
-          </Link>
+            <Search className="h-3.5 w-3.5" />
+            Find Athlete
+          </button>
 
           <Button
             type="button"
@@ -180,7 +189,10 @@ export function PublicRaceHubPage() {
           <div className="grid gap-5 lg:grid-cols-[0.95fr,1.05fr]">
             <PublicLeaderboard raceId={raceId} athletes={leaderboard} />
 
-            <section className="rounded-[28px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_50px_rgba(15,23,42,0.08)] backdrop-blur-sm">
+            <section
+              ref={searchSectionRef}
+              className="rounded-[28px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_50px_rgba(15,23,42,0.08)] backdrop-blur-sm"
+            >
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Live Athletes</p>
