@@ -136,6 +136,9 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
         }
 
         List<UUID> participantIds = participants.stream().map(Participant::getId).toList();
+        Map<UUID, GpsLocation> latestByParticipant = gpsLocationRepository.findLatestByRaceIdAndParticipantIds(raceId, participantIds)
+            .stream()
+            .collect(Collectors.toMap(location -> location.getParticipant().getId(), location -> location, (left, right) -> left));
         Map<UUID, List<CheckpointRecord>> recordsByParticipant = checkpointRecordRepository
             .findByRaceIdAndParticipantIdInOrderByRecordedAtAsc(raceId, participantIds)
             .stream()
@@ -143,11 +146,9 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
 
         List<PublicRaceAthleteSummaryResponse> summaries = new ArrayList<>();
         for (Participant participant : participants) {
-            GpsLocation latest = gpsLocationRepository
-                .findTopByParticipantIdAndRaceIdOrderByRecordedAtDesc(participant.getId(), raceId)
-                .orElse(null);
+            GpsLocation latest = latestByParticipant.get(participant.getId());
             List<CheckpointRecord> records = recordsByParticipant.getOrDefault(participant.getId(), List.of());
-            if (liveOnly && !isPubliclyRelevant(participant, latest, records)) {
+            if (liveOnly && !isPubliclyRelevant(participant, latest)) {
                 continue;
             }
             summaries.add(buildAthleteSummary(participant, latest, records, raceId));
@@ -160,9 +161,9 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
             .toList();
     }
 
-    private boolean isPubliclyRelevant(Participant participant, GpsLocation latest, List<CheckpointRecord> records) {
+    private boolean isPubliclyRelevant(Participant participant, GpsLocation latest) {
         return participant.getStatus() == Participant.ParticipantStatus.STARTED
-            && (latest != null || !records.isEmpty());
+            && latest != null;
     }
 
     private PublicRaceAthleteSummaryResponse buildAthleteSummary(
