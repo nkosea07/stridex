@@ -14,6 +14,7 @@ import com.racetracker.repository.GpsLocationRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.service.PublicTrackingService;
+import io.micrometer.observation.annotation.Observed;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +52,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     }
 
     @Override
+    @Observed(name = "tracking.public.race_hub")
     @Transactional(readOnly = true)
     public PublicRaceHubResponse getRaceHub(UUID raceId) {
         Race race = getVisibleRace(raceId);
@@ -70,6 +72,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     }
 
     @Override
+    @Observed(name = "tracking.public.live_athletes")
     @Transactional(readOnly = true)
     public List<PublicRaceAthleteSummaryResponse> getLiveAthletes(UUID raceId, String query) {
         getVisibleRace(raceId);
@@ -82,6 +85,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     }
 
     @Override
+    @Observed(name = "tracking.public.athlete_detail")
     @Transactional(readOnly = true)
     public PublicAthleteTrackingResponse getAthleteTracking(UUID raceId, UUID participantId) {
         getVisibleRace(raceId);

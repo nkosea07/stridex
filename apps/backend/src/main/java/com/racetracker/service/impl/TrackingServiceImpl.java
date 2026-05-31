@@ -9,6 +9,7 @@ import com.racetracker.model.*;
 import com.racetracker.repository.*;
 import com.racetracker.service.TrackingService;
 import com.racetracker.websocket.TrackingLivePublisher;
+import io.micrometer.observation.annotation.Observed;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -54,6 +55,7 @@ public class TrackingServiceImpl implements TrackingService {
     }
 
     @Override
+    @Observed(name = "tracking.ingest.location")
     @Transactional
     public void recordLocation(UUID raceId, GpsLocationRequest request) {
         Participant participant = resolveCurrentParticipant(raceId);
@@ -62,6 +64,7 @@ public class TrackingServiceImpl implements TrackingService {
     }
 
     @Override
+    @Observed(name = "tracking.ingest.location_batch")
     @Transactional
     public void recordLocationsBatch(UUID raceId, GpsLocationBatchRequest request) {
         Participant participant = resolveCurrentParticipant(raceId);
@@ -102,6 +105,7 @@ public class TrackingServiceImpl implements TrackingService {
     }
 
     @Override
+    @Observed(name = "tracking.ingest.checkpoint")
     @Transactional
     public void recordCheckpoint(UUID raceId, TrackingCheckpointRequest request) {
         if (request == null || request.getCheckpointId() == null) {
@@ -140,6 +144,7 @@ public class TrackingServiceImpl implements TrackingService {
     }
 
     @Override
+    @Observed(name = "tracking.live.aggregate")
     @Transactional(readOnly = true)
     public List<LiveTrackingResponse> getLiveData(UUID raceId) {
         verifyRaceExists(raceId);
@@ -156,6 +161,7 @@ public class TrackingServiceImpl implements TrackingService {
     }
 
     @Override
+    @Observed(name = "tracking.live.participant_track")
     @Transactional(readOnly = true)
     public ParticipantTrackResponse getParticipantTrack(UUID raceId, UUID participantId) {
         verifyRaceExists(raceId);
