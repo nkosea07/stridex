@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { RefreshCcw, Search, Trophy } from 'lucide-react'
+import { Link, useParams } from 'react-router-dom'
+import { ChevronRight, RefreshCcw, Search, Trophy } from 'lucide-react'
 import { publicTrackingApi } from '@/lib/api'
 import type { PublicAthleteSummary, PublicRaceHub } from '@/types'
 import { PublicRaceHero } from '@/components/public/PublicRaceHero'
@@ -105,13 +105,13 @@ export function PublicRaceHubPage() {
 
     try {
       setIsRefreshing(true)
-      const [hubData, liveData, rows] = await Promise.all([
+      const [hubData, liveData] = await Promise.all([
         publicTrackingApi.getRaceHub(raceId),
         publicTrackingApi.getLiveAthletes(raceId),
-        trimmedQuery
-          ? publicTrackingApi.searchAthletes(raceId, trimmedQuery)
-          : publicTrackingApi.getLiveAthletes(raceId),
       ])
+      const rows = trimmedQuery
+        ? await publicTrackingApi.searchAthletes(raceId, trimmedQuery)
+        : liveData
 
       setHub(hubData)
       setLiveAthletes(liveData)
@@ -187,7 +187,29 @@ export function PublicRaceHubPage() {
           />
 
           <div className="grid gap-5 lg:grid-cols-[0.95fr,1.05fr]">
-            <PublicLeaderboard raceId={raceId} athletes={leaderboard} />
+            <div className="space-y-5">
+              <PublicLeaderboard raceId={raceId} athletes={leaderboard} />
+
+              <section className="rounded-[28px] border border-slate-200/70 bg-white/80 p-5 shadow-[0_16px_50px_rgba(15,23,42,0.08)] backdrop-blur-sm">
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Free on Web</p>
+                <h2 className="mt-2 text-2xl font-black uppercase tracking-[-0.04em] text-slate-950">
+                  Keep following here, save favorites in your account
+                </h2>
+                <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
+                  Public race tracking stays open on web. Create a free account when you want favorite athletes,
+                  alerts, and the fuller spectator experience in the mobile app.
+                </p>
+                <Button
+                  asChild
+                  className="mt-4 rounded-full bg-slate-950 px-5 text-xs font-bold uppercase tracking-[0.18em] text-cyan-100 hover:bg-slate-800"
+                >
+                  <Link to="/register">
+                    Create Free Account
+                    <ChevronRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </section>
+            </div>
 
             <section
               ref={searchSectionRef}

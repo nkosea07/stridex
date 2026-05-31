@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Activity, ArrowLeft, Copy, Flag, MapPin, RefreshCcw, Timer } from 'lucide-react'
+import { Activity, ArrowLeft, ChevronRight, Copy, Flag, MapPin, RefreshCcw, Timer } from 'lucide-react'
 import { publicTrackingApi } from '@/lib/api'
 import type { PublicAthleteTracking } from '@/types'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +33,7 @@ function statusTone(status: string) {
 
 export function PublicAthleteTrackingPage() {
   const { raceId, participantId } = useParams<{ raceId: string; participantId: string }>()
+  const requestIdRef = useRef(0)
   const [tracking, setTracking] = useState<PublicAthleteTracking | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -46,16 +47,24 @@ export function PublicAthleteTrackingPage() {
       setIsRefreshing(true)
     }
 
+    const requestId = ++requestIdRef.current
+
     try {
       const data = await publicTrackingApi.getAthleteTracking(raceId, participantId)
-      setTracking(data)
+      if (requestId === requestIdRef.current) {
+        setTracking(data)
+      }
     } catch {
-      toast.error(mode === 'refresh' ? 'Failed to refresh athlete tracking' : 'Failed to load athlete tracking')
+      if (requestId === requestIdRef.current) {
+        toast.error(mode === 'refresh' ? 'Failed to refresh athlete tracking' : 'Failed to load athlete tracking')
+      }
     } finally {
-      if (mode === 'initial') {
-        setIsLoading(false)
-      } else {
-        setIsRefreshing(false)
+      if (requestId === requestIdRef.current) {
+        if (mode === 'initial') {
+          setIsLoading(false)
+        } else {
+          setIsRefreshing(false)
+        }
       }
     }
   }, [participantId, raceId])
@@ -63,30 +72,12 @@ export function PublicAthleteTrackingPage() {
   useEffect(() => {
     if (!raceId || !participantId) return
 
-    let cancelled = false
-
-    void (async () => {
-      try {
-        setIsLoading(true)
-        const data = await publicTrackingApi.getAthleteTracking(raceId, participantId)
-        if (!cancelled) {
-          setTracking(data)
-        }
-      } catch {
-        if (!cancelled) {
-          toast.error('Failed to load athlete tracking')
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false)
-        }
-      }
-    })()
+    void loadTracking('initial')
 
     return () => {
-      cancelled = true
+      requestIdRef.current += 1
     }
-  }, [participantId, raceId])
+  }, [loadTracking, participantId, raceId])
 
   const recentSplits = useMemo(() => tracking?.splits.slice(-6).reverse() ?? [], [tracking])
 
@@ -247,6 +238,23 @@ export function PublicAthleteTrackingPage() {
                 <p className="mt-1 font-mono text-2xl font-black text-cyan-100">
                   {formatPredictedFinish(tracking.predictedFinishTime)}
                 </p>
+              </div>
+
+              <div className="rounded-3xl border border-cyan-300/15 bg-cyan-400/10 p-4">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-100/80">Free on Web</p>
+                <p className="mt-2 text-base font-bold text-white">Follow this athlete here, unlock favorites and alerts with an account.</p>
+                <p className="mt-2 text-sm leading-6 text-slate-200">
+                  Public tracking stays available on web. A free account adds saved athletes, alerting, and the richer mobile app experience.
+                </p>
+                <Button
+                  asChild
+                  className="mt-4 rounded-full bg-white px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-950 hover:bg-cyan-50"
+                >
+                  <Link to="/register">
+                    Create Free Account
+                    <ChevronRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
               </div>
             </div>
           </section>
