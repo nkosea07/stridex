@@ -48,7 +48,7 @@ Web surface for both public spectators and authenticated race operations:
 - Results and analytics
 
 **Tech Stack:**
-- React 18
+- React 19
 - Vite
 - TypeScript
 - Tailwind CSS
