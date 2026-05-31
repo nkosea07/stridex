@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, RefreshCcw, Trophy } from 'lucide-react'
 import { publicTrackingApi } from '@/lib/api'
@@ -14,100 +14,105 @@ export function PublicRaceHubPage() {
   const { raceId } = useParams<{ raceId: string }>()
   const [hub, setHub] = useState<PublicRaceHub | null>(null)
   const [athletes, setAthletes] = useState<PublicAthleteSummary[]>([])
+  const [liveCount, setLiveCount] = useState(0)
   const [query, setQuery] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
-  const deferredQuery = useDeferredValue(query.trim())
+  const trimmedQuery = query.trim()
 
   useEffect(() => {
     if (!raceId) return
 
     let cancelled = false
 
-    const load = async () => {
+    const load = async (mode: 'initial' | 'refresh' | 'search') => {
+      const shouldShowQuery = mode === 'search' && trimmedQuery.length > 0
+
       try {
-        setIsLoading(true)
-        const [hubData, liveData] = await Promise.all([
+        if (mode === 'initial') {
+          setIsLoading(true)
+        } else if (mode === 'refresh') {
+          setIsRefreshing(true)
+        } else {
+          setIsSearching(true)
+        }
+
+        const [hubData, liveData, rows] = await Promise.all([
           publicTrackingApi.getRaceHub(raceId),
           publicTrackingApi.getLiveAthletes(raceId),
+          shouldShowQuery
+            ? publicTrackingApi.searchAthletes(raceId, trimmedQuery)
+            : publicTrackingApi.getLiveAthletes(raceId),
         ])
 
         if (cancelled) return
 
         setHub(hubData)
-        setAthletes(liveData)
+        setLiveCount(liveData.length)
+        setAthletes(rows)
       } catch {
         if (!cancelled) {
-          toast.error('Failed to load the public race hub')
+          toast.error(mode === 'search' ? 'Failed to refresh athlete results' : 'Failed to load the public race hub')
         }
       } finally {
         if (!cancelled) {
-          setIsLoading(false)
+          if (mode === 'initial') {
+            setIsLoading(false)
+          } else if (mode === 'refresh') {
+            setIsRefreshing(false)
+          } else {
+            setIsSearching(false)
+          }
         }
       }
     }
 
-    void load()
+    if (!hub) {
+      void load('initial')
+    } else {
+      const timer = window.setTimeout(() => {
+        void load('search')
+      }, 180)
 
-    return () => {
-      cancelled = true
-    }
-  }, [raceId])
-
-  useEffect(() => {
-    if (!raceId || isLoading) return
-
-    let cancelled = false
-
-    const loadAthletes = async () => {
-      try {
-        setIsSearching(true)
-        const rows = deferredQuery
-          ? await publicTrackingApi.searchAthletes(raceId, deferredQuery)
-          : await publicTrackingApi.getLiveAthletes(raceId)
-
-        if (!cancelled) {
-          setAthletes(rows)
-        }
-      } catch {
-        if (!cancelled) {
-          toast.error('Failed to refresh athlete results')
-        }
-      } finally {
-        if (!cancelled) {
-          setIsSearching(false)
-        }
+      return () => {
+        cancelled = true
+        window.clearTimeout(timer)
       }
     }
 
-    void loadAthletes()
-
     return () => {
       cancelled = true
     }
-  }, [deferredQuery, isLoading, raceId])
+  }, [hub, raceId, trimmedQuery])
 
   const leaderboard = useMemo(() => hub?.leaderboard ?? [], [hub])
 
   const handleRefresh = async () => {
     if (!raceId) return
 
+    let cancelled = false
     try {
       setIsRefreshing(true)
-      const [hubData, rows] = await Promise.all([
+      const [hubData, liveData, rows] = await Promise.all([
         publicTrackingApi.getRaceHub(raceId),
-        deferredQuery
-          ? publicTrackingApi.searchAthletes(raceId, deferredQuery)
+        publicTrackingApi.getLiveAthletes(raceId),
+        trimmedQuery
+          ? publicTrackingApi.searchAthletes(raceId, trimmedQuery)
           : publicTrackingApi.getLiveAthletes(raceId),
       ])
 
+      if (cancelled) return
+
       setHub(hubData)
+      setLiveCount(liveData.length)
       setAthletes(rows)
     } catch {
       toast.error('Failed to refresh public race data')
     } finally {
-      setIsRefreshing(false)
+      if (!cancelled) {
+        setIsRefreshing(false)
+      }
     }
   }
 
@@ -143,11 +148,11 @@ export function PublicRaceHubPage() {
       <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-8">
         <div className="mb-4 flex items-center justify-between gap-3">
           <Link
-            to="/"
+            to={`/race/${raceId}`}
             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-200 backdrop-blur-sm"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Home
+            Race Hub
           </Link>
 
           <Button
@@ -163,7 +168,7 @@ export function PublicRaceHubPage() {
         </div>
 
         <div className="space-y-5">
-          <PublicRaceHero hub={hub} liveCount={athletes.length} />
+          <PublicRaceHero hub={hub} liveCount={liveCount} />
 
           <PublicAthleteSearch
             query={query}

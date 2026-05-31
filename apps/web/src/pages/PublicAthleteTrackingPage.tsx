@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Activity, ArrowLeft, Flag, MapPin, Timer } from 'lucide-react'
+import { Activity, ArrowLeft, Copy, Flag, MapPin, RefreshCcw, Timer } from 'lucide-react'
 import { publicTrackingApi } from '@/lib/api'
 import type { PublicAthleteTracking } from '@/types'
 import { Badge } from '@/components/ui/badge'
@@ -35,17 +35,40 @@ export function PublicAthleteTrackingPage() {
   const { raceId, participantId } = useParams<{ raceId: string; participantId: string }>()
   const [tracking, setTracking] = useState<PublicAthleteTracking | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const loadTracking = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
+    if (!raceId || !participantId) return
+
+    if (mode === 'initial') {
+      setIsLoading(true)
+    } else {
+      setIsRefreshing(true)
+    }
+
+    try {
+      const data = await publicTrackingApi.getAthleteTracking(raceId, participantId)
+      setTracking(data)
+    } catch {
+      toast.error(mode === 'refresh' ? 'Failed to refresh athlete tracking' : 'Failed to load athlete tracking')
+    } finally {
+      if (mode === 'initial') {
+        setIsLoading(false)
+      } else {
+        setIsRefreshing(false)
+      }
+    }
+  }, [participantId, raceId])
 
   useEffect(() => {
     if (!raceId || !participantId) return
 
     let cancelled = false
 
-    const load = async () => {
+    void (async () => {
       try {
         setIsLoading(true)
         const data = await publicTrackingApi.getAthleteTracking(raceId, participantId)
-
         if (!cancelled) {
           setTracking(data)
         }
@@ -58,9 +81,7 @@ export function PublicAthleteTrackingPage() {
           setIsLoading(false)
         }
       }
-    }
-
-    void load()
+    })()
 
     return () => {
       cancelled = true
@@ -68,6 +89,19 @@ export function PublicAthleteTrackingPage() {
   }, [participantId, raceId])
 
   const recentSplits = useMemo(() => tracking?.splits.slice(-6).reverse() ?? [], [tracking])
+
+  const handleRefresh = async () => {
+    await loadTracking('refresh')
+  }
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      toast.success('Athlete link copied')
+    } catch {
+      toast.error('Failed to copy athlete link')
+    }
+  }
 
   if (!raceId || !participantId) {
     return <div className="min-h-screen bg-slate-950" />
@@ -108,14 +142,27 @@ export function PublicAthleteTrackingPage() {
             Race Hub
           </Link>
 
-          <Button
-            type="button"
-            variant="secondary"
-            className="rounded-full border border-white/10 bg-white/5 px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-100 hover:bg-white/10"
-            onClick={() => window.location.reload()}
-          >
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="rounded-full border border-white/10 bg-white/5 px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-100 hover:bg-white/10"
+              onClick={() => void handleCopyLink()}
+            >
+              <Copy className="mr-2 h-3.5 w-3.5" />
+              Copy Link
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="rounded-full border border-white/10 bg-white/5 px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-100 hover:bg-white/10"
+              onClick={() => void handleRefresh()}
+              disabled={isRefreshing}
+            >
+              <RefreshCcw className={`mr-2 h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <section className="relative overflow-hidden rounded-[30px] border border-white/10 bg-slate-950 text-white shadow-[0_30px_80px_rgba(2,6,23,0.55)]">
