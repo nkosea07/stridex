@@ -24,6 +24,19 @@ interface PageResponse<T> {
   content: T[]
 }
 
+interface AuthApiResponse {
+  token?: string | null
+  refreshToken?: string | null
+  requiresEmailVerification?: boolean
+  user: User
+}
+
+interface LoginApiResponse {
+  token: string
+  refreshToken: string
+  user: User
+}
+
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem('auth_token')
   
@@ -47,13 +60,13 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
 // Auth API
 export const authApi = {
   login: (email: string, password: string) =>
-    fetchApi<{ token: string; user: User }>('/auth/login', {
+    fetchApi<LoginApiResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
   
   register: (data: { email: string; password: string; firstName: string; lastName: string; phone?: string }) =>
-    fetchApi<{ token: string; user: User }>('/auth/register', {
+    fetchApi<AuthApiResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

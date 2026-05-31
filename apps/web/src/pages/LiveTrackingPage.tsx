@@ -3,10 +3,9 @@ import { useParams } from 'react-router-dom'
 import Map, { Marker, MapRef } from 'react-map-gl'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { connectLiveTracking, trackingApi, checkpointsApi } from '@/lib/api'
-import type { LiveTrackingData, Checkpoint } from '@/types'
+import { connectLiveTracking, trackingApi, checkpointsApi, racesApi } from '@/lib/api'
+import type { LiveTrackingData, Checkpoint, Race } from '@/types'
 import { toast } from 'sonner'
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
 import { CommandBar, TrackingMode } from '@/components/dashboard/CommandBar'
@@ -15,12 +14,14 @@ import { AnalyticsTray } from '@/components/dashboard/AnalyticsTray'
 import { AeroPanel } from '@/components/dashboard/AeroPanel'
 import { FreshnessIndicator } from '@/components/dashboard/FreshnessIndicator'
 import { SecurityAuditor } from '@/components/dashboard/SecurityAuditor'
+
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
+type LiveTrackingViewModel = LiveTrackingData & { lastSeen?: number }
 
 export function LiveTrackingPage() {
   const { raceId } = useParams()
   const [race, setRace] = useState<Race | null>(null)
-  const [data, setData] = useState<ExtendedLiveTrackingData[]>([])
+  const [data, setData] = useState<LiveTrackingViewModel[]>([])
 
   // Security/Config Check
   useEffect(() => {
@@ -31,7 +32,7 @@ export function LiveTrackingPage() {
 
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([])
   const [search, setSearch] = useState('')
-  const [selectedParticipant, setSelectedParticipant] = useState<ExtendedLiveTrackingData | null>(null)
+  const [selectedParticipant, setSelectedParticipant] = useState<LiveTrackingViewModel | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [viewState, setViewState] = useState({ longitude: 18.43, latitude: -34.035, zoom: 11.5 })
   const [mode, setMode] = useState<TrackingMode>('spectator')
@@ -94,7 +95,7 @@ export function LiveTrackingPage() {
     [data, search],
   )
 
-  const handleParticipantClick = useCallback((participant: ExtendedLiveTrackingData) => {
+  const handleParticipantClick = useCallback((participant: LiveTrackingViewModel) => {
     setSelectedParticipant(participant)
     mapRef.current?.flyTo({
       center: [participant.longitude, participant.latitude],
@@ -104,9 +105,10 @@ export function LiveTrackingPage() {
     })
   }, [])
 
-  const latestLastSeen = useMemo(() => 
-    data.length > 0 ? Math.max(...data.map(d => d.lastSeen || 0)) : undefined
-  , [data]);
+  const latestLastSeen = useMemo(
+    () => (data.length > 0 ? Math.max(...data.map((participant) => participant.lastSeen || 0)) : undefined),
+    [data],
+  )
 
   const DataStrip = (
     <Sidebar
@@ -116,7 +118,7 @@ export function LiveTrackingPage() {
       selectedParticipant={selectedParticipant}
       onParticipantClick={handleParticipantClick}
     />
-  );
+  )
 
   const analyticsTrayContent = (
     <AnalyticsTray
@@ -124,7 +126,7 @@ export function LiveTrackingPage() {
       mode={mode}
       checkpoints={checkpoints}
     />
-  );
+  )
 
   return (
     <DashboardLayout
@@ -132,10 +134,10 @@ export function LiveTrackingPage() {
       analyticsTray={analyticsTrayContent}
       className={cn(isFullscreen && 'fixed inset-0 z-50 h-screen')}
     >
-      <CommandBar 
-        mode={mode} 
+      <CommandBar
+        mode={mode}
         onModeChange={setMode}
-        raceTitle={race?.name || "Live Tracking"}
+        raceTitle={race?.name || 'Live Tracking'}
       />
 
       <div className="flex-1 relative h-full w-full">
@@ -177,9 +179,9 @@ export function LiveTrackingPage() {
           ))}
         </Map>
 
-        <AeroPanel 
-          participant={selectedParticipant} 
-          onClose={() => setSelectedParticipant(null)} 
+        <AeroPanel
+          participant={selectedParticipant}
+          onClose={() => setSelectedParticipant(null)}
         />
 
         <SecurityAuditor />
