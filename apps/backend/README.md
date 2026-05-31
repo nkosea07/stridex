@@ -17,7 +17,7 @@ cd apps/backend
 mvn spring-boot:run
 ```
 
-API base path is configured as `/api`.
+The backend runs under the `/api` servlet context path, so versioned controller routes are exposed under `/api/v1`.
 
 ## Configuration
 Main config file:
@@ -36,61 +36,71 @@ Common database variables:
 ## API Surface (Implemented)
 
 ### Auth
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `POST /api/auth/refresh`
-- `GET /api/auth/me`
-- `PUT /api/auth/profile`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+- `GET /api/v1/auth/me`
+- `PUT /api/v1/auth/profile`
 
 ### Races
-- `GET /api/races`
-- `GET /api/races/{id}`
-- `POST /api/races`
-- `PUT /api/races/{id}`
-- `PATCH /api/races/{id}/status`
-- `DELETE /api/races/{id}`
+- `GET /api/v1/races`
+- `GET /api/v1/races/{id}`
+- `POST /api/v1/races`
+- `PUT /api/v1/races/{id}`
+- `PATCH /api/v1/races/{id}/status`
+- `DELETE /api/v1/races/{id}`
 
 ### Participants and Registration
-- `GET /api/races/{raceId}/participants`
-- `GET /api/races/{raceId}/participants/{id}`
-- `POST /api/races/{raceId}/participants`
-- `PUT /api/races/{raceId}/participants/{id}`
-- `DELETE /api/races/{raceId}/participants/{id}`
-- `POST /api/races/{raceId}/participants/{id}/check-in`
-- `POST /api/races/{raceId}/participants/import`
-- `GET /api/races/{raceId}/participants/export`
-- `POST /api/races/{raceId}/register`
-- `GET /api/races/my-registrations`
-- `DELETE /api/registrations/{registrationId}`
+- `GET /api/v1/races/{raceId}/participants`
+- `GET /api/v1/races/{raceId}/participants/{id}`
+- `POST /api/v1/races/{raceId}/participants`
+- `PUT /api/v1/races/{raceId}/participants/{id}`
+- `DELETE /api/v1/races/{raceId}/participants/{id}`
+- `POST /api/v1/races/{raceId}/participants/{id}/check-in`
+- `POST /api/v1/races/{raceId}/participants/import`
+- `GET /api/v1/races/{raceId}/participants/export`
+- `POST /api/v1/races/{raceId}/register`
+- `GET /api/v1/participants/my-registrations`
+- `DELETE /api/v1/registrations/{registrationId}`
 
 ### Checkpoints
-- `GET /api/races/{raceId}/checkpoints`
-- `POST /api/races/{raceId}/checkpoints`
-- `PUT /api/races/{raceId}/checkpoints/{checkpointId}`
-- `DELETE /api/races/{raceId}/checkpoints/{checkpointId}`
-- `POST /api/races/{raceId}/checkpoints/{checkpointId}/record`
+- `GET /api/v1/races/{raceId}/checkpoints`
+- `POST /api/v1/races/{raceId}/checkpoints`
+- `PUT /api/v1/races/{raceId}/checkpoints/{checkpointId}`
+- `DELETE /api/v1/races/{raceId}/checkpoints/{checkpointId}`
+- `POST /api/v1/races/{raceId}/checkpoints/{checkpointId}/record`
 
 ### Tracking
-- `POST /api/tracking/{raceId}/location`
-- `POST /api/tracking/{raceId}/locations`
-- `POST /api/tracking/{raceId}/checkpoint`
-- `GET /api/races/{raceId}/tracking/live`
-- `GET /api/races/{raceId}/tracking/{participantId}`
+- `POST /api/v1/tracking/{raceId}/location`
+- `POST /api/v1/tracking/{raceId}/locations`
+- `POST /api/v1/tracking/{raceId}/checkpoint`
+- `GET /api/v1/races/{raceId}/tracking/live`
+- `GET /api/v1/races/{raceId}/tracking/{participantId}`
+
+### Public Spectator Tracking
+- `GET /api/v1/public/races/{raceId}/hub`
+- `GET /api/v1/public/races/{raceId}/tracking/live`
+- `GET /api/v1/public/races/{raceId}/tracking/search?q=<term>`
+- `GET /api/v1/public/races/{raceId}/tracking/athletes/{participantId}`
+
+Anonymous access is expected for `GET` requests under `/api/v1/public/races/**` only. Existing admin, organizer, and athlete routes remain protected by the normal security rules.
+
+Public payloads must stay spectator-safe. Include only race summary, leaderboard, split, and athlete tracking fields needed for public viewing, and do not return email addresses, phone numbers, emergency contacts, medical notes, device tokens, internal notes, or other admin-only audit data.
 
 ### Results
-- `GET /api/races/{raceId}/results`
-- `GET /api/races/{raceId}/results/{participantId}`
-- `GET /api/results/my`
-- `POST /api/races/{raceId}/results/publish`
+- `GET /api/v1/races/{raceId}/results`
+- `GET /api/v1/races/{raceId}/results/{participantId}`
+- `GET /api/v1/results/my`
+- `POST /api/v1/races/{raceId}/results/publish`
 
 ### Dashboard and Notifications
-- `GET /api/dashboard/stats`
-- `GET /api/notifications`
-- `PUT /api/notifications/{id}/read`
+- `GET /api/v1/dashboard/stats`
+- `GET /api/v1/notifications`
+- `PUT /api/v1/notifications/{id}/read`
 
 ## WebSocket (Live Tracking)
 Endpoint:
-- `ws://<host>/api/ws/tracking`
+- `ws://<host>/ws-tracking`
 
 Client subscribe message:
 ```json

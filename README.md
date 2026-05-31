@@ -9,7 +9,7 @@ This is a monorepo containing three applications:
 ```
 ├── apps/
 │   ├── backend/       # Java Spring Boot API (PostgreSQL)
-│   ├── web/           # React Vite Admin Dashboard
+│   ├── web/           # React Vite Web App
 │   └── mobile/        # React Native (Expo) Mobile App
 └── packages/          # Shared packages (if needed)
 ```
@@ -36,10 +36,11 @@ The backend API built with Java Spring Boot, providing:
 
 [View Backend README](apps/backend/README.md)
 
-### Web Admin Dashboard (React Vite)
+### Web Application (React Vite)
 **Location:** `apps/web/`
 
-Admin dashboard for race organizers and volunteers:
+Web surface for both public spectators and authenticated race operations:
+- Public race hub and athlete tracking pages for anonymous spectators
 - Race management (create, edit, configure)
 - Participant management
 - Live tracking map view
@@ -73,6 +74,12 @@ Cross-platform mobile app for athletes:
 
 [View Mobile README](apps/mobile/README.md)
 
+## Product Surfaces
+
+- `apps/web`: serves both public spectators and authenticated/admin workflows. Public Phase 1 routes include `/race/:raceId` and `/race/:raceId/athlete/:participantId`.
+- `apps/mobile`: remains the richer logged-in experience for athletes. Premium fan-oriented mobile features are later phases and out of scope for this foundation.
+- `apps/backend`: serves protected admin/athlete APIs plus anonymous public spectator read endpoints.
+
 ## Getting Started
 
 ### Prerequisites
@@ -93,10 +100,10 @@ pnpm install
 ```bash
 cd apps/backend
 docker-compose up -d  # Start PostgreSQL
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
-3. **Start the web dashboard:**
+3. **Start the web app:**
 ```bash
 cd apps/web
 pnpm dev
@@ -157,35 +164,35 @@ See `apps/backend/database/schema.sql` for full schema.
 The backend exposes RESTful APIs:
 
 ### Authentication
-- `POST /api/auth/register` - Register user
-- `POST /api/auth/login` - Login
-- `GET /api/auth/me` - Current user
+- `POST /api/v1/auth/register` - Register user
+- `POST /api/v1/auth/login` - Login
+- `GET /api/v1/auth/me` - Current user
 
 ### Races
-- `GET /api/races` - List races
-- `POST /api/races` - Create race
-- `GET /api/races/:id` - Race details
-- `PUT /api/races/:id` - Update race
+- `GET /api/v1/races` - List races
+- `POST /api/v1/races` - Create race
+- `GET /api/v1/races/:id` - Race details
+- `PUT /api/v1/races/:id` - Update race
 
 ### Participants
-- `GET /api/races/:id/participants` - List participants
-- `POST /api/races/:id/register` - Register for race
+- `GET /api/v1/races/:id/participants` - List participants
+- `POST /api/v1/races/:id/register` - Register for race
 
 ### Tracking
-- `POST /api/tracking/:raceId/location` - Send GPS location
-- `POST /api/tracking/:raceId/checkpoint` - Record checkpoint
-- `WebSocket /ws/tracking` - Real-time updates
+- `POST /api/v1/tracking/:raceId/location` - Send GPS location
+- `POST /api/v1/tracking/:raceId/checkpoint` - Record checkpoint
+- `WebSocket /ws-tracking` - Real-time updates
 
 ### Results
-- `GET /api/races/:id/results` - Race results
-- `GET /api/results/my` - User's results
+- `GET /api/v1/races/:id/results` - Race results
+- `GET /api/v1/results/my` - User's results
 
 ## Development
 
 ### Backend Development
 ```bash
 cd apps/backend
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 ### Web Development
@@ -209,7 +216,7 @@ Deploy Spring Boot to any Java-compatible hosting:
 - Azure App Service
 - DigitalOcean App Platform
 
-### Web Dashboard
+### Web Application
 Deploy Vite app to:
 - Vercel
 - Netlify

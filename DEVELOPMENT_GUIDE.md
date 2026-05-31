@@ -24,7 +24,7 @@ This guide provides detailed instructions and prompts to help you complete the r
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Mobile App    │     │   Web Admin     │     │  Public Website │
+│   Mobile App    │     │     Web App     │     │  Public Website │
 │  (React Native) │     │  (React Vite)   │     │   (Optional)    │
 └────────┬────────┘     └────────┬────────┘     └────────┬────────┘
          │                       │                       │
@@ -46,11 +46,27 @@ This guide provides detailed instructions and prompts to help you complete the r
 | Layer | Technology | Purpose |
 |-------|------------|---------|
 | Mobile | React Native + Expo | Athlete app (iOS/Android) |
-| Web Admin | React + Vite + Tailwind | Race management dashboard |
+| Web App | React + Vite + Tailwind | Public spectator and race operations surface |
 | Backend | Spring Boot 3.x | REST API + WebSocket server |
 | Database | PostgreSQL 15+ | Primary data store |
 | Cache | Redis (optional) | Session/caching layer |
 | Auth | JWT + Spring Security | Authentication/Authorization |
+
+### Public Spectator Flow
+
+Phase 1 adds a public spectator web surface without changing the protected admin and athlete flows:
+- Public web routes: `/race/:raceId` and `/race/:raceId/athlete/:participantId`
+- Public backend endpoints: `GET /api/v1/public/races/{raceId}/hub`, `GET /api/v1/public/races/{raceId}/tracking/live`, `GET /api/v1/public/races/{raceId}/tracking/search?q=<term>`, and `GET /api/v1/public/races/{raceId}/tracking/athletes/{participantId}`
+- Security model: anonymous `GET` access is limited to the public endpoint prefix; admin and athlete routes remain authenticated
+
+### Backend-to-Web Public Data Path
+
+The public spectator path is now:
+1. Tracking data is recorded through the existing tracking domain and race operations flow.
+2. The backend exposes a spectator-safe public read layer under `/api/v1/public/races/...`.
+3. The web app consumes those endpoints for the shareable race hub and athlete detail routes.
+
+Keep this phase intentionally narrow. Premium mobile fan experiences and RFID/device ingest remain later-phase work and are out of scope here.
 
 ---
 
@@ -291,7 +307,7 @@ Requirements:
      - /api/races/*/manage/** - hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')
      - /api/checkpoints/record - hasAnyRole('RACE_ADMIN', 'VOLUNTEER')
      - /api/** - authenticated
-     - /ws/** - permitAll (WebSocket, auth handled differently)
+     - /ws-tracking/** - permitAll (WebSocket, auth handled differently)
    - Disable CSRF (stateless API)
    - Configure CORS
    - Add JWT filter before UsernamePasswordAuthenticationFilter
@@ -406,7 +422,7 @@ Requirements:
    - Enable STOMP over WebSocket
    - Configure message broker with /topic prefix
    - Application destination prefix: /app
-   - WebSocket endpoint: /ws
+   - WebSocket endpoint: /ws-tracking
    - Configure CORS for web and mobile clients
    - Add JWT authentication interceptor
 
@@ -759,9 +775,9 @@ public class AuthService {
 
 ## Integration Points
 
-### Web Admin -> Backend
+### Web App -> Backend
 
-The web admin is pre-configured to call `VITE_API_URL` (default: `http://localhost:8080/api/v1`).
+The web app is pre-configured to call `VITE_API_URL` (default: `http://localhost:8080/api/v1`).
 
 Update `apps/web/.env`:
 ```
@@ -896,9 +912,9 @@ cd apps/backend
 docker-compose up -d
 
 # 2. Run backend (after implementing)
-./mvnw spring-boot:run
+mvn spring-boot:run
 
-# 3. Run web admin
+# 3. Run web app
 cd apps/web
 pnpm install
 pnpm dev
