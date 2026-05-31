@@ -1,0 +1,310 @@
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuthStore } from '@/store/auth';
+import { useTheme } from '@/contexts/theme';
+import type { ThemePreference } from '@/types';
+
+export default function ProfileScreen() {
+  const { user, logout, isAuthenticated } = useAuthStore();
+  const { theme, resolvedTheme, setTheme } = useTheme();
+
+  const cycleTheme = async () => {
+    const order: ThemePreference[] = ['light', 'dark', 'system'];
+    const currentIndex = order.indexOf(theme);
+    const next = order[(currentIndex + 1) % order.length];
+    await setTheme(next);
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Sign Out', 
+          style: 'destructive',
+          onPress: () => {
+            logout();
+            router.replace('/(auth)/login');
+          }
+        },
+      ]
+    );
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <View style={styles.authContainer}>
+        <Text style={styles.authTitle}>Sign in to view your profile</Text>
+        <TouchableOpacity 
+          style={styles.signInButton}
+          onPress={() => router.push('/(auth)/login')}
+        >
+          <Text style={styles.signInButtonText}>Sign In</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const menuItems = [
+    { icon: 'person-outline', label: 'Edit Profile', onPress: () => {} },
+    { icon: 'medical-outline', label: 'Emergency Contact', onPress: () => {} },
+    { icon: 'notifications-outline', label: 'Notifications', onPress: () => {} },
+    { icon: 'shield-checkmark-outline', label: 'Privacy & Security', onPress: () => {} },
+    { icon: 'help-circle-outline', label: 'Help & Support', onPress: () => {} },
+    { icon: 'document-text-outline', label: 'Terms & Conditions', onPress: () => {} },
+    { icon: 'information-circle-outline', label: 'About', onPress: () => {} },
+  ];
+
+  return (
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Profile Header */}
+      <View style={styles.header}>
+        <View style={styles.avatarContainer}>
+          {user?.profileImage ? (
+            <Image source={{ uri: user.profileImage }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Ionicons name="person" size={40} color="#FFFFFF" />
+            </View>
+          )}
+          <TouchableOpacity style={styles.editAvatarButton}>
+            <Ionicons name="camera" size={16} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.name}>{user?.firstName} {user?.lastName}</Text>
+        <Text style={styles.email}>{user?.email}</Text>
+      </View>
+
+      {/* Quick Stats */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>12</Text>
+          <Text style={styles.statLabel}>Races</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>478.5</Text>
+          <Text style={styles.statLabel}>Total KM</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>3</Text>
+          <Text style={styles.statLabel}>Badges</Text>
+        </View>
+      </View>
+
+      {/* Menu Items */}
+      <View style={styles.menuContainer}>
+        <TouchableOpacity style={styles.menuItem} onPress={cycleTheme}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="moon-outline" size={22} color="#6B7280" />
+            <View>
+              <Text style={styles.menuItemText}>Appearance</Text>
+              <Text style={styles.menuSubText}>
+                {theme === 'system'
+                  ? `System (${resolvedTheme})`
+                  : theme.charAt(0).toUpperCase() + theme.slice(1)}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.menuContainer}>
+        {menuItems.map((item, index) => (
+          <TouchableOpacity 
+            key={index} 
+            style={styles.menuItem}
+            onPress={item.onPress}
+          >
+            <View style={styles.menuItemLeft}>
+              <Ionicons name={item.icon as any} size={22} color="#6B7280" />
+              <Text style={styles.menuItemText}>{item.label}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Sign Out Button */}
+      <TouchableOpacity style={styles.signOutButton} onPress={handleLogout}>
+        <Ionicons name="log-out-outline" size={22} color="#DC2626" />
+        <Text style={styles.signOutText}>Sign Out</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.version}>Version 1.0.0</Text>
+      
+      <View style={styles.bottomSpacing} />
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+  },
+  authContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#FFFFFF',
+  },
+  authTitle: {
+    fontSize: 18,
+    color: '#6B7280',
+    marginBottom: 16,
+  },
+  signInButton: {
+    backgroundColor: '#0F766E',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  signInButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  header: {
+    backgroundColor: '#0F766E',
+    paddingTop: 24,
+    paddingBottom: 32,
+    alignItems: 'center',
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+  },
+  avatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+  },
+  editAvatarButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#1F2937',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
+  name: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  email: {
+    fontSize: 14,
+    color: '#A7F3D0',
+    marginTop: 4,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: -20,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#0F766E',
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  menuContainer: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  menuItemText: {
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  menuSubText: {
+    marginTop: 2,
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FEE2E2',
+    marginHorizontal: 16,
+    marginTop: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  signOutText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+  version: {
+    textAlign: 'center',
+    color: '#9CA3AF',
+    fontSize: 14,
+    marginTop: 24,
+  },
+  bottomSpacing: {
+    height: 32,
+  },
+});

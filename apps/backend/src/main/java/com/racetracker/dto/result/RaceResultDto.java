@@ -1,0 +1,43 @@
+package com.racetracker.dto.result;
+
+import com.racetracker.dto.participant.ParticipantDto;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+@Getter
+@Setter
+public class RaceResultDto {
+    private UUID id;
+    private UUID participantId;
+    private UUID raceId;
+    private UUID categoryId;
+
+    // Web contract fields
+    private String gunTime;
+    private String chipTime;
+    private Integer overallPosition;
+    private Integer genderPosition;
+    private Integer categoryPosition;
+    private String averagePace;
+    private Double averageSpeed;
+    @JsonProperty("isOfficial")
+    private boolean isOfficial;
+    @JsonProperty("isDisqualified")
+    private boolean isDisqualified;
+    private String disqualificationReason;
+    private ParticipantDto participant;
+
+    // Mobile contract fields
+    private String bibNumber;
+    private String category;
+    private String startTime;
+    private String finishTime;
+    private String totalTime;
+    private List<ResultSplitDto> splits = new ArrayList<>();
+    private String status;
+}

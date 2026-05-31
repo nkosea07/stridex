@@ -1,0 +1,26 @@
+{
+  "name": "race-tracker-platform",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "contracts:validate": "node scripts/validate-contracts.mjs",
+    "dev": "pnpm --filter web dev",
+    "dev:stack": "bash scripts/dev-stack.sh",
+    "dev:down": "bash scripts/dev-stack.sh down",
+    "dev:web": "pnpm --filter web dev",
+    "dev:mobile": "pnpm --filter race-tracker-mobile start",
+    "build": "pnpm contracts:validate && pnpm --filter web build",
+    "build:web": "pnpm contracts:validate && pnpm --filter web build",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: race-tracker-db
+    environment:
+      POSTGRES_DB: race_tracker
+      POSTGRES_USER: race_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-localdevpassword}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "${DB_HOST_PORT:-5435}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U race_admin -d race_tracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - race-tracker-network
+
+  # Spring Boot Backend (uncomment after building)
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: race-tracker-backend
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   environment:
+  #     SPRING_PROFILES_ACTIVE: dev
+  #     DB_HOST: db
+  #     DB_PORT: 5432
+  #     DB_NAME: race_tracker
+  #     DB_USERNAME: race_admin
+  #     DB_PASSWORD: ${DB_PASSWORD:-localdevpassword}
+  #     JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-for-local-development}
+  #     MAIL_HOST: mailhog
+  #     MAIL_PORT: 1025
+  #   ports:
+  #     - "8080:8080"
+  #   networks:
+  #     - race-tracker-network
+
+  # MailHog for local email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: race-tracker-mailhog
+    profiles:
+      - mail
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - race-tracker-network
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: race-tracker-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - race-tracker-network
+
+volumes:
+  postgres_data:
+
+networks:
+  race-tracker-network:
+    driver: bridge

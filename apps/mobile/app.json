@@ -1,0 +1,68 @@
+{
+  "expo": {
+    "name": "Race Tracker",
+    "slug": "race-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "racetracker",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F766E"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.racetracker.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We need your location to track your race progress in real-time.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We need your location to track your race progress even when the app is in the background.",
+        "NSCameraUsageDescription": "We need camera access to scan QR codes at checkpoints."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F766E"
+      },
+      "package": "com.racetracker.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "CAMERA"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Race Tracker to use your location to track your race progress."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Race Tracker to access your camera for QR code scanning."
+        }
+      ],
+      [
+        "@rnmapbox/maps",
+        {
+          "mapboxAccessToken": "$MAPBOX_ACCESS_TOKEN"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

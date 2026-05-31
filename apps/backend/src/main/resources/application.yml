@@ -1,0 +1,151 @@
+spring:
+  application:
+    name: race-tracker-backend
+  config:
+    import: optional:file:.env[.properties]
+  
+  # Database Configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:race_tracker}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      connection-timeout: 20000
+  
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update  # Use 'update' for development, 'validate' for production
+    show-sql: ${SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+  
+  # Email Configuration
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+  
+  # File Upload
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# Server Configuration
+server:
+  port: ${SERVER_PORT:8081}
+  servlet:
+    context-path: /api
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expiration: 86400000    # 24 hours
+  refresh-token-expiration: 604800000   # 7 days
+
+# CORS Configuration
+cors:
+  allowed-origins:
+    - http://localhost:5173    # Vite dev server
+    - http://localhost:8082    # Mobile web dev server
+    - http://localhost:3000    # Alternative dev server
+    - ${FRONTEND_URL:http://localhost:5173}
+  allowed-methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - PATCH
+    - OPTIONS
+  allowed-headers:
+    - "*"
+  allow-credentials: true
+
+# WebSocket Configuration
+websocket:
+  allowed-origins:
+    - http://localhost:5173
+    - ${FRONTEND_URL:http://localhost:5173}
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.racetracker: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+# Race Tracker Custom Configuration
+racetracker:
+  bib:
+    qr-code-size: 200
+    default-prefix: "RT"
+  tracking:
+    gps-update-interval-seconds: 5
+    checkpoint-radius-meters: 50
+  email:
+    enabled: ${MAIL_ENABLED:false}
+    from-address: ${MAIL_FROM:noreply@racetracker.com}
+    from-name: "Race Tracker Platform"
+    frontend-base-url: ${FRONTEND_URL:http://localhost:5173}
+    verification-path: /verify-email
+    reset-password-path: /reset-password
+  api:
+    version: 1
+  seed:
+    default-admin:
+      enabled: false
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+logging:
+  level:
+    com.racetracker: DEBUG
+
+racetracker:
+  seed:
+    default-admin:
+      enabled: true
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+logging:
+  level:
+    root: WARN
+    com.racetracker: INFO
