@@ -54,6 +54,34 @@ server:
   servlet:
     context-path: /api
 
+management:
+  endpoints:
+    enabled-by-default: false
+    web:
+      base-path: /actuator
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      enabled: true
+      probes:
+        enabled: true
+      show-details: never
+    info:
+      enabled: true
+    prometheus:
+      enabled: true
+  info:
+    env:
+      enabled: true
+    build:
+      enabled: true
+
+info:
+  app:
+    name: race-tracker-backend
+    description: Backend service for Race/Marathon Tracking Platform
+
 # JWT Configuration
 jwt:
   secret: ${JWT_SECRET}
