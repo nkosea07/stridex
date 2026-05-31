@@ -23,7 +23,6 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -33,12 +32,6 @@ import java.util.stream.Collectors;
 public class PublicTrackingServiceImpl implements PublicTrackingService {
 
     private static final int HUB_LEADERBOARD_LIMIT = 10;
-    private static final EnumSet<Participant.ParticipantStatus> PUBLICLY_RELEVANT_STATUSES = EnumSet.of(
-        Participant.ParticipantStatus.STARTED,
-        Participant.ParticipantStatus.FINISHED,
-        Participant.ParticipantStatus.DNF,
-        Participant.ParticipantStatus.DISQUALIFIED
-    );
 
     private final RaceRepository raceRepository;
     private final ParticipantRepository participantRepository;
@@ -168,9 +161,8 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     }
 
     private boolean isPubliclyRelevant(Participant participant, GpsLocation latest, List<CheckpointRecord> records) {
-        return latest != null
-            || !records.isEmpty()
-            || (participant.getStatus() != null && PUBLICLY_RELEVANT_STATUSES.contains(participant.getStatus()));
+        return participant.getStatus() == Participant.ParticipantStatus.STARTED
+            && (latest != null || !records.isEmpty());
     }
 
     private PublicRaceAthleteSummaryResponse buildAthleteSummary(

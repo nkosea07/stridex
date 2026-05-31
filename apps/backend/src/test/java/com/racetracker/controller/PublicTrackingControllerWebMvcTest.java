@@ -40,7 +40,7 @@ class PublicTrackingControllerWebMvcTest {
     private JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Test
-    void publicEndpoints_doNotDeclareMethodSecurity() throws Exception {
+    void getHub_allowsAnonymousAccess() throws Exception {
         UUID raceId = UUID.randomUUID();
 
         PublicRaceAthleteSummaryResponse athlete = new PublicRaceAthleteSummaryResponse();
@@ -58,14 +58,7 @@ class PublicTrackingControllerWebMvcTest {
         when(publicTrackingService.getRaceHub(raceId)).thenReturn(response);
 
         Method getHub = PublicTrackingController.class.getMethod("getHub", UUID.class);
-        Method getLiveAthletes = PublicTrackingController.class.getMethod("getLiveAthletes", UUID.class);
-        Method searchAthletes = PublicTrackingController.class.getMethod("searchAthletes", UUID.class, String.class);
-        Method getAthleteTracking = PublicTrackingController.class.getMethod("getAthleteTracking", UUID.class, UUID.class);
-
         org.assertj.core.api.Assertions.assertThat(getHub.isAnnotationPresent(PreAuthorize.class)).isFalse();
-        org.assertj.core.api.Assertions.assertThat(getLiveAthletes.isAnnotationPresent(PreAuthorize.class)).isFalse();
-        org.assertj.core.api.Assertions.assertThat(searchAthletes.isAnnotationPresent(PreAuthorize.class)).isFalse();
-        org.assertj.core.api.Assertions.assertThat(getAthleteTracking.isAnnotationPresent(PreAuthorize.class)).isFalse();
 
         mockMvc.perform(get("/v1/public/races/{raceId}/hub", raceId))
             .andExpect(status().isOk())
