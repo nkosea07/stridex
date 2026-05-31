@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { ChevronRight, RefreshCcw, Search, Trophy } from 'lucide-react'
 import { publicTrackingApi } from '@/lib/api'
 import type { PublicAthleteSummary, PublicRaceHub } from '@/types'
@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 
 export function PublicRaceHubPage() {
   const { raceId } = useParams<{ raceId: string }>()
+  const location = useLocation()
   const searchSectionRef = useRef<HTMLElement | null>(null)
   const [hub, setHub] = useState<PublicRaceHub | null>(null)
   const [athletes, setAthletes] = useState<PublicAthleteSummary[]>([])
@@ -22,6 +23,7 @@ export function PublicRaceHubPage() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const trimmedQuery = query.trim()
+  const returnTo = `${location.pathname}${location.search}${location.hash}`
 
   useEffect(() => {
     if (!raceId) return
@@ -203,7 +205,7 @@ export function PublicRaceHubPage() {
                   asChild
                   className="mt-4 rounded-full bg-slate-950 px-5 text-xs font-bold uppercase tracking-[0.18em] text-cyan-100 hover:bg-slate-800"
                 >
-                  <Link to="/register">
+                  <Link to="/register" state={{ from: returnTo }}>
                     Create Free Account
                     <ChevronRight className="ml-2 h-4 w-4" />
                   </Link>

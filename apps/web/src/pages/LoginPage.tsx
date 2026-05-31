@@ -15,7 +15,11 @@ export function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const unauthorizedReason = (location.state as { reason?: string } | null)?.reason === 'unauthorized'
+  const locationState = location.state as { from?: string; reason?: string } | null
+  const unauthorizedReason = locationState?.reason === 'unauthorized'
+  const returnTo = typeof locationState?.from === 'string' && locationState.from.startsWith('/') && !locationState.from.startsWith('//')
+    ? locationState.from
+    : undefined
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -23,7 +27,7 @@ export function LoginPage() {
     
     try {
       const user = await login(email, password)
-      navigate(isAdminRole(user.role) ? '/admin' : '/app')
+      navigate(returnTo ?? (isAdminRole(user.role) ? '/admin' : '/app'))
       toast.success('Welcome back!')
     } catch {
       toast.error('Invalid credentials. Please try again.')
@@ -101,7 +105,11 @@ export function LoginPage() {
 
             <p className="mt-4 text-center text-sm text-muted-foreground">
               New user?{' '}
-              <Link to="/register" className="text-primary underline-offset-4 hover:underline">
+              <Link
+                to="/register"
+                state={returnTo ? { from: returnTo } : undefined}
+                className="text-primary underline-offset-4 hover:underline"
+              >
                 Create account
               </Link>
             </p>

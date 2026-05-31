@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { Activity, ArrowLeft, ChevronRight, Copy, Flag, MapPin, RefreshCcw, Timer } from 'lucide-react'
 import { publicTrackingApi } from '@/lib/api'
 import type { PublicAthleteTracking } from '@/types'
@@ -33,10 +33,12 @@ function statusTone(status: string) {
 
 export function PublicAthleteTrackingPage() {
   const { raceId, participantId } = useParams<{ raceId: string; participantId: string }>()
+  const location = useLocation()
   const requestIdRef = useRef(0)
   const [tracking, setTracking] = useState<PublicAthleteTracking | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const returnTo = `${location.pathname}${location.search}${location.hash}`
 
   const loadTracking = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (!raceId || !participantId) return
@@ -250,7 +252,7 @@ export function PublicAthleteTrackingPage() {
                   asChild
                   className="mt-4 rounded-full bg-white px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-950 hover:bg-cyan-50"
                 >
-                  <Link to="/register">
+                  <Link to="/register" state={{ from: returnTo }}>
                     Create Free Account
                     <ChevronRight className="ml-2 h-4 w-4" />
                   </Link>
