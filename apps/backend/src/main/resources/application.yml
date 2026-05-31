@@ -72,8 +72,8 @@ management:
     prometheus:
       enabled: true
   info:
-    env:
-      enabled: true
+    defaults:
+      enabled: false
     build:
       enabled: true
 

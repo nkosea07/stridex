@@ -4,6 +4,9 @@ import com.racetracker.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.actuate.info.Info;
+import org.springframework.boot.actuate.info.InfoContributor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -91,6 +94,17 @@ public class SecurityConfig {
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
+    }
+
+    @Bean
+    public InfoContributor appInfoContributor(
+        @Value("${spring.application.name}") String applicationName,
+        @Value("${info.app.description:}") String applicationDescription
+    ) {
+        return (Info.Builder builder) -> builder.withDetail("app", java.util.Map.of(
+            "name", applicationName,
+            "description", applicationDescription
+        ));
     }
 
     private List<String> emptyFallback(List<String> input, List<String> fallback) {

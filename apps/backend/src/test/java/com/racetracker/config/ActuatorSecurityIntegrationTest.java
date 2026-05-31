@@ -3,8 +3,13 @@ package com.racetracker.config;
 import com.racetracker.security.CustomUserDetailsService;
 import com.racetracker.security.JwtAuthenticationFilter;
 import com.racetracker.security.JwtService;
+import io.micrometer.core.instrument.Clock;
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.prometheus.metrics.model.registry.PrometheusRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.actuate.metrics.export.prometheus.PrometheusScrapeEndpoint;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration;
@@ -16,13 +21,19 @@ import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfigurat
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.RequestBuilder;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+
+import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -78,9 +89,14 @@ class ActuatorSecurityIntegrationTest {
     void prometheusEndpoint_isNotPubliclyAccessible() throws Exception {
         mockMvc.perform(apiGet("/actuator/prometheus"))
             .andExpect(result -> assertThat(result.getResponse().getStatus()).isIn(401, 403));
+
+        mockMvc.perform(apiGet("/actuator/prometheus").with(user("ops-user")))
+            .andExpect(status().isOk())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
+            .andExpect(content().string(org.hamcrest.Matchers.containsString("#")));
     }
 
-    private RequestBuilder apiGet(String path) {
+    private MockHttpServletRequestBuilder apiGet(String path) {
         return get("/api" + path).contextPath("/api");
     }
 
@@ -96,5 +112,15 @@ class ActuatorSecurityIntegrationTest {
     @EnableConfigurationProperties({CorsProperties.class, RaceTrackerProperties.class})
     @Import({SecurityConfig.class, JwtAuthenticationFilter.class})
     static class TestApplication {
+
+        @Bean
+        PrometheusMeterRegistry prometheusMeterRegistry() {
+            return new PrometheusMeterRegistry(PrometheusConfig.DEFAULT, new PrometheusRegistry(), Clock.SYSTEM);
+        }
+
+        @Bean
+        PrometheusScrapeEndpoint prometheusScrapeEndpoint(PrometheusMeterRegistry prometheusMeterRegistry) {
+            return new PrometheusScrapeEndpoint(prometheusMeterRegistry.getPrometheusRegistry(), new Properties());
+        }
     }
 }
