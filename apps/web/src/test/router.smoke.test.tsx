@@ -1,7 +1,42 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { appRoutes } from '@/App'
+import routes from '../../app/routes'
+import Root from '../../app/root'
+import type { RouteConfigEntry } from '@react-router/dev/routes'
+import type { RouteObject } from 'react-router-dom'
+import type { ComponentType } from 'react'
+
+const routeModules = import.meta.glob('../../app/**/*.tsx', { eager: true }) as Record<
+  string,
+  { default?: ComponentType }
+>
+
+function getRouteModule(file: string) {
+  const routeModule = routeModules[`../../app/${file}`]
+
+  if (!routeModule?.default) {
+    throw new Error(`Missing route module for ${file}`)
+  }
+
+  return routeModule.default
+}
+
+function toRouteObjects(config: RouteConfigEntry[]): RouteObject[] {
+  return config.map((entry) => ({
+    path: entry.path,
+    index: entry.index,
+    Component: getRouteModule(entry.file),
+    children: entry.children ? toRouteObjects(entry.children) : undefined,
+  }))
+}
+
+const runtimeRoutes: RouteObject[] = [
+  {
+    Component: Root,
+    children: toRouteObjects(routes),
+  },
+]
 
 const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
   const url = String(input)
@@ -153,7 +188,7 @@ describe('appRoutes', () => {
   ])('resolves %s', async (initialEntry, expectedPathname, findExpectedContent, setup) => {
     setup()
 
-    const router = createMemoryRouter(appRoutes, {
+    const router = createMemoryRouter(runtimeRoutes, {
       initialEntries: [initialEntry],
     })
 

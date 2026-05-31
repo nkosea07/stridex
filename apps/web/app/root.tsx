@@ -1,8 +1,15 @@
 import type { ReactNode } from 'react'
-import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router'
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, type LinksFunction } from 'react-router'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { Toaster } from '@/components/ui/sonner'
+import appStylesHref from '../src/index.css?url'
+import mapboxStylesHref from 'mapbox-gl/dist/mapbox-gl.css?url'
+
+export const links: LinksFunction = () => [
+  { rel: 'stylesheet', href: appStylesHref },
+  { rel: 'stylesheet', href: mapboxStylesHref },
+]
 
 function Document({ children }: { children: ReactNode }) {
   return (
