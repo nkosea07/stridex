@@ -28,11 +28,12 @@ The backend API built with Java Spring Boot, providing:
 
 **Tech Stack:**
 - Java 21
-- Spring Boot 3.2
+- Spring Boot 3.5
 - Spring Security + JWT
 - Spring Data JPA
 - PostgreSQL 15
 - WebSocket (STOMP)
+- Actuator + Micrometer/Prometheus
 
 [View Backend README](apps/backend/README.md)
 
@@ -84,7 +85,13 @@ Cross-platform mobile app for athletes:
 
 - `apps/web`: serves both public spectators and authenticated/admin workflows. Public Phase 1 routes include `/race/:raceId` and `/race/:raceId/athlete/:participantId`.
 - `apps/mobile`: remains the richer logged-in experience for athletes. Premium fan-oriented mobile features are later phases and out of scope for this foundation.
-- `apps/backend`: serves protected admin/athlete APIs plus anonymous public spectator read endpoints.
+- `apps/backend`: serves protected admin/athlete APIs plus anonymous public spectator read endpoints, with `/api/actuator` health/info/prometheus management endpoints for deployment and race-day operations.
+
+Backend modernization status:
+- `apps/backend` now runs on Spring Boot 3.5 with Actuator and Micrometer observation support.
+- Public tracking and tracking ingest hot paths use stable `@Observed` names for metrics/observation.
+- `/api/actuator/health/**` and `/api/actuator/info` are public; `/api/actuator/prometheus` requires authentication.
+- External OpenTelemetry exporter setup, geospatial storage, telemetry partitioning, and RFID/bib ingest are later modernization phases.
 
 ## Getting Started
 

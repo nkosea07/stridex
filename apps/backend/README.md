@@ -4,10 +4,12 @@ Spring Boot API for race administration, participant tracking, results, and noti
 
 ## Stack
 - Java 17
-- Spring Boot 3.2
+- Spring Boot 3.5
 - Spring Security (JWT)
 - Spring Data JPA (PostgreSQL)
 - Spring WebSocket
+- Spring Boot Actuator
+- Micrometer Observation + Prometheus metrics
 - MapStruct
 - springdoc OpenAPI + Swagger UI
 
@@ -18,6 +20,8 @@ mvn spring-boot:run
 ```
 
 The backend runs under the `/api` servlet context path, so versioned controller routes are exposed under `/api/v1`.
+
+Management endpoints also use the same context path and are exposed under `/api/actuator`.
 
 ## Configuration
 Main config file:
@@ -32,6 +36,27 @@ Common database variables:
 - `DB_NAME` (default `race_tracker`)
 - `DB_USERNAME` (default `race_admin`)
 - `DB_PASSWORD` (default `password`)
+
+## Management and Observability
+
+Actuator is configured as the backend operational surface:
+- `GET /api/actuator/health` is public for load balancers and uptime checks.
+- `GET /api/actuator/health/liveness` is public for liveness probes.
+- `GET /api/actuator/health/readiness` is public for readiness probes.
+- `GET /api/actuator/info` is public, but limited to explicit safe app metadata and optional build metadata.
+- `GET /api/actuator/prometheus` is exposed for metrics scraping but requires authentication.
+
+The public tracking and tracking ingest hot paths are instrumented with Micrometer `@Observed` names:
+- `tracking.public.race_hub`
+- `tracking.public.live_athletes`
+- `tracking.public.athlete_detail`
+- `tracking.ingest.location`
+- `tracking.ingest.location_batch`
+- `tracking.ingest.checkpoint`
+- `tracking.live.aggregate`
+- `tracking.live.participant_track`
+
+This phase does not configure an external OpenTelemetry collector/exporter. Geospatial storage work, telemetry partitioning, and RFID/bib device ingest remain later modernization phases.
 
 ## API Surface (Implemented)
 
@@ -141,3 +166,9 @@ mvn clean test
 
 Current test suite includes controller-level smoke tests under:
 - `src/test/java/com/racetracker/controller`
+
+Focused operational tests:
+```bash
+cd apps/backend
+mvn -Dtest=ActuatorSecurityIntegrationTest,TrackingObservationCoverageTest test
+```

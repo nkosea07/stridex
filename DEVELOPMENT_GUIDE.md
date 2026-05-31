@@ -47,7 +47,7 @@ This guide provides detailed instructions and prompts to help you complete the r
 |-------|------------|---------|
 | Mobile | React Native + Expo | Athlete app (iOS/Android) |
 | Web App | React + Vite + Tailwind | Public spectator and race operations surface |
-| Backend | Spring Boot 3.x | REST API + WebSocket server |
+| Backend | Spring Boot 3.5 | REST API + WebSocket server |
 | Database | PostgreSQL 15+ | Primary data store |
 | Cache | Redis (optional) | Session/caching layer |
 | Auth | JWT + Spring Security | Authentication/Authorization |
@@ -75,6 +75,19 @@ The web app is moving toward React Router route-managed data loading so routing,
 Current route modules live in `apps/web/app/`, with most reusable UI, page composition, API clients, and shared logic still living in `apps/web/src/`.
 
 This foundation does not include deeper prerender or SSR rollout, broad admin/operator data-loading refactors, or non-web modernization work. Those remain deferred to later modernization plans.
+
+### Backend Platform and Observability Direction
+
+The backend platform modernization follows the public web routing work because the public spectator surface depends on reliable backend reads, tracking writes, and live tracking fanout. The current backend baseline is Spring Boot 3.5 with Actuator enabled under the existing `/api` servlet context.
+
+Management endpoint policy:
+- Public probes: `GET /api/actuator/health`, `GET /api/actuator/health/liveness`, and `GET /api/actuator/health/readiness`
+- Public safe metadata: `GET /api/actuator/info`
+- Authenticated metrics scrape: `GET /api/actuator/prometheus`
+
+Micrometer `@Observed` instrumentation exists on the public tracking and tracking ingest hot paths. The stable observation names are `tracking.public.race_hub`, `tracking.public.live_athletes`, `tracking.public.athlete_detail`, `tracking.ingest.location`, `tracking.ingest.location_batch`, `tracking.ingest.checkpoint`, `tracking.live.aggregate`, and `tracking.live.participant_track`.
+
+This phase does not include external OpenTelemetry collector/exporter setup, PostGIS/geospatial work, telemetry partitioning, or RFID/bib device ingest. Those remain separate modernization plans.
 
 ---
 
