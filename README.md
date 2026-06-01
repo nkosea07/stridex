@@ -31,7 +31,7 @@ The backend API built with Java Spring Boot, providing:
 - Spring Boot 3.5
 - Spring Security + JWT
 - Spring Data JPA
-- PostgreSQL 15
+- PostgreSQL 15 + PostGIS
 - WebSocket (STOMP)
 - Actuator + Micrometer/Prometheus
 
@@ -95,7 +95,8 @@ Backend modernization status:
 - `apps/backend` now runs on Spring Boot 3.5 with Actuator and Micrometer observation support.
 - Public tracking and tracking ingest hot paths use stable `@Observed` names for metrics/observation.
 - `/api/actuator/health/**` and `/api/actuator/info` are public; `/api/actuator/prometheus` requires authentication.
-- External OpenTelemetry exporter setup, geospatial storage, telemetry partitioning, and RFID/bib ingest are later modernization phases.
+- PostGIS-backed `geography(Point, 4326)` query columns and GiST indexes exist for race, checkpoint, and GPS location proximity work while decimal lat/lng fields remain the API contract.
+- External OpenTelemetry exporter setup, telemetry partitioning, and RFID/bib ingest are later modernization phases.
 
 Mobile modernization status:
 - `apps/mobile` targets Expo SDK 54 as the bridge runtime before any SDK 55/New Architecture-only migration.
@@ -109,7 +110,7 @@ Mobile modernization status:
 ### Prerequisites
 - Node.js 20.19+
 - Java 21
-- PostgreSQL 15
+- PostgreSQL 15 with PostGIS available
 - pnpm
 
 ### Quick Start
@@ -179,6 +180,8 @@ The PostgreSQL database includes:
 - `checkpoints` - Race checkpoints
 - `checkpoint_records` - Checkpoint crossings
 - `gps_locations` - GPS tracking data
+
+PostGIS is enabled by the schema for spatial query fields. Keep the decimal latitude/longitude fields for API compatibility; use the generated geography columns and GiST indexes for proximity queries such as checkpoint geofencing. High-volume `gps_locations` partitioning by `recorded_at` is planned as a future migration, not part of the current schema foundation.
 
 See `apps/backend/database/schema.sql` for full schema.
 

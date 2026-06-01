@@ -48,7 +48,7 @@ This guide provides detailed instructions and prompts to help you complete the r
 | Mobile | React Native + Expo | Athlete app (iOS/Android) |
 | Web App | React + Vite + Tailwind | Public spectator and race operations surface |
 | Backend | Spring Boot 3.5 | REST API + WebSocket server |
-| Database | PostgreSQL 15+ | Primary data store |
+| Database | PostgreSQL 15+ with PostGIS | Primary data store and spatial query support |
 | Cache | Redis (optional) | Session/caching layer |
 | Auth | JWT + Spring Security | Authentication/Authorization |
 
@@ -87,7 +87,7 @@ Management endpoint policy:
 
 Micrometer `@Observed` instrumentation exists on the public tracking and tracking ingest hot paths. The stable observation names are `tracking.public.race_hub`, `tracking.public.live_athletes`, `tracking.public.athlete_detail`, `tracking.ingest.location`, `tracking.ingest.location_batch`, `tracking.ingest.checkpoint`, `tracking.live.aggregate`, and `tracking.live.participant_track`.
 
-This phase does not include external OpenTelemetry collector/exporter setup, PostGIS/geospatial work, telemetry partitioning, or RFID/bib device ingest. Those remain separate modernization plans.
+This phase does not include external OpenTelemetry collector/exporter setup, telemetry partitioning, or RFID/bib device ingest. The PostGIS/geospatial schema foundation is in place and remains deliberately narrow: spatial columns are query fields, while the existing decimal latitude/longitude API fields stay unchanged.
 
 ### Mobile Runtime and Offline Tracking Direction
 
@@ -671,6 +671,14 @@ GET /api/v1/tracking/live/{raceId}:
 
 ## Database Setup
 
+### Geospatial Foundation
+
+The backend schema now enables PostGIS and adds `geography(Point, 4326)` query columns for race start/finish locations, checkpoints, and GPS locations. Existing decimal latitude/longitude columns remain the compatibility fields for DTOs, JPA entities, and current API payloads.
+
+Use the spatial columns through repository/service boundaries instead of spreading raw spatial SQL across controllers. `ST_DWithin` plus GiST indexes is the intended path for proximity checks such as checkpoint geofencing.
+
+Telemetry table growth remains a production risk. Convert `gps_locations` to range partitioning on `recorded_at` in a dedicated migration when race-day volume justifies it; do not rewrite the table inside the current schema foundation. RFID/bib ingest should stay deferred until this location storage and proximity-query foundation is stable.
+
 ### Initial Setup Commands
 
 ```bash
@@ -684,6 +692,8 @@ export DATABASE_URL=postgresql://user:password@localhost:5432/racetracker
 # Run schema (using psql or your preferred tool)
 psql $DATABASE_URL -f database/schema.sql
 ```
+
+The target database must support PostGIS before the schema is applied. Managed PostgreSQL providers usually require enabling the extension at the database level first.
 
 ### Sample Data Script
 
@@ -944,6 +954,7 @@ SENTRY_DSN=your-sentry-dsn
 
 - [ ] Set strong JWT secret (min 256 bits)
 - [ ] Configure HTTPS/TLS
+- [ ] Confirm PostGIS is available before applying production schema changes
 - [ ] Set up database connection pooling
 - [ ] Configure rate limiting
 - [ ] Set up health check endpoint (/actuator/health)

@@ -7,6 +7,7 @@ Spring Boot API for race administration, participant tracking, results, and noti
 - Spring Boot 3.5
 - Spring Security (JWT)
 - Spring Data JPA (PostgreSQL)
+- PostGIS for spatial query fields and proximity indexes
 - Spring WebSocket
 - Spring Boot Actuator
 - Micrometer Observation + Prometheus metrics
@@ -37,6 +38,13 @@ Common database variables:
 - `DB_USERNAME` (default `race_admin`)
 - `DB_PASSWORD` (default `password`)
 
+Database requirements:
+- PostgreSQL must have PostGIS available before applying `database/schema.sql`; the schema enables it with `CREATE EXTENSION IF NOT EXISTS postgis`.
+- Decimal latitude/longitude columns remain the API compatibility fields.
+- `geography(Point, 4326)` columns on races, checkpoints, and GPS locations are query fields for spatial operations.
+- GiST indexes support the intended `ST_DWithin` proximity path for checkpoint/race-day location checks.
+- `gps_locations` partitioning is intentionally deferred to a dedicated migration on `recorded_at` so existing JPA/API behavior stays stable.
+
 ## Management and Observability
 
 Actuator is configured as the backend operational surface:
@@ -56,7 +64,7 @@ The public tracking and tracking ingest hot paths are instrumented with Micromet
 - `tracking.live.aggregate`
 - `tracking.live.participant_track`
 
-This phase does not configure an external OpenTelemetry collector/exporter. Geospatial storage work, telemetry partitioning, and RFID/bib device ingest remain later modernization phases.
+This phase does not configure an external OpenTelemetry collector/exporter. The geospatial schema foundation is present; telemetry partitioning and RFID/bib device ingest remain later modernization phases.
 
 ## API Surface (Implemented)
 
