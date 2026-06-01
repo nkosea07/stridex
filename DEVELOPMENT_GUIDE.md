@@ -89,6 +89,35 @@ Micrometer `@Observed` instrumentation exists on the public tracking and trackin
 
 This phase does not include external OpenTelemetry collector/exporter setup, PostGIS/geospatial work, telemetry partitioning, or RFID/bib device ingest. Those remain separate modernization plans.
 
+### Mobile Runtime and Offline Tracking Direction
+
+The mobile app now targets Expo SDK 54 with React Native 0.81 and React 19.1. This is the bridge runtime before a later Expo SDK 55 / mandatory New Architecture migration.
+
+Mobile runtime policy:
+- Node baseline is `>=20.19`
+- package management is pnpm only
+- `pnpm --filter race-tracker-mobile exec expo-doctor` is part of the verification loop
+- native behavior should be tested with a development build, not only Expo Go
+
+Offline tracking model:
+1. Expo Location remains the primary live tracking mechanism.
+2. GPS points are queued in SQLite with sync status, retry counts, last error, and idempotency metadata.
+3. Failed sync attempts keep points queued for retry; they are not marked synced after a network failure.
+4. Active tracking sessions are persisted locally and recovered during app startup before the splash screen is hidden.
+5. `expo-background-task` is an opportunistic catch-up worker for queued points, not immediate race timing infrastructure.
+
+EAS Update readiness:
+- `apps/mobile/eas.json` defines `development`, `preview`, and `production` channels.
+- `app.json` uses an app-version runtime policy for OTA compatibility.
+- No fake Expo project id or update URL is checked in. Add account-backed EAS values only when publishing real updates.
+
+Deferred mobile work:
+- Expo SDK 55 / New Architecture-only migration
+- backend push-token registration and notification preferences
+- premium mobile fan features
+- mobile crash/error observability
+- RFID/bib ingest integration
+
 ---
 
 ## Backend Implementation Tasks
@@ -941,9 +970,7 @@ pnpm install
 pnpm dev
 
 # 4. Run mobile app
-cd apps/mobile
-npx expo install
-npx expo start
+pnpm --filter race-tracker-mobile start
 ```
 
 ---

@@ -73,11 +73,15 @@ Cross-platform mobile app for athletes:
 - Push notifications
 
 **Tech Stack:**
-- React Native (Expo)
+- React Native 0.81 (Expo SDK 54)
+- React 19.1
 - Expo Router
 - Zustand
 - React Native Maps
 - Expo Location & Camera
+- Expo SQLite
+- Expo BackgroundTask
+- Expo Updates / EAS Update readiness
 
 [View Mobile README](apps/mobile/README.md)
 
@@ -93,13 +97,20 @@ Backend modernization status:
 - `/api/actuator/health/**` and `/api/actuator/info` are public; `/api/actuator/prometheus` requires authentication.
 - External OpenTelemetry exporter setup, geospatial storage, telemetry partitioning, and RFID/bib ingest are later modernization phases.
 
+Mobile modernization status:
+- `apps/mobile` targets Expo SDK 54 as the bridge runtime before any SDK 55/New Architecture-only migration.
+- Active tracking sessions and queued GPS points are persisted in SQLite so normal app lifecycle interruptions do not discard race context.
+- `expo-background-task` is configured only for opportunistic catch-up sync; live race timing still depends on Expo Location foreground/background updates.
+- EAS build channels and `expo-updates` runtime-version policy are scaffolded, but a real Expo project id/update URL must be added when EAS Update is activated for an account.
+- Backend push-token registration, premium mobile fan features, SDK 55 migration, and RFID/bib ingest remain later phases.
+
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+
+- Node.js 20.19+
 - Java 21
 - PostgreSQL 15
-- pnpm (recommended) or npm
+- pnpm
 
 ### Quick Start
 
@@ -124,8 +135,7 @@ pnpm dev
 
 4. **Start the mobile app:**
 ```bash
-cd apps/mobile
-npx expo start
+pnpm --filter race-tracker-mobile start
 ```
 
 ## Features
@@ -226,8 +236,10 @@ pnpm preview
 
 ### Mobile Development
 ```bash
-cd apps/mobile
-npx expo start
+pnpm --filter race-tracker-mobile start
+pnpm --filter race-tracker-mobile exec tsc --noEmit
+pnpm --filter race-tracker-mobile lint
+pnpm --filter race-tracker-mobile exec expo-doctor
 ```
 
 ## Deployment
