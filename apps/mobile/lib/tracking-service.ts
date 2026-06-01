@@ -26,6 +26,7 @@ export const BATTERY_SAVER_OPTIONS: TrackingOptions = {
 export type LocationRow = {
   id: number;
   raceId: string;
+  clientPointId: string | null;
   latitude: number;
   longitude: number;
   altitude: number | null;
@@ -34,6 +35,9 @@ export type LocationRow = {
   heading: number | null;
   timestamp: string;
   synced: number;
+  syncAttempts: number;
+  lastSyncError: string | null;
+  updatedAt: string | null;
 };
 
 export type TrackingSessionRow = {
@@ -46,6 +50,17 @@ export type TrackingSessionRow = {
 
 // Initialize SQLite Database
 let db: TrackingDatabase | null = null;
+
+const addColumnIfMissing = async (database: TrackingDatabase, statement: string) => {
+  try {
+    await database.execAsync(statement);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.toLowerCase().includes('duplicate column')) {
+      throw error;
+    }
+  }
+};
 
 export const initDb = async () => {
   if (db) return db;
@@ -61,7 +76,11 @@ export const initDb = async () => {
       speed REAL,
       heading REAL,
       timestamp TEXT NOT NULL,
-      synced INTEGER DEFAULT 0
+      synced INTEGER DEFAULT 0,
+      clientPointId TEXT,
+      syncAttempts INTEGER NOT NULL DEFAULT 0,
+      lastSyncError TEXT,
+      updatedAt TEXT
     );
     CREATE TABLE IF NOT EXISTS tracking_sessions (
       raceId TEXT PRIMARY KEY,
@@ -72,6 +91,23 @@ export const initDb = async () => {
     );
     CREATE INDEX IF NOT EXISTS idx_tracking_sessions_status_updated
       ON tracking_sessions(status, updatedAt);
+  `);
+  await addColumnIfMissing(db, 'ALTER TABLE locations ADD COLUMN clientPointId TEXT;');
+  await addColumnIfMissing(db, 'ALTER TABLE locations ADD COLUMN syncAttempts INTEGER NOT NULL DEFAULT 0;');
+  await addColumnIfMissing(db, 'ALTER TABLE locations ADD COLUMN lastSyncError TEXT;');
+  await addColumnIfMissing(db, 'ALTER TABLE locations ADD COLUMN updatedAt TEXT;');
+  await db.execAsync(`
+    DELETE FROM locations
+      WHERE id NOT IN (
+        SELECT MIN(id)
+        FROM locations
+        GROUP BY raceId, timestamp
+      );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_race_timestamp_unique
+      ON locations(raceId, timestamp);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_client_point_id_unique
+      ON locations(clientPointId)
+      WHERE clientPointId IS NOT NULL;
   `);
   return db;
 };
@@ -101,17 +137,33 @@ TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }: any) => {
     if (!raceId) return;
 
     for (const location of locations) {
+      const timestamp = new Date(location.timestamp).toISOString();
+      const updatedAt = new Date().toISOString();
       await database.runAsync(
-        'INSERT INTO locations (raceId, latitude, longitude, altitude, accuracy, speed, heading, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        `INSERT OR IGNORE INTO locations (
+          raceId,
+          clientPointId,
+          latitude,
+          longitude,
+          altitude,
+          accuracy,
+          speed,
+          heading,
+          timestamp,
+          synced,
+          updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
         [
           raceId,
+          createClientPointId(raceId, location),
           location.coords.latitude,
           location.coords.longitude,
           location.coords.altitude ?? null,
           location.coords.accuracy ?? null,
           location.coords.speed ?? null,
           location.coords.heading ?? null,
-          new Date(location.timestamp).toISOString(),
+          timestamp,
+          updatedAt,
         ]
       );
     }
@@ -181,6 +233,30 @@ const getActiveRaceId = async () => {
   return activeRaceId;
 };
 
+const createClientPointId = (raceId: string, location: Location.LocationObject) => {
+  return [
+    raceId,
+    new Date(location.timestamp).toISOString(),
+    location.coords.latitude.toFixed(6),
+    location.coords.longitude.toFixed(6),
+  ].join(':');
+};
+
+const updateLocationRowsById = async (
+  database: TrackingDatabase,
+  ids: number[],
+  setClause: string,
+  params: (string | number | null)[] = [],
+) => {
+  if (ids.length === 0) return;
+
+  const placeholders = ids.map(() => '?').join(',');
+  await database.runAsync(
+    `UPDATE locations SET ${setClause} WHERE id IN (${placeholders})`,
+    [...params, ...ids]
+  );
+};
+
 export const syncPendingLocations = async (raceId: string) => {
   const database = await initDb();
   const pending = await database.getAllAsync<LocationRow>(
@@ -219,12 +295,11 @@ export const syncPendingLocations = async (raceId: string) => {
     }
   }
 
-  // Mark all pending as processed regardless of whether they were filtered
-  // This ensures we don't keep reprocessing the same "redundant" points.
-  const allIds = pending.map(p => p.id).join(',');
+  const pendingIds = pending.map((point) => point.id);
 
   if (filtered.length === 0) {
-    await database.runAsync(`UPDATE locations SET synced = 1 WHERE id IN (${allIds})`);
+    // These points are intentionally compacted locally as redundant, so they do not need network delivery.
+    await updateLocationRowsById(database, pendingIds, 'synced = 1, updatedAt = ?', [new Date().toISOString()]);
     return;
   }
 
@@ -240,9 +315,18 @@ export const syncPendingLocations = async (raceId: string) => {
     }));
 
     await api.sendLocationsBatch(raceId, batch);
-    await database.runAsync(`UPDATE locations SET synced = 1 WHERE id IN (${allIds})`);
+    await updateLocationRowsById(database, pendingIds, 'synced = 1, lastSyncError = NULL, updatedAt = ?', [
+      new Date().toISOString(),
+    ]);
   } catch (err) {
     console.warn('Failed to sync locations in background:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    await updateLocationRowsById(
+      database,
+      pendingIds,
+      'syncAttempts = syncAttempts + 1, lastSyncError = ?, updatedAt = ?',
+      [message, new Date().toISOString()]
+    );
   }
 };
 
