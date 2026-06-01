@@ -6,6 +6,13 @@
     "orientation": "portrait",
     "scheme": "racetracker",
     "userInterfaceStyle": "automatic",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "splash": {
       "backgroundColor": "#0F766E"
     },
@@ -59,7 +66,8 @@
       ],
       "expo-font",
       "expo-sqlite",
-      "expo-background-task"
+      "expo-background-task",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true

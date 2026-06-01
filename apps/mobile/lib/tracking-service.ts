@@ -1,9 +1,11 @@
 import * as Location from 'expo-location';
+import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import { openDatabaseAsync, type TrackingDatabase } from './db';
 import { api } from './api';
 
 export const LOCATION_TRACKING_TASK = 'LOCATION_TRACKING_TASK';
+export const LOCATION_SYNC_TASK = 'LOCATION_SYNC_TASK';
 
 export interface TrackingOptions {
   accuracy: Location.LocationAccuracy;
@@ -173,6 +175,19 @@ TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }: any) => {
   }
 });
 
+TaskManager.defineTask(LOCATION_SYNC_TASK, async () => {
+  try {
+    const activeSession = await getActiveTrackingSession();
+    if (!activeSession) return BackgroundTask.BackgroundTaskResult.Success;
+
+    await syncPendingLocations(activeSession.raceId);
+    return BackgroundTask.BackgroundTaskResult.Success;
+  } catch (error) {
+    console.warn('Failed to run background location sync:', error);
+    return BackgroundTask.BackgroundTaskResult.Failed;
+  }
+});
+
 // Simple state management for the active race ID in the background task
 let activeRaceId: string | null = null;
 
@@ -255,6 +270,25 @@ const updateLocationRowsById = async (
     `UPDATE locations SET ${setClause} WHERE id IN (${placeholders})`,
     [...params, ...ids]
   );
+};
+
+export const registerLocationSyncTask = async () => {
+  const status = await BackgroundTask.getStatusAsync();
+  if (status !== BackgroundTask.BackgroundTaskStatus.Available) return;
+
+  const isRegistered = await TaskManager.isTaskRegisteredAsync(LOCATION_SYNC_TASK);
+  if (isRegistered) return;
+
+  await BackgroundTask.registerTaskAsync(LOCATION_SYNC_TASK, {
+    minimumInterval: 15,
+  });
+};
+
+export const unregisterLocationSyncTask = async () => {
+  const isRegistered = await TaskManager.isTaskRegisteredAsync(LOCATION_SYNC_TASK);
+  if (isRegistered) {
+    await BackgroundTask.unregisterTaskAsync(LOCATION_SYNC_TASK);
+  }
 };
 
 export const syncPendingLocations = async (raceId: string) => {
@@ -361,6 +395,10 @@ export const startBackgroundTracking = async (
     activeRaceId = null;
     throw error;
   }
+
+  await registerLocationSyncTask().catch((error) => {
+    console.warn('Failed to register background location sync:', error);
+  });
 };
 
 export const stopBackgroundTracking = async () => {
@@ -369,6 +407,9 @@ export const stopBackgroundTracking = async () => {
   if (isStarted) {
     await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK);
   }
+  await unregisterLocationSyncTask().catch((error) => {
+    console.warn('Failed to unregister background location sync:', error);
+  });
   await markTrackingSessionStopped(raceId);
   activeRaceId = null;
 };
