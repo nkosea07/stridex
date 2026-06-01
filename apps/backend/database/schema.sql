@@ -254,6 +254,68 @@ UPDATE gps_locations
 SET location_geog = ST_SetSRID(ST_MakePoint(longitude::double precision, latitude::double precision), 4326)::geography
 WHERE location_geog IS NULL;
 
+-- Keep spatial query columns in sync with the decimal latitude/longitude source fields.
+CREATE OR REPLACE FUNCTION set_race_location_geog()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.start_location_lat IS NOT NULL AND NEW.start_location_lng IS NOT NULL THEN
+        NEW.start_location_geog = ST_SetSRID(ST_MakePoint(NEW.start_location_lng::double precision, NEW.start_location_lat::double precision), 4326)::geography;
+    ELSE
+        NEW.start_location_geog = NULL;
+    END IF;
+
+    IF NEW.finish_location_lat IS NOT NULL AND NEW.finish_location_lng IS NOT NULL THEN
+        NEW.finish_location_geog = ST_SetSRID(ST_MakePoint(NEW.finish_location_lng::double precision, NEW.finish_location_lat::double precision), 4326)::geography;
+    ELSE
+        NEW.finish_location_geog = NULL;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS set_race_location_geog_before_write ON races;
+CREATE TRIGGER set_race_location_geog_before_write
+    BEFORE INSERT OR UPDATE OF start_location_lat, start_location_lng, finish_location_lat, finish_location_lng
+    ON races
+    FOR EACH ROW
+    EXECUTE FUNCTION set_race_location_geog();
+
+CREATE OR REPLACE FUNCTION set_checkpoint_location_geog()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.latitude IS NOT NULL AND NEW.longitude IS NOT NULL THEN
+        NEW.location_geog = ST_SetSRID(ST_MakePoint(NEW.longitude::double precision, NEW.latitude::double precision), 4326)::geography;
+    ELSE
+        NEW.location_geog = NULL;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS set_checkpoint_location_geog_before_write ON checkpoints;
+CREATE TRIGGER set_checkpoint_location_geog_before_write
+    BEFORE INSERT OR UPDATE OF latitude, longitude
+    ON checkpoints
+    FOR EACH ROW
+    EXECUTE FUNCTION set_checkpoint_location_geog();
+
+CREATE OR REPLACE FUNCTION set_gps_location_geog()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.location_geog = ST_SetSRID(ST_MakePoint(NEW.longitude::double precision, NEW.latitude::double precision), 4326)::geography;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS set_gps_location_geog_before_write ON gps_locations;
+CREATE TRIGGER set_gps_location_geog_before_write
+    BEFORE INSERT OR UPDATE OF latitude, longitude
+    ON gps_locations
+    FOR EACH ROW
+    EXECUTE FUNCTION set_gps_location_geog();
+
 -- Checkpoint Records
 CREATE TYPE record_method AS ENUM ('RFID', 'QR_CODE', 'MANUAL', 'GPS_AUTO');
 

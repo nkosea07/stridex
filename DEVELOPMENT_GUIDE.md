@@ -673,9 +673,11 @@ GET /api/v1/tracking/live/{raceId}:
 
 ### Geospatial Foundation
 
-The backend schema now enables PostGIS and adds `geography(Point, 4326)` query columns for race start/finish locations, checkpoints, and GPS locations. Existing decimal latitude/longitude columns remain the compatibility fields for DTOs, JPA entities, and current API payloads.
+The backend schema now enables PostGIS and adds `geography(Point, 4326)` query columns for race start/finish locations, checkpoints, and GPS locations. Existing decimal latitude/longitude columns remain the compatibility fields for DTOs, JPA entities, and current API payloads. Database triggers keep the spatial query columns synchronized when coordinates are inserted or updated.
 
 Use the spatial columns through repository/service boundaries instead of spreading raw spatial SQL across controllers. `ST_DWithin` plus GiST indexes is the intended path for proximity checks such as checkpoint geofencing.
+
+For existing deployments, apply `apps/backend/database/migrations/2026-06-01-geospatial-telemetry-foundation.sql`. It enables PostGIS, adds/backfills the geography columns, creates sync triggers, and adds the GiST indexes without changing API contracts.
 
 Telemetry table growth remains a production risk. Convert `gps_locations` to range partitioning on `recorded_at` in a dedicated migration when race-day volume justifies it; do not rewrite the table inside the current schema foundation. RFID/bib ingest should stay deferred until this location storage and proximity-query foundation is stable.
 

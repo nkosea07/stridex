@@ -181,7 +181,7 @@ The PostgreSQL database includes:
 - `checkpoint_records` - Checkpoint crossings
 - `gps_locations` - GPS tracking data
 
-PostGIS is enabled by the schema for spatial query fields. Keep the decimal latitude/longitude fields for API compatibility; use the generated geography columns and GiST indexes for proximity queries such as checkpoint geofencing. High-volume `gps_locations` partitioning by `recorded_at` is planned as a future migration, not part of the current schema foundation.
+PostGIS is enabled by the schema for spatial query fields. Keep the decimal latitude/longitude fields for API compatibility; database triggers maintain the geography columns, and GiST indexes support proximity queries such as checkpoint geofencing. Existing deployments should apply `apps/backend/database/migrations/2026-06-01-geospatial-telemetry-foundation.sql`. High-volume `gps_locations` partitioning by `recorded_at` is planned as a future migration, not part of the current schema foundation.
 
 See `apps/backend/database/schema.sql` for full schema.
 

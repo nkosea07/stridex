@@ -41,8 +41,9 @@ Common database variables:
 Database requirements:
 - PostgreSQL must have PostGIS available before applying `database/schema.sql`; the schema enables it with `CREATE EXTENSION IF NOT EXISTS postgis`.
 - Decimal latitude/longitude columns remain the API compatibility fields.
-- `geography(Point, 4326)` columns on races, checkpoints, and GPS locations are query fields for spatial operations.
+- `geography(Point, 4326)` columns on races, checkpoints, and GPS locations are query fields for spatial operations, maintained from decimal coordinates by database triggers.
 - GiST indexes support the intended `ST_DWithin` proximity path for checkpoint/race-day location checks.
+- Existing deployments should apply `database/migrations/2026-06-01-geospatial-telemetry-foundation.sql` rather than relying on `schema.sql`.
 - `gps_locations` partitioning is intentionally deferred to a dedicated migration on `recorded_at` so existing JPA/API behavior stays stable.
 
 ## Management and Observability
