@@ -3,6 +3,7 @@
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- =============================================
 -- USERS & AUTHENTICATION
@@ -72,8 +73,10 @@ CREATE TABLE races (
                        country VARCHAR(100),
                        start_location_lat DECIMAL(10, 8),
                        start_location_lng DECIMAL(11, 8),
+                       start_location_geog geography(Point, 4326),
                        finish_location_lat DECIMAL(10, 8),
                        finish_location_lng DECIMAL(11, 8),
+                       finish_location_geog geography(Point, 4326),
 
     -- Timing
                        race_date DATE NOT NULL,
@@ -130,6 +133,7 @@ CREATE TABLE checkpoints (
                              distance_from_start_km DECIMAL(6, 2),
                              latitude DECIMAL(10, 8),
                              longitude DECIMAL(11, 8),
+                             location_geog geography(Point, 4326),
                              order_index INTEGER NOT NULL,
                              cutoff_time INTERVAL, -- Time limit to reach this checkpoint
                              has_rfid_reader BOOLEAN DEFAULT false,
@@ -197,12 +201,16 @@ CREATE TABLE participants (
 -- =============================================
 
 -- GPS Location History
+-- Future partitioning path:
+-- gps_locations should be converted to RANGE partitioning on recorded_at in a dedicated migration.
+-- Do not rewrite the table in this schema foundation phase; keep JPA/API compatibility first.
 CREATE TABLE gps_locations (
                                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                                participant_id UUID REFERENCES participants(id) ON DELETE CASCADE,
                                race_id UUID REFERENCES races(id) ON DELETE CASCADE,
                                latitude DECIMAL(10, 8) NOT NULL,
                                longitude DECIMAL(11, 8) NOT NULL,
+                               location_geog geography(Point, 4326),
                                altitude DECIMAL(8, 2),
                                accuracy DECIMAL(6, 2),
                                speed DECIMAL(6, 2), -- km/h
@@ -211,6 +219,40 @@ CREATE TABLE gps_locations (
                                recorded_at TIMESTAMP WITH TIME ZONE NOT NULL,
                                received_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Spatial columns for existing deployments that already created the base tables.
+ALTER TABLE races
+    ADD COLUMN IF NOT EXISTS start_location_geog geography(Point, 4326),
+    ADD COLUMN IF NOT EXISTS finish_location_geog geography(Point, 4326);
+
+ALTER TABLE checkpoints
+    ADD COLUMN IF NOT EXISTS location_geog geography(Point, 4326);
+
+ALTER TABLE gps_locations
+    ADD COLUMN IF NOT EXISTS location_geog geography(Point, 4326);
+
+-- Backfill spatial points from compatibility latitude/longitude columns.
+UPDATE races
+SET start_location_geog = ST_SetSRID(ST_MakePoint(start_location_lng::double precision, start_location_lat::double precision), 4326)::geography
+WHERE start_location_lat IS NOT NULL
+  AND start_location_lng IS NOT NULL
+  AND start_location_geog IS NULL;
+
+UPDATE races
+SET finish_location_geog = ST_SetSRID(ST_MakePoint(finish_location_lng::double precision, finish_location_lat::double precision), 4326)::geography
+WHERE finish_location_lat IS NOT NULL
+  AND finish_location_lng IS NOT NULL
+  AND finish_location_geog IS NULL;
+
+UPDATE checkpoints
+SET location_geog = ST_SetSRID(ST_MakePoint(longitude::double precision, latitude::double precision), 4326)::geography
+WHERE latitude IS NOT NULL
+  AND longitude IS NOT NULL
+  AND location_geog IS NULL;
+
+UPDATE gps_locations
+SET location_geog = ST_SetSRID(ST_MakePoint(longitude::double precision, latitude::double precision), 4326)::geography
+WHERE location_geog IS NULL;
 
 -- Checkpoint Records
 CREATE TYPE record_method AS ENUM ('RFID', 'QR_CODE', 'MANUAL', 'GPS_AUTO');
@@ -346,6 +388,8 @@ CREATE INDEX idx_auth_tokens_type ON auth_tokens(token_type);
 CREATE INDEX idx_races_status ON races(status);
 CREATE INDEX idx_races_date ON races(race_date);
 CREATE INDEX idx_races_created_by ON races(created_by);
+CREATE INDEX IF NOT EXISTS idx_races_start_location_geog ON races USING GIST (start_location_geog);
+CREATE INDEX IF NOT EXISTS idx_races_finish_location_geog ON races USING GIST (finish_location_geog);
 
 -- Participants
 CREATE INDEX idx_participants_race ON participants(race_id);
@@ -358,6 +402,10 @@ CREATE INDEX idx_gps_participant ON gps_locations(participant_id);
 CREATE INDEX idx_gps_race ON gps_locations(race_id);
 CREATE INDEX idx_gps_recorded_at ON gps_locations(recorded_at);
 CREATE INDEX idx_gps_location ON gps_locations(latitude, longitude);
+CREATE INDEX IF NOT EXISTS idx_gps_locations_location_geog ON gps_locations USING GIST (location_geog);
+
+-- Checkpoints
+CREATE INDEX IF NOT EXISTS idx_checkpoints_location_geog ON checkpoints USING GIST (location_geog);
 
 -- Checkpoint Records
 CREATE INDEX idx_checkpoint_records_participant ON checkpoint_records(participant_id);
