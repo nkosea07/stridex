@@ -8,6 +8,7 @@ import {
   initDb,
   DEFAULT_OPTIONS,
   BATTERY_SAVER_OPTIONS,
+  getActiveTrackingSession,
   type LocationRow,
 } from '@/lib/tracking-service';
 import type { Race, GpsLocation, CheckpointRecord, LiveStats, TrackingState } from '@/types';
@@ -99,6 +100,31 @@ export const useTrackingStore = create<ExtendedTrackingState>((set, get) => ({
   startTime: null,
   syncInterval: null,
 
+  recoverActiveTrackingSession: async () => {
+    await initDb();
+    const activeSession = await getActiveTrackingSession();
+    if (!activeSession) return;
+
+    try {
+      const race = await api.getRace(activeSession.raceId);
+      const startTime = new Date(activeSession.startedAt);
+      set({
+        currentRace: race,
+        isTracking: true,
+        batterySaver: activeSession.batterySaver === 1,
+        startTime,
+      });
+      await get().rehydrateFromLocalDb(activeSession.raceId);
+    } catch (error) {
+      console.warn('Failed to recover active tracking session:', error);
+      set({
+        currentRace: null,
+        isTracking: false,
+        startTime: null,
+      });
+    }
+  },
+
   setBatterySaver: (enabled: boolean) => {
     set({ batterySaver: enabled });
     const { isTracking, currentRace } = get();
@@ -138,7 +164,7 @@ export const useTrackingStore = create<ExtendedTrackingState>((set, get) => ({
     await initDb();
 
     const options = get().batterySaver ? BATTERY_SAVER_OPTIONS : DEFAULT_OPTIONS;
-    await startBackgroundTracking(race.id, options);
+    await startBackgroundTracking(race.id, options, get().batterySaver);
 
     const startTime = new Date();
     set({ currentRace: race, isTracking: true, locations: [], checkpointRecords: [], startTime });

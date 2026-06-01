@@ -36,6 +36,14 @@ export type LocationRow = {
   synced: number;
 };
 
+export type TrackingSessionRow = {
+  raceId: string;
+  startedAt: string;
+  batterySaver: number;
+  status: 'active' | 'stopped';
+  updatedAt: string;
+};
+
 // Initialize SQLite Database
 let db: TrackingDatabase | null = null;
 
@@ -55,6 +63,15 @@ export const initDb = async () => {
       timestamp TEXT NOT NULL,
       synced INTEGER DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS tracking_sessions (
+      raceId TEXT PRIMARY KEY,
+      startedAt TEXT NOT NULL,
+      batterySaver INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      updatedAt TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_tracking_sessions_status_updated
+      ON tracking_sessions(status, updatedAt);
   `);
   return db;
 };
@@ -106,10 +123,63 @@ TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }: any) => {
 
 // Simple state management for the active race ID in the background task
 let activeRaceId: string | null = null;
-export const setActiveRaceId = (id: string | null) => {
-  activeRaceId = id;
+
+const saveActiveTrackingSession = async (raceId: string, batterySaver: boolean) => {
+  const database = await initDb();
+  const now = new Date().toISOString();
+  await database.runAsync(
+    `INSERT INTO tracking_sessions (raceId, startedAt, batterySaver, status, updatedAt)
+     VALUES (?, ?, ?, 'active', ?)
+     ON CONFLICT(raceId) DO UPDATE SET
+       startedAt = excluded.startedAt,
+       batterySaver = excluded.batterySaver,
+       status = 'active',
+       updatedAt = excluded.updatedAt`,
+    [raceId, now, batterySaver ? 1 : 0, now]
+  );
 };
-const getActiveRaceId = () => activeRaceId;
+
+const markTrackingSessionStopped = async (raceId?: string | null) => {
+  const database = await initDb();
+  const now = new Date().toISOString();
+  if (raceId) {
+    await database.runAsync(
+      "UPDATE tracking_sessions SET status = 'stopped', updatedAt = ? WHERE raceId = ?",
+      [now, raceId]
+    );
+    return;
+  }
+
+  await database.runAsync(
+    "UPDATE tracking_sessions SET status = 'stopped', updatedAt = ? WHERE status = 'active'",
+    [now]
+  );
+};
+
+export const getActiveTrackingSession = async (): Promise<TrackingSessionRow | null> => {
+  const database = await initDb();
+  return database.getFirstAsync<TrackingSessionRow>(
+    "SELECT * FROM tracking_sessions WHERE status = 'active' ORDER BY updatedAt DESC LIMIT 1"
+  );
+};
+
+export const setActiveRaceId = async (id: string | null, batterySaver = false) => {
+  if (id) {
+    await saveActiveTrackingSession(id, batterySaver);
+    activeRaceId = id;
+  } else {
+    activeRaceId = null;
+    await markTrackingSessionStopped();
+  }
+};
+
+const getActiveRaceId = async () => {
+  if (activeRaceId) return activeRaceId;
+
+  const activeSession = await getActiveTrackingSession();
+  activeRaceId = activeSession?.raceId ?? null;
+  return activeRaceId;
+};
 
 export const syncPendingLocations = async (raceId: string) => {
   const database = await initDb();
@@ -176,33 +246,45 @@ export const syncPendingLocations = async (raceId: string) => {
   }
 };
 
-export const startBackgroundTracking = async (raceId: string, options: TrackingOptions = DEFAULT_OPTIONS) => {
+export const startBackgroundTracking = async (
+  raceId: string,
+  options: TrackingOptions = DEFAULT_OPTIONS,
+  batterySaver = false,
+) => {
   const { status: foreground } = await Location.requestForegroundPermissionsAsync();
   if (foreground !== 'granted') throw new Error('Foreground location permission denied');
 
   const { status: background } = await Location.requestBackgroundPermissionsAsync();
   if (background !== 'granted') throw new Error('Background location permission denied');
 
-  setActiveRaceId(raceId);
-  
-  await Location.startLocationUpdatesAsync(LOCATION_TRACKING_TASK, {
-    accuracy: options.accuracy,
-    timeInterval: options.timeInterval,
-    distanceInterval: options.distanceInterval,
-    foregroundService: {
-      notificationTitle: 'Race Tracking Active',
-      notificationBody: 'Your location is being shared with race organizers.',
-      notificationColor: '#2563EB',
-    },
-    pausesUpdatesAutomatically: false,
-    showsBackgroundLocationIndicator: true,
-  });
+  await setActiveRaceId(raceId, batterySaver);
+
+  try {
+    await Location.startLocationUpdatesAsync(LOCATION_TRACKING_TASK, {
+      accuracy: options.accuracy,
+      timeInterval: options.timeInterval,
+      distanceInterval: options.distanceInterval,
+      foregroundService: {
+        notificationTitle: 'Race Tracking Active',
+        notificationBody: 'Your location is being shared with race organizers.',
+        notificationColor: '#2563EB',
+      },
+      pausesUpdatesAutomatically: false,
+      showsBackgroundLocationIndicator: true,
+    });
+  } catch (error) {
+    await markTrackingSessionStopped(raceId);
+    activeRaceId = null;
+    throw error;
+  }
 };
 
 export const stopBackgroundTracking = async () => {
+  const raceId = activeRaceId;
   const isStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
   if (isStarted) {
     await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK);
   }
-  setActiveRaceId(null);
+  await markTrackingSessionStopped(raceId);
+  activeRaceId = null;
 };

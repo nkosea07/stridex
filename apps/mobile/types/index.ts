@@ -211,4 +211,5 @@ export interface TrackingState {
   recordCheckpoint: (record: CheckpointRecord) => void;
   setBatterySaver: (enabled: boolean) => void;
   rehydrateFromLocalDb: (raceId: string) => Promise<void>;
+  recoverActiveTrackingSession: () => Promise<void>;
 }
