@@ -7,6 +7,7 @@ import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.model.*;
 import com.racetracker.repository.*;
+import com.racetracker.service.GeoTelemetryService;
 import com.racetracker.service.TrackingService;
 import com.racetracker.websocket.TrackingLivePublisher;
 import io.micrometer.observation.annotation.Observed;
@@ -35,6 +36,7 @@ public class TrackingServiceImpl implements TrackingService {
     private final CheckpointRepository checkpointRepository;
     private final CheckpointRecordRepository checkpointRecordRepository;
     private final TrackingLivePublisher trackingLivePublisher;
+    private final GeoTelemetryService geoTelemetryService;
 
     public TrackingServiceImpl(
         RaceRepository raceRepository,
@@ -43,7 +45,8 @@ public class TrackingServiceImpl implements TrackingService {
         GpsLocationRepository gpsLocationRepository,
         CheckpointRepository checkpointRepository,
         CheckpointRecordRepository checkpointRecordRepository,
-        TrackingLivePublisher trackingLivePublisher
+        TrackingLivePublisher trackingLivePublisher,
+        GeoTelemetryService geoTelemetryService
     ) {
         this.raceRepository = raceRepository;
         this.participantRepository = participantRepository;
@@ -52,6 +55,7 @@ public class TrackingServiceImpl implements TrackingService {
         this.checkpointRepository = checkpointRepository;
         this.checkpointRecordRepository = checkpointRecordRepository;
         this.trackingLivePublisher = trackingLivePublisher;
+        this.geoTelemetryService = geoTelemetryService;
     }
 
     @Override
@@ -76,21 +80,26 @@ public class TrackingServiceImpl implements TrackingService {
         BigDecimal batchDistance = BigDecimal.ZERO;
         
         Optional<GpsLocation> prev = gpsLocationRepository.findTopByParticipantIdAndRaceIdOrderByRecordedAtDesc(participant.getId(), raceId);
-        double lastLat = prev.map(l -> l.getLatitude().doubleValue()).orElse(0.0);
-        double lastLon = prev.map(l -> l.getLongitude().doubleValue()).orElse(0.0);
+        BigDecimal lastLat = prev.map(GpsLocation::getLatitude).orElse(null);
+        BigDecimal lastLon = prev.map(GpsLocation::getLongitude).orElse(null);
         boolean hasPrev = prev.isPresent();
 
         for (GpsLocationRequest item : request.getLocations()) {
             latest = saveLocationBasic(participant, item);
             
             if (hasPrev) {
-                double dist = calculateDistance(lastLat, lastLon, item.getLatitude().doubleValue(), item.getLongitude().doubleValue());
+                double dist = geoTelemetryService.calculateDistanceKm(
+                    lastLat,
+                    lastLon,
+                    item.getLatitude(),
+                    item.getLongitude()
+                );
                 if (dist > 0.001) {
                     batchDistance = batchDistance.add(BigDecimal.valueOf(dist));
                 }
             }
-            lastLat = item.getLatitude().doubleValue();
-            lastLon = item.getLongitude().doubleValue();
+            lastLat = item.getLatitude();
+            lastLon = item.getLongitude();
             hasPrev = true;
         }
 
@@ -302,13 +311,18 @@ public class TrackingServiceImpl implements TrackingService {
     }
 
     private GpsLocation saveLocation(Participant participant, GpsLocationRequest request) {
+        Optional<GpsLocation> prev = gpsLocationRepository.findTopByParticipantIdAndRaceIdOrderByRecordedAtDesc(
+            participant.getId(),
+            participant.getRace().getId()
+        );
         GpsLocation location = saveLocationBasic(participant, request);
 
-        Optional<GpsLocation> prev = gpsLocationRepository.findTopByParticipantIdAndRaceIdOrderByRecordedAtDesc(participant.getId(), participant.getRace().getId());
         if (prev.isPresent()) {
-            double dist = calculateDistance(
-                prev.get().getLatitude().doubleValue(), prev.get().getLongitude().doubleValue(),
-                location.getLatitude().doubleValue(), location.getLongitude().doubleValue()
+            double dist = geoTelemetryService.calculateDistanceKm(
+                prev.get().getLatitude(),
+                prev.get().getLongitude(),
+                location.getLatitude(),
+                location.getLongitude()
             );
             if (dist > 0.001) {
                 participantRepository.incrementTotalDistance(participant.getId(), BigDecimal.valueOf(dist));
@@ -332,16 +346,5 @@ public class TrackingServiceImpl implements TrackingService {
         location.setRecordedAt(parseTimestamp(request.getTimestamp()));
         location.setReceivedAt(OffsetDateTime.now());
         return gpsLocationRepository.save(location);
-    }
-
-    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-        double earthRadius = 6371; // km
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLon = Math.toRadians(lon2 - lon1);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                   Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-                   Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return earthRadius * c;
     }
 }
