@@ -7,7 +7,8 @@ import {
   syncPendingLocations,
   initDb,
   DEFAULT_OPTIONS,
-  BATTERY_SAVER_OPTIONS
+  BATTERY_SAVER_OPTIONS,
+  type LocationRow,
 } from '@/lib/tracking-service';
 import type { Race, GpsLocation, CheckpointRecord, LiveStats, TrackingState } from '@/types';
 
@@ -109,7 +110,7 @@ export const useTrackingStore = create<ExtendedTrackingState>((set, get) => ({
 
   rehydrateFromLocalDb: async (raceId: string) => {
     const db = await initDb();
-    const rows = await db.getAllAsync<any>(
+    const rows = await db.getAllAsync<LocationRow>(
       'SELECT * FROM locations WHERE raceId = ? ORDER BY timestamp ASC',
       [raceId]
     );
@@ -118,10 +119,10 @@ export const useTrackingStore = create<ExtendedTrackingState>((set, get) => ({
       const mappedLocations: GpsLocation[] = rows.map(r => ({
         latitude: r.latitude,
         longitude: r.longitude,
-        altitude: r.altitude,
-        accuracy: r.accuracy,
-        speed: r.speed,
-        heading: r.heading,
+        altitude: r.altitude ?? undefined,
+        accuracy: r.accuracy ?? undefined,
+        speed: r.speed ?? undefined,
+        heading: r.heading ?? undefined,
         timestamp: r.timestamp
       }));
       

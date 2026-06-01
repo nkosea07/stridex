@@ -205,9 +205,10 @@ export interface TrackingState {
   checkpointRecords: CheckpointRecord[];
   liveStats: LiveStats | null;
   batterySaver: boolean;
-  startTracking: (race: Race) => void;
+  startTracking: (race: Race) => Promise<void>;
   stopTracking: () => void;
   addLocation: (location: GpsLocation) => void;
   recordCheckpoint: (record: CheckpointRecord) => void;
   setBatterySaver: (enabled: boolean) => void;
+  rehydrateFromLocalDb: (raceId: string) => Promise<void>;
 }

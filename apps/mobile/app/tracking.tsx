@@ -1,4 +1,4 @@
-import { View, StyleSheet, Alert, Dimensions, ActivityIndicator, AppState } from 'react-native';
+import { View, StyleSheet, Alert, ActivityIndicator, AppState } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useTrackingStore } from '@/store/tracking';
@@ -9,8 +9,6 @@ import { HUD } from '@/components/HUD';
 import { BottomDrawer } from '@/components/BottomDrawer';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/theme';
-
-const { width } = Dimensions.get('window');
 
 function normalizeRaceStatus(raw?: string): Race['status'] {
   const value = String(raw || '').toLowerCase();

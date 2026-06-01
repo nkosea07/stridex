@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import { openDatabaseAsync } from './db';
+import { openDatabaseAsync, type TrackingDatabase } from './db';
 import { api } from './api';
 
 export const LOCATION_TRACKING_TASK = 'LOCATION_TRACKING_TASK';
@@ -23,8 +23,21 @@ export const BATTERY_SAVER_OPTIONS: TrackingOptions = {
   distanceInterval: 50, // 50 meters
 };
 
+export type LocationRow = {
+  id: number;
+  raceId: string;
+  latitude: number;
+  longitude: number;
+  altitude: number | null;
+  accuracy: number | null;
+  speed: number | null;
+  heading: number | null;
+  timestamp: string;
+  synced: number;
+};
+
 // Initialize SQLite Database
-let db: any = null;
+let db: TrackingDatabase | null = null;
 
 export const initDb = async () => {
   if (db) return db;
@@ -100,7 +113,7 @@ const getActiveRaceId = () => activeRaceId;
 
 export const syncPendingLocations = async (raceId: string) => {
   const database = await initDb();
-  const pending = await database.getAllAsync<any>(
+  const pending = await database.getAllAsync<LocationRow>(
     'SELECT * FROM locations WHERE raceId = ? AND synced = 0 ORDER BY timestamp ASC LIMIT 100',
     [raceId]
   );
@@ -109,8 +122,8 @@ export const syncPendingLocations = async (raceId: string) => {
 
   // Differential Sync Logic: 
   // We filter points that are too close to each other to save bandwidth/server load.
-  const filtered = [];
-  let lastSentPoint = null;
+  const filtered: LocationRow[] = [];
+  let lastSentPoint: LocationRow | null = null;
 
   for (const point of pending) {
     if (!lastSentPoint) {
@@ -149,10 +162,10 @@ export const syncPendingLocations = async (raceId: string) => {
     const batch = filtered.map(p => ({
       latitude: p.latitude,
       longitude: p.longitude,
-      altitude: p.altitude,
-      accuracy: p.accuracy,
-      speed: p.speed,
-      heading: p.heading,
+      altitude: p.altitude ?? undefined,
+      accuracy: p.accuracy ?? undefined,
+      speed: p.speed ?? undefined,
+      heading: p.heading ?? undefined,
       timestamp: p.timestamp,
     }));
 
@@ -181,7 +194,7 @@ export const startBackgroundTracking = async (raceId: string, options: TrackingO
       notificationBody: 'Your location is being shared with race organizers.',
       notificationColor: '#2563EB',
     },
-    pausesLocationUpdatesAutomatically: false,
+    pausesUpdatesAutomatically: false,
     showsBackgroundLocationIndicator: true,
   });
 };
