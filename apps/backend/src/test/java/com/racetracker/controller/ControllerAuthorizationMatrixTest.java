@@ -48,6 +48,18 @@ class ControllerAuthorizationMatrixTest {
     }
 
     @Test
+    void rfidControllerGuards() {
+        String opsGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')";
+        assertGuard(RfidController.class, "createReader", opsGuard);
+        assertGuard(RfidController.class, "listReaders", opsGuard);
+        assertGuard(RfidController.class, "revokeReader", opsGuard);
+        assertThat(Arrays.stream(RfidController.class.getDeclaredMethods())
+            .filter(method -> method.getName().equals("ingestReads"))
+            .noneMatch(method -> method.isAnnotationPresent(PreAuthorize.class)))
+            .isTrue();
+    }
+
+    @Test
     void trackingControllerGuards() {
         String trackOpsGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL', 'ATHLETE')";
         assertGuard(TrackingController.class, "sendLocation", trackOpsGuard);

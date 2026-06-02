@@ -46,6 +46,8 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     Optional<Participant> findByRaceIdAndBibNumber(UUID raceId, String bibNumber);
 
+    Optional<Participant> findByRaceIdAndRfidTag(UUID raceId, String rfidTag);
+
     @Modifying
     @Query("UPDATE Participant p SET p.totalDistance = COALESCE(p.totalDistance, 0.0) + :delta WHERE p.id = :id")
     void incrementTotalDistance(@Param("id") UUID id, @Param("delta") BigDecimal delta);

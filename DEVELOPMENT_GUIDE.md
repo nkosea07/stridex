@@ -87,7 +87,7 @@ Management endpoint policy:
 
 Micrometer `@Observed` instrumentation exists on the public tracking and tracking ingest hot paths. The stable observation names are `tracking.public.race_hub`, `tracking.public.live_athletes`, `tracking.public.athlete_detail`, `tracking.ingest.location`, `tracking.ingest.location_batch`, `tracking.ingest.checkpoint`, `tracking.live.aggregate`, and `tracking.live.participant_track`.
 
-This phase does not include external OpenTelemetry collector/exporter setup, telemetry partitioning, or RFID/bib device ingest. The PostGIS/geospatial schema foundation is in place and remains deliberately narrow: spatial columns are query fields, while the existing decimal latitude/longitude API fields stay unchanged.
+This phase does not include external OpenTelemetry collector/exporter setup or telemetry partitioning. The PostGIS/geospatial schema foundation is in place, and RFID/bib bridge ingest now exists as a backend-only foundation with device API keys, raw read storage, and checkpoint-record normalization.
 
 ### Mobile Runtime and Offline Tracking Direction
 
@@ -116,7 +116,7 @@ Deferred mobile work:
 - backend push-token registration and notification preferences
 - premium mobile fan features
 - mobile crash/error observability
-- RFID/bib ingest integration
+- RFID operator UI and vendor-specific mobile/device adapters
 
 ---
 
@@ -680,6 +680,14 @@ Use the spatial columns through repository/service boundaries instead of spreadi
 For existing deployments, apply `apps/backend/database/migrations/2026-06-01-geospatial-telemetry-foundation.sql`. It enables PostGIS, adds/backfills the geography columns, creates sync triggers, and adds the GiST indexes without changing API contracts.
 
 Telemetry table growth remains a production risk. Convert `gps_locations` to range partitioning on `recorded_at` in a dedicated migration when race-day volume justifies it; do not rewrite the table inside the current schema foundation. RFID/bib ingest should stay deferred until this location storage and proximity-query foundation is stable.
+
+### RFID / Bib Bridge Ingest Foundation
+
+The backend supports a generic HTTP bridge for RFID/chip timing systems. Operators create checkpoint readers with `POST /api/v1/races/{raceId}/rfid/readers`; creation returns a plaintext `apiKey` once and stores only a SHA-256 hash in `rfid_readers`.
+
+Timing bridges submit batches to `POST /api/v1/rfid/read-events` with `X-RFID-Reader-Key`. Each read includes `rfidTag`, `readAt`, optional `sourceEventId`, `antenna`, `rssi`, and `rawPayload`. Valid first-time reads create normal `checkpoint_records` with `recordMethod=RFID`. Duplicate source/checkpoint reads, unknown tags, and revoked readers are retained in `rfid_read_events` as processing statuses.
+
+Apply `apps/backend/database/migrations/2026-06-02-rfid-bib-ingest-foundation.sql` for existing databases. CSV timing imports, reader health dashboards, operator correction workflows, and vendor-specific device SDK integrations are still deferred.
 
 ### Initial Setup Commands
 

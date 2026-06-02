@@ -149,7 +149,7 @@ pnpm --filter race-tracker-mobile start
 
 ### Multiple Tracking Methods
 - GPS tracking from mobile app
-- RFID/chip timing at checkpoints
+- RFID/chip timing bridge ingest at checkpoints
 - QR code scanning at checkpoints
 - Manual checkpoint entry
 
@@ -179,9 +179,13 @@ The PostgreSQL database includes:
 - `participants` - Race registrations
 - `checkpoints` - Race checkpoints
 - `checkpoint_records` - Checkpoint crossings
+- `rfid_readers` - RFID bridge reader registry and API-key hashes
+- `rfid_read_events` - Raw RFID reads and processing outcomes
 - `gps_locations` - GPS tracking data
 
 PostGIS is enabled by the schema for spatial query fields. Keep the decimal latitude/longitude fields for API compatibility; database triggers maintain the geography columns, and GiST indexes support proximity queries such as checkpoint geofencing. Existing deployments should apply `apps/backend/database/migrations/2026-06-01-geospatial-telemetry-foundation.sql`. High-volume `gps_locations` partitioning by `recorded_at` is planned as a future migration, not part of the current schema foundation.
+
+RFID bridge ingestion is backend-first: operators register checkpoint readers, receive a one-time API key, and timing bridges submit batched reads to `/api/v1/rfid/read-events`. The backend stores raw read outcomes and converts valid first-time reads into normal checkpoint records. Operator monitoring UI, CSV timing imports, and vendor-specific adapters remain later phases.
 
 See `apps/backend/database/schema.sql` for full schema.
 
@@ -207,6 +211,7 @@ The backend exposes RESTful APIs:
 ### Tracking
 - `POST /api/v1/tracking/:raceId/location` - Send GPS location
 - `POST /api/v1/tracking/:raceId/checkpoint` - Record checkpoint
+- `POST /api/v1/rfid/read-events` - Submit batched RFID reads with `X-RFID-Reader-Key`
 - `WebSocket /ws-tracking` - Real-time updates
 
 ### Results

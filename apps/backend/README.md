@@ -65,7 +65,7 @@ The public tracking and tracking ingest hot paths are instrumented with Micromet
 - `tracking.live.aggregate`
 - `tracking.live.participant_track`
 
-This phase does not configure an external OpenTelemetry collector/exporter. The geospatial schema foundation is present; telemetry partitioning and RFID/bib device ingest remain later modernization phases.
+This phase does not configure an external OpenTelemetry collector/exporter. The geospatial schema foundation and backend RFID bridge ingest foundation are present; telemetry partitioning, RFID operator UI, vendor SDK adapters, and CSV timing imports remain later modernization phases.
 
 ## API Surface (Implemented)
 
@@ -103,6 +103,16 @@ This phase does not configure an external OpenTelemetry collector/exporter. The 
 - `PUT /api/v1/races/{raceId}/checkpoints/{checkpointId}`
 - `DELETE /api/v1/races/{raceId}/checkpoints/{checkpointId}`
 - `POST /api/v1/races/{raceId}/checkpoints/{checkpointId}/record`
+
+### RFID / Bib Timing Bridge
+- `POST /api/v1/races/{raceId}/rfid/readers`
+- `GET /api/v1/races/{raceId}/rfid/readers`
+- `PATCH /api/v1/races/{raceId}/rfid/readers/{readerId}/revoke`
+- `POST /api/v1/rfid/read-events`
+
+Reader management routes require operator authentication. Creating a reader returns the plaintext `apiKey` only once; the database stores only its SHA-256 hash. Timing bridges call `POST /api/v1/rfid/read-events` with `X-RFID-Reader-Key`.
+
+RFID reads are stored as raw `rfid_read_events` and valid first-time reads create normal `checkpoint_records` with `recordMethod=RFID`. Duplicate checkpoint reads and unknown tags are stored as event statuses instead of failing the full batch.
 
 ### Tracking
 - `POST /api/v1/tracking/{raceId}/location`

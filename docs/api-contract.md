@@ -43,6 +43,19 @@ The shared contract publishes these anonymous spectator paths:
 - `publicRaceSearch`: `/public/races/:raceId/tracking/search`
 - `publicAthleteTracking`: `/public/races/:raceId/tracking/athletes/:participantId`
 
+## RFID Bridge Endpoints
+
+The RFID bridge endpoints are backend-owned and not currently published in the shared web/mobile contract package because they are not consumed by the public web or mobile apps.
+
+- Admin reader management uses normal JWT/operator authorization:
+- `POST /api/v1/races/{raceId}/rfid/readers`
+- `GET /api/v1/races/{raceId}/rfid/readers`
+- `PATCH /api/v1/races/{raceId}/rfid/readers/{readerId}/revoke`
+- Device ingest uses `X-RFID-Reader-Key`:
+- `POST /api/v1/rfid/read-events`
+
+If web/mobile clients later manage readers or display reader health, add these paths to `packages/contracts` before wiring those clients.
+
 ## Changing API Version
 
 1. Update `packages/contracts/contract.json` (`apiVersion`, paths if needed).
