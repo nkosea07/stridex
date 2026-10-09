@@ -11,6 +11,9 @@ import {
   MoreHorizontal,
   Eye,
   Trash2,
+  Copy,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -71,6 +74,11 @@ export function RacesPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false)
+  const [cloneSource, setCloneSource] = useState<Race | null>(null)
+  const [cloneName, setCloneName] = useState('')
+  const [cloneDate, setCloneDate] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [newRace, setNewRace] = useState({
     name: '',
@@ -86,7 +94,7 @@ export function RacesPage() {
   const loadRaces = async () => {
     setIsLoading(true)
     try {
-      const data = await racesApi.list()
+      const data = await racesApi.list(showArchived)
       setRaces(data)
     } catch {
       toast.error('Failed to load races')
@@ -97,7 +105,7 @@ export function RacesPage() {
 
   useEffect(() => {
     loadRaces()
-  }, [])
+  }, [showArchived])
 
   const filteredRaces = useMemo(
     () =>
@@ -152,6 +160,49 @@ export function RacesPage() {
     }
   }
 
+  const handleArchive = async (id: string) => {
+    try {
+      await racesApi.archive(id)
+      toast.success('Race archived')
+      await loadRaces()
+    } catch {
+      toast.error('Failed to archive race')
+    }
+  }
+
+  const handleRestore = async (id: string) => {
+    try {
+      await racesApi.restore(id)
+      toast.success('Race restored')
+      await loadRaces()
+    } catch {
+      toast.error('Failed to restore race')
+    }
+  }
+
+  const openCloneDialog = (race: Race) => {
+    setCloneSource(race)
+    setCloneName(`${race.name} (Copy)`)
+    setCloneDate(race.raceDate ? race.raceDate.slice(0, 10) : '')
+    setIsCloneDialogOpen(true)
+  }
+
+  const handleCloneRace = async () => {
+    if (!cloneSource) return
+    try {
+      await racesApi.clone(cloneSource.id, {
+        name: cloneName,
+        raceDate: cloneDate || undefined,
+      })
+      toast.success('Race cloned')
+      setIsCloneDialogOpen(false)
+      setCloneSource(null)
+      await loadRaces()
+    } catch {
+      toast.error('Failed to clone race')
+    }
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -190,6 +241,13 @@ export function RacesPage() {
             <SelectItem value="CANCELLED">Cancelled</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          variant={showArchived ? 'default' : 'outline'}
+          onClick={() => setShowArchived((value) => !value)}
+        >
+          <Archive className="mr-2 h-4 w-4" />
+          {showArchived ? 'Hide Archived' : 'Show Archived'}
+        </Button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -223,6 +281,21 @@ export function RacesPage() {
                       <Eye className="mr-2 h-4 w-4" />
                       View Details
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openCloneDialog(race) }}>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Clone
+                    </DropdownMenuItem>
+                    {race.archivedAt ? (
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void handleRestore(race.id) }}>
+                        <ArchiveRestore className="mr-2 h-4 w-4" />
+                        Restore
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void handleArchive(race.id) }}>
+                        <Archive className="mr-2 h-4 w-4" />
+                        Archive
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void handleDelete(race.id) }} className="text-destructive">
                       <Trash2 className="mr-2 h-4 w-4" />
@@ -317,6 +390,31 @@ export function RacesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
             <Button onClick={() => void handleCreateRace()}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCloneDialogOpen} onOpenChange={setIsCloneDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clone Race</DialogTitle>
+            <DialogDescription>
+              Copy categories, checkpoints, and registration fields from {cloneSource?.name ?? 'the selected race'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div>
+              <Label>New Name</Label>
+              <Input value={cloneName} onChange={(e) => setCloneName(e.target.value)} />
+            </div>
+            <div>
+              <Label>Race Date</Label>
+              <Input type="date" value={cloneDate} onChange={(e) => setCloneDate(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCloneDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => void handleCloneRace()} disabled={!cloneName.trim()}>Clone</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

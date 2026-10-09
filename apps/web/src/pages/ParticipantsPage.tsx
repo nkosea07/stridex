@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Plus, Search, Upload, Download, MoreHorizontal, Trash2, CheckCircle, XCircle, Clock, CreditCard, Filter, Printer, History } from 'lucide-react'
+import { Plus, Search, Upload, Download, MoreHorizontal, Trash2, CheckCircle, XCircle, Clock, CreditCard, Filter, Printer, History, Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -188,6 +188,39 @@ export function ParticipantsPage() {
     }
   }
 
+  const handleStartPayment = async (participantId: string) => {
+    if (!raceId) return
+    try {
+      const payment = await participantsApi.startCheckout(raceId, participantId)
+      if (payment.checkoutUrl) {
+        window.open(payment.checkoutUrl, '_blank', 'noopener')
+        toast.success('Payment checkout opened in a new tab')
+      } else {
+        toast.error('No checkout URL returned')
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to start payment')
+    }
+  }
+
+  const handleAddPenalty = async (participantId: string) => {
+    if (!raceId) return
+    const secondsRaw = window.prompt('Time penalty in seconds (e.g. 120):')
+    if (!secondsRaw) return
+    const seconds = Number(secondsRaw)
+    if (!Number.isFinite(seconds) || seconds === 0) {
+      toast.error('Enter a non-zero number of seconds')
+      return
+    }
+    const reason = window.prompt('Reason (optional)') ?? undefined
+    try {
+      await participantsApi.addPenalty(raceId, participantId, { seconds, reason })
+      toast.success('Penalty added')
+    } catch {
+      toast.error('Failed to add penalty')
+    }
+  }
+
   const handleAddParticipant = async () => {
     if (!raceId) return
     try {
@@ -324,8 +357,12 @@ export function ParticipantsPage() {
                         )}
                         {(p.paymentStatus === 'UNPAID' || p.paymentStatus === 'PENDING') && (
                           <>
-                            <DropdownMenuItem onClick={() => void handleVerifyPayment(p.id)}>
+                            <DropdownMenuItem onClick={() => void handleStartPayment(p.id)}>
                               <CreditCard className="mr-2 h-4 w-4" />
+                              Start Online Payment
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void handleVerifyPayment(p.id)}>
+                              <CheckCircle className="mr-2 h-4 w-4" />
                               Verify Payment
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -338,6 +375,10 @@ export function ParticipantsPage() {
                         <DropdownMenuItem onClick={() => void handleDownloadBib(p.id, `${p.firstName} ${p.lastName}`)}>
                           <Printer className="mr-2 h-4 w-4" />
                           Print Bib
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => void handleAddPenalty(p.id)}>
+                          <Timer className="mr-2 h-4 w-4" />
+                          Add Time Penalty
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive" onClick={() => void handleDelete(p.id)}>

@@ -26,12 +26,15 @@ import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { authApi } from '@/lib/api'
+import { enableWebPush, isWebPushConfigured } from '@/lib/push'
 
 export function SettingsPage() {
   const { user, updateUser } = useAuth()
   const { theme, resolvedTheme, setTheme } = useTheme()
   const [profileSaving, setProfileSaving] = useState(false)
   const [passwordResetSending, setPasswordResetSending] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushRegistered, setPushRegistered] = useState(false)
   const [profile, setProfile] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -65,6 +68,23 @@ export function SettingsPage() {
       toast.error(error instanceof Error ? error.message : 'Unable to update your profile')
     } finally {
       setProfileSaving(false)
+    }
+  }
+
+  const handleEnablePush = async () => {
+    setPushBusy(true)
+    try {
+      const enabled = await enableWebPush()
+      if (enabled) {
+        setPushRegistered(true)
+        toast.success('Browser push notifications enabled')
+      } else {
+        toast.error('Push notifications are not available in this browser')
+      }
+    } catch {
+      toast.error('Failed to enable push notifications')
+    } finally {
+      setPushBusy(false)
     }
   }
 
@@ -230,15 +250,19 @@ export function SettingsPage() {
                 </h3>
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label htmlFor="pushNotifications">Enable Push Notifications</Label>
-                    <p className="text-xs text-muted-foreground">Receive real-time alerts in your browser</p>
+                    <Label>Browser Push Notifications</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {isWebPushConfigured()
+                        ? 'Receive real-time race and checkpoint alerts in this browser.'
+                        : 'Push is not configured for this deployment.'}
+                    </p>
                   </div>
-                  <Switch
-                    id="pushNotifications"
-                    checked={notifications.pushNotifications}
-                    disabled
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, pushNotifications: checked })}
-                  />
+                  <Button
+                    onClick={() => void handleEnablePush()}
+                    disabled={pushBusy || pushRegistered || !isWebPushConfigured()}
+                  >
+                    {pushRegistered ? 'Enabled' : pushBusy ? 'Enabling…' : 'Enable'}
+                  </Button>
                 </div>
               </div>
 

@@ -92,12 +92,24 @@ export function PublicRaceResultsPanel({ raceId }: PublicRaceResultsPanelProps) 
         <>
           <ol className="mt-5 divide-y divide-white/10">
             {results.map((result) => (
-              <li key={result.participantId} className="grid grid-cols-[3rem,1fr,auto] items-center gap-3 py-3 first:pt-0 last:pb-0">
+              <li key={result.participantId} className="grid grid-cols-[3rem,1fr,auto,auto] items-center gap-3 py-3 first:pt-0 last:pb-0">
                 <span className="font-mono text-sm font-bold text-cyan-200">{result.overallPosition ?? '—'}</span>
                 <span className="min-w-0 truncate text-sm font-semibold">{result.participantName || 'Participant'}
                   <span className="ml-2 font-mono text-xs font-normal text-slate-400">#{result.bibNumber || '—'}</span>
                 </span>
                 <span className="font-mono text-sm text-slate-300">{result.totalTime || result.finishTime || '—'}</span>
+                {result.certificateToken ? (
+                  <a
+                    className="text-xs font-bold uppercase tracking-wide text-cyan-200 hover:text-cyan-100"
+                    href={resultsApi.publicCertificateUrl(raceId, result.participantId, result.certificateToken)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Certificate
+                  </a>
+                ) : (
+                  <span />
+                )}
               </li>
             ))}
           </ol>

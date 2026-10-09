@@ -70,10 +70,39 @@ export interface Race {
   waiverText?: string
   participantCount?: number
   createdAt: string
+  archivedAt?: string
 }
 
 export type PaymentStatus = 'UNPAID' | 'PENDING' | 'PAID' | 'WAIVED' | 'REFUNDED'
 export type RegistrationDecision = 'APPROVE' | 'REJECT' | 'WAITLIST'
+
+export interface Penalty {
+  id: string
+  participantId: string
+  seconds: number
+  reason?: string
+  createdAt?: string
+}
+
+export interface AppNotification {
+  id: string
+  title: string
+  message: string
+  type?: string
+  read: boolean
+  timestamp?: string
+}
+
+export interface Payment {
+  id: string
+  participantId: string
+  provider: string
+  status: string
+  amount?: number
+  currency?: string
+  reference?: string
+  checkoutUrl?: string
+}
 
 export interface RegistrationField {
   id: string
@@ -318,6 +347,7 @@ export interface RaceResult {
   isOfficial: boolean
   isDisqualified: boolean
   disqualificationReason?: string
+  penaltySeconds?: number
   participant?: Participant
 }
 
@@ -404,6 +434,7 @@ export interface PublicRaceResult {
   overallPosition?: number | null
   genderPosition?: number | null
   categoryPosition?: number | null
+  certificateToken?: string | null
 }
 
 export interface PublicRaceResultPage {

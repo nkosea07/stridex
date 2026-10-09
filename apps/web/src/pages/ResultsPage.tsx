@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { resultsApi } from '@/lib/api'
 import type { RaceResult } from '@/types'
 import { toast } from 'sonner'
@@ -78,24 +79,19 @@ export function ResultsPage() {
     }
   }
 
-  const handleExportResults = () => {
-    const headers = ['position', 'name', 'bib', 'chipTime', 'pace', 'speed']
-    const rows = filteredResults.map((r) => [
-      r.overallPosition ?? '',
-      `${r.participant?.firstName || ''} ${r.participant?.lastName || ''}`.trim(),
-      r.participant?.bibNumber || '',
-      r.chipTime || '',
-      r.averagePace || '',
-      r.averageSpeed ?? '',
-    ])
-    const csv = [headers.join(','), ...rows.map((row) => row.map((v) => `"${String(v)}"`).join(','))].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', `results-${raceId || 'race'}.csv`)
-    link.click()
-    URL.revokeObjectURL(url)
+  const handleExportResults = async (format: 'csv' | 'pdf' | 'xlsx' = 'csv') => {
+    if (!raceId) return
+    try {
+      const blob = await resultsApi.exportResults(raceId, format)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `results-${raceId}.${format}`)
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Failed to export results')
+    }
   }
 
   const ResultsTable = ({ list, showGenderPosition = false }: { list: RaceResult[]; showGenderPosition?: boolean }) => (
@@ -142,7 +138,19 @@ export function ResultsPage() {
           <p className="text-muted-foreground">Race results and rankings</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleExportResults}><Download className="mr-2 h-4 w-4" />Export</Button>
+          <Button variant="outline" onClick={() => void handleExportResults('csv')}><Download className="mr-2 h-4 w-4" />Export</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" aria-label="Export format">
+                <Download className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => void handleExportResults('csv')}>CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handleExportResults('xlsx')}>Excel (XLSX)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handleExportResults('pdf')}>PDF</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button onClick={() => void handlePublishResults()}><Send className="mr-2 h-4 w-4" />Publish Results</Button>
         </div>
       </div>

@@ -26,7 +26,10 @@ import type {
   RegistrationField,
   Team,
   PaymentStatus,
-  RegistrationDecision
+  RegistrationDecision,
+  Penalty,
+  AppNotification,
+  Payment
 } from '@/types'
 import { API_CONTRACT } from '@race-tracker/contracts'
 
@@ -244,8 +247,8 @@ export const organizerApplicationsApi = {
 
 // Races API
 export const racesApi = {
-  list: async () => {
-    const data = await fetchApi<PageResponse<Race>>('/races')
+  list: async (includeArchived = false) => {
+    const data = await fetchApi<PageResponse<Race>>(`/races${includeArchived ? '?includeArchived=true' : ''}`)
     return data.content ?? []
   },
   
@@ -265,6 +268,18 @@ export const racesApi = {
   
   delete: (id: string) =>
     fetchApi<void>(`/races/${id}`, { method: 'DELETE' }),
+  
+  clone: (id: string, data: { name: string; raceDate?: string; startTime?: string; copyCategories?: boolean; copyCheckpoints?: boolean; copyRegistrationFields?: boolean }) =>
+    fetchApi<Race>(`/races/${id}/clone`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  archive: (id: string) =>
+    fetchApi<Race>(`/races/${id}/archive`, { method: 'POST' }),
+  
+  restore: (id: string) =>
+    fetchApi<Race>(`/races/${id}/restore`, { method: 'POST' }),
   
   updateStatus: (id: string, status: Race['status']) =>
     fetchApi<Race>(`/races/${id}/status`, {
@@ -297,6 +312,21 @@ export const participantsApi = {
   
   checkIn: (raceId: string, id: string) =>
     fetchApi<Participant>(`/races/${raceId}/participants/${id}/check-in`, { method: 'POST' }),
+  
+  listPenalties: (raceId: string, id: string) =>
+    fetchApi<Penalty[]>(`/races/${raceId}/participants/${id}/penalties`),
+  
+  addPenalty: (raceId: string, id: string, data: { seconds: number; reason?: string }) =>
+    fetchApi<Penalty>(`/races/${raceId}/participants/${id}/penalties`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  removePenalty: (raceId: string, id: string, penaltyId: string) =>
+    fetchApi<void>(`/races/${raceId}/participants/${id}/penalties/${penaltyId}`, { method: 'DELETE' }),
+  
+  startCheckout: (raceId: string, id: string) =>
+    fetchApi<Payment>(`/races/${raceId}/participants/${id}/payment/checkout`, { method: 'POST' }),
   
   importCsv: (raceId: string, file: File) => {
     const formData = new FormData()
@@ -430,6 +460,12 @@ export const checkpointsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  correctRecord: (raceId: string, checkpointId: string, recordId: string, data: { adjustedRecordedAt?: string; reason?: string; verified?: boolean }) =>
+    fetchApi<CheckpointRecord>(`/races/${raceId}/checkpoints/${checkpointId}/records/${recordId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 }
 
 export const rfidApi = {
@@ -485,6 +521,20 @@ export const resultsApi = {
   
   publish: (raceId: string) =>
     fetchApi<void>(`/races/${raceId}/results/publish`, { method: 'POST' }),
+
+  exportResults: async (raceId: string, format: 'csv' | 'pdf' | 'xlsx') => {
+    const response = await fetch(`${API_BASE}/races/${raceId}/results/export?format=${format}`, {
+      credentials: 'include',
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+    })
+    if (!response.ok) throw new Error('Failed to export results')
+    return response.blob()
+  },
+
+  publicCertificateUrl: (raceId: string, participantId: string, token: string) =>
+    `${API_BASE}${buildContractPath(API_CONTRACT.endpoints.publicRaceResultCertificate, { raceId, participantId })}?token=${encodeURIComponent(token)}`,
 }
 
 // Tracking API
@@ -554,6 +604,24 @@ export const favoritesApi = {
 
   unfollow: (raceId: string, participantId: string) =>
     fetchApi<void>(`/favorites/${participantId}?raceId=${encodeURIComponent(raceId)}`, { method: 'DELETE' }),
+}
+
+export const notificationsApi = {
+  list: () => fetchApi<AppNotification[]>(API_CONTRACT.endpoints.notifications),
+
+  markRead: (id: string) =>
+    fetchApi<AppNotification>(`${API_CONTRACT.endpoints.notifications}/${id}/read`, { method: 'PUT' }),
+
+  registerDevice: (token: string, platform = 'web') =>
+    fetchApi<{ status: string }>(API_CONTRACT.endpoints.notificationDevices, {
+      method: 'POST',
+      body: JSON.stringify({ token, platform }),
+    }),
+
+  unregisterDevice: (token: string) =>
+    fetchApi<void>(`${API_CONTRACT.endpoints.notificationDevices}?token=${encodeURIComponent(token)}`, {
+      method: 'DELETE',
+    }),
 }
 
 import { Client } from '@stomp/stompjs'
