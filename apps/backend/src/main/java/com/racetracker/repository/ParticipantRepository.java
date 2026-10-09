@@ -225,4 +225,49 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
     @Modifying
     @Query("UPDATE Participant p SET p.totalDistance = COALESCE(p.totalDistance, 0.0) + :delta WHERE p.id = :id")
     void incrementTotalDistance(@Param("id") UUID id, @Param("delta") BigDecimal delta);
+
+    @Query("select p.status, count(p) from Participant p where p.race.id = :raceId group by p.status")
+    List<Object[]> countByStatusGrouped(@Param("raceId") UUID raceId);
+
+    @Query("select p.gender, count(p) from Participant p where p.race.id = :raceId group by p.gender")
+    List<Object[]> countByGender(@Param("raceId") UUID raceId);
+
+    @Query("select p.nationality, count(p) from Participant p where p.race.id = :raceId group by p.nationality")
+    List<Object[]> countByNationality(@Param("raceId") UUID raceId);
+
+    @Query("select p.shirtSize, count(p) from Participant p where p.race.id = :raceId group by p.shirtSize")
+    List<Object[]> countByShirtSize(@Param("raceId") UUID raceId);
+
+    @Query("select p.paymentStatus, count(p), coalesce(sum(p.paymentAmount), 0) from Participant p where p.race.id = :raceId group by p.paymentStatus")
+    List<Object[]> paymentTotals(@Param("raceId") UUID raceId);
+
+    @Query(value = """
+        SELECT CASE
+                   WHEN p.date_of_birth IS NULL THEN 'UNKNOWN'
+                   WHEN date_part('year', age(r.race_date, p.date_of_birth)) < 20 THEN 'U20'
+                   WHEN date_part('year', age(r.race_date, p.date_of_birth)) < 30 THEN '20-29'
+                   WHEN date_part('year', age(r.race_date, p.date_of_birth)) < 40 THEN '30-39'
+                   WHEN date_part('year', age(r.race_date, p.date_of_birth)) < 50 THEN '40-49'
+                   WHEN date_part('year', age(r.race_date, p.date_of_birth)) < 60 THEN '50-59'
+                   WHEN date_part('year', age(r.race_date, p.date_of_birth)) < 70 THEN '60-69'
+                   ELSE '70+'
+               END AS age_group,
+               count(*)
+        FROM participants p
+        JOIN races r ON r.id = p.race_id
+        WHERE p.race_id = :raceId
+        GROUP BY age_group
+        ORDER BY age_group
+        """, nativeQuery = true)
+    List<Object[]> countByAgeGroup(@Param("raceId") UUID raceId);
+
+    @Query(value = """
+        SELECT to_char(date_trunc('day', p.registered_at), 'YYYY-MM-DD') AS day, count(*)
+        FROM participants p
+        WHERE p.race_id = :raceId
+          AND p.registered_at >= now() - make_interval(days => :days)
+        GROUP BY day
+        ORDER BY day
+        """, nativeQuery = true)
+    List<Object[]> registrationSeries(@Param("raceId") UUID raceId, @Param("days") int days);
 }
