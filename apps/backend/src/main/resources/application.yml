@@ -161,6 +161,18 @@ racetracker:
     frontend-base-url: ${FRONTEND_URL:http://localhost:5173}
     verification-path: /verify-email
     reset-password-path: /reset-password
+  push:
+    enabled: ${PUSH_ENABLED:false}
+    service-account-json: ${FCM_SERVICE_ACCOUNT_JSON:}
+    project-id: ${FCM_PROJECT_ID:}
+  payments:
+    enabled: ${PAYMENTS_ENABLED:false}
+    base-url: ${PESEPAY_BASE_URL:https://api.test.sandbox.pesepay.com/payments-engine/v1}
+    integration-key: ${PESEPAY_INTEGRATION_KEY:}
+    encryption-key: ${PESEPAY_ENCRYPTION_KEY:}
+    currency: ${PAYMENTS_CURRENCY:USD}
+    result-url: ${PAYMENTS_RESULT_URL:}
+    return-url: ${PAYMENTS_RETURN_URL:}
   rfid:
     simulation-enabled: ${RFID_SIMULATION_ENABLED:true}
     stream-key: ${RFID_STREAM_KEY:race.rfid.ingest}

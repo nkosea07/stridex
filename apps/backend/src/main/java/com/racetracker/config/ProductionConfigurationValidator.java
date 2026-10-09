@@ -22,6 +22,8 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
     private final String databaseUrl;
     private final String databasePassword;
     private final boolean rfidSimulationEnabled;
+    private final boolean pushEnabled;
+    private final String pushServiceAccountJson;
 
     public ProductionConfigurationValidator(
         @Value("${jwt.secret:}") String jwtSecret,
@@ -30,7 +32,9 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
         CorsProperties corsProperties,
         @Value("${spring.datasource.url:}") String databaseUrl,
         @Value("${spring.datasource.password:}") String databasePassword,
-        @Value("${racetracker.rfid.simulation-enabled:true}") boolean rfidSimulationEnabled
+        @Value("${racetracker.rfid.simulation-enabled:true}") boolean rfidSimulationEnabled,
+        @Value("${racetracker.push.enabled:false}") boolean pushEnabled,
+        @Value("${racetracker.push.service-account-json:}") String pushServiceAccountJson
     ) {
         this.jwtSecret = jwtSecret;
         this.mfaEncryptionKey = mfaEncryptionKey;
@@ -39,6 +43,8 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
         this.databaseUrl = databaseUrl;
         this.databasePassword = databasePassword;
         this.rfidSimulationEnabled = rfidSimulationEnabled;
+        this.pushEnabled = pushEnabled;
+        this.pushServiceAccountJson = pushServiceAccountJson;
     }
 
     @PostConstruct
@@ -80,6 +86,10 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
         }
         if (rfidSimulationEnabled) {
             throw new IllegalStateException("Production must disable global RFID simulation; enable simulation only for authorized test races");
+        }
+
+        if (pushEnabled && (pushServiceAccountJson == null || pushServiceAccountJson.isBlank())) {
+            throw new IllegalStateException("Production push notifications require FCM_SERVICE_ACCOUNT_JSON");
         }
 
         if (corsProperties.getAllowedOrigins().isEmpty() || corsProperties.getAllowedOrigins().stream().anyMatch(this::isUnsafeOrigin)) {

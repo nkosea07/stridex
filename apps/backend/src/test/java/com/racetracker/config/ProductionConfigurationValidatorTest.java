@@ -22,7 +22,9 @@ class ProductionConfigurationValidatorTest {
             corsProperties,
             "jdbc:postgresql://db.internal:5432/race_tracker",
             "unique-production-database-password",
-            false
+            false,
+            false,
+            ""
         );
 
         assertThatCode(() -> validator.run(new DefaultApplicationArguments())).doesNotThrowAnyException();
@@ -40,7 +42,9 @@ class ProductionConfigurationValidatorTest {
             corsProperties,
             "jdbc:postgresql://db.internal:5432/race_tracker",
             "unique-production-database-password",
-            false
+            false,
+            false,
+            ""
         );
 
         assertThatThrownBy(() -> validator.run(new DefaultApplicationArguments()))
@@ -60,7 +64,9 @@ class ProductionConfigurationValidatorTest {
             corsProperties,
             "jdbc:postgresql://db.internal:5432/race_tracker",
             "unique-production-database-password",
-            false
+            false,
+            false,
+            ""
         );
 
         assertThatThrownBy(() -> validator.run(new DefaultApplicationArguments()))
@@ -80,7 +86,9 @@ class ProductionConfigurationValidatorTest {
             corsProperties,
             "jdbc:postgresql://db.internal:5432/race_tracker",
             "CHANGE_ME_DATABASE_PASSWORD",
-            false
+            false,
+            false,
+            ""
         );
 
         assertThatThrownBy(() -> validator.run(new DefaultApplicationArguments()))

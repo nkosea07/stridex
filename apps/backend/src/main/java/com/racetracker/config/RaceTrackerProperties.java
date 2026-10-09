@@ -17,6 +17,8 @@ public class RaceTrackerProperties {
     private Email email = new Email();
     private Storage storage = new Storage();
     private Rfid rfid = new Rfid();
+    private Push push = new Push();
+    private Payments payments = new Payments();
 
     @Getter
     @Setter
@@ -74,5 +76,25 @@ public class RaceTrackerProperties {
         private long recoveryFixedDelayMillis = 5000;
         private int readerSilenceTimeoutSeconds = 120;
         private int gatewayBacklogDegradedThreshold = 100;
+    }
+
+    @Getter
+    @Setter
+    public static class Push {
+        private boolean enabled = false;
+        private String serviceAccountJson;
+        private String projectId;
+    }
+
+    @Getter
+    @Setter
+    public static class Payments {
+        private boolean enabled = false;
+        private String baseUrl = "https://api.test.sandbox.pesepay.com/payments-engine/v1";
+        private String integrationKey;
+        private String encryptionKey;
+        private String currency = "USD";
+        private String resultUrl;
+        private String returnUrl;
     }
 }
