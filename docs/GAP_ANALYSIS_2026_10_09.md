@@ -26,9 +26,9 @@ and **enterprise/AI**.
 | 6 | Live Tracking | **Done** | GPS ingest, drift filter, playback, heatmap, live feed, leaderboard, favorites, WebSocket |
 | 7 | Checkpoint & Timing | **Done** | CRUD + record, QR scan, manual entry, splits, auto-ranking, DNF/DNS/DQ, penalties + time corrections (P0-2) |
 | 8 | Results | **Partial** | Rankings (overall/gender/category/age-group), medals, team/country rankings, revisions, public results, CSV/PDF/XLSX export, certificates. Missing: personal bests, qualification status |
-| 9 | Payments | **Partial** | Pesepay (EcoCash/cards/Zimswitch) online checkout + webhook + manual verify (P0-5). Missing: refunds, coupons, promo/early-bird |
+| 9 | Payments | **Partial** | Pesepay (EcoCash/cards/Zimswitch) checkout + webhook, manual verify, promo/discount codes, manual refunds. Missing: automated gateway refunds, early-bird/team pricing |
 | 10 | Email & Notifications | **Partial** | Transactional email + in-app + FCM push backend (P0-4). Missing: SMS, WhatsApp, template management UI |
-| 11 | Analytics & Reporting | **Partial** | Basic dashboard + telemetry tray + heatmap. Missing: revenue/demographics/completion analytics, BI |
+| 11 | Analytics & Reporting | **Partial** | Race analytics: registration series, revenue, status breakdown, demographics (P1); dashboard + telemetry tray + heatmap. Missing: PDF/Excel report exports, device-quality analytics, BI |
 | 12 | Media | **Partial** | Image/video upload, race gallery, athlete tagging, moderation, public approved gallery (P1). Missing: AI facial matching, social sharing |
 | 13 | Mobile Features | **Partial** | Athlete app: registration, background GPS, offline queue, results, scanner. Missing: SOS, push wiring, spectator, timing-official app |
 | 14 | Security | **Done** | JWT hardening, Secure cookies, MFA, rate limiting, append-only audit, correlation IDs, prod validator, hashed RFID keys, PII-safe public endpoints |
@@ -44,7 +44,8 @@ and **enterprise/AI**.
 - **P0 — commercialization (delivered 2026-10-09):** race clone/archive, checkpoint
   penalties + time corrections, results exports + certificates, FCM push, Pesepay payments.
 - **P1 — product depth:** age-group/team/country rankings + medals **(delivered 2026-10-09)**;
-  media gallery with tagging + moderation **(delivered 2026-10-09)**; analytics/BI;
-  Excel import; OAuth; i18n; route/GPX geometry; refunds/coupons.
+  media gallery with tagging + moderation **(delivered 2026-10-09)**; race analytics +
+  promo codes + refunds **(delivered 2026-10-09)**; Excel import; OAuth; i18n;
+  route/GPX geometry; automated refunds.
 - **P2 — enterprise/AI:** AI anomaly + forecasting; Kubernetes/IaC; load/security/E2E
   testing; GDPR erasure/export; mobile spectator + SOS; SMS/WhatsApp.
