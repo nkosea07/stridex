@@ -383,6 +383,40 @@ export interface MediaItem {
   createdAt?: string
 }
 
+export interface RaceAnalyticsSummary {
+  totalRegistrations: number
+  statusCounts: Record<string, number>
+  paidCount: number
+  unpaidCount: number
+  refundedCount: number
+  revenue: number
+  completionRate: number
+}
+
+export interface Demographics {
+  gender: Record<string, number>
+  ageGroups: Record<string, number>
+  countries: Record<string, number>
+  shirtSizes: Record<string, number>
+}
+
+export interface RegistrationPoint {
+  date: string
+  count: number
+}
+
+export interface PromoCode {
+  id: string
+  raceId?: string | null
+  code: string
+  discountType: 'PERCENT' | 'FIXED'
+  discountValue: number
+  maxUses?: number | null
+  usedCount: number
+  active: boolean
+  expiresAt?: string | null
+}
+
 export interface DashboardStats {
   totalRaces: number
   activeRaces: number

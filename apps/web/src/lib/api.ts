@@ -31,7 +31,11 @@ import type {
   AppNotification,
   Payment,
   RankingEntry,
-  MediaItem
+  MediaItem,
+  RaceAnalyticsSummary,
+  Demographics,
+  RegistrationPoint,
+  PromoCode
 } from '@/types'
 import { API_CONTRACT } from '@race-tracker/contracts'
 
@@ -327,8 +331,11 @@ export const participantsApi = {
   removePenalty: (raceId: string, id: string, penaltyId: string) =>
     fetchApi<void>(`/races/${raceId}/participants/${id}/penalties/${penaltyId}`, { method: 'DELETE' }),
   
-  startCheckout: (raceId: string, id: string) =>
-    fetchApi<Payment>(`/races/${raceId}/participants/${id}/payment/checkout`, { method: 'POST' }),
+  startCheckout: (raceId: string, id: string, promoCode?: string) =>
+    fetchApi<Payment>(`/races/${raceId}/participants/${id}/payment/checkout${promoCode ? `?promoCode=${encodeURIComponent(promoCode)}` : ''}`, { method: 'POST' }),
+  
+  refundPayment: (raceId: string, id: string) =>
+    fetchApi<Payment>(`/races/${raceId}/participants/${id}/payment/refund`, { method: 'POST' }),
   
   importCsv: (raceId: string, file: File) => {
     const formData = new FormData()
@@ -662,6 +669,29 @@ export const mediaApi = {
 
   remove: (raceId: string, id: string) =>
     fetchApi<void>(`/races/${raceId}/media/${id}`, { method: 'DELETE' }),
+}
+
+export const analyticsApi = {
+  summary: (raceId: string) => fetchApi<RaceAnalyticsSummary>(`/races/${raceId}/analytics/summary`),
+  demographics: (raceId: string) => fetchApi<Demographics>(`/races/${raceId}/analytics/demographics`),
+  registrations: (raceId: string, days = 30) =>
+    fetchApi<RegistrationPoint[]>(`/races/${raceId}/analytics/registrations?days=${days}`),
+}
+
+export const promoApi = {
+  list: (raceId: string) => fetchApi<PromoCode[]>(`/races/${raceId}/promo-codes`),
+
+  create: (raceId: string, data: { code: string; discountType: 'PERCENT' | 'FIXED'; discountValue: number; maxUses?: number; expiresAt?: string }) =>
+    fetchApi<PromoCode>(`/races/${raceId}/promo-codes`, { method: 'POST', body: JSON.stringify(data) }),
+
+  setActive: (raceId: string, id: string, active: boolean) =>
+    fetchApi<PromoCode>(`/races/${raceId}/promo-codes/${id}/active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active }),
+    }),
+
+  remove: (raceId: string, id: string) =>
+    fetchApi<void>(`/races/${raceId}/promo-codes/${id}`, { method: 'DELETE' }),
 }
 
 import { Client } from '@stomp/stompjs'

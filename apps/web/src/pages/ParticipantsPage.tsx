@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Plus, Search, Upload, Download, MoreHorizontal, Trash2, CheckCircle, XCircle, Clock, CreditCard, Filter, Printer, History, Timer } from 'lucide-react'
+import { Plus, Search, Upload, Download, MoreHorizontal, Trash2, CheckCircle, XCircle, Clock, CreditCard, Filter, Printer, History, Timer, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -190,8 +190,9 @@ export function ParticipantsPage() {
 
   const handleStartPayment = async (participantId: string) => {
     if (!raceId) return
+    const promoCode = window.prompt('Promo code (optional)') ?? undefined
     try {
-      const payment = await participantsApi.startCheckout(raceId, participantId)
+      const payment = await participantsApi.startCheckout(raceId, participantId, promoCode || undefined)
       if (payment.checkoutUrl) {
         window.open(payment.checkoutUrl, '_blank', 'noopener')
         toast.success('Payment checkout opened in a new tab')
@@ -200,6 +201,17 @@ export function ParticipantsPage() {
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to start payment')
+    }
+  }
+
+  const handleRefundPayment = async (participantId: string) => {
+    if (!raceId) return
+    try {
+      await participantsApi.refundPayment(raceId, participantId)
+      toast.success('Payment marked as refunded')
+      await loadParticipants()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to refund payment')
     }
   }
 
@@ -364,6 +376,15 @@ export function ParticipantsPage() {
                             <DropdownMenuItem onClick={() => void handleVerifyPayment(p.id)}>
                               <CheckCircle className="mr-2 h-4 w-4" />
                               Verify Payment
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
+                        {p.paymentStatus === 'PAID' && (
+                          <>
+                            <DropdownMenuItem onClick={() => void handleRefundPayment(p.id)}>
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Refund Payment
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                           </>

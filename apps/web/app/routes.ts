@@ -17,6 +17,8 @@ export default [
     route('races/:raceId/checkpoints', 'routes/admin-race-checkpoints.tsx'),
     route('races/:raceId/rfid', 'routes/admin-race-rfid.tsx'),
     route('races/:raceId/media', 'routes/admin-race-media.tsx'),
+    route('races/:raceId/analytics', 'routes/admin-race-analytics.tsx'),
+    route('races/:raceId/promos', 'routes/admin-race-promos.tsx'),
     route('races/:raceId/results', 'routes/admin-race-results.tsx'),
     route('organizer-applications', 'routes/admin-organizer-applications.tsx'),
     route('settings', 'routes/admin-settings.tsx'),
