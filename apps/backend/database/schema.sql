@@ -54,6 +54,20 @@ CREATE TABLE auth_tokens (
                              created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Organizer signup requests remain separate from privileged role assignment.
+CREATE TABLE organizer_applications (
+                                      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                                      applicant_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL UNIQUE,
+                                      organization_name VARCHAR(200) NOT NULL,
+                                      status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+                                      review_notes VARCHAR(2000),
+                                      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                                      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                                      CONSTRAINT organizer_applications_status_check CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED'))
+);
+
+CREATE INDEX idx_organizer_applications_status ON organizer_applications(status, created_at);
+
 -- =============================================
 -- RACES
 -- =============================================
@@ -319,7 +333,10 @@ CREATE TRIGGER set_gps_location_geog_before_write
 -- Checkpoint Records
 CREATE TYPE record_method AS ENUM ('RFID', 'QR_CODE', 'MANUAL', 'GPS_AUTO');
 CREATE TYPE rfid_reader_status AS ENUM ('ACTIVE', 'REVOKED');
-CREATE TYPE rfid_read_event_status AS ENUM ('ACCEPTED', 'DUPLICATE', 'UNKNOWN_TAG', 'INVALID_READER', 'ERROR');
+CREATE TYPE rfid_gateway_status AS ENUM ('ONLINE', 'DEGRADED', 'OFFLINE');
+CREATE TYPE rfid_read_event_status AS ENUM ('RECEIVED', 'ACCEPTED', 'DUPLICATE', 'UNKNOWN_TAG', 'INVALID_READER', 'ERROR');
+CREATE TYPE participant_credential_type AS ENUM ('RFID_UHF_TIMING', 'QR_TICKET', 'NFC_GATE', 'BARCODE_GATEPASS');
+CREATE TYPE participant_credential_status AS ENUM ('ACTIVE', 'REVOKED');
 
 CREATE TABLE rfid_readers (
                               id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -331,9 +348,33 @@ CREATE TABLE rfid_readers (
                               status rfid_reader_status NOT NULL DEFAULT 'ACTIVE',
                               last_seen_at TIMESTAMP WITH TIME ZONE,
                               last_ip VARCHAR(64),
+                              gateway_name VARCHAR(200),
+                              gateway_status rfid_gateway_status DEFAULT 'OFFLINE',
+                              gateway_backlog INTEGER DEFAULT 0,
+                              firmware_version VARCHAR(120),
+                              hardware_model VARCHAR(200),
+                              hardware_profile VARCHAR(120),
+                              reader_class VARCHAR(120),
+                              last_error TEXT,
+                              last_heartbeat_at TIMESTAMP WITH TIME ZONE,
+                              last_processed_at TIMESTAMP WITH TIME ZONE,
                               created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                               updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                               UNIQUE(race_id, external_id)
+);
+
+CREATE TABLE participant_credentials (
+                                         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                                         participant_id UUID REFERENCES participants(id) ON DELETE CASCADE NOT NULL,
+                                         race_id UUID REFERENCES races(id) ON DELETE CASCADE NOT NULL,
+                                         credential_type participant_credential_type NOT NULL,
+                                         credential_value VARCHAR(200) NOT NULL,
+                                         status participant_credential_status NOT NULL DEFAULT 'ACTIVE',
+                                         assigned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                                         revoked_at TIMESTAMP WITH TIME ZONE,
+                                         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                                         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                                         UNIQUE(race_id, credential_type, credential_value)
 );
 
 CREATE TABLE checkpoint_records (
@@ -371,6 +412,7 @@ CREATE TABLE rfid_read_events (
                                   antenna VARCHAR(100),
                                   rssi DECIMAL(8, 2),
                                   raw_payload TEXT,
+                                  event_origin VARCHAR(20) NOT NULL DEFAULT 'HARDWARE',
                                   status rfid_read_event_status NOT NULL,
                                   matched_participant_id UUID REFERENCES participants(id) ON DELETE SET NULL,
                                   checkpoint_record_id UUID REFERENCES checkpoint_records(id) ON DELETE SET NULL,
@@ -515,7 +557,10 @@ CREATE INDEX idx_rfid_read_events_reader ON rfid_read_events(reader_id);
 CREATE INDEX idx_rfid_read_events_race ON rfid_read_events(race_id);
 CREATE INDEX idx_rfid_read_events_checkpoint ON rfid_read_events(checkpoint_id);
 CREATE INDEX idx_rfid_read_events_source ON rfid_read_events(reader_id, source_event_id);
+CREATE UNIQUE INDEX idx_rfid_read_events_source_unique ON rfid_read_events(reader_id, source_event_id) WHERE source_event_id IS NOT NULL;
 CREATE INDEX idx_participants_rfid_tag ON participants(rfid_tag);
+CREATE INDEX idx_participant_credentials_participant ON participant_credentials(participant_id);
+CREATE INDEX idx_participant_credentials_lookup ON participant_credentials(race_id, credential_type, credential_value, status);
 
 -- Notifications
 CREATE INDEX idx_notifications_user ON notifications(user_id);
@@ -546,12 +591,7 @@ CREATE TRIGGER update_participants_updated_at BEFORE UPDATE ON participants FOR 
 CREATE TRIGGER update_race_results_updated_at BEFORE UPDATE ON race_results FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_email_templates_updated_at BEFORE UPDATE ON email_templates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_rfid_readers_updated_at BEFORE UPDATE ON rfid_readers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_participant_credentials_updated_at BEFORE UPDATE ON participant_credentials FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- =============================================
--- SEED DATA (Optional)
--- =============================================
-
--- Insert Super Admin
--- Password: admin123 (bcrypt hash)
-INSERT INTO users (email, password_hash, first_name, last_name, role, is_active, email_verified)
-VALUES ('admin@racetracker.com', '$2a$10$15iYnBnQe.NOKNB/Ev2TseNkDgSPGeu63gAWPxunWkkQF3KHLCDxW', 'System', 'Admin', 'SUPER_ADMIN', true, true);
+-- Development seed data is created only by DataInitializer when the dev profile
+-- explicitly enables racetracker.seed.default-admin.enabled.
