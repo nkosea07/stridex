@@ -38,6 +38,8 @@ public class RaceResultDto {
     private String startTime;
     private String finishTime;
     private String totalTime;
+    private Integer penaltySeconds;
+    private boolean certificateAvailable;
     private List<ResultSplitDto> splits = new ArrayList<>();
     private String status;
 }

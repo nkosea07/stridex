@@ -13,6 +13,7 @@ import com.racetracker.model.Participant;
 import com.racetracker.model.Race;
 import com.racetracker.model.User;
 import com.racetracker.repository.CheckpointRecordRepository;
+import com.racetracker.repository.ParticipantPenaltyRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
@@ -44,6 +45,7 @@ public class ResultServiceImpl implements ResultService {
     private final UserRepository userRepository;
     private final ParticipantMapper participantMapper;
     private final RaceResultRevisionRepository resultRevisionRepository;
+    private final ParticipantPenaltyRepository penaltyRepository;
 
     public ResultServiceImpl(
         RaceRepository raceRepository,
@@ -51,7 +53,8 @@ public class ResultServiceImpl implements ResultService {
         CheckpointRecordRepository checkpointRecordRepository,
         UserRepository userRepository,
         ParticipantMapper participantMapper,
-        RaceResultRevisionRepository resultRevisionRepository
+        RaceResultRevisionRepository resultRevisionRepository,
+        ParticipantPenaltyRepository penaltyRepository
     ) {
         this.raceRepository = raceRepository;
         this.participantRepository = participantRepository;
@@ -59,6 +62,7 @@ public class ResultServiceImpl implements ResultService {
         this.userRepository = userRepository;
         this.participantMapper = participantMapper;
         this.resultRevisionRepository = resultRevisionRepository;
+        this.penaltyRepository = penaltyRepository;
     }
 
     @Override
@@ -166,13 +170,21 @@ public class ResultServiceImpl implements ResultService {
             .stream()
             .collect(Collectors.groupingBy(record -> record.getParticipant().getId()));
 
+        Map<UUID, Integer> penaltySecondsByParticipant = penaltyRepository.findByParticipantIdIn(participantIds)
+            .stream()
+            .collect(Collectors.groupingBy(
+                penalty -> penalty.getParticipant().getId(),
+                Collectors.summingInt(penalty -> penalty.getSeconds() == null ? 0 : penalty.getSeconds())
+            ));
+
         List<RaceResultDto> results = new ArrayList<>(projections.size());
         for (RaceResultRowProjection projection : projections) {
             Participant participant = participantById.get(projection.getParticipantId());
             if (participant == null || participant.getRace() == null) continue;
             ResultComputation computed = computeResult(
                 participant.getRace(), participant,
-                recordsByParticipant.getOrDefault(participant.getId(), List.of())
+                recordsByParticipant.getOrDefault(participant.getId(), List.of()),
+                penaltySecondsByParticipant.getOrDefault(participant.getId(), 0)
             );
             RaceResultDto dto = computed.dto();
             dto.setOverallPosition(toPosition(projection.getOverallPosition()));
@@ -195,10 +207,14 @@ public class ResultServiceImpl implements ResultService {
     private ResultComputation computeResult(Race race, Participant participant) {
         List<CheckpointRecord> records = checkpointRecordRepository
             .findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participant.getId(), race.getId());
-        return computeResult(race, participant, records);
+        return computeResult(race, participant, records, 0);
     }
 
     private ResultComputation computeResult(Race race, Participant participant, List<CheckpointRecord> records) {
+        return computeResult(race, participant, records, 0);
+    }
+
+    private ResultComputation computeResult(Race race, Participant participant, List<CheckpointRecord> records, int penaltySeconds) {
 
         RaceResultDto dto = new RaceResultDto();
         dto.setId(participant.getId());
@@ -211,6 +227,7 @@ public class ResultServiceImpl implements ResultService {
         dto.setStatus(mapStatus(participant.getStatus()));
         dto.setDisqualified(participant.getStatus() == Participant.ParticipantStatus.DISQUALIFIED);
         dto.setDisqualificationReason(dto.isDisqualified() ? "Disqualified" : null);
+        dto.setPenaltySeconds(penaltySeconds);
 
         OffsetDateTime start = resolveStart(participant, records);
         OffsetDateTime finish = resolveFinish(records);
@@ -218,9 +235,10 @@ public class ResultServiceImpl implements ResultService {
         dto.setStartTime(start != null ? start.toString() : null);
         dto.setFinishTime(finish != null ? finish.toString() : null);
 
-        Duration duration = (start != null && finish != null && !finish.isBefore(start))
+        Duration rawDuration = (start != null && finish != null && !finish.isBefore(start))
             ? Duration.between(start, finish)
             : null;
+        Duration duration = rawDuration != null ? rawDuration.plusSeconds(penaltySeconds) : null;
 
         String durationStr = formatDuration(duration);
         dto.setTotalTime(durationStr);
@@ -237,16 +255,18 @@ public class ResultServiceImpl implements ResultService {
         }
 
         dto.setOfficial(participant.getStatus() == Participant.ParticipantStatus.FINISHED && !dto.isDisqualified());
+        dto.setCertificateAvailable(dto.isOfficial());
 
         if (start != null) {
             for (CheckpointRecord record : records) {
+                OffsetDateTime effective = effectiveTime(record);
                 ResultSplitDto split = new ResultSplitDto();
                 split.setId(record.getId());
                 split.setCheckpointId(record.getCheckpoint() != null ? record.getCheckpoint().getId() : null);
-                split.setTimestamp(record.getRecordedAt() != null ? record.getRecordedAt().toString() : null);
+                split.setTimestamp(effective != null ? effective.toString() : null);
                 split.setMethod(record.getRecordMethod() != null ? record.getRecordMethod().name().toLowerCase(Locale.ROOT) : null);
-                if (record.getRecordedAt() != null && !record.getRecordedAt().isBefore(start)) {
-                    split.setSplitTime(formatDuration(Duration.between(start, record.getRecordedAt())));
+                if (effective != null && !effective.isBefore(start)) {
+                    split.setSplitTime(formatDuration(Duration.between(start, effective)));
                 }
                 dto.getSplits().add(split);
             }
@@ -254,6 +274,10 @@ public class ResultServiceImpl implements ResultService {
 
         Long finishSeconds = duration != null ? duration.toSeconds() : null;
         return new ResultComputation(dto, finishSeconds);
+    }
+
+    private OffsetDateTime effectiveTime(CheckpointRecord record) {
+        return record.getAdjustedRecordedAt() != null ? record.getAdjustedRecordedAt() : record.getRecordedAt();
     }
 
     private void assignPositions(List<ResultComputation> rows) {
@@ -295,7 +319,7 @@ public class ResultServiceImpl implements ResultService {
 
         for (CheckpointRecord record : records) {
             if (record.getCheckpoint() != null && record.getCheckpoint().getCheckpointType() == Checkpoint.CheckpointType.START) {
-                return record.getRecordedAt();
+                return effectiveTime(record);
             }
         }
 
@@ -306,7 +330,7 @@ public class ResultServiceImpl implements ResultService {
         for (int i = records.size() - 1; i >= 0; i--) {
             CheckpointRecord record = records.get(i);
             if (record.getCheckpoint() != null && record.getCheckpoint().getCheckpointType() == Checkpoint.CheckpointType.FINISH) {
-                return record.getRecordedAt();
+                return effectiveTime(record);
             }
         }
         return null;

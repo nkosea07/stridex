@@ -140,6 +140,31 @@ public class CheckpointServiceImpl implements CheckpointService {
         return checkpointMapper.toRecordDto(saved);
     }
 
+    @Override
+    @Transactional
+    public CheckpointRecordDto correctRecord(UUID raceId, UUID checkpointId, UUID recordId, CheckpointRecordCorrectionRequest request) {
+        getCheckpoint(raceId, checkpointId);
+        CheckpointRecord record = checkpointRecordRepository.findByRaceIdAndCheckpointIdAndId(raceId, checkpointId, recordId)
+            .orElseThrow(() -> new ResourceNotFoundException("Checkpoint record not found"));
+
+        if (request.getAdjustedRecordedAt() != null) {
+            record.setAdjustedRecordedAt(request.getAdjustedRecordedAt());
+        }
+        if (request.getVerified() != null) {
+            record.setIsVerified(request.getVerified());
+        }
+        if (request.getReason() != null) {
+            record.setAdjustmentReason(request.getReason());
+        }
+        User actor = resolveCurrentUserOrNull();
+        record.setAdjustedBy(actor != null ? actor.getId() : null);
+        record.setAdjustedAt(OffsetDateTime.now());
+
+        CheckpointRecord saved = checkpointRecordRepository.save(record);
+        liveSummaryCacheInvalidator.evictLastCheckpointAfterCommit(saved.getParticipant().getId(), raceId);
+        return checkpointMapper.toRecordDto(saved);
+    }
+
     private Participant resolveParticipant(UUID raceId, CheckpointRecordRequest request) {
         if (request.getParticipantId() != null) {
             return participantRepository.findByRaceIdAndId(raceId, request.getParticipantId())

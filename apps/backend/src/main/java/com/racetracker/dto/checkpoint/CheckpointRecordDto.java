@@ -19,4 +19,7 @@ public class CheckpointRecordDto {
     private String elapsedTime;
     private Boolean isVerified;
     private String notes;
+    private String adjustedRecordedAt;
+    private String adjustmentReason;
+    private String adjustedAt;
 }

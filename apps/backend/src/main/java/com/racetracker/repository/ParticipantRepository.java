@@ -105,10 +105,15 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
               AND (:userId IS NULL OR EXISTS (
                   SELECT 1 FROM participants mine WHERE mine.race_id = r.id AND mine.user_id = :userId
               ))
+        ), penalties AS (
+            SELECT pp.race_id, pp.participant_id, sum(pp.seconds) AS penalty_seconds
+            FROM participant_penalties pp
+            JOIN target_races tr ON tr.id = pp.race_id
+            GROUP BY pp.race_id, pp.participant_id
         ), checkpoint_times AS (
             SELECT cr.race_id, cr.participant_id,
-                   min(cr.recorded_at) FILTER (WHERE cp.checkpoint_type = 'START') AS start_checkpoint_at,
-                   max(cr.recorded_at) FILTER (WHERE cp.checkpoint_type = 'FINISH') AS finish_at
+                   min(coalesce(cr.adjusted_recorded_at, cr.recorded_at)) FILTER (WHERE cp.checkpoint_type = 'START') AS start_checkpoint_at,
+                   max(coalesce(cr.adjusted_recorded_at, cr.recorded_at)) FILTER (WHERE cp.checkpoint_type = 'FINISH') AS finish_at
             FROM checkpoint_records cr
             JOIN checkpoints cp ON cp.id = cr.checkpoint_id
             JOIN target_races tr ON tr.id = cr.race_id
@@ -117,15 +122,17 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
             SELECT p.id AS participant_id, p.race_id, p.user_id, p.category_id, p.bib_number,
                    p.status::text AS status, p.gender::text AS gender,
                    coalesce(p.checked_in_at, ct.start_checkpoint_at, p.registered_at) AS start_time,
-                   ct.finish_at
+                   ct.finish_at,
+                   coalesce(pen.penalty_seconds, 0) AS penalty_seconds
             FROM participants p
             JOIN target_races tr ON tr.id = p.race_id
             LEFT JOIN checkpoint_times ct ON ct.race_id = p.race_id AND ct.participant_id = p.id
+            LEFT JOIN penalties pen ON pen.race_id = p.race_id AND pen.participant_id = p.id
         ), finishers AS (
             SELECT b.participant_id,
-                   row_number() OVER (PARTITION BY b.race_id ORDER BY b.finish_at, b.participant_id) AS overall_position,
-                   row_number() OVER (PARTITION BY b.race_id, b.gender ORDER BY b.finish_at, b.participant_id) AS gender_position,
-                   row_number() OVER (PARTITION BY b.race_id, b.category_id ORDER BY b.finish_at, b.participant_id) AS category_position
+                   row_number() OVER (PARTITION BY b.race_id ORDER BY b.finish_at + make_interval(secs => b.penalty_seconds), b.participant_id) AS overall_position,
+                   row_number() OVER (PARTITION BY b.race_id, b.gender ORDER BY b.finish_at + make_interval(secs => b.penalty_seconds), b.participant_id) AS gender_position,
+                   row_number() OVER (PARTITION BY b.race_id, b.category_id ORDER BY b.finish_at + make_interval(secs => b.penalty_seconds), b.participant_id) AS category_position
             FROM base b
             WHERE b.status = 'FINISHED' AND b.finish_at IS NOT NULL
         )

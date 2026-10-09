@@ -5,6 +5,7 @@ import com.racetracker.exception.ConflictException;
 import com.racetracker.mapper.ParticipantMapper;
 import com.racetracker.model.Race;
 import com.racetracker.repository.CheckpointRecordRepository;
+import com.racetracker.repository.ParticipantPenaltyRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.RaceResultRevisionRepository;
@@ -37,6 +38,7 @@ class ResultServiceImplPaginationTest {
     @Mock private UserRepository userRepository;
     @Mock private ParticipantMapper participantMapper;
     @Mock private RaceResultRevisionRepository resultRevisionRepository;
+    @Mock private ParticipantPenaltyRepository penaltyRepository;
 
     private ResultServiceImpl resultService;
     private final UUID raceId = UUID.randomUUID();
@@ -44,7 +46,7 @@ class ResultServiceImplPaginationTest {
     @BeforeEach
     void setUp() {
         resultService = new ResultServiceImpl(raceRepository, participantRepository, checkpointRecordRepository,
-            userRepository, participantMapper, resultRevisionRepository);
+            userRepository, participantMapper, resultRevisionRepository, penaltyRepository);
         when(raceRepository.findById(raceId)).thenReturn(Optional.of(org.mockito.Mockito.mock(Race.class)));
     }
 
