@@ -1,14 +1,19 @@
 package com.racetracker.service;
 
+import com.racetracker.config.RaceTrackerProperties;
 import com.racetracker.dto.rfid.RfidReaderCreateRequest;
 import com.racetracker.dto.rfid.RfidReaderCreateResponse;
+import com.racetracker.dto.rfid.RfidReaderHeartbeatRequest;
 import com.racetracker.exception.ApiException;
 import com.racetracker.exception.ResourceNotFoundException;
+import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.model.Checkpoint;
 import com.racetracker.model.Race;
+import com.racetracker.model.RfidReadEvent;
 import com.racetracker.model.RfidReader;
 import com.racetracker.repository.CheckpointRepository;
 import com.racetracker.repository.RaceRepository;
+import com.racetracker.repository.RfidReadEventRepository;
 import com.racetracker.repository.RfidReaderRepository;
 import com.racetracker.service.impl.RfidReaderServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,11 +45,23 @@ class RfidReaderServiceTest {
     @Mock
     private RfidApiKeyService rfidApiKeyService;
 
+    @Mock
+    private RfidReadEventRepository rfidReadEventRepository;
+
+    private RaceTrackerProperties raceTrackerProperties;
     private RfidReaderServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new RfidReaderServiceImpl(rfidReaderRepository, raceRepository, checkpointRepository, rfidApiKeyService);
+        raceTrackerProperties = new RaceTrackerProperties();
+        service = new RfidReaderServiceImpl(
+            rfidReaderRepository,
+            raceRepository,
+            checkpointRepository,
+            rfidReadEventRepository,
+            rfidApiKeyService,
+            raceTrackerProperties
+        );
     }
 
     @Test
@@ -95,6 +112,79 @@ class RfidReaderServiceTest {
         when(checkpointRepository.findByRaceIdAndId(raceId, checkpointId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> service.create(raceId, createRequest(checkpointId)));
+    }
+
+    @Test
+    void heartbeatUpdatesGatewayMetadata() {
+        RfidReader reader = new RfidReader();
+        reader.setId(UUID.randomUUID());
+        reader.setStatus(RfidReader.RfidReaderStatus.ACTIVE);
+
+        when(rfidApiKeyService.hashKey("api-key")).thenReturn("hashed");
+        when(rfidReaderRepository.findByApiKeyHash("hashed")).thenReturn(Optional.of(reader));
+        when(rfidReaderRepository.save(any(RfidReader.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RfidReaderHeartbeatRequest request = new RfidReaderHeartbeatRequest();
+        request.setGatewayName("edge-1");
+        request.setGatewayBacklog(25);
+        request.setFirmwareVersion("1.2.3");
+        request.setHardwareModel("Impinj R700");
+        request.setHardwareProfile("IMPINJ_EVENT_GRADE");
+        request.setReaderClass("FIXED_4_PORT");
+
+        var response = service.heartbeat("api-key", request, "10.0.0.10");
+
+        assertThat(response.getGatewayName()).isEqualTo("edge-1");
+        assertThat(response.getGatewayStatus()).isEqualTo("ONLINE");
+        assertThat(response.getGatewayBacklog()).isEqualTo(25);
+        assertThat(response.getHardwareProfile()).isEqualTo("IMPINJ_EVENT_GRADE");
+        assertThat(response.getReaderClass()).isEqualTo("FIXED_4_PORT");
+        assertThat(response.getLastIp()).isEqualTo("10.0.0.10");
+    }
+
+    @Test
+    void heartbeatRejectsUnknownApiKey() {
+        when(rfidApiKeyService.hashKey("api-key")).thenReturn("hashed");
+        when(rfidReaderRepository.findByApiKeyHash("hashed")).thenReturn(Optional.empty());
+
+        assertThrows(UnauthorizedException.class, () -> service.heartbeat("api-key", new RfidReaderHeartbeatRequest(), "127.0.0.1"));
+    }
+
+    @Test
+    void overviewReturnsDerivedMetrics() {
+        UUID raceId = UUID.randomUUID();
+        when(raceRepository.existsById(raceId)).thenReturn(true);
+
+        RfidReader onlineReader = new RfidReader();
+        onlineReader.setStatus(RfidReader.RfidReaderStatus.ACTIVE);
+        onlineReader.setLastHeartbeatAt(java.time.OffsetDateTime.now());
+        onlineReader.setGatewayStatus(RfidReader.GatewayStatus.ONLINE);
+
+        RfidReader degradedReader = new RfidReader();
+        degradedReader.setStatus(RfidReader.RfidReaderStatus.ACTIVE);
+        degradedReader.setLastHeartbeatAt(java.time.OffsetDateTime.now());
+        degradedReader.setGatewayStatus(RfidReader.GatewayStatus.DEGRADED);
+
+        when(rfidReaderRepository.findByRaceIdOrderByCreatedAtDesc(raceId)).thenReturn(java.util.List.of(onlineReader, degradedReader));
+        when(rfidReadEventRepository.countByRaceId(raceId)).thenReturn(10L);
+        when(rfidReadEventRepository.countByRaceIdAndStatus(raceId, RfidReadEvent.RfidReadEventStatus.RECEIVED)).thenReturn(2L);
+        when(rfidReadEventRepository.countByRaceIdAndStatus(raceId, RfidReadEvent.RfidReadEventStatus.DUPLICATE)).thenReturn(3L);
+        when(rfidReadEventRepository.countByRaceIdAndStatus(raceId, RfidReadEvent.RfidReadEventStatus.UNKNOWN_TAG)).thenReturn(1L);
+        when(rfidReadEventRepository.countByRaceIdAndStatus(raceId, RfidReadEvent.RfidReadEventStatus.INVALID_READER)).thenReturn(0L);
+        when(rfidReadEventRepository.countByRaceIdAndStatus(raceId, RfidReadEvent.RfidReadEventStatus.ERROR)).thenReturn(1L);
+        when(rfidReadEventRepository.findAverageIngressLagMillis(raceId)).thenReturn(850L);
+        when(rfidReadEventRepository.findOldestReceivedAtByRaceIdAndStatus(raceId, RfidReadEvent.RfidReadEventStatus.RECEIVED))
+            .thenReturn(java.time.OffsetDateTime.now().minusSeconds(12));
+
+        var overview = service.overview(raceId);
+
+        assertThat(overview.getTotalReaders()).isEqualTo(2);
+        assertThat(overview.getOnlineReaders()).isEqualTo(1);
+        assertThat(overview.getDegradedReaders()).isEqualTo(1);
+        assertThat(overview.getProcessedEvents()).isEqualTo(8);
+        assertThat(overview.getDuplicateRate()).isEqualTo(37.5);
+        assertThat(overview.getAverageIngressLagMillis()).isEqualTo(850L);
+        assertThat(overview.getOldestQueuedReadAgeSeconds()).isGreaterThanOrEqualTo(12L);
     }
 
     private RfidReaderCreateRequest createRequest(UUID checkpointId) {

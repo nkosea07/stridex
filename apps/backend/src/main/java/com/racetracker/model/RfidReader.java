@@ -54,6 +54,38 @@ public class RfidReader {
     @Column(name = "last_ip")
     private String lastIp;
 
+    @Column(name = "gateway_name")
+    private String gatewayName;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcType(PostgreSQLEnumJdbcType.class)
+    @Column(name = "gateway_status", columnDefinition = "rfid_gateway_status")
+    private GatewayStatus gatewayStatus = GatewayStatus.OFFLINE;
+
+    @Column(name = "gateway_backlog")
+    private Integer gatewayBacklog = 0;
+
+    @Column(name = "firmware_version")
+    private String firmwareVersion;
+
+    @Column(name = "hardware_model")
+    private String hardwareModel;
+
+    @Column(name = "hardware_profile")
+    private String hardwareProfile;
+
+    @Column(name = "reader_class")
+    private String readerClass;
+
+    @Column(name = "last_error", columnDefinition = "TEXT")
+    private String lastError;
+
+    @Column(name = "last_heartbeat_at")
+    private OffsetDateTime lastHeartbeatAt;
+
+    @Column(name = "last_processed_at")
+    private OffsetDateTime lastProcessedAt;
+
     @CreationTimestamp
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
@@ -64,5 +96,9 @@ public class RfidReader {
 
     public enum RfidReaderStatus {
         ACTIVE, REVOKED
+    }
+
+    public enum GatewayStatus {
+        ONLINE, DEGRADED, OFFLINE
     }
 }

@@ -4,11 +4,15 @@ import com.racetracker.config.CorsProperties;
 import com.racetracker.config.RaceTrackerProperties;
 import com.racetracker.config.SecurityConfig;
 import com.racetracker.dto.rfid.RfidReadEventBatchResponse;
+import com.racetracker.dto.rfid.RfidReaderDto;
+import com.racetracker.dto.rfid.RfidRaceOverviewDto;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.security.CustomUserDetailsService;
 import com.racetracker.security.JwtService;
+import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import com.racetracker.service.RfidIngestService;
 import com.racetracker.service.RfidReaderService;
+import com.racetracker.service.AuditEventService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -48,7 +52,13 @@ class RfidControllerWebMvcTest {
     private RfidIngestService rfidIngestService;
 
     @MockBean
+    private AuditEventService auditEventService;
+
+    @MockBean
     private JwtService jwtService;
+
+    @MockBean
+    private MfaAuthenticationServiceImpl mfaAuthenticationService;
 
     @MockBean
     private CustomUserDetailsService customUserDetailsService;
@@ -96,6 +106,40 @@ class RfidControllerWebMvcTest {
                 .content(validBatchJson()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.accepted").value(1));
+    }
+
+    @Test
+    void heartbeatAcceptsValidReaderKey() throws Exception {
+        RfidReaderDto readerDto = new RfidReaderDto();
+        readerDto.setGatewayStatus("ONLINE");
+        when(rfidReaderService.heartbeat(eq("valid-key"), any(), anyString())).thenReturn(readerDto);
+
+        mockMvc.perform(post("/v1/rfid/readers/heartbeat")
+                .header("X-RFID-Reader-Key", "valid-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "gatewayName": "edge-1",
+                      "gatewayBacklog": 12
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.gatewayStatus").value("ONLINE"));
+    }
+
+    @Test
+    void overviewReturnsReaderMetricsForAuthorizedUsers() throws Exception {
+        RfidRaceOverviewDto overview = new RfidRaceOverviewDto();
+        overview.setTotalReaders(2);
+        overview.setQueueDepth(4);
+        when(rfidReaderService.overview(any())).thenReturn(overview);
+
+        mockMvc.perform(get("/v1/races/{raceId}/rfid/overview", UUID.randomUUID())
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user("official")
+                    .roles("OFFICIAL")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalReaders").value(2))
+            .andExpect(jsonPath("$.queueDepth").value(4));
     }
 
     private String validBatchJson() {

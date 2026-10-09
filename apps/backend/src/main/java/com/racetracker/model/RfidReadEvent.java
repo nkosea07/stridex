@@ -56,6 +56,9 @@ public class RfidReadEvent {
     @Column(name = "raw_payload", columnDefinition = "TEXT")
     private String rawPayload;
 
+    @Column(name = "event_origin", nullable = false, length = 20)
+    private String eventOrigin = "HARDWARE";
+
     @Enumerated(EnumType.STRING)
     @JdbcType(PostgreSQLEnumJdbcType.class)
     @Column(nullable = false, columnDefinition = "rfid_read_event_status")
@@ -73,6 +76,6 @@ public class RfidReadEvent {
     private String errorMessage;
 
     public enum RfidReadEventStatus {
-        ACCEPTED, DUPLICATE, UNKNOWN_TAG, INVALID_READER, ERROR
+        RECEIVED, ACCEPTED, DUPLICATE, UNKNOWN_TAG, INVALID_READER, ERROR
     }
 }

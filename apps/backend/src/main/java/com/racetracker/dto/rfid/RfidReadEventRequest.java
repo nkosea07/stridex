@@ -22,4 +22,6 @@ public class RfidReadEventRequest {
     private String antenna;
     private BigDecimal rssi;
     private String rawPayload;
+
+    private String eventOrigin;
 }

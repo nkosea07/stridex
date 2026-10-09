@@ -3,17 +3,15 @@ package com.racetracker.service;
 import com.racetracker.dto.rfid.RfidReadEventBatchRequest;
 import com.racetracker.dto.rfid.RfidReadEventBatchResponse;
 import com.racetracker.dto.rfid.RfidReadEventRequest;
+import com.racetracker.config.RaceTrackerProperties;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.model.*;
-import com.racetracker.repository.CheckpointRecordRepository;
-import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RfidReadEventRepository;
 import com.racetracker.repository.RfidReaderRepository;
 import com.racetracker.service.impl.RfidIngestServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -25,7 +23,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class RfidIngestServiceTest {
@@ -37,13 +37,10 @@ class RfidIngestServiceTest {
     private RfidReadEventRepository rfidReadEventRepository;
 
     @Mock
-    private ParticipantRepository participantRepository;
-
-    @Mock
-    private CheckpointRecordRepository checkpointRecordRepository;
-
-    @Mock
     private RfidApiKeyService rfidApiKeyService;
+
+    @Mock
+    private RfidEventPublisher rfidEventPublisher;
 
     private RfidIngestServiceImpl service;
 
@@ -52,73 +49,27 @@ class RfidIngestServiceTest {
         service = new RfidIngestServiceImpl(
             rfidReaderRepository,
             rfidReadEventRepository,
-            participantRepository,
-            checkpointRecordRepository,
-            rfidApiKeyService
+            rfidApiKeyService,
+            rfidEventPublisher,
+            new RaceTrackerProperties()
         );
     }
 
     @Test
-    void ingestCreatesCheckpointRecordForAcceptedRead() {
+    void ingestQueuesAcceptedReadForAsyncProcessing() {
         Fixture fixture = fixture(RfidReader.RfidReaderStatus.ACTIVE);
-        Participant participant = participant(fixture.race.getId(), "TAG-1");
-        CheckpointRecord savedRecord = new CheckpointRecord();
-        savedRecord.setId(UUID.randomUUID());
 
         stubReader(fixture.reader);
-        when(rfidReadEventRepository.findByReaderIdAndSourceEventId(fixture.reader.getId(), "event-1")).thenReturn(Optional.empty());
-        when(participantRepository.findByRaceIdAndRfidTag(fixture.race.getId(), "TAG-1")).thenReturn(Optional.of(participant));
-        when(checkpointRecordRepository.findByParticipantIdAndCheckpointId(participant.getId(), fixture.checkpoint.getId())).thenReturn(Optional.empty());
-        when(checkpointRecordRepository.save(any(CheckpointRecord.class))).thenReturn(savedRecord);
 
         RfidReadEventBatchResponse response = service.ingest("api-key", batch(read("event-1", "TAG-1")), "127.0.0.1");
 
         assertThat(response.getAccepted()).isEqualTo(1);
         assertThat(response.getResults()).singleElement().satisfies(result -> {
             assertThat(result.getStatus()).isEqualTo("ACCEPTED");
-            assertThat(result.getParticipantId()).isEqualTo(participant.getId());
-            assertThat(result.getCheckpointRecordId()).isEqualTo(savedRecord.getId());
+            assertThat(result.getParticipantId()).isNull();
+            assertThat(result.getCheckpointRecordId()).isNull();
         });
-
-        ArgumentCaptor<CheckpointRecord> recordCaptor = ArgumentCaptor.forClass(CheckpointRecord.class);
-        verify(checkpointRecordRepository).save(recordCaptor.capture());
-        assertThat(recordCaptor.getValue().getRecordMethod()).isEqualTo(CheckpointRecord.RecordMethod.RFID);
-        assertThat(recordCaptor.getValue().getIsVerified()).isTrue();
-        assertThat(recordCaptor.getValue().getRecordedBy()).isNull();
-    }
-
-    @Test
-    void ingestStoresUnknownTagWithoutCreatingCheckpointRecord() {
-        Fixture fixture = fixture(RfidReader.RfidReaderStatus.ACTIVE);
-        stubReader(fixture.reader);
-        when(rfidReadEventRepository.findByReaderIdAndSourceEventId(fixture.reader.getId(), "event-1")).thenReturn(Optional.empty());
-        when(participantRepository.findByRaceIdAndRfidTag(fixture.race.getId(), "TAG-404")).thenReturn(Optional.empty());
-
-        RfidReadEventBatchResponse response = service.ingest("api-key", batch(read("event-1", "TAG-404")), "127.0.0.1");
-
-        assertThat(response.getUnknownTag()).isEqualTo(1);
-        assertThat(response.getResults().get(0).getStatus()).isEqualTo("UNKNOWN_TAG");
-        verify(checkpointRecordRepository, never()).save(any());
-    }
-
-    @Test
-    void ingestMarksExistingCheckpointRecordAsDuplicate() {
-        Fixture fixture = fixture(RfidReader.RfidReaderStatus.ACTIVE);
-        Participant participant = participant(fixture.race.getId(), "TAG-1");
-        CheckpointRecord existingRecord = new CheckpointRecord();
-        existingRecord.setId(UUID.randomUUID());
-
-        stubReader(fixture.reader);
-        when(rfidReadEventRepository.findByReaderIdAndSourceEventId(fixture.reader.getId(), "event-1")).thenReturn(Optional.empty());
-        when(participantRepository.findByRaceIdAndRfidTag(fixture.race.getId(), "TAG-1")).thenReturn(Optional.of(participant));
-        when(checkpointRecordRepository.findByParticipantIdAndCheckpointId(participant.getId(), fixture.checkpoint.getId()))
-            .thenReturn(Optional.of(existingRecord));
-
-        RfidReadEventBatchResponse response = service.ingest("api-key", batch(read("event-1", "TAG-1")), "127.0.0.1");
-
-        assertThat(response.getDuplicate()).isEqualTo(1);
-        assertThat(response.getResults().get(0).getCheckpointRecordId()).isEqualTo(existingRecord.getId());
-        verify(checkpointRecordRepository, never()).save(any());
+        verify(rfidEventPublisher).publish(any(RfidReadEvent.class));
     }
 
     @Test
@@ -130,8 +81,29 @@ class RfidIngestServiceTest {
 
         assertThat(response.getInvalidReader()).isEqualTo(1);
         assertThat(response.getResults().get(0).getStatus()).isEqualTo("INVALID_READER");
-        verifyNoInteractions(participantRepository);
-        verifyNoInteractions(checkpointRecordRepository);
+        verify(rfidEventPublisher, never()).publish(any(RfidReadEvent.class));
+    }
+
+    @Test
+    void ingestReturnsDuplicateWithoutPublishingAnAlreadySeenSourceEvent() {
+        Fixture fixture = fixture(RfidReader.RfidReaderStatus.ACTIVE);
+        when(rfidApiKeyService.hashKey("api-key")).thenReturn("hashed");
+        when(rfidReaderRepository.findByApiKeyHash("hashed")).thenReturn(Optional.of(fixture.reader));
+        RfidReadEvent existing = new RfidReadEvent();
+        existing.setMatchedParticipant(null);
+        existing.setCheckpointRecord(null);
+        when(rfidReadEventRepository.findByReaderIdAndSourceEventId(fixture.reader.getId(), "event-1"))
+            .thenReturn(Optional.of(existing));
+
+        RfidReadEventBatchResponse response = service.ingest("api-key", batch(read("event-1", "TAG-1")), "127.0.0.1");
+
+        assertThat(response.getDuplicate()).isEqualTo(1);
+        assertThat(response.getResults()).singleElement().satisfies(result -> {
+            assertThat(result.getStatus()).isEqualTo("DUPLICATE");
+            assertThat(result.getErrorMessage()).isEqualTo("sourceEventId already ingested");
+        });
+        verify(rfidReadEventRepository, never()).save(any(RfidReadEvent.class));
+        verify(rfidEventPublisher, never()).publish(any(RfidReadEvent.class));
     }
 
     @Test
@@ -142,39 +114,16 @@ class RfidIngestServiceTest {
         assertThrows(UnauthorizedException.class, () -> service.ingest("api-key", batch(read("event-1", "TAG-1")), "127.0.0.1"));
     }
 
-    @Test
-    void ingestReturnsMixedBatchCounts() {
-        Fixture fixture = fixture(RfidReader.RfidReaderStatus.ACTIVE);
-        Participant participant = participant(fixture.race.getId(), "TAG-1");
-        CheckpointRecord savedRecord = new CheckpointRecord();
-        savedRecord.setId(UUID.randomUUID());
-        CheckpointRecord existingRecord = new CheckpointRecord();
-        existingRecord.setId(UUID.randomUUID());
-
-        stubReader(fixture.reader);
-        when(rfidReadEventRepository.findByReaderIdAndSourceEventId(any(UUID.class), any(String.class))).thenReturn(Optional.empty());
-        when(participantRepository.findByRaceIdAndRfidTag(fixture.race.getId(), "TAG-1")).thenReturn(Optional.of(participant));
-        when(participantRepository.findByRaceIdAndRfidTag(fixture.race.getId(), "TAG-404")).thenReturn(Optional.empty());
-        when(checkpointRecordRepository.findByParticipantIdAndCheckpointId(participant.getId(), fixture.checkpoint.getId()))
-            .thenReturn(Optional.empty())
-            .thenReturn(Optional.of(existingRecord));
-        when(checkpointRecordRepository.save(any(CheckpointRecord.class))).thenReturn(savedRecord);
-
-        RfidReadEventBatchResponse response = service.ingest("api-key", batch(
-            read("event-1", "TAG-1"),
-            read("event-2", "TAG-404"),
-            read("event-3", "TAG-1")
-        ), "127.0.0.1");
-
-        assertThat(response.getAccepted()).isEqualTo(1);
-        assertThat(response.getUnknownTag()).isEqualTo(1);
-        assertThat(response.getDuplicate()).isEqualTo(1);
-        assertThat(response.getResults()).hasSize(3);
-    }
-
     private void stubReader(RfidReader reader) {
         when(rfidApiKeyService.hashKey("api-key")).thenReturn("hashed");
         when(rfidReaderRepository.findByApiKeyHash("hashed")).thenReturn(Optional.of(reader));
+        when(rfidReadEventRepository.save(any(RfidReadEvent.class))).thenAnswer(invocation -> {
+            RfidReadEvent event = invocation.getArgument(0);
+            if (event.getId() == null) {
+                event.setId(UUID.randomUUID());
+            }
+            return event;
+        });
     }
 
     private RfidReadEventBatchRequest batch(RfidReadEventRequest... reads) {
@@ -203,16 +152,6 @@ class RfidIngestServiceTest {
         reader.setCheckpoint(checkpoint);
         reader.setStatus(status);
         return new Fixture(race, checkpoint, reader);
-    }
-
-    private Participant participant(UUID raceId, String tag) {
-        Race race = new Race();
-        race.setId(raceId);
-        Participant participant = new Participant();
-        participant.setId(UUID.randomUUID());
-        participant.setRace(race);
-        participant.setRfidTag(tag);
-        return participant;
     }
 
     private record Fixture(Race race, Checkpoint checkpoint, RfidReader reader) {

@@ -5,16 +5,14 @@ import com.racetracker.dto.rfid.RfidReadEventBatchResponse;
 import com.racetracker.dto.rfid.RfidReadEventRequest;
 import com.racetracker.dto.rfid.RfidReadEventResultDto;
 import com.racetracker.exception.UnauthorizedException;
-import com.racetracker.model.CheckpointRecord;
-import com.racetracker.model.Participant;
 import com.racetracker.model.RfidReadEvent;
 import com.racetracker.model.RfidReader;
-import com.racetracker.repository.CheckpointRecordRepository;
-import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RfidReadEventRepository;
 import com.racetracker.repository.RfidReaderRepository;
+import com.racetracker.service.RfidEventPublisher;
 import com.racetracker.service.RfidApiKeyService;
 import com.racetracker.service.RfidIngestService;
+import com.racetracker.config.RaceTrackerProperties;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,22 +25,22 @@ public class RfidIngestServiceImpl implements RfidIngestService {
 
     private final RfidReaderRepository rfidReaderRepository;
     private final RfidReadEventRepository rfidReadEventRepository;
-    private final ParticipantRepository participantRepository;
-    private final CheckpointRecordRepository checkpointRecordRepository;
     private final RfidApiKeyService rfidApiKeyService;
+    private final RfidEventPublisher rfidEventPublisher;
+    private final RaceTrackerProperties raceTrackerProperties;
 
     public RfidIngestServiceImpl(
         RfidReaderRepository rfidReaderRepository,
         RfidReadEventRepository rfidReadEventRepository,
-        ParticipantRepository participantRepository,
-        CheckpointRecordRepository checkpointRecordRepository,
-        RfidApiKeyService rfidApiKeyService
+        RfidApiKeyService rfidApiKeyService,
+        RfidEventPublisher rfidEventPublisher,
+        RaceTrackerProperties raceTrackerProperties
     ) {
         this.rfidReaderRepository = rfidReaderRepository;
         this.rfidReadEventRepository = rfidReadEventRepository;
-        this.participantRepository = participantRepository;
-        this.checkpointRecordRepository = checkpointRecordRepository;
         this.rfidApiKeyService = rfidApiKeyService;
+        this.rfidEventPublisher = rfidEventPublisher;
+        this.raceTrackerProperties = raceTrackerProperties;
     }
 
     @Override
@@ -64,71 +62,45 @@ public class RfidIngestServiceImpl implements RfidIngestService {
         RfidReadEventBatchResponse response = new RfidReadEventBatchResponse();
         List<RfidReadEventRequest> reads = request.getReads();
         for (RfidReadEventRequest read : reads) {
-            RfidReadEventResultDto result = processRead(reader, read);
+            if (reader.getStatus() != RfidReader.RfidReaderStatus.ACTIVE) {
+                RfidReadEvent event = saveBaseEvent(reader, read, RfidReadEvent.RfidReadEventStatus.INVALID_READER);
+                event.setErrorMessage("RFID reader is revoked");
+                RfidReadEvent saved = rfidReadEventRepository.save(event);
+                RfidReadEventResultDto result = result(read, saved.getStatus().name(), null, null, "RFID reader is revoked");
+                response.getResults().add(result);
+                incrementCount(response, result.getStatus());
+                continue;
+            }
+
+            String sourceEventId = read.getSourceEventId() == null ? null : read.getSourceEventId().trim();
+            if (sourceEventId != null && !sourceEventId.isBlank()) {
+                Optional<RfidReadEvent> existing = rfidReadEventRepository.findByReaderIdAndSourceEventId(
+                    reader.getId(),
+                    sourceEventId
+                );
+                if (existing.isPresent()) {
+                    RfidReadEventResultDto result = result(
+                        read,
+                        RfidReadEvent.RfidReadEventStatus.DUPLICATE.name(),
+                        existing.get().getMatchedParticipant() == null ? null : existing.get().getMatchedParticipant().getId(),
+                        existing.get().getCheckpointRecord() == null ? null : existing.get().getCheckpointRecord().getId(),
+                        "sourceEventId already ingested"
+                    );
+                    response.getResults().add(result);
+                    incrementCount(response, result.getStatus());
+                    continue;
+                }
+            }
+
+            RfidReadEvent event = saveBaseEvent(reader, read, RfidReadEvent.RfidReadEventStatus.RECEIVED);
+            RfidReadEvent saved = rfidReadEventRepository.save(event);
+            rfidEventPublisher.publish(saved);
+
+            RfidReadEventResultDto result = result(read, "ACCEPTED", null, null, null);
             response.getResults().add(result);
             incrementCount(response, result.getStatus());
         }
         return response;
-    }
-
-    private RfidReadEventResultDto processRead(RfidReader reader, RfidReadEventRequest read) {
-        if (reader.getStatus() != RfidReader.RfidReaderStatus.ACTIVE) {
-            RfidReadEvent event = saveBaseEvent(reader, read, RfidReadEvent.RfidReadEventStatus.INVALID_READER);
-            event.setErrorMessage("RFID reader is revoked");
-            rfidReadEventRepository.save(event);
-            return result(read, event, null, null, "RFID reader is revoked");
-        }
-
-        if (read.getSourceEventId() != null && !read.getSourceEventId().isBlank()) {
-            Optional<RfidReadEvent> existingEvent = rfidReadEventRepository.findByReaderIdAndSourceEventId(
-                reader.getId(),
-                read.getSourceEventId().trim()
-            );
-            if (existingEvent.isPresent()) {
-                RfidReadEvent duplicateEvent = saveBaseEvent(reader, read, RfidReadEvent.RfidReadEventStatus.DUPLICATE);
-                duplicateEvent.setMatchedParticipant(existingEvent.get().getMatchedParticipant());
-                duplicateEvent.setCheckpointRecord(existingEvent.get().getCheckpointRecord());
-                duplicateEvent.setErrorMessage("sourceEventId already processed");
-                rfidReadEventRepository.save(duplicateEvent);
-                return result(read, duplicateEvent, duplicateEvent.getMatchedParticipant(), duplicateEvent.getCheckpointRecord(), duplicateEvent.getErrorMessage());
-            }
-        }
-
-        Optional<Participant> participant = participantRepository.findByRaceIdAndRfidTag(reader.getRace().getId(), read.getRfidTag().trim());
-        if (participant.isEmpty()) {
-            RfidReadEvent event = saveBaseEvent(reader, read, RfidReadEvent.RfidReadEventStatus.UNKNOWN_TAG);
-            event.setErrorMessage("No participant is assigned to RFID tag");
-            rfidReadEventRepository.save(event);
-            return result(read, event, null, null, event.getErrorMessage());
-        }
-
-        Optional<CheckpointRecord> existingRecord = checkpointRecordRepository.findByParticipantIdAndCheckpointId(
-            participant.get().getId(),
-            reader.getCheckpoint().getId()
-        );
-        if (existingRecord.isPresent()) {
-            RfidReadEvent event = saveBaseEvent(reader, read, RfidReadEvent.RfidReadEventStatus.DUPLICATE);
-            event.setMatchedParticipant(participant.get());
-            event.setCheckpointRecord(existingRecord.get());
-            event.setErrorMessage("Checkpoint already recorded for this participant");
-            rfidReadEventRepository.save(event);
-            return result(read, event, participant.get(), existingRecord.get(), event.getErrorMessage());
-        }
-
-        CheckpointRecord record = new CheckpointRecord();
-        record.setRace(reader.getRace());
-        record.setCheckpoint(reader.getCheckpoint());
-        record.setParticipant(participant.get());
-        record.setRecordedAt(read.getReadAt());
-        record.setRecordMethod(CheckpointRecord.RecordMethod.RFID);
-        record.setIsVerified(true);
-        CheckpointRecord savedRecord = checkpointRecordRepository.save(record);
-
-        RfidReadEvent event = saveBaseEvent(reader, read, RfidReadEvent.RfidReadEventStatus.ACCEPTED);
-        event.setMatchedParticipant(participant.get());
-        event.setCheckpointRecord(savedRecord);
-        rfidReadEventRepository.save(event);
-        return result(read, event, participant.get(), savedRecord, null);
     }
 
     private RfidReadEvent saveBaseEvent(
@@ -148,23 +120,29 @@ public class RfidIngestServiceImpl implements RfidIngestService {
         event.setAntenna(read.getAntenna());
         event.setRssi(read.getRssi());
         event.setRawPayload(read.getRawPayload());
+        event.setEventOrigin(normalizeEventOrigin(read.getEventOrigin()));
         event.setStatus(status);
         return event;
     }
 
-    private RfidReadEventResultDto result(
-        RfidReadEventRequest read,
-        RfidReadEvent event,
-        Participant participant,
-        CheckpointRecord checkpointRecord,
-        String errorMessage
-    ) {
+    private String normalizeEventOrigin(String rawOrigin) {
+        String origin = rawOrigin == null || rawOrigin.isBlank() ? "HARDWARE" : rawOrigin.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!origin.equals("SIMULATED") && !origin.equals("HARDWARE")) {
+            throw new com.racetracker.exception.ApiException("RFID event origin must be SIMULATED or HARDWARE");
+        }
+        if (origin.equals("SIMULATED") && !raceTrackerProperties.getRfid().isSimulationEnabled()) {
+            throw new com.racetracker.exception.ApiException("Simulated RFID events are disabled");
+        }
+        return origin;
+    }
+
+    private RfidReadEventResultDto result(RfidReadEventRequest read, String status, java.util.UUID participantId, java.util.UUID checkpointRecordId, String errorMessage) {
         RfidReadEventResultDto dto = new RfidReadEventResultDto();
         dto.setSourceEventId(read.getSourceEventId());
         dto.setRfidTag(read.getRfidTag());
-        dto.setStatus(event.getStatus().name());
-        dto.setParticipantId(participant != null ? participant.getId() : null);
-        dto.setCheckpointRecordId(checkpointRecord != null ? checkpointRecord.getId() : null);
+        dto.setStatus(status);
+        dto.setParticipantId(participantId);
+        dto.setCheckpointRecordId(checkpointRecordId);
         dto.setErrorMessage(errorMessage);
         return dto;
     }
