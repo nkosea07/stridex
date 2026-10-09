@@ -62,6 +62,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     private final RaceRegistrationFieldRepository registrationFieldRepository;
     private final ParticipantRegistrationAnswerRepository registrationAnswerRepository;
     private final RegistrationEmailService registrationEmailService;
+    private final com.racetracker.service.NotificationService notificationService;
 
     public ParticipantServiceImpl(
         ParticipantRepository participantRepository,
@@ -76,7 +77,8 @@ public class ParticipantServiceImpl implements ParticipantService {
         TeamRepository teamRepository,
         RaceRegistrationFieldRepository registrationFieldRepository,
         ParticipantRegistrationAnswerRepository registrationAnswerRepository,
-        RegistrationEmailService registrationEmailService
+        RegistrationEmailService registrationEmailService,
+        com.racetracker.service.NotificationService notificationService
     ) {
         this.participantRepository = participantRepository;
         this.raceRepository = raceRepository;
@@ -91,6 +93,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         this.registrationFieldRepository = registrationFieldRepository;
         this.registrationAnswerRepository = registrationAnswerRepository;
         this.registrationEmailService = registrationEmailService;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -820,9 +823,21 @@ public class ParticipantServiceImpl implements ParticipantService {
     private void sendReviewEmailAfterCommit(Participant participant) {
         Participant.ParticipantStatus status = participant.getStatus();
         Runnable action = switch (status) {
-            case CONFIRMED, CHECKED_IN -> () -> registrationEmailService.sendRegistrationApproved(participant);
-            case WAITLISTED -> () -> registrationEmailService.sendRegistrationWaitlisted(participant);
-            case REJECTED -> () -> registrationEmailService.sendRegistrationRejected(participant);
+            case CONFIRMED, CHECKED_IN -> () -> {
+                registrationEmailService.sendRegistrationApproved(participant);
+                notifyParticipant(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
+                    "Registration confirmed", "Your registration for " + raceName(participant) + " is confirmed.");
+            };
+            case WAITLISTED -> () -> {
+                registrationEmailService.sendRegistrationWaitlisted(participant);
+                notifyParticipant(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
+                    "Added to waitlist", "You are on the waitlist for " + raceName(participant) + ".");
+            };
+            case REJECTED -> () -> {
+                registrationEmailService.sendRegistrationRejected(participant);
+                notifyParticipant(participant, com.racetracker.model.Notification.NotificationType.ALERT,
+                    "Registration update", "Your registration for " + raceName(participant) + " was not approved.");
+            };
             default -> null;
         };
         if (action == null) {
@@ -839,6 +854,24 @@ public class ParticipantServiceImpl implements ParticipantService {
         } else {
             action.run();
         }
+    }
+
+    private void notifyParticipant(Participant participant, com.racetracker.model.Notification.NotificationType type,
+                                   String title, String message) {
+        if (participant.getUser() == null) {
+            return;
+        }
+        try {
+            notificationService.notify(participant.getUser().getId(), type, title, message,
+                java.util.Map.of("participantId", participant.getId().toString()));
+        } catch (RuntimeException ex) {
+            // Notification delivery must never break registration flows.
+        }
+    }
+
+    private String raceName(Participant participant) {
+        return participant.getRace() != null && participant.getRace().getName() != null
+            ? participant.getRace().getName() : "your race";
     }
 
     private void applyCreateFields(Participant participant, ParticipantCreateRequest request) {

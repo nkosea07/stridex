@@ -53,6 +53,7 @@ class ParticipantServiceImplRegistrationTest {
     @Mock RaceRegistrationFieldRepository registrationFieldRepository;
     @Mock ParticipantRegistrationAnswerRepository registrationAnswerRepository;
     @Mock RegistrationEmailService registrationEmailService;
+    @Mock NotificationService notificationService;
 
     private ParticipantServiceImpl service;
     private User user;
@@ -68,7 +69,7 @@ class ParticipantServiceImplRegistrationTest {
             participantRepository, raceRepository, raceCategoryRepository, userRepository,
             importJobRepository, participantMapper, importJobMapper, new RaceTrackerProperties(),
             participantCredentialService, teamRepository, registrationFieldRepository,
-            registrationAnswerRepository, registrationEmailService
+            registrationAnswerRepository, registrationEmailService, notificationService
         );
 
         user = User.builder()
