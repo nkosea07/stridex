@@ -5,6 +5,7 @@ import routes from '../../app/routes'
 import Root from '../../app/root'
 import type { RouteConfigEntry } from '@react-router/dev/routes'
 import type { RouteObject } from 'react-router-dom'
+import { setAccessToken } from '@/lib/api'
 
 const routeModules = import.meta.glob('../../app/**/*.tsx', { eager: true }) as Record<
   string,
@@ -48,12 +49,25 @@ const runtimeRoutes: RouteObject[] = [
   },
 ]
 
-const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+let mockSessionRole: 'admin' | 'athlete' = 'athlete'
+
+function startBrowserSession(role: 'admin' | 'athlete') {
+  mockSessionRole = role
+  document.cookie = `rt_browser_csrf=${role}-csrf; path=/`
+}
+
+const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
   const url = String(input)
 
+  if (url.includes('/auth/browser/refresh')) {
+    return new Response(JSON.stringify({ token: `${mockSessionRole}-token` }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
   if (url.includes('/auth/me')) {
-    const token = localStorage.getItem('auth_token')
-    const role = token === 'admin-token' ? 'SUPER_ADMIN' : 'ATHLETE'
+    const role = mockSessionRole === 'admin' ? 'SUPER_ADMIN' : 'ATHLETE'
 
     return new Response(
       JSON.stringify({
@@ -74,6 +88,20 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
   }
 
   if (url.includes('/public/races/') && url.includes('/athletes/live')) {
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (url.includes('/public/races/') && url.includes('/tracking/live-feed')) {
+    return new Response(JSON.stringify({ items: [], nextCursor: null, refreshedAt: new Date().toISOString() }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (url.includes('/public/races/') && url.includes('/tracking/heatmap')) {
     return new Response(JSON.stringify([]), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -173,6 +201,9 @@ describe('appRoutes', () => {
 
   beforeEach(() => {
     localStorage.clear()
+    document.cookie = 'rt_browser_csrf=; Max-Age=0; path=/'
+    setAccessToken(null)
+    mockSessionRole = 'athlete'
     fetchMock.mockClear()
   })
 
@@ -185,6 +216,7 @@ describe('appRoutes', () => {
   })
 
   it.each([
+    ['/', '/', () => screen.findByRole('heading', { name: /race-day control/i }), () => undefined],
     ['/race/demo', '/race/demo', () => screen.findByText(/Public Race Hub/i), () => undefined],
     [
       '/race/demo/athlete/demo-athlete',
@@ -193,8 +225,8 @@ describe('appRoutes', () => {
       () => undefined,
     ],
     ['/login', '/login', () => screen.findByRole('heading', { name: /sign in/i }), () => undefined],
-    ['/admin', '/admin', () => screen.findByRole('heading', { name: /^dashboard$/i }), () => localStorage.setItem('auth_token', 'admin-token')],
-    ['/app', '/app', () => screen.findByRole('heading', { name: /my dashboard/i }), () => localStorage.setItem('auth_token', 'athlete-token')],
+    ['/admin', '/admin', () => screen.findByRole('heading', { name: /^dashboard$/i }), () => startBrowserSession('admin')],
+    ['/app', '/app', () => screen.findByRole('heading', { name: /my dashboard/i }), () => startBrowserSession('athlete')],
   ])('resolves %s', async (initialEntry, expectedPathname, findExpectedContent, setup) => {
     setup()
 
@@ -207,6 +239,15 @@ describe('appRoutes', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(expectedPathname)
     })
+
+    if (initialEntry === '/admin') {
+      await waitFor(() => {
+        expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/auth/browser/refresh'))).toBe(true)
+        const meCalls = fetchMock.mock.calls.filter(([url]) => String(url).includes('/auth/me'))
+        expect(meCalls.length).toBeGreaterThan(0)
+        expect(meCalls.every(([, init]) => new Headers(init?.headers).get('Authorization') === 'Bearer admin-token')).toBe(true)
+      })
+    }
 
     expect(await findExpectedContent()).toBeInTheDocument()
   })

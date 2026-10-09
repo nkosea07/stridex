@@ -1,6 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
-import { X, MapPin, Zap, Navigation, Clock, Timer } from 'lucide-react';
+import { X, MapPin, Zap, Navigation, Timer } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { LiveTrackingData } from '@/types';

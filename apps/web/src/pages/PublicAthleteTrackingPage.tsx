@@ -3,6 +3,8 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import { Activity, ArrowLeft, ChevronRight, Copy, Flag, MapPin, RefreshCcw, Timer } from 'lucide-react'
 import { publicTrackingApi } from '@/lib/api'
 import type { PublicAthleteTracking } from '@/types'
+import { AthleteTrackPlayback } from '@/components/public/AthleteTrackPlayback'
+import { FollowButton } from '@/components/public/FollowButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -163,6 +165,7 @@ export function PublicAthleteTrackingPage({
           </Link>
 
           <div className="flex items-center gap-2">
+            <FollowButton raceId={raceId} participantId={participantId} />
             <Button
               type="button"
               variant="secondary"
@@ -325,6 +328,10 @@ export function PublicAthleteTrackingPage({
               )}
             </div>
           </section>
+        </div>
+
+        <div className="mt-5">
+          <AthleteTrackPlayback raceId={raceId} participantId={participantId} />
         </div>
       </div>
     </div>

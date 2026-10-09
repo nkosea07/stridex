@@ -11,13 +11,22 @@ vi.mock('@/lib/api', () => ({
   publicTrackingApi: {
     getRaceHub: vi.fn(),
     getLiveAthletes: vi.fn(),
+    getLiveFeed: vi.fn(),
     searchAthletes: vi.fn(),
     getAthleteTracking: vi.fn(),
+    getAthleteTrack: vi.fn().mockResolvedValue({ points: [] }),
+    getHeatmap: vi.fn().mockResolvedValue([]),
+  },
+  favoritesApi: {
+    list: vi.fn().mockResolvedValue([]),
+    follow: vi.fn(),
+    unfollow: vi.fn(),
   },
 }))
 
 const getRaceHubMock = vi.mocked(publicTrackingApi.getRaceHub)
 const getLiveAthletesMock = vi.mocked(publicTrackingApi.getLiveAthletes)
+const getLiveFeedMock = vi.mocked(publicTrackingApi.getLiveFeed)
 const searchAthletesMock = vi.mocked(publicTrackingApi.searchAthletes)
 const getAthleteTrackingMock = vi.mocked(publicTrackingApi.getAthleteTracking)
 
@@ -96,16 +105,18 @@ describe('public route loaders', () => {
       distanceKm: 42.2,
       leaderboard: [],
     })
-    getLiveAthletesMock.mockResolvedValue([
-      {
+    getLiveFeedMock.mockResolvedValue({
+      items: [{
         participantId: 'athlete-1',
         participantName: 'Demo Athlete',
         bibNumber: '101',
         status: 'STARTED',
         lastCheckpoint: '10K',
         elapsedTime: '00:40:00',
-      },
-    ])
+      }],
+      nextCursor: null,
+      refreshedAt: '2026-05-31T06:00:00.000Z',
+    })
 
     const initialData = await publicRaceRouteModule.clientLoader(createRaceLoaderArgs({ raceId: 'demo' }))
 
@@ -122,11 +133,12 @@ describe('public route loaders', () => {
 
     await waitFor(() => {
       expect(getRaceHubMock).toHaveBeenCalledTimes(1)
-      expect(getLiveAthletesMock).toHaveBeenCalledTimes(1)
+      expect(getLiveFeedMock).toHaveBeenCalledTimes(1)
     })
 
     expect(getRaceHubMock).toHaveBeenCalledWith('demo')
-    expect(getLiveAthletesMock).toHaveBeenCalledWith('demo')
+    expect(getLiveFeedMock).toHaveBeenCalledWith('demo', { limit: 100 })
+    expect(getLiveAthletesMock).not.toHaveBeenCalled()
     expect(searchAthletesMock).not.toHaveBeenCalled()
   })
 

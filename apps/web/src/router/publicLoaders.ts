@@ -16,13 +16,13 @@ export interface PublicAthleteTrackingLoaderData {
 export async function loadPublicRaceHubData(raceId: string): Promise<PublicRaceHubLoaderData> {
   const [hub, liveAthletes] = await Promise.all([
     publicTrackingApi.getRaceHub(raceId),
-    publicTrackingApi.getLiveAthletes(raceId),
+    publicTrackingApi.getLiveFeed(raceId, { limit: 100 }),
   ])
 
   return {
     raceId,
     hub,
-    liveAthletes,
+    liveAthletes: liveAthletes.items,
   }
 }
 

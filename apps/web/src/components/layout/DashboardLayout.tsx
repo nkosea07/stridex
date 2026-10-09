@@ -5,8 +5,10 @@ import {
   Flag, 
   Users, 
   MapPin, 
+  Wifi,
   Timer, 
   Trophy,
+  ClipboardList,
   Settings,
   LogOut,
   Menu,
@@ -37,6 +39,7 @@ const raceNavItems = [
   { to: 'participants', icon: Users, label: 'Participants' },
   { to: 'live', icon: MapPin, label: 'Live Tracking' },
   { to: 'checkpoints', icon: Timer, label: 'Checkpoints' },
+  { to: 'rfid', icon: Wifi, label: 'RFID' },
   { to: 'results', icon: Trophy, label: 'Results' },
 ]
 
@@ -50,6 +53,9 @@ export function DashboardLayout() {
   const raceMatch = location.pathname.match(/\/admin\/races\/([^/]+)/)
   const raceId = raceMatch?.[1]
   const isInRaceContext = raceId && raceId !== 'new'
+  const visibleMainNavItems = user?.role === 'SUPER_ADMIN'
+    ? [...mainNavItems, { to: '/admin/organizer-applications', icon: ClipboardList, label: 'Organizer applications' }]
+    : mainNavItems
 
   const handleLogout = () => {
     logout()
@@ -92,7 +98,7 @@ export function DashboardLayout() {
         {/* Navigation */}
         <ScrollArea className="flex-1 px-3 py-4">
           <nav className="space-y-1">
-            {mainNavItems.map((item) => (
+            {visibleMainNavItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}

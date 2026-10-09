@@ -5,10 +5,18 @@ import { ThemeProvider } from '@/contexts/ThemeContext'
 import { Toaster } from '@/components/ui/sonner'
 import appStylesHref from '../src/index.css?url'
 import mapboxStylesHref from 'mapbox-gl/dist/mapbox-gl.css?url'
+import { PRODUCT } from '@/config/product'
 
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: appStylesHref },
   { rel: 'stylesheet', href: mapboxStylesHref },
+]
+
+export const meta = () => [
+  { title: `${PRODUCT.name} | Race-day operations and live tracking` },
+  { name: 'description', content: PRODUCT.description },
+  { property: 'og:title', content: PRODUCT.name },
+  { property: 'og:description', content: PRODUCT.description },
 ]
 
 function Document({ children }: { children: ReactNode }) {

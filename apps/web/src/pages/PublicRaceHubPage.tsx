@@ -7,6 +7,9 @@ import { PublicRaceHero } from '@/components/public/PublicRaceHero'
 import { PublicAthleteSearch } from '@/components/public/PublicAthleteSearch'
 import { PublicLeaderboard } from '@/components/public/PublicLeaderboard'
 import { PublicAthleteCard } from '@/components/public/PublicAthleteCard'
+import { PublicRaceResultsPanel } from '@/components/public/PublicRaceResultsPanel'
+import { PublicRaceRegistrationPanel } from '@/components/public/PublicRaceRegistrationPanel'
+import { RaceHeatmap } from '@/components/public/RaceHeatmap'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import type { PublicRaceHubLoaderData } from '@/router/publicLoaders'
@@ -60,15 +63,15 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
         setIsLoading(true)
         const [hubData, liveData] = await Promise.all([
           publicTrackingApi.getRaceHub(raceId),
-          publicTrackingApi.getLiveAthletes(raceId),
+          publicTrackingApi.getLiveFeed(raceId, { limit: 100 }),
         ])
 
         if (cancelled) return
 
         setHub(hubData)
-        setLiveAthletes(liveData)
-        setLiveCount(liveData.length)
-        setAthletes(liveData)
+        setLiveAthletes(liveData.items)
+        setLiveCount(liveData.items.length)
+        setAthletes(liveData.items)
       } catch {
         if (!cancelled) {
           toast.error('Failed to load the public race hub')
@@ -134,15 +137,15 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
       setIsRefreshing(true)
       const [hubData, liveData] = await Promise.all([
         publicTrackingApi.getRaceHub(raceId),
-        publicTrackingApi.getLiveAthletes(raceId),
+        publicTrackingApi.getLiveFeed(raceId, { limit: 100 }),
       ])
       const rows = trimmedQuery
         ? await publicTrackingApi.searchAthletes(raceId, trimmedQuery)
-        : liveData
+        : liveData.items
 
       setHub(hubData)
-      setLiveAthletes(liveData)
-      setLiveCount(liveData.length)
+      setLiveAthletes(liveData.items)
+      setLiveCount(liveData.items.length)
       setAthletes(rows)
     } catch {
       toast.error('Failed to refresh public race data')
@@ -205,6 +208,12 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
 
         <div className="space-y-5">
           <PublicRaceHero hub={hub} liveCount={liveCount} />
+
+          {hub.resultsPublished && <PublicRaceResultsPanel raceId={raceId} />}
+
+          <PublicRaceRegistrationPanel raceId={raceId} hub={hub} returnTo={returnTo} />
+
+          <RaceHeatmap raceId={raceId} />
 
           <PublicAthleteSearch
             query={query}

@@ -14,7 +14,7 @@ interface RunnerCardProps {
 export function RunnerCard({ participant, isSelected, onClick }: RunnerCardProps) {
   const sparklineData = useMemo(() => {
     // Generate 10 random data points for the pace trend
-    return Array.from({ length: 10 }, (_, i) => ({
+    return Array.from({ length: 10 }, () => ({
       value: participant.speed * (0.8 + Math.random() * 0.4),
     }));
   }, [participant.speed]);

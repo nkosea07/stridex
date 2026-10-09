@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Flag, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,12 +22,14 @@ function getSafePublicReturnPath(value: unknown) {
 export function RegisterPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
+    organizationName: '',
     password: '',
     confirmPassword: '',
   })
@@ -38,6 +40,7 @@ export function RegisterPage() {
 
   const fromState = (location.state as { from?: string } | null)?.from
   const returnTo = getSafePublicReturnPath(fromState)
+  const organizerIntent = searchParams.get('intent') === 'organizer'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,15 +52,22 @@ export function RegisterPage() {
 
     setIsLoading(true)
     try {
-      await authApi.register({
+      const commonData = {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         email: form.email.trim(),
         phone: form.phone.trim() || undefined,
         password: form.password,
-      })
+      }
+      if (organizerIntent) {
+        await authApi.registerOrganizer({ ...commonData, organizationName: form.organizationName.trim() })
+      } else {
+        await authApi.register(commonData)
+      }
       authApi.logout()
-      toast.success('Account created. Please sign in.')
+      toast.success(organizerIntent
+        ? 'Application submitted. Please verify your email; organizer access remains pending review.'
+        : 'Account created. Please sign in.')
       navigate('/login', { replace: true, state: returnTo ? { from: returnTo } : undefined })
     } catch {
       toast.error('Registration failed. Check your details and try again.')
@@ -74,14 +84,18 @@ export function RegisterPage() {
             <Flag className="h-6 w-6 text-primary-foreground" />
           </div>
           <h1 className="mt-4 text-2xl font-bold text-foreground">Race Tracker</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Create your account</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {organizerIntent ? 'Start your organizer account request' : 'Create your account'}
+          </p>
         </div>
 
         <Card className="border-border bg-card">
           <CardHeader className="space-y-1">
             <CardTitle className="text-xl">Register</CardTitle>
             <CardDescription>
-              New users are created with athlete access. Admin role assignment is managed separately.
+              {organizerIntent
+                ? 'Your account is verified first. Organizer access is reviewed before race controls are enabled.'
+                : 'New users are created with athlete access. Admin role assignment is managed separately.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -131,6 +145,20 @@ export function RegisterPage() {
                 />
               </div>
 
+              {organizerIntent && (
+                <div className="space-y-2">
+                  <Label htmlFor="organizationName">Organization / race brand</Label>
+                  <Input
+                    id="organizationName"
+                    value={form.organizationName}
+                    onChange={(e) => update('organizationName', e.target.value)}
+                    required
+                    maxLength={200}
+                    className="bg-muted/50"
+                  />
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <Input
@@ -164,7 +192,7 @@ export function RegisterPage() {
                     Creating account...
                   </>
                 ) : (
-                  'Create Account'
+                  organizerIntent ? 'Create organizer account' : 'Create account'
                 )}
               </Button>
             </form>

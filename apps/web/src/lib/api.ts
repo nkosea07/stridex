@@ -1,16 +1,32 @@
 import type { 
   Race, 
   Participant, 
+  ImportJob,
   Checkpoint, 
   CheckpointRecord,
   PublicAthleteSummary,
   PublicAthleteTracking,
+  PublicParticipantTrack,
+  HeatCell,
+  FavoriteAthlete,
   PublicRaceHub,
+  PublicRaceLiveFeed,
   RaceCategory,
   RaceResult,
+  RaceResultPage,
+  PublicRaceResultPage,
   DashboardStats,
   LiveTrackingData,
-  User
+  User,
+  RfidReader,
+  RfidRaceOverview,
+  OrganizerApplicationPage,
+  OrganizerApplicationReview,
+  Registration,
+  RegistrationField,
+  Team,
+  PaymentStatus,
+  RegistrationDecision
 } from '@/types'
 import { API_CONTRACT } from '@race-tracker/contracts'
 
@@ -27,37 +43,83 @@ interface PageResponse<T> {
   content: T[]
 }
 
-interface AuthApiResponse {
+export interface BrowserAuthResponse {
   token?: string | null
   refreshToken?: string | null
   requiresEmailVerification?: boolean
+  mfaRequired?: boolean
+  mfaEnrollmentRequired?: boolean
+  mfaChallengeToken?: string | null
+  recoveryCodes?: string[]
   user: User
 }
 
-interface LoginApiResponse {
-  token: string
-  refreshToken: string
-  user: User
+let accessToken: string | null = null
+let browserRefreshPromise: Promise<boolean> | null = null
+
+export function setAccessToken(token: string | null) {
+  accessToken = token
 }
 
-async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const token = localStorage.getItem('auth_token')
-  
+export function getAccessToken() {
+  return accessToken
+}
+
+function getCookie(name: string) {
+  if (typeof document === 'undefined') return undefined
+  const prefix = `${name}=`
+  return document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(prefix))?.slice(prefix.length)
+}
+
+async function refreshBrowserSession() {
+  if (browserRefreshPromise) return browserRefreshPromise
+  browserRefreshPromise = (async () => {
+    const csrfToken = getCookie('rt_browser_csrf')
+    if (!csrfToken) return false
+    const response = await fetch(`${API_BASE}/auth/browser/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'X-CSRF-Token': decodeURIComponent(csrfToken) },
+    })
+    if (!response.ok) return false
+    const session = await response.json() as BrowserAuthResponse
+    if (!session.token) return false
+    setAccessToken(session.token)
+    return true
+  })()
+  try {
+    return await browserRefreshPromise
+  } finally {
+    browserRefreshPromise = null
+  }
+}
+
+async function fetchApi<T>(endpoint: string, options?: RequestInit, allowRefresh = true): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
+      ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
       ...options?.headers,
     },
   })
+
+  if (response.status === 401 && allowRefresh && !endpoint.startsWith('/auth/')) {
+    try {
+      if (await refreshBrowserSession()) return fetchApi<T>(endpoint, options, false)
+    } catch {
+      setAccessToken(null)
+    }
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'An error occurred' }))
     throw new ApiError(response.status, error.message)
   }
 
-  return response.json()
+  if (response.status === 204) return undefined as T
+  return response.json() as Promise<T>
 }
 
 function buildContractPath(
@@ -101,22 +163,83 @@ async function fetchPublicApi<T>(endpoint: string, options?: RequestInit): Promi
 // Auth API
 export const authApi = {
   login: (email: string, password: string) =>
-    fetchApi<LoginApiResponse>('/auth/login', {
+    fetchApi<BrowserAuthResponse>('/auth/browser/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
+
+  beginMfaEnrollment: (challengeToken: string) =>
+    fetchApi<{ secret: string; provisioningUri: string }>('/auth/browser/mfa/totp/enroll', {
+      method: 'POST',
+      body: JSON.stringify({ challengeToken }),
+    }),
+
+  confirmMfaEnrollment: (challengeToken: string, code: string) =>
+    fetchApi<BrowserAuthResponse>('/auth/browser/mfa/totp/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ challengeToken, code }),
+    }),
+
+  verifyMfaLogin: (challengeToken: string, code: string) =>
+    fetchApi<BrowserAuthResponse>('/auth/browser/mfa/verify-login', {
+      method: 'POST',
+      body: JSON.stringify({ challengeToken, code }),
+    }),
+
+  restoreBrowserSession: refreshBrowserSession,
+  setAccessToken,
   
   register: (data: { email: string; password: string; firstName: string; lastName: string; phone?: string }) =>
-    fetchApi<AuthApiResponse>('/auth/register', {
+    fetchApi<BrowserAuthResponse>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  registerOrganizer: (data: { email: string; password: string; firstName: string; lastName: string; phone?: string; organizationName: string }) =>
+    fetchApi<BrowserAuthResponse>(API_CONTRACT.endpoints.authRegisterOrganizer, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   
   me: () => fetchApi<User>('/auth/me'),
+
+  updateProfile: (data: { firstName: string; lastName: string; phone?: string }) =>
+    fetchApi<User>('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  forgotPassword: (email: string) =>
+    fetchApi<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
   
-  logout: () => {
-    localStorage.removeItem('auth_token')
+  logout: async () => {
+    const csrfToken = getCookie('rt_browser_csrf')
+    try {
+      await fetch(`${API_BASE}/auth/browser/logout`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: csrfToken ? { 'X-CSRF-Token': decodeURIComponent(csrfToken) } : {},
+      })
+    } finally {
+      setAccessToken(null)
+    }
   },
+}
+
+export const organizerApplicationsApi = {
+  list: (status?: string, page = 0, size = 20) => {
+    const query = new URLSearchParams({ page: String(page), size: String(size) })
+    if (status) query.set('status', status)
+    return fetchApi<OrganizerApplicationPage>(`/admin/organizer-applications?${query.toString()}`)
+  },
+  decide: (applicationId: string, decision: 'APPROVE' | 'REJECT', reviewNotes?: string) =>
+    fetchApi<OrganizerApplicationReview>(`/admin/organizer-applications/${applicationId}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, reviewNotes }),
+    }),
 }
 
 // Races API
@@ -152,7 +275,8 @@ export const racesApi = {
 
 // Participants API
 export const participantsApi = {
-  list: (raceId: string) => fetchApi<Participant[]>(`/races/${raceId}/participants`),
+  list: (raceId: string, status?: string) =>
+    fetchApi<Participant[]>(`/races/${raceId}/participants${status ? `?status=${encodeURIComponent(status)}` : ''}`),
   
   get: (raceId: string, id: string) => fetchApi<Participant>(`/races/${raceId}/participants/${id}`),
   
@@ -180,41 +304,106 @@ export const participantsApi = {
     return fetch(`${API_BASE}/races/${raceId}/participants/import`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
+      credentials: 'include',
       body: formData,
     }).then(res => res.json())
   },
   
   exportCsv: (raceId: string) =>
     fetch(`${API_BASE}/races/${raceId}/participants/export`, {
+      credentials: 'include',
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
     }).then(res => res.blob()),
 
-  listImportJobs: (raceId: string) => fetchApi<any[]>(`/races/${raceId}/participants/import-jobs`),
+  listImportJobs: (raceId: string) => fetchApi<ImportJob[]>(`/races/${raceId}/participants/import-jobs`),
   
-  getImportJob: (raceId: string, jobId: string) => fetchApi<any>(`/races/${raceId}/participants/import-jobs/${jobId}`),
+  getImportJob: (raceId: string, jobId: string) => fetchApi<ImportJob>(`/races/${raceId}/participants/import-jobs/${jobId}`),
 
   downloadBib: (raceId: string, participantId: string) =>
     fetch(`${API_BASE}/races/${raceId}/bibs/${participantId}`, {
+      credentials: 'include',
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
     }).then(res => res.blob()),
 
   downloadBatchBibs: (raceId: string, participantIds: string[]) =>
     fetch(`${API_BASE}/races/${raceId}/bibs/batch`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
       body: JSON.stringify(participantIds),
     }).then(res => res.blob()),
 
-  myRegistrations: () => fetchApi<Array<{ raceId: string; status: string }>>('/participants/my-registrations'),
+  review: (raceId: string, id: string, decision: RegistrationDecision, reason?: string) =>
+    fetchApi<Participant>(`/races/${raceId}/participants/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, reason }),
+    }),
+
+  verifyPayment: (raceId: string, id: string, data: { status: PaymentStatus; reference?: string; amount?: number }) =>
+    fetchApi<Participant>(`/races/${raceId}/participants/${id}/payment`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  myRegistrations: () => fetchApi<Registration[]>('/participants/my-registrations'),
+}
+
+// Registration fields / teams API
+export const registrationApi = {
+  listFields: (raceId: string) => fetchApi<RegistrationField[]>(`/races/${raceId}/registration-fields`),
+
+  createField: (raceId: string, data: Partial<RegistrationField>) =>
+    fetchApi<RegistrationField>(`/races/${raceId}/registration-fields`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateField: (raceId: string, id: string, data: Partial<RegistrationField>) =>
+    fetchApi<RegistrationField>(`/races/${raceId}/registration-fields/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  deleteField: (raceId: string, id: string) =>
+    fetchApi<void>(`/races/${raceId}/registration-fields/${id}`, { method: 'DELETE' }),
+
+  listTeams: (raceId: string) => fetchApi<Team[]>(`/races/${raceId}/teams`),
+
+  createTeam: (raceId: string, data: { name: string; clubName?: string }) =>
+    fetchApi<Team>(`/races/${raceId}/teams`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+}
+
+export interface PublicRegistrationPayload {
+  categoryId: string
+  emergencyContact: { name?: string; phone?: string; relationship?: string }
+  waiverAccepted?: boolean
+  shirtSize?: string
+  teamId?: string
+  clubName?: string
+  teamName?: string
+  answers?: Array<{ fieldId: string; value?: string }>
+}
+
+export const publicRegistrationApi = {
+  listFields: (raceId: string) => fetchApi<RegistrationField[]>(`/public/races/${raceId}/registration-fields`),
+
+  register: (raceId: string, payload: PublicRegistrationPayload) =>
+    fetchApi<Registration>(`/races/${raceId}/participants/register`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 }
 
 // Checkpoints API
@@ -243,6 +432,15 @@ export const checkpointsApi = {
     }),
 }
 
+export const rfidApi = {
+  listReaders: (raceId: string) => fetchApi<RfidReader[]>(`/races/${raceId}/rfid/readers`),
+  getOverview: (raceId: string) => fetchApi<RfidRaceOverview>(`/races/${raceId}/rfid/overview`),
+  revokeReader: (raceId: string, readerId: string) =>
+    fetchApi<RfidReader>(`/races/${raceId}/rfid/readers/${readerId}/revoke`, {
+      method: 'PATCH',
+    }),
+}
+
 // Categories API
 export const categoriesApi = {
   list: (raceId: string) => fetchApi<RaceCategory[]>(`/races/${raceId}/categories`),
@@ -266,6 +464,22 @@ export const categoriesApi = {
 // Results API
 export const resultsApi = {
   list: (raceId: string) => fetchApi<RaceResult[]>(`/races/${raceId}/results`),
+
+  page: (raceId: string, page = 0, size = 50, revision?: number) => {
+    return fetchApi<RaceResultPage>(buildContractPath(
+      API_CONTRACT.endpoints.raceResultsPage,
+      { raceId },
+      { page, size, revision },
+    ))
+  },
+
+  publicPage: (raceId: string, page = 0, size = 25, revision?: number) => {
+    return fetchPublicApi<PublicRaceResultPage>(buildContractPath(
+      API_CONTRACT.endpoints.publicRaceResults,
+      { raceId },
+      { page, size, revision },
+    ))
+  },
 
   my: () => fetchApi<RaceResult[]>('/results/my'),
   
@@ -299,6 +513,15 @@ export const publicTrackingApi = {
       buildContractPath(API_CONTRACT.endpoints.publicRaceLive, { raceId }),
     ),
 
+  getLiveFeed: (raceId: string, options?: { cursor?: string; limit?: number; query?: string }) =>
+    fetchPublicApi<PublicRaceLiveFeed>(
+      buildContractPath(API_CONTRACT.endpoints.publicRaceLiveFeed, { raceId }, {
+        cursor: options?.cursor,
+        limit: options?.limit,
+        q: options?.query,
+      }),
+    ),
+
   searchAthletes: (raceId: string, query: string) =>
     fetchPublicApi<PublicAthleteSummary[]>(
       buildContractPath(API_CONTRACT.endpoints.publicRaceSearch, { raceId }, { q: query }),
@@ -308,6 +531,29 @@ export const publicTrackingApi = {
     fetchPublicApi<PublicAthleteTracking>(
       buildContractPath(API_CONTRACT.endpoints.publicAthleteTracking, { raceId, participantId }),
     ),
+
+  getAthleteTrack: (raceId: string, participantId: string) =>
+    fetchPublicApi<PublicParticipantTrack>(
+      buildContractPath(API_CONTRACT.endpoints.publicAthleteTrack, { raceId, participantId }),
+    ),
+
+  getHeatmap: (raceId: string, options?: { from?: string; to?: string; scale?: number }) =>
+    fetchPublicApi<HeatCell[]>(
+      buildContractPath(API_CONTRACT.endpoints.publicRaceHeatmap, { raceId }, options),
+    ),
+}
+
+export const favoritesApi = {
+  list: () => fetchApi<FavoriteAthlete[]>('/favorites'),
+
+  follow: (raceId: string, participantId: string) =>
+    fetchApi<FavoriteAthlete>('/favorites', {
+      method: 'POST',
+      body: JSON.stringify({ raceId, participantId }),
+    }),
+
+  unfollow: (raceId: string, participantId: string) =>
+    fetchApi<void>(`/favorites/${participantId}?raceId=${encodeURIComponent(raceId)}`, { method: 'DELETE' }),
 }
 
 import { Client } from '@stomp/stompjs'
@@ -321,7 +567,7 @@ export function connectLiveTracking(raceId: string, onMessage: (data: LiveTracki
   // The backend endpoint is /ws-tracking
   const wsUrl = envUrl || `${protocol}//${window.location.host}/ws-tracking`
   
-  const token = localStorage.getItem('auth_token')
+  const token = accessToken
   
   stompClient = new Client({
     brokerURL: wsUrl,
@@ -356,6 +602,45 @@ export function connectLiveTracking(raceId: string, onMessage: (data: LiveTracki
     if (stompClient) {
       stompClient.deactivate()
       stompClient = null
+    }
+  }
+}
+
+export interface UserAlertPayload {
+  title: string
+  message: string
+  type?: string
+}
+
+let userAlertClient: Client | null = null
+
+export function connectUserAlerts(userId: string, onMessage: (data: UserAlertPayload) => void) {
+  const envUrl = (import.meta.env.VITE_WS_URL as string | undefined)?.trim()
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsUrl = envUrl || `${protocol}//${window.location.host}/ws-tracking`
+
+  userAlertClient = new Client({
+    brokerURL: wsUrl,
+    connectHeaders: { Authorization: `Bearer ${accessToken}` },
+    reconnectDelay: 5000,
+    heartbeatIncoming: 4000,
+    heartbeatOutgoing: 4000,
+  })
+
+  userAlertClient.onConnect = () => {
+    userAlertClient?.subscribe(`/topic/user.${userId}`, (message) => {
+      if (message.body) {
+        onMessage(JSON.parse(message.body))
+      }
+    })
+  }
+
+  userAlertClient.activate()
+
+  return () => {
+    if (userAlertClient) {
+      userAlertClient.deactivate()
+      userAlertClient = null
     }
   }
 }

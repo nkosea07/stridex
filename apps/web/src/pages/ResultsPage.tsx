@@ -15,17 +15,35 @@ import { toast } from 'sonner'
 export function ResultsPage() {
   const { raceId } = useParams()
   const [results, setResults] = useState<RaceResult[]>([])
+  const [resultTotal, setResultTotal] = useState(0)
+  const [resultPage, setResultPage] = useState(0)
+  const [resultRevision, setResultRevision] = useState<number | null>(null)
+  const [hasMoreResults, setHasMoreResults] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [search, setSearch] = useState('')
   const [genderFilter, setGenderFilter] = useState<string>('all')
   const [activeTab, setActiveTab] = useState('overall')
 
-  const loadResults = async () => {
+  const loadResults = async (page = 0, append = false) => {
     if (!raceId) return
     try {
-      const data = await resultsApi.list(raceId)
-      setResults(data)
-    } catch {
+      if (append) setIsLoadingMore(true)
+      const data = await resultsApi.page(raceId, page, 50, append ? resultRevision ?? undefined : undefined)
+      setResults((current) => append ? [...current, ...data.items] : data.items)
+      setResultTotal(data.totalElements)
+      setResultPage(data.page)
+      setResultRevision(data.revision)
+      setHasMoreResults(data.page + 1 < data.totalPages)
+    } catch (error) {
+      if (append && error instanceof Error && error.message.toLowerCase().includes('results changed')) {
+        toast.error('Results changed. Reloading from the first page.')
+        setResultRevision(null)
+        await loadResults(0, false)
+        return
+      }
       toast.error('Failed to load results')
+    } finally {
+      if (append) setIsLoadingMore(false)
     }
   }
 
@@ -130,7 +148,7 @@ export function ResultsPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Finishers</CardTitle></CardHeader><CardContent><div className="flex items-center gap-2"><Trophy className="h-5 w-5 text-chart-3" /><span className="text-2xl font-bold">{filteredResults.length}</span></div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Results</CardTitle></CardHeader><CardContent><div className="flex items-center gap-2"><Trophy className="h-5 w-5 text-chart-3" /><span className="text-2xl font-bold">{resultTotal}</span></div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Male Finishers</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{maleResults.length}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Female Finishers</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{femaleResults.length}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Best Time</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold font-mono">{filteredResults[0]?.chipTime || '--:--:--'}</div></CardContent></Card>
@@ -161,6 +179,13 @@ export function ResultsPage() {
         <TabsContent value="men"><ResultsTable list={maleResults} showGenderPosition /></TabsContent>
         <TabsContent value="women"><ResultsTable list={femaleResults} showGenderPosition /></TabsContent>
       </Tabs>
+      {hasMoreResults && (
+        <div className="flex justify-center">
+          <Button variant="outline" disabled={isLoadingMore} onClick={() => void loadResults(resultPage + 1, true)}>
+            {isLoadingMore ? 'Loading…' : 'Load more results'}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
