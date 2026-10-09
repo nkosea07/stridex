@@ -5,8 +5,10 @@ import com.racetracker.dto.result.RaceResultDto;
 import com.racetracker.dto.result.RaceResultPageDto;
 import com.racetracker.dto.result.PublicRaceResultDto;
 import com.racetracker.dto.result.PublicRaceResultPageDto;
+import com.racetracker.dto.result.RankingEntryDto;
 import com.racetracker.security.CertificateTokenService;
 import com.racetracker.service.CertificateService;
+import com.racetracker.service.RankingService;
 import com.racetracker.service.ResultExportService;
 import com.racetracker.service.ResultService;
 import com.racetracker.service.AuditEventService;
@@ -33,6 +35,7 @@ public class ResultController {
     private final ResultExportService resultExportService;
     private final CertificateService certificateService;
     private final CertificateTokenService certificateTokenService;
+    private final RankingService rankingService;
 
     public ResultController(
         ResultService resultService,
@@ -41,7 +44,8 @@ public class ResultController {
         ClientAddressResolver clientAddressResolver,
         ResultExportService resultExportService,
         CertificateService certificateService,
-        CertificateTokenService certificateTokenService
+        CertificateTokenService certificateTokenService,
+        RankingService rankingService
     ) {
         this.resultService = resultService;
         this.auditEventService = auditEventService;
@@ -50,6 +54,7 @@ public class ResultController {
         this.resultExportService = resultExportService;
         this.certificateService = certificateService;
         this.certificateTokenService = certificateTokenService;
+        this.rankingService = rankingService;
     }
 
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/results")
@@ -86,6 +91,18 @@ public class ResultController {
         @PathVariable UUID participantId
     ) {
         return pdfResponse(certificateService.generate(raceId, participantId), "certificate.pdf");
+    }
+
+    @GetMapping("/v${racetracker.api.version}/races/{raceId}/rankings/teams")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
+    public ResponseEntity<List<RankingEntryDto>> teamRankings(@PathVariable UUID raceId) {
+        return ResponseEntity.ok(rankingService.teamRankings(raceId));
+    }
+
+    @GetMapping("/v${racetracker.api.version}/races/{raceId}/rankings/countries")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
+    public ResponseEntity<List<RankingEntryDto>> countryRankings(@PathVariable UUID raceId) {
+        return ResponseEntity.ok(rankingService.countryRankings(raceId));
     }
 
     @GetMapping("/v${racetracker.api.version}/public/races/{raceId}/results")

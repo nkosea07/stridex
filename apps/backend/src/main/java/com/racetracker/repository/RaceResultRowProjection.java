@@ -15,4 +15,6 @@ public interface RaceResultRowProjection {
     Long getOverallPosition();
     Long getGenderPosition();
     Long getCategoryPosition();
+    String getAgeGroup();
+    Long getAgeGroupPosition();
 }

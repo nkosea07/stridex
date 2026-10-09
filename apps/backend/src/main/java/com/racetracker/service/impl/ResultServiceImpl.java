@@ -190,6 +190,9 @@ public class ResultServiceImpl implements ResultService {
             dto.setOverallPosition(toPosition(projection.getOverallPosition()));
             dto.setGenderPosition(toPosition(projection.getGenderPosition()));
             dto.setCategoryPosition(toPosition(projection.getCategoryPosition()));
+            dto.setAgeGroup(projection.getAgeGroup());
+            dto.setAgeGroupPosition(toPosition(projection.getAgeGroupPosition()));
+            dto.setMedal(medalFor(projection.getOverallPosition(), dto.isOfficial(), dto.isDisqualified()));
             results.add(dto);
         }
         return List.copyOf(results);
@@ -202,6 +205,18 @@ public class ResultServiceImpl implements ResultService {
 
     private Integer toPosition(Long position) {
         return position == null ? null : Math.toIntExact(position);
+    }
+
+    private String medalFor(Long overallPosition, boolean official, boolean disqualified) {
+        if (!official || disqualified || overallPosition == null) {
+            return null;
+        }
+        return switch (overallPosition.intValue()) {
+            case 1 -> "GOLD";
+            case 2 -> "SILVER";
+            case 3 -> "BRONZE";
+            default -> null;
+        };
     }
 
     private ResultComputation computeResult(Race race, Participant participant) {

@@ -98,7 +98,7 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     @Query(value = """
         WITH target_races AS (
-            SELECT r.id
+            SELECT r.id, r.race_date
             FROM races r
             WHERE (:raceId IS NULL OR r.id = :raceId)
               AND (:publishedOnly = false OR r.results_published_at IS NOT NULL)
@@ -123,7 +123,17 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
                    p.status::text AS status, p.gender::text AS gender,
                    coalesce(p.checked_in_at, ct.start_checkpoint_at, p.registered_at) AS start_time,
                    ct.finish_at,
-                   coalesce(pen.penalty_seconds, 0) AS penalty_seconds
+                   coalesce(pen.penalty_seconds, 0) AS penalty_seconds,
+                   CASE
+                       WHEN p.date_of_birth IS NULL THEN 'UNKNOWN'
+                       WHEN date_part('year', age(tr.race_date, p.date_of_birth)) < 20 THEN 'U20'
+                       WHEN date_part('year', age(tr.race_date, p.date_of_birth)) < 30 THEN '20-29'
+                       WHEN date_part('year', age(tr.race_date, p.date_of_birth)) < 40 THEN '30-39'
+                       WHEN date_part('year', age(tr.race_date, p.date_of_birth)) < 50 THEN '40-49'
+                       WHEN date_part('year', age(tr.race_date, p.date_of_birth)) < 60 THEN '50-59'
+                       WHEN date_part('year', age(tr.race_date, p.date_of_birth)) < 70 THEN '60-69'
+                       ELSE '70+'
+                   END AS age_group
             FROM participants p
             JOIN target_races tr ON tr.id = p.race_id
             LEFT JOIN checkpoint_times ct ON ct.race_id = p.race_id AND ct.participant_id = p.id
@@ -132,15 +142,17 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
             SELECT b.participant_id,
                    row_number() OVER (PARTITION BY b.race_id ORDER BY b.finish_at + make_interval(secs => b.penalty_seconds), b.participant_id) AS overall_position,
                    row_number() OVER (PARTITION BY b.race_id, b.gender ORDER BY b.finish_at + make_interval(secs => b.penalty_seconds), b.participant_id) AS gender_position,
-                   row_number() OVER (PARTITION BY b.race_id, b.category_id ORDER BY b.finish_at + make_interval(secs => b.penalty_seconds), b.participant_id) AS category_position
+                   row_number() OVER (PARTITION BY b.race_id, b.category_id ORDER BY b.finish_at + make_interval(secs => b.penalty_seconds), b.participant_id) AS category_position,
+                   row_number() OVER (PARTITION BY b.race_id, b.age_group ORDER BY b.finish_at + make_interval(secs => b.penalty_seconds), b.participant_id) AS age_group_position
             FROM base b
             WHERE b.status = 'FINISHED' AND b.finish_at IS NOT NULL
         )
         SELECT b.participant_id AS "participantId", b.race_id AS "raceId", b.category_id AS "categoryId",
                b.bib_number AS "bibNumber", b.status AS "status", b.gender AS "gender",
                b.start_time AS "startTime", b.finish_at AS "finishTime",
+               b.age_group AS "ageGroup",
                f.overall_position AS "overallPosition", f.gender_position AS "genderPosition",
-               f.category_position AS "categoryPosition"
+               f.category_position AS "categoryPosition", f.age_group_position AS "ageGroupPosition"
         FROM base b
         LEFT JOIN finishers f ON f.participant_id = b.participant_id
         WHERE (:userId IS NULL OR b.user_id = :userId)
