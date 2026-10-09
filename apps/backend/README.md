@@ -36,15 +36,21 @@ Common database variables:
 - `DB_PORT` (default `5432`)
 - `DB_NAME` (default `race_tracker`)
 - `DB_USERNAME` (default `race_admin`)
-- `DB_PASSWORD` (default `password`)
+- `DB_PASSWORD` (default `localdevpassword` for local Docker Compose only)
+
+For the `prod` Spring profile, `DB_HOST`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, and `FRONTEND_URL` are required. Production accepts only explicit HTTPS CORS origins, validates the JWT secret at startup, disables development seeding, and disables Swagger/OpenAPI endpoints.
 
 Database requirements:
-- PostgreSQL must have PostGIS available before applying `database/schema.sql`; the schema enables it with `CREATE EXTENSION IF NOT EXISTS postgis`.
+- PostgreSQL must provide PostGIS; the Flyway baseline enables it with `CREATE EXTENSION IF NOT EXISTS postgis`.
 - Decimal latitude/longitude columns remain the API compatibility fields.
 - `geography(Point, 4326)` columns on races, checkpoints, and GPS locations are query fields for spatial operations, maintained from decimal coordinates by database triggers.
 - GiST indexes support the intended `ST_DWithin` proximity path for checkpoint/race-day location checks.
-- Existing deployments should apply `database/migrations/2026-06-01-geospatial-telemetry-foundation.sql` rather than relying on `schema.sql`.
+- Versioned migrations in `src/main/resources/db/migration` are authoritative. Hibernate validates the migrated schema and does not update it outside the explicit local `dev` profile.
+- Flyway does not automatically baseline non-empty databases. Before adopting it on an existing environment, take a verified backup, compare the full schema with `V1__baseline.sql` plus the intended upgrades, and manually record the matching Flyway baseline version. Do not baseline based only on table names or apply the old date-named SQL scripts blindly; their deployment history is not tracked here.
+- `V3__organizer_applications_and_rfid_scale.sql` checks for duplicate `(reader_id, source_event_id)` groups before creating the idempotency index. Reconcile duplicates from its diagnostic output without deleting/merging timing records, then rerun.
 - `gps_locations` partitioning is intentionally deferred to a dedicated migration on `recorded_at` so existing JPA/API behavior stays stable.
+
+For a clean local database, start the PostGIS service with `docker compose up -d db redis`, then run the backend. Flyway applies the clean baseline and forward migrations. Do not run `database/schema.sql` separately.
 
 ## Management and Observability
 
@@ -109,10 +115,11 @@ This phase does not configure an external OpenTelemetry collector/exporter. The 
 - `GET /api/v1/races/{raceId}/rfid/readers`
 - `PATCH /api/v1/races/{raceId}/rfid/readers/{readerId}/revoke`
 - `POST /api/v1/rfid/read-events`
+- `POST /api/v1/rfid/readers/heartbeat`
 
-Reader management routes require operator authentication. Creating a reader returns the plaintext `apiKey` only once; the database stores only its SHA-256 hash. Timing bridges call `POST /api/v1/rfid/read-events` with `X-RFID-Reader-Key`.
+Reader management routes require operator authentication. Creating a reader returns the plaintext `apiKey` only once; the database stores only its SHA-256 hash. Timing bridges call `POST /api/v1/rfid/read-events` and `POST /api/v1/rfid/readers/heartbeat` with `X-RFID-Reader-Key`.
 
-RFID reads are stored as raw `rfid_read_events` and valid first-time reads create normal `checkpoint_records` with `recordMethod=RFID`. Duplicate checkpoint reads and unknown tags are stored as event statuses instead of failing the full batch.
+RFID reads are stored immediately as raw `rfid_read_events` with a queued `RECEIVED` status, published to Redis Streams, and normalized asynchronously into official `checkpoint_records` with `recordMethod=RFID`. Participant matching now resolves through `participant_credentials`, with the legacy participant `rfidTag` field kept for backward compatibility and auto-synced to `RFID_UHF_TIMING` credentials. Reader heartbeat updates expose gateway status, backlog, firmware/model metadata, hardware profile metadata, and last-processed timestamps so demo compact-UHF readers and Impinj event-grade readers stay visible through the same inventory surface.
 
 ### Tracking
 - `POST /api/v1/tracking/{raceId}/location`
@@ -182,6 +189,18 @@ OpenAPI JSON:
 cd apps/backend
 mvn clean test
 ```
+
+The `FlywayPostgresMigrationSmokeTest` also migrates a clean PostGIS database
+through the latest version when `FLYWAY_TEST_URL`, `FLYWAY_TEST_USERNAME`, and
+`FLYWAY_TEST_PASSWORD` are set. Without those variables it is skipped. GitHub
+Actions provides a disposable PostGIS service for this gate.
+
+For pilot deployment, use the repository-root `compose.pilot.yml` and
+`.env.pilot.example`; production PostgreSQL/PostGIS remains externalizable. Read
+`docs/pilot-operations-runbook.md` before baseline adoption, backup, restore, or
+rollback. A non-empty database must be structurally compared to the V1 baseline
+before it is manually baselined; this repository does not claim that any existing
+environment has already passed that comparison.
 
 Current test suite includes controller-level smoke tests under:
 - `src/test/java/com/racetracker/controller`

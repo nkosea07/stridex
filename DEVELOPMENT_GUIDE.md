@@ -677,7 +677,7 @@ The backend schema now enables PostGIS and adds `geography(Point, 4326)` query c
 
 Use the spatial columns through repository/service boundaries instead of spreading raw spatial SQL across controllers. `ST_DWithin` plus GiST indexes is the intended path for proximity checks such as checkpoint geofencing.
 
-For existing deployments, apply `apps/backend/database/migrations/2026-06-01-geospatial-telemetry-foundation.sql`. It enables PostGIS, adds/backfills the geography columns, creates sync triggers, and adds the GiST indexes without changing API contracts.
+The backend now uses Flyway migrations under `apps/backend/src/main/resources/db/migration`; clean databases migrate on application startup. For existing deployments, take and verify a backup, compare the database schema against the baseline and intended forward migrations, and manually baseline only the exact matching schema. The date-named scripts under `apps/backend/database/migrations` do not prove deployment history and must not be applied blindly.
 
 Telemetry table growth remains a production risk. Convert `gps_locations` to range partitioning on `recorded_at` in a dedicated migration when race-day volume justifies it; do not rewrite the table inside the current schema foundation. RFID/bib ingest should stay deferred until this location storage and proximity-query foundation is stable.
 
@@ -685,9 +685,9 @@ Telemetry table growth remains a production risk. Convert `gps_locations` to ran
 
 The backend supports a generic HTTP bridge for RFID/chip timing systems. Operators create checkpoint readers with `POST /api/v1/races/{raceId}/rfid/readers`; creation returns a plaintext `apiKey` once and stores only a SHA-256 hash in `rfid_readers`.
 
-Timing bridges submit batches to `POST /api/v1/rfid/read-events` with `X-RFID-Reader-Key`. Each read includes `rfidTag`, `readAt`, optional `sourceEventId`, `antenna`, `rssi`, and `rawPayload`. Valid first-time reads create normal `checkpoint_records` with `recordMethod=RFID`. Duplicate source/checkpoint reads, unknown tags, and revoked readers are retained in `rfid_read_events` as processing statuses.
+Timing bridges submit batches to `POST /api/v1/rfid/read-events` with `X-RFID-Reader-Key`. Each read includes `rfidTag`, `readAt`, optional `sourceEventId`, `antenna`, `rssi`, and `rawPayload`. The API durably stores raw reads with `RECEIVED` status, publishes them to Redis Streams, and normalizes them asynchronously into official `checkpoint_records` with `recordMethod=RFID`. Participant timing identity now resolves through `participant_credentials`, while the legacy participant `rfidTag` field remains backward-compatible and auto-synced to `RFID_UHF_TIMING` credentials. Gateways report health to `POST /api/v1/rfid/readers/heartbeat`, which updates reader backlog, firmware/model metadata, hardware profile metadata, and heartbeat status for admin surfaces.
 
-Apply `apps/backend/database/migrations/2026-06-02-rfid-bib-ingest-foundation.sql` for existing databases. CSV timing imports, reader health dashboards, operator correction workflows, and vendor-specific device SDK integrations are still deferred.
+RFID scaling and organizer schema changes are included in the versioned Flyway migrations. Before upgrading an existing database, resolve any duplicate RFID source-event groups reported by migration preflight without deleting timing data. CSV timing imports, reader health dashboards, operator correction workflows, and vendor-specific device SDK integrations are still deferred.
 
 ### Initial Setup Commands
 
@@ -699,8 +699,8 @@ docker-compose up -d
 # Or connect to existing PostgreSQL
 export DATABASE_URL=postgresql://user:password@localhost:5432/racetracker
 
-# Run schema (using psql or your preferred tool)
-psql $DATABASE_URL -f database/schema.sql
+# Start the backend; Flyway applies versioned migrations before Hibernate validates the schema.
+mvn spring-boot:run
 ```
 
 The target database must support PostGIS before the schema is applied. Managed PostgreSQL providers usually require enabling the extension at the database level first.
