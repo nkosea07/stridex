@@ -20,5 +20,19 @@ public class PublicRaceHubResponse {
     private BigDecimal distanceKm;
     private String bannerImageUrl;
     private String logoUrl;
+    private boolean resultsPublished;
+    private String registrationOpens;
+    private String registrationCloses;
+    private Integer maxParticipants;
+    private BigDecimal registrationFee;
+    private String currency;
+    private Boolean isPublicRegistration;
+    private Boolean requireApproval;
+    private Boolean waitlistEnabled;
+    private Boolean requireWaiver;
+    private String waiverVersion;
+    private String waiverText;
+    private Integer participantCount;
+    private List<com.racetracker.dto.race.RaceCategoryDto> categories = new ArrayList<>();
     private List<PublicRaceAthleteSummaryResponse> leaderboard = new ArrayList<>();
 }

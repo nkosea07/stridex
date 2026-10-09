@@ -1,6 +1,7 @@
 export type EndpointKey =
   | 'authLogin'
   | 'authRegister'
+  | 'authRegisterOrganizer'
   | 'authRefresh'
   | 'authMe'
   | 'authProfile'
@@ -9,12 +10,25 @@ export type EndpointKey =
   | 'raceRegister'
   | 'publicRaceHub'
   | 'publicRaceLive'
+  | 'publicRaceLiveFeed'
+  | 'publicRaceResults'
   | 'publicRaceSearch'
   | 'publicAthleteTracking'
+  | 'publicAthleteTrack'
+  | 'publicRaceHeatmap'
+  | 'publicRaceRegistrationFields'
+  | 'favorites'
+  | 'favoriteDelete'
+  | 'raceRegistrationFields'
+  | 'raceTeams'
+  | 'raceParticipantReview'
+  | 'raceParticipantPayment'
   | 'myRegistrations'
   | 'trackingLocation'
   | 'trackingCheckpoint'
   | 'myResults'
+  | 'myResultsPage'
+  | 'raceResultsPage'
   | 'notifications';
 
 export interface ApiContract {

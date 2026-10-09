@@ -37,4 +37,23 @@ public interface GpsLocationRepository extends JpaRepository<GpsLocation, UUID> 
 
     @Query("select count(distinct g.participant.id) from GpsLocation g where g.recordedAt >= :since")
     long countDistinctParticipantsActiveSince(@Param("since") OffsetDateTime since);
+
+    @Query(value = """
+        select round(coalesce(smoothed_latitude, latitude)::numeric, :scale)::double precision as latitude,
+               round(coalesce(smoothed_longitude, longitude)::numeric, :scale)::double precision as longitude,
+               count(*) as weight
+        from gps_locations
+        where race_id = :raceId
+          and filtered = false
+          and (:from is null or recorded_at >= :from)
+          and (:to is null or recorded_at <= :to)
+        group by 1, 2
+        order by weight desc
+        """, nativeQuery = true)
+    List<HeatCellProjection> heatCells(
+        @Param("raceId") UUID raceId,
+        @Param("from") OffsetDateTime from,
+        @Param("to") OffsetDateTime to,
+        @Param("scale") int scale
+    );
 }

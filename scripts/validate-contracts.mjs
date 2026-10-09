@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = '/Users/nkosinxumalo/WebProjects/AMS';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const contractPath = path.join(root, 'packages/contracts/contract.json');
 const backendConfigPath = path.join(root, 'apps/backend/src/main/resources/application.yml');
@@ -14,8 +15,13 @@ const contractTypesPath = path.join(root, 'packages/contracts/index.d.ts');
 const requiredPublicEndpointKeys = [
   'publicRaceHub',
   'publicRaceLive',
+  'publicRaceLiveFeed',
+  'publicRaceResults',
   'publicRaceSearch',
   'publicAthleteTracking',
+  'publicAthleteTrack',
+  'publicRaceHeatmap',
+  'publicRaceRegistrationFields',
 ];
 
 const errors = [];
@@ -74,6 +80,11 @@ assert(
   'Web API base path must come from API_CONTRACT.web.apiBasePath.',
 );
 assert(
+  webApi.includes('API_CONTRACT.endpoints.publicRaceResults')
+    && webApi.includes('API_CONTRACT.endpoints.raceResultsPage'),
+  'Web results endpoints must be resolved from API_CONTRACT.',
+);
+assert(
   !/const API_BASE\s*=\s*['"]\/api\/v[0-9]+['"]/.test(webApi),
   'Web API client still hardcodes /api/vN.',
 );
@@ -86,6 +97,10 @@ assert(
 assert(
   mobileApi.includes('const API_BASE_URL = getVersionedApiBase(API_ROOT);'),
   'Mobile API base path must be derived from getVersionedApiBase(API_ROOT).',
+);
+assert(
+  mobileApi.includes('API_CONTRACT.endpoints.myResultsPage'),
+  'Mobile paginated results endpoint must be resolved from API_CONTRACT.',
 );
 assert(
   !/\/api\/v[0-9]+/.test(mobileApi),

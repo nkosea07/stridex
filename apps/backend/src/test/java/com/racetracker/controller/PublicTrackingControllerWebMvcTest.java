@@ -3,8 +3,12 @@ package com.racetracker.controller;
 import com.racetracker.dto.publictracking.PublicAthleteTrackingResponse;
 import com.racetracker.dto.publictracking.PublicRaceAthleteSummaryResponse;
 import com.racetracker.dto.publictracking.PublicRaceHubResponse;
+import com.racetracker.dto.publictracking.PublicRaceLiveFeedResponse;
 import com.racetracker.dto.tracking.CheckpointSplitDto;
 import com.racetracker.security.JwtAuthenticationFilter;
+import com.racetracker.security.ClientAddressResolver;
+import com.racetracker.security.RequestRateLimiter;
+import com.racetracker.service.ParticipantService;
 import com.racetracker.service.PublicTrackingService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +39,16 @@ class PublicTrackingControllerWebMvcTest {
     private PublicTrackingService publicTrackingService;
 
     @MockBean
+    private ParticipantService participantService;
+
+    @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @MockBean
+    private RequestRateLimiter requestRateLimiter;
+
+    @MockBean
+    private ClientAddressResolver clientAddressResolver;
 
     @Test
     void getHub_returnsPayloadInControllerSlice() throws Exception {
@@ -92,5 +105,29 @@ class PublicTrackingControllerWebMvcTest {
             .andExpect(jsonPath("$.medicalConditions").doesNotExist())
             .andExpect(jsonPath("$.deviceToken").doesNotExist())
             .andExpect(jsonPath("$.locations").doesNotExist());
+    }
+
+    @Test
+    void getLiveFeed_returnsBoundedCursorPayload() throws Exception {
+        UUID raceId = UUID.randomUUID();
+        PublicRaceAthleteSummaryResponse athlete = new PublicRaceAthleteSummaryResponse();
+        athlete.setParticipantId(UUID.randomUUID());
+        athlete.setParticipantName("Taylor Swiftfoot");
+
+        PublicRaceLiveFeedResponse response = new PublicRaceLiveFeedResponse();
+        response.setItems(List.of(athlete));
+        response.setNextCursor("djE6MQ");
+        response.setRefreshedAt(java.time.OffsetDateTime.parse("2026-05-31T06:00:00Z"));
+
+        when(publicTrackingService.getLiveFeed(raceId, "tay", "cursor", 10)).thenReturn(response);
+
+        mockMvc.perform(get("/v1/public/races/{raceId}/tracking/live-feed", raceId)
+                .param("q", "tay")
+                .param("cursor", "cursor")
+                .param("limit", "10"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[0].participantName").value("Taylor Swiftfoot"))
+            .andExpect(jsonPath("$.nextCursor").value("djE6MQ"))
+            .andExpect(jsonPath("$.refreshedAt").value("2026-05-31T06:00:00Z"));
     }
 }

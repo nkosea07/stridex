@@ -8,6 +8,10 @@ import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.model.*;
 import com.racetracker.repository.*;
 import com.racetracker.service.GeoTelemetryService;
+import com.racetracker.service.GpsDriftFilter;
+import com.racetracker.service.LastCheckpointNameCache;
+import com.racetracker.service.LiveSummaryCacheInvalidator;
+import com.racetracker.service.SpectatorAlertService;
 import com.racetracker.service.TrackingService;
 import com.racetracker.websocket.TrackingLivePublisher;
 import io.micrometer.observation.annotation.Observed;
@@ -37,6 +41,10 @@ public class TrackingServiceImpl implements TrackingService {
     private final CheckpointRecordRepository checkpointRecordRepository;
     private final TrackingLivePublisher trackingLivePublisher;
     private final GeoTelemetryService geoTelemetryService;
+    private final GpsDriftFilter gpsDriftFilter;
+    private final LiveSummaryCacheInvalidator liveSummaryCacheInvalidator;
+    private final LastCheckpointNameCache lastCheckpointNameCache;
+    private final SpectatorAlertService spectatorAlertService;
 
     public TrackingServiceImpl(
         RaceRepository raceRepository,
@@ -46,7 +54,11 @@ public class TrackingServiceImpl implements TrackingService {
         CheckpointRepository checkpointRepository,
         CheckpointRecordRepository checkpointRecordRepository,
         TrackingLivePublisher trackingLivePublisher,
-        GeoTelemetryService geoTelemetryService
+        GeoTelemetryService geoTelemetryService,
+        GpsDriftFilter gpsDriftFilter,
+        LiveSummaryCacheInvalidator liveSummaryCacheInvalidator,
+        LastCheckpointNameCache lastCheckpointNameCache,
+        SpectatorAlertService spectatorAlertService
     ) {
         this.raceRepository = raceRepository;
         this.participantRepository = participantRepository;
@@ -56,6 +68,10 @@ public class TrackingServiceImpl implements TrackingService {
         this.checkpointRecordRepository = checkpointRecordRepository;
         this.trackingLivePublisher = trackingLivePublisher;
         this.geoTelemetryService = geoTelemetryService;
+        this.gpsDriftFilter = gpsDriftFilter;
+        this.liveSummaryCacheInvalidator = liveSummaryCacheInvalidator;
+        this.lastCheckpointNameCache = lastCheckpointNameCache;
+        this.spectatorAlertService = spectatorAlertService;
     }
 
     @Override
@@ -76,31 +92,24 @@ public class TrackingServiceImpl implements TrackingService {
             return;
         }
 
-        GpsLocation latest = null;
         BigDecimal batchDistance = BigDecimal.ZERO;
-        
-        Optional<GpsLocation> prev = gpsLocationRepository.findTopByParticipantIdAndRaceIdOrderByRecordedAtDesc(participant.getId(), raceId);
-        BigDecimal lastLat = prev.map(GpsLocation::getLatitude).orElse(null);
-        BigDecimal lastLon = prev.map(GpsLocation::getLongitude).orElse(null);
-        boolean hasPrev = prev.isPresent();
+        GpsLocation lastAccepted = gpsLocationRepository
+            .findTopByParticipantIdAndRaceIdOrderByRecordedAtDesc(participant.getId(), raceId)
+            .orElse(null);
 
         for (GpsLocationRequest item : request.getLocations()) {
-            latest = saveLocationBasic(participant, item);
-            
-            if (hasPrev) {
-                double dist = geoTelemetryService.calculateDistanceKm(
-                    lastLat,
-                    lastLon,
-                    item.getLatitude(),
-                    item.getLongitude()
-                );
-                if (dist > 0.001) {
-                    batchDistance = batchDistance.add(BigDecimal.valueOf(dist));
+            GpsLocation location = buildLocation(participant, item);
+            GpsDriftFilter.FilterResult result = gpsDriftFilter.filter(
+                lastAccepted, item.getLatitude(), item.getLongitude(), item.getAccuracy(), location.getRecordedAt());
+            applyFilter(location, result);
+            GpsLocation saved = gpsLocationRepository.save(location);
+
+            if (!result.filtered()) {
+                if (result.distanceKm() > 0) {
+                    batchDistance = batchDistance.add(BigDecimal.valueOf(result.distanceKm()));
                 }
+                lastAccepted = saved;
             }
-            lastLat = item.getLatitude();
-            lastLon = item.getLongitude();
-            hasPrev = true;
         }
 
         if (batchDistance.compareTo(BigDecimal.ZERO) > 0) {
@@ -108,8 +117,8 @@ public class TrackingServiceImpl implements TrackingService {
             participant = participantRepository.findById(participant.getId()).orElse(participant);
         }
 
-        if (latest != null) {
-            trackingLivePublisher.publishLocationUpdate(raceId, buildLiveTrackingResponse(participant, latest, raceId));
+        if (lastAccepted != null) {
+            trackingLivePublisher.publishLocationUpdate(raceId, buildLiveTrackingResponse(participant, lastAccepted, raceId));
         }
     }
 
@@ -140,8 +149,9 @@ public class TrackingServiceImpl implements TrackingService {
 
         checkpointRecordRepository.save(record);
         
-        evictLastCheckpointCache(participant.getId(), raceId);
+        liveSummaryCacheInvalidator.evictLastCheckpointAfterCommit(participant.getId(), raceId);
 
+        Participant.ParticipantStatus previousStatus = participant.getStatus();
         if (checkpoint.getCheckpointType() == Checkpoint.CheckpointType.FINISH) {
             participant.setStatus(Participant.ParticipantStatus.FINISHED);
         } else if (participant.getStatus() == Participant.ParticipantStatus.REGISTERED
@@ -150,6 +160,15 @@ public class TrackingServiceImpl implements TrackingService {
             participant.setStatus(Participant.ParticipantStatus.STARTED);
         }
         participantRepository.save(participant);
+
+        spectatorAlertService.onCheckpoint(participant, checkpoint);
+        if (participant.getStatus() == Participant.ParticipantStatus.FINISHED
+            && previousStatus != Participant.ParticipantStatus.FINISHED) {
+            spectatorAlertService.onFinished(participant);
+        } else if (participant.getStatus() == Participant.ParticipantStatus.STARTED
+            && previousStatus != Participant.ParticipantStatus.STARTED) {
+            spectatorAlertService.onStarted(participant);
+        }
     }
 
     @Override
@@ -175,24 +194,16 @@ public class TrackingServiceImpl implements TrackingService {
     public ParticipantTrackResponse getParticipantTrack(UUID raceId, UUID participantId) {
         verifyRaceExists(raceId);
         List<GpsLocation> locations = gpsLocationRepository.findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participantId, raceId);
-        
-        List<ParticipantTrackPointDto> points = locations.stream().map(l -> 
-            new ParticipantTrackPointDto(l.getLatitude(), l.getLongitude(), l.getRecordedAt().toString())
-        ).collect(Collectors.toList());
-        
+
+        List<ParticipantTrackPointDto> points = locations.stream()
+            .filter(l -> !Boolean.TRUE.equals(l.getFiltered()))
+            .map(l -> new ParticipantTrackPointDto(
+                GpsDriftFilter.effectiveLatitude(l),
+                GpsDriftFilter.effectiveLongitude(l),
+                l.getRecordedAt().toString()))
+            .collect(Collectors.toList());
+
         return new ParticipantTrackResponse(points);
-    }
-
-    @org.springframework.cache.annotation.Cacheable(value = "lastCheckpoint", key = "#participantId + '-' + #raceId")
-    public String getLastCheckpointName(UUID participantId, UUID raceId) {
-        return checkpointRecordRepository.findTopByParticipantIdAndRaceIdOrderByRecordedAtDesc(participantId, raceId)
-            .map(record -> record.getCheckpoint() != null ? record.getCheckpoint().getName() : null)
-            .orElse(null);
-    }
-
-    @org.springframework.cache.annotation.CacheEvict(value = "lastCheckpoint", key = "#participantId + '-' + #raceId")
-    public void evictLastCheckpointCache(UUID participantId, UUID raceId) {
-        // Method for cache eviction
     }
 
     private LiveTrackingResponse buildLiveTrackingResponse(Participant participant, GpsLocation latest, UUID raceId) {
@@ -200,12 +211,12 @@ public class TrackingServiceImpl implements TrackingService {
         row.setParticipantId(participant.getId());
         row.setBibNumber(participant.getBibNumber());
         row.setParticipantName(participant.getFullName());
-        row.setLatitude(latest.getLatitude());
-        row.setLongitude(latest.getLongitude());
+        row.setLatitude(GpsDriftFilter.effectiveLatitude(latest));
+        row.setLongitude(GpsDriftFilter.effectiveLongitude(latest));
         row.setSpeed(latest.getSpeed());
         row.setStatus(participant.getStatus() != null ? participant.getStatus().name() : null);
 
-        row.setLastCheckpoint(getLastCheckpointName(participant.getId(), raceId));
+        row.setLastCheckpoint(lastCheckpointNameCache.getName(participant.getId(), raceId));
 
         OffsetDateTime start = participant.getCheckedInAt() != null ? participant.getCheckedInAt() : participant.getRegisteredAt();
         Duration elapsed = null;
@@ -315,24 +326,20 @@ public class TrackingServiceImpl implements TrackingService {
             participant.getId(),
             participant.getRace().getId()
         );
-        GpsLocation location = saveLocationBasic(participant, request);
+        GpsLocation location = buildLocation(participant, request);
+        GpsDriftFilter.FilterResult result = gpsDriftFilter.filter(
+            prev.orElse(null), request.getLatitude(), request.getLongitude(), request.getAccuracy(), location.getRecordedAt());
+        applyFilter(location, result);
+        GpsLocation saved = gpsLocationRepository.save(location);
 
-        if (prev.isPresent()) {
-            double dist = geoTelemetryService.calculateDistanceKm(
-                prev.get().getLatitude(),
-                prev.get().getLongitude(),
-                location.getLatitude(),
-                location.getLongitude()
-            );
-            if (dist > 0.001) {
-                participantRepository.incrementTotalDistance(participant.getId(), BigDecimal.valueOf(dist));
-            }
+        if (!result.filtered() && result.distanceKm() > 0) {
+            participantRepository.incrementTotalDistance(participant.getId(), BigDecimal.valueOf(result.distanceKm()));
         }
 
-        return location;
+        return saved;
     }
 
-    private GpsLocation saveLocationBasic(Participant participant, GpsLocationRequest request) {
+    private GpsLocation buildLocation(Participant participant, GpsLocationRequest request) {
         GpsLocation location = new GpsLocation();
         location.setParticipant(participant);
         location.setRace(participant.getRace());
@@ -345,6 +352,13 @@ public class TrackingServiceImpl implements TrackingService {
         location.setBatteryLevel(request.getBatteryLevel());
         location.setRecordedAt(parseTimestamp(request.getTimestamp()));
         location.setReceivedAt(OffsetDateTime.now());
-        return gpsLocationRepository.save(location);
+        return location;
+    }
+
+    private void applyFilter(GpsLocation location, GpsDriftFilter.FilterResult result) {
+        location.setFiltered(result.filtered());
+        location.setFilterReason(result.reason());
+        location.setSmoothedLatitude(result.smoothedLatitude());
+        location.setSmoothedLongitude(result.smoothedLongitude());
     }
 }

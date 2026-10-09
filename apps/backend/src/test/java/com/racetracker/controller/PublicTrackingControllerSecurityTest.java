@@ -6,6 +6,10 @@ import com.racetracker.config.SecurityConfig;
 import com.racetracker.dto.publictracking.PublicRaceHubResponse;
 import com.racetracker.security.CustomUserDetailsService;
 import com.racetracker.security.JwtService;
+import com.racetracker.security.ClientAddressResolver;
+import com.racetracker.security.RequestRateLimiter;
+import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
+import com.racetracker.service.ParticipantService;
 import com.racetracker.service.PublicTrackingService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,10 +43,22 @@ class PublicTrackingControllerSecurityTest {
     private PublicTrackingService publicTrackingService;
 
     @MockBean
+    private ParticipantService participantService;
+
+    @MockBean
     private JwtService jwtService;
 
     @MockBean
     private CustomUserDetailsService customUserDetailsService;
+
+    @MockBean
+    private RequestRateLimiter requestRateLimiter;
+
+    @MockBean
+    private ClientAddressResolver clientAddressResolver;
+
+    @MockBean
+    private MfaAuthenticationServiceImpl mfaAuthenticationService;
 
     @Test
     void getHub_allowsAnonymousAccessWhenFiltersAreEnabled() throws Exception {
