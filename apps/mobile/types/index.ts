@@ -18,8 +18,16 @@ export interface AuthResponse {
   token?: string | null;
   refreshToken?: string | null;
   requiresEmailVerification?: boolean;
+  mfaRequired?: boolean;
+  mfaEnrollmentRequired?: boolean;
+  mfaChallengeToken?: string | null;
+  recoveryCodes?: string[];
   user: User;
 }
+
+export type MobileLoginResult =
+  | { kind: 'authenticated'; user: User }
+  | { kind: 'mfa'; challengeToken: string; enrollmentRequired: boolean; user: User };
 
 export interface RegisterRequest {
   firstName: string;
@@ -51,6 +59,26 @@ export interface Race {
   registrationDeadline?: string;
   maxParticipants?: number;
   currentParticipants?: number;
+  currency?: string;
+  isPublicRegistration?: boolean;
+  requireApproval?: boolean;
+  waitlistEnabled?: boolean;
+  requireWaiver?: boolean;
+  waiverVersion?: string;
+  waiverText?: string;
+  participantCount?: number;
+}
+
+export interface RegistrationField {
+  id: string;
+  raceId: string;
+  fieldKey: string;
+  label: string;
+  fieldType: 'TEXT' | 'SELECT' | 'CHECKBOX' | 'NUMBER';
+  required: boolean;
+  options: string[];
+  displayOrder: number;
+  active: boolean;
 }
 
 export interface RaceCategory {
@@ -117,13 +145,42 @@ export interface Registration {
   userId: string;
   categoryId: string;
   bibNumber?: string;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'dns' | 'dnf' | 'finished' | string;
+  status: 'pending' | 'pending_review' | 'waitlisted' | 'rejected' | 'confirmed' | 'cancelled' | 'dns' | 'dnf' | 'finished' | string;
   registrationDate?: string;
   emergencyContact: {
     name: string;
     phone: string;
     relationship: string;
   };
+  shirtSize?: string;
+  paymentStatus?: 'UNPAID' | 'PENDING' | 'PAID' | 'WAIVED' | 'REFUNDED';
+  teamId?: string;
+  teamName?: string;
+  rejectionReason?: string;
+  waitlistPosition?: number;
+}
+
+export interface RaceRegistrationRequest {
+  categoryId: string;
+  emergencyContact: Registration['emergencyContact'];
+  waiverAccepted?: boolean;
+  shirtSize?: string;
+  teamId?: string;
+  clubName?: string;
+  teamName?: string;
+  answers?: { fieldId: string; value?: string }[];
+}
+
+export type ParticipantCredentialType = 'RFID_UHF_TIMING' | 'QR_TICKET' | 'NFC_GATE' | 'BARCODE_GATEPASS';
+export type ParticipantCredentialStatus = 'ACTIVE' | 'REVOKED';
+
+export interface ParticipantCredential {
+  id: string;
+  type: ParticipantCredentialType;
+  value: string;
+  status: ParticipantCredentialStatus;
+  assignedAt?: string;
+  revokedAt?: string;
 }
 
 // Tracking Types
@@ -158,6 +215,7 @@ export interface LiveStats {
 
 // Results Types
 export interface RaceResult {
+  id?: string;
   raceId: string;
   participantId: string;
   bibNumber: string;
@@ -165,11 +223,23 @@ export interface RaceResult {
   startTime: string;
   finishTime?: string;
   totalTime?: string;
+  chipTime?: string;
+  gunTime?: string;
+  averagePace?: string;
   overallPosition?: number;
   categoryPosition?: number;
   genderPosition?: number;
   splits: CheckpointRecord[];
   status: 'in_progress' | 'finished' | 'dnf' | 'dns' | 'dq';
+}
+
+export interface RaceResultPage {
+  items: RaceResult[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  revision: number;
 }
 
 // Notification Types
@@ -190,7 +260,8 @@ export interface AuthState {
   refreshToken: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<MobileLoginResult>;
+  completeMfa: (challengeToken: string, code: string, enrollment: boolean) => Promise<AuthResponse>;
   register: (userData: RegisterRequest) => Promise<AuthResponse>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<void>;

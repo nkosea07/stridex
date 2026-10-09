@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Alert, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { useState } from 'react';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth';
@@ -6,8 +7,11 @@ import { useTheme } from '@/contexts/theme';
 import type { ThemePreference } from '@/types';
 
 export default function ProfileScreen() {
-  const { user, logout, isAuthenticated } = useAuthStore();
+  const { user, logout, isAuthenticated, updateProfile } = useAuthStore();
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const [profileEditorVisible, setProfileEditorVisible] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [draftProfile, setDraftProfile] = useState({ firstName: '', lastName: '', phone: '' });
 
   const cycleTheme = async () => {
     const order: ThemePreference[] = ['light', 'dark', 'system'];
@@ -34,6 +38,41 @@ export default function ProfileScreen() {
     );
   };
 
+  const openProfileEditor = () => {
+    setDraftProfile({
+      firstName: user?.firstName ?? '',
+      lastName: user?.lastName ?? '',
+      phone: user?.phone ?? '',
+    });
+    setProfileEditorVisible(true);
+  };
+
+  const saveProfile = async () => {
+    if (!draftProfile.firstName.trim() || !draftProfile.lastName.trim()) {
+      Alert.alert('Profile details required', 'Enter your first and last name before saving.');
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      await updateProfile({
+        firstName: draftProfile.firstName.trim(),
+        lastName: draftProfile.lastName.trim(),
+        phone: draftProfile.phone.trim() || undefined,
+      });
+      setProfileEditorVisible(false);
+      Alert.alert('Profile updated', 'Your profile changes have been saved.');
+    } catch (error) {
+      Alert.alert('Unable to update profile', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const unavailable = (feature: string) => {
+    Alert.alert(feature, 'This feature is not available in the pilot yet.');
+  };
+
   if (!isAuthenticated) {
     return (
       <View style={styles.authContainer}>
@@ -49,13 +88,13 @@ export default function ProfileScreen() {
   }
 
   const menuItems = [
-    { icon: 'person-outline', label: 'Edit Profile', onPress: () => {} },
-    { icon: 'medical-outline', label: 'Emergency Contact', onPress: () => {} },
-    { icon: 'notifications-outline', label: 'Notifications', onPress: () => {} },
-    { icon: 'shield-checkmark-outline', label: 'Privacy & Security', onPress: () => {} },
-    { icon: 'help-circle-outline', label: 'Help & Support', onPress: () => {} },
-    { icon: 'document-text-outline', label: 'Terms & Conditions', onPress: () => {} },
-    { icon: 'information-circle-outline', label: 'About', onPress: () => {} },
+    { icon: 'person-outline', label: 'Edit Profile', onPress: openProfileEditor },
+    { icon: 'medical-outline', label: 'Emergency Contact', onPress: () => unavailable('Emergency Contact') },
+    { icon: 'notifications-outline', label: 'Notifications', onPress: () => unavailable('Notifications') },
+    { icon: 'shield-checkmark-outline', label: 'Privacy & Security', onPress: () => unavailable('Privacy & Security') },
+    { icon: 'help-circle-outline', label: 'Help & Support', onPress: () => unavailable('Help & Support') },
+    { icon: 'document-text-outline', label: 'Terms & Conditions', onPress: () => unavailable('Terms & Conditions') },
+    { icon: 'information-circle-outline', label: 'About', onPress: () => Alert.alert('Race Tracker', 'Pilot mobile app. Version 1.0.0') },
   ];
 
   return (
@@ -70,7 +109,7 @@ export default function ProfileScreen() {
               <Ionicons name="person" size={40} color="#FFFFFF" />
             </View>
           )}
-          <TouchableOpacity style={styles.editAvatarButton}>
+          <TouchableOpacity style={styles.editAvatarButton} onPress={() => unavailable('Profile photo')}>
             <Ionicons name="camera" size={16} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -81,17 +120,17 @@ export default function ProfileScreen() {
       {/* Quick Stats */}
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>12</Text>
+          <Text style={styles.statNumber}>—</Text>
           <Text style={styles.statLabel}>Races</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>478.5</Text>
+          <Text style={styles.statNumber}>—</Text>
           <Text style={styles.statLabel}>Total KM</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>3</Text>
+          <Text style={styles.statNumber}>—</Text>
           <Text style={styles.statLabel}>Badges</Text>
         </View>
       </View>
@@ -137,6 +176,43 @@ export default function ProfileScreen() {
       </TouchableOpacity>
 
       <Text style={styles.version}>Version 1.0.0</Text>
+
+      <Modal visible={profileEditorVisible} transparent animationType="slide" onRequestClose={() => setProfileEditorVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={draftProfile.firstName}
+              onChangeText={(firstName) => setDraftProfile((current) => ({ ...current, firstName }))}
+              placeholder="First name"
+              autoCapitalize="words"
+            />
+            <TextInput
+              style={styles.modalInput}
+              value={draftProfile.lastName}
+              onChangeText={(lastName) => setDraftProfile((current) => ({ ...current, lastName }))}
+              placeholder="Last name"
+              autoCapitalize="words"
+            />
+            <TextInput
+              style={styles.modalInput}
+              value={draftProfile.phone}
+              onChangeText={(phone) => setDraftProfile((current) => ({ ...current, phone }))}
+              placeholder="Phone (optional)"
+              keyboardType="phone-pad"
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancelButton} onPress={() => setProfileEditorVisible(false)} disabled={savingProfile}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalSaveButton} onPress={saveProfile} disabled={savingProfile}>
+                {savingProfile ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalSaveText}>Save</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       
       <View style={styles.bottomSpacing} />
     </ScrollView>
@@ -306,5 +382,58 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 32,
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    gap: 12,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 8,
+  },
+  modalCancelButton: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  modalCancelText: {
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  modalSaveButton: {
+    minWidth: 90,
+    alignItems: 'center',
+    backgroundColor: '#0F766E',
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  modalSaveText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });

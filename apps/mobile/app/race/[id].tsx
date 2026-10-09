@@ -1,9 +1,10 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, Modal, TextInput, Switch } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import type { RegistrationField } from '@/types';
 
 const DEFAULT_BANNER = 'https://images.unsplash.com/photo-1513593771513-7b58b6c4af38?w=800';
 
@@ -44,6 +45,15 @@ export default function RaceDetailScreen() {
   const [checkpoints, setCheckpoints] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [registrationFields, setRegistrationFields] = useState<RegistrationField[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [contact, setContact] = useState({ name: '', phone: '', relationship: 'Self' });
+  const [shirtSize, setShirtSize] = useState('');
+  const [teamName, setTeamName] = useState('');
+  const [clubName, setClubName] = useState('');
+  const [waiverAccepted, setWaiverAccepted] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -59,7 +69,7 @@ export default function RaceDetailScreen() {
     load().finally(() => setIsLoading(false));
   }, [load]);
 
-  const handleRegister = () => {
+  const openRegistration = async () => {
     if (!race) return;
 
     const firstCategory = (race.categories || [])[0];
@@ -68,34 +78,62 @@ export default function RaceDetailScreen() {
       return;
     }
 
-    Alert.alert(
-      'Register for race',
-      `Register for ${race.name} in ${firstCategory.name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Continue',
-          onPress: async () => {
-            try {
-              setIsRegistering(true);
-              await api.registerForRace(String(id), {
-                categoryId: String(firstCategory.id),
-                emergencyContact: {
-                  name: user ? `${user.firstName} ${user.lastName}`.trim() : 'Emergency Contact',
-                  phone: user?.phone || '0000000000',
-                  relationship: 'Self',
-                },
-              });
-              Alert.alert('Success', 'Registration completed.');
-            } catch (error: any) {
-              Alert.alert('Registration failed', error?.message || 'Unable to register for this race.');
-            } finally {
-              setIsRegistering(false);
-            }
-          },
+    setSelectedCategoryId(String(firstCategory.id));
+    setContact({
+      name: user ? `${user.firstName} ${user.lastName}`.trim() : '',
+      phone: user?.phone || '',
+      relationship: 'Self',
+    });
+    setIsRegisterOpen(true);
+
+    try {
+      const fields = await api.getRegistrationFields(String(id));
+      setRegistrationFields(fields);
+    } catch {
+      setRegistrationFields([]);
+    }
+  };
+
+  const submitRegistration = async () => {
+    if (!selectedCategoryId) {
+      Alert.alert('Registration failed', 'Please select a category.');
+      return;
+    }
+    if (race?.requireWaiver && !waiverAccepted) {
+      Alert.alert('Registration failed', 'You must accept the race waiver.');
+      return;
+    }
+
+    try {
+      setIsRegistering(true);
+      const registration = await api.registerForRace(String(id), {
+        categoryId: selectedCategoryId,
+        emergencyContact: {
+          name: contact.name,
+          phone: contact.phone,
+          relationship: contact.relationship,
         },
-      ],
-    );
+        waiverAccepted,
+        shirtSize: shirtSize || undefined,
+        teamName: teamName || undefined,
+        clubName: clubName || undefined,
+        answers: registrationFields.map((field) => ({ fieldId: field.id, value: answers[field.id] })),
+      });
+      setIsRegisterOpen(false);
+      const status = registration.status;
+      Alert.alert(
+        'Registration submitted',
+        status === 'waitlisted'
+          ? 'You have been added to the waitlist.'
+          : status === 'pending_review'
+            ? 'Your registration is pending review.'
+            : 'Registration completed.',
+      );
+    } catch (error: any) {
+      Alert.alert('Registration failed', error?.message || 'Unable to register for this race.');
+    } finally {
+      setIsRegistering(false);
+    }
   };
 
   if (isLoading) {
@@ -223,10 +261,147 @@ export default function RaceDetailScreen() {
       </ScrollView>
 
       <View style={styles.registerContainer}>
-        <TouchableOpacity style={styles.registerButton} onPress={handleRegister} disabled={isRegistering}>
+        <TouchableOpacity style={styles.registerButton} onPress={openRegistration} disabled={isRegistering}>
           <Text style={styles.registerButtonText}>{isRegistering ? 'Registering...' : 'Register Now'}</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal visible={isRegisterOpen} animationType="slide" transparent onRequestClose={() => setIsRegisterOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalTitle}>Register for {race?.name}</Text>
+
+              <Text style={styles.fieldLabel}>Category</Text>
+              <View style={styles.optionRow}>
+                {(race?.categories || []).map((category: any) => (
+                  <TouchableOpacity
+                    key={String(category.id)}
+                    style={[styles.optionChip, selectedCategoryId === String(category.id) && styles.optionChipActive]}
+                    onPress={() => setSelectedCategoryId(String(category.id))}
+                  >
+                    <Text style={[styles.optionChipText, selectedCategoryId === String(category.id) && styles.optionChipTextActive]}>
+                      {category.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.fieldLabel}>Emergency contact name</Text>
+              <TextInput
+                style={styles.input}
+                value={contact.name}
+                onChangeText={(value) => setContact((prev) => ({ ...prev, name: value }))}
+                placeholder="Full name"
+                placeholderTextColor="#9CA3AF"
+              />
+
+              <Text style={styles.fieldLabel}>Emergency contact phone</Text>
+              <TextInput
+                style={styles.input}
+                value={contact.phone}
+                onChangeText={(value) => setContact((prev) => ({ ...prev, phone: value }))}
+                placeholder="Phone number"
+                keyboardType="phone-pad"
+                placeholderTextColor="#9CA3AF"
+              />
+
+              <Text style={styles.fieldLabel}>Relationship</Text>
+              <TextInput
+                style={styles.input}
+                value={contact.relationship}
+                onChangeText={(value) => setContact((prev) => ({ ...prev, relationship: value }))}
+                placeholder="e.g. Spouse"
+                placeholderTextColor="#9CA3AF"
+              />
+
+              <Text style={styles.fieldLabel}>Shirt size (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={shirtSize}
+                onChangeText={setShirtSize}
+                placeholder="e.g. M"
+                placeholderTextColor="#9CA3AF"
+              />
+
+              <Text style={styles.fieldLabel}>Team name (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={teamName}
+                onChangeText={setTeamName}
+                placeholder="Team"
+                placeholderTextColor="#9CA3AF"
+              />
+
+              <Text style={styles.fieldLabel}>Club name (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={clubName}
+                onChangeText={setClubName}
+                placeholder="Club"
+                placeholderTextColor="#9CA3AF"
+              />
+
+              {registrationFields.map((field) => (
+                <View key={field.id}>
+                  <Text style={styles.fieldLabel}>{field.label}{field.required ? ' *' : ''}</Text>
+                  {field.fieldType === 'CHECKBOX' ? (
+                    <View style={styles.switchRow}>
+                      <Switch
+                        value={answers[field.id] === 'true'}
+                        onValueChange={(value) => setAnswers((prev) => ({ ...prev, [field.id]: value ? 'true' : 'false' }))}
+                      />
+                    </View>
+                  ) : field.fieldType === 'SELECT' ? (
+                    <View style={styles.optionRow}>
+                      {(field.options || []).map((option) => (
+                        <TouchableOpacity
+                          key={option}
+                          style={[styles.optionChip, answers[field.id] === option && styles.optionChipActive]}
+                          onPress={() => setAnswers((prev) => ({ ...prev, [field.id]: option }))}
+                        >
+                          <Text style={[styles.optionChipText, answers[field.id] === option && styles.optionChipTextActive]}>
+                            {option}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : (
+                    <TextInput
+                      style={styles.input}
+                      value={answers[field.id] || ''}
+                      onChangeText={(value) => setAnswers((prev) => ({ ...prev, [field.id]: value }))}
+                      keyboardType={field.fieldType === 'NUMBER' ? 'numeric' : 'default'}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  )}
+                </View>
+              ))}
+
+              {race?.requireWaiver && (
+                <View style={styles.waiverBox}>
+                  {race?.waiverText ? <Text style={styles.waiverText}>{race.waiverText}</Text> : null}
+                  <View style={styles.switchRow}>
+                    <Switch value={waiverAccepted} onValueChange={setWaiverAccepted} />
+                    <Text style={styles.waiverLabel}>
+                      I accept the race waiver{race?.waiverVersion ? ` (${race.waiverVersion})` : ''}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.modalCancel} onPress={() => setIsRegisterOpen(false)} disabled={isRegistering}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalConfirm} onPress={submitRegistration} disabled={isRegistering}>
+                  <Text style={styles.modalConfirmText}>{isRegistering ? 'Submitting...' : 'Submit'}</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -420,5 +595,122 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 24,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 32,
+    maxHeight: '90%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#1F2937',
+    backgroundColor: '#F9FAFB',
+  },
+  optionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  optionChip: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#F9FAFB',
+  },
+  optionChipActive: {
+    borderColor: '#0F766E',
+    backgroundColor: '#CCFBF1',
+  },
+  optionChipText: {
+    fontSize: 14,
+    color: '#4B5563',
+  },
+  optionChipTextActive: {
+    color: '#0F766E',
+    fontWeight: '600',
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  waiverBox: {
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    padding: 12,
+  },
+  waiverText: {
+    fontSize: 13,
+    color: '#92400E',
+    marginBottom: 8,
+  },
+  waiverLabel: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+  },
+  modalCancel: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  modalConfirm: {
+    flex: 1,
+    backgroundColor: '#0F766E',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

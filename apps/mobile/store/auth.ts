@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { api } from '@/lib/api';
 import type { AuthState } from '@/types';
 
@@ -13,15 +14,34 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (email: string, password: string) => {
     try {
       set({ isLoading: true });
-      const { user, token, refreshToken } = await api.login(email, password);
-      await AsyncStorage.setItem('auth_token', token);
-      await AsyncStorage.setItem('refresh_token', refreshToken);
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-      set({ user, token, refreshToken, isAuthenticated: true, isLoading: false });
+      const response = await api.login(email, password);
+      if (response.token && response.refreshToken) {
+        await AsyncStorage.setItem('user', JSON.stringify(response.user));
+        set({ user: response.user, token: response.token, refreshToken: response.refreshToken, isAuthenticated: true, isLoading: false });
+        return { kind: 'authenticated' as const, user: response.user };
+      }
+      if (response.mfaRequired && response.mfaChallengeToken) {
+        set({ isLoading: false });
+        return {
+          kind: 'mfa' as const,
+          challengeToken: response.mfaChallengeToken,
+          enrollmentRequired: Boolean(response.mfaEnrollmentRequired),
+          user: response.user,
+        };
+      }
+      if (response.requiresEmailVerification) throw new Error('Email verification required');
+      throw new Error('Login did not return a valid session');
     } catch (error) {
       set({ isLoading: false });
       throw error;
     }
+  },
+
+  completeMfa: async (challengeToken, code, enrollment) => {
+    const response = await api.completeMfa(challengeToken, code, enrollment);
+    await AsyncStorage.setItem('user', JSON.stringify(response.user));
+    set({ user: response.user, token: response.token!, refreshToken: response.refreshToken!, isAuthenticated: true, isLoading: false });
+    return response;
   },
 
   register: async (userData) => {
@@ -30,8 +50,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       const response = await api.register(userData);
 
       if (response.token && response.refreshToken) {
-        await AsyncStorage.setItem('auth_token', response.token);
-        await AsyncStorage.setItem('refresh_token', response.refreshToken);
         await AsyncStorage.setItem('user', JSON.stringify(response.user));
         set({
           user: response.user,
@@ -41,8 +59,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           isLoading: false,
         });
       } else {
-        await AsyncStorage.removeItem('auth_token');
-        await AsyncStorage.removeItem('refresh_token');
+        await api.logout();
         await AsyncStorage.removeItem('user');
         set({
           user: null,
@@ -61,8 +78,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
-    await AsyncStorage.removeItem('auth_token');
-    await AsyncStorage.removeItem('refresh_token');
+    await api.logout();
     await AsyncStorage.removeItem('user');
     set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
   },
@@ -81,8 +97,22 @@ export const useAuthStore = create<AuthState>((set) => ({
 // Initialize auth state from storage
 export const initializeAuth = async () => {
   try {
-    const token = await AsyncStorage.getItem('auth_token');
-    const refreshToken = await AsyncStorage.getItem('refresh_token');
+    let token = await SecureStore.getItemAsync('auth_token');
+    let refreshToken = await SecureStore.getItemAsync('refresh_token');
+    if (!token) {
+      token = await AsyncStorage.getItem('auth_token');
+      if (token) {
+        await SecureStore.setItemAsync('auth_token', token);
+        await AsyncStorage.removeItem('auth_token');
+      }
+    }
+    if (!refreshToken) {
+      refreshToken = await AsyncStorage.getItem('refresh_token');
+      if (refreshToken) {
+        await SecureStore.setItemAsync('refresh_token', refreshToken);
+        await AsyncStorage.removeItem('refresh_token');
+      }
+    }
     const userStr = await AsyncStorage.getItem('user');
     
     if (token) {
@@ -97,8 +127,7 @@ export const initializeAuth = async () => {
           isLoading: false,
         });
       } catch {
-        await AsyncStorage.removeItem('auth_token');
-        await AsyncStorage.removeItem('refresh_token');
+        await api.logout();
         await AsyncStorage.removeItem('user');
         useAuthStore.setState({
           user: null,
