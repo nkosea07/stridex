@@ -29,7 +29,9 @@ import type {
   RegistrationDecision,
   Penalty,
   AppNotification,
-  Payment
+  Payment,
+  RankingEntry,
+  MediaItem
 } from '@/types'
 import { API_CONTRACT } from '@race-tracker/contracts'
 
@@ -522,6 +524,12 @@ export const resultsApi = {
   publish: (raceId: string) =>
     fetchApi<void>(`/races/${raceId}/results/publish`, { method: 'POST' }),
 
+  teamRankings: (raceId: string) =>
+    fetchApi<RankingEntry[]>(`/races/${raceId}/rankings/teams`),
+
+  countryRankings: (raceId: string) =>
+    fetchApi<RankingEntry[]>(`/races/${raceId}/rankings/countries`),
+
   exportResults: async (raceId: string, format: 'csv' | 'pdf' | 'xlsx') => {
     const response = await fetch(`${API_BASE}/races/${raceId}/results/export?format=${format}`, {
       credentials: 'include',
@@ -622,6 +630,38 @@ export const notificationsApi = {
     fetchApi<void>(`${API_CONTRACT.endpoints.notificationDevices}?token=${encodeURIComponent(token)}`, {
       method: 'DELETE',
     }),
+}
+
+export const mediaApi = {
+  list: (raceId: string) => fetchApi<MediaItem[]>(`/races/${raceId}/media`),
+
+  publicList: (raceId: string) => fetchPublicApi<MediaItem[]>(`/public/races/${raceId}/media`),
+
+  upload: async (raceId: string, file: File, caption?: string, participantId?: string) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (caption) formData.append('caption', caption)
+    if (participantId) formData.append('participantId', participantId)
+    const response = await fetch(`${API_BASE}/races/${raceId}/media`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      body: formData,
+    })
+    if (!response.ok) throw new Error('Failed to upload media')
+    return response.json() as Promise<MediaItem>
+  },
+
+  approve: (raceId: string, id: string) =>
+    fetchApi<MediaItem>(`/races/${raceId}/media/${id}/approve`, { method: 'POST' }),
+
+  reject: (raceId: string, id: string) =>
+    fetchApi<MediaItem>(`/races/${raceId}/media/${id}/reject`, { method: 'POST' }),
+
+  remove: (raceId: string, id: string) =>
+    fetchApi<void>(`/races/${raceId}/media/${id}`, { method: 'DELETE' }),
 }
 
 import { Client } from '@stomp/stompjs'

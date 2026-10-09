@@ -342,6 +342,9 @@ export interface RaceResult {
   overallPosition?: number
   genderPosition?: number
   categoryPosition?: number
+  ageGroup?: string
+  ageGroupPosition?: number
+  medal?: string | null
   averagePace?: string
   averageSpeed?: number
   isOfficial: boolean
@@ -358,6 +361,26 @@ export interface RaceResultPage {
   totalElements: number
   totalPages: number
   revision: number
+}
+
+export interface RankingEntry {
+  name: string
+  finishers: number
+  totalSeconds: number
+  totalTime?: string
+  averageTime?: string
+  bestTime?: string
+}
+
+export interface MediaItem {
+  id: string
+  raceId: string
+  participantId?: string | null
+  mediaType: string
+  url: string
+  caption?: string | null
+  status: string
+  createdAt?: string
 }
 
 export interface DashboardStats {

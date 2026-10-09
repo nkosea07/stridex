@@ -10,6 +10,7 @@ import { PublicAthleteCard } from '@/components/public/PublicAthleteCard'
 import { PublicRaceResultsPanel } from '@/components/public/PublicRaceResultsPanel'
 import { PublicRaceRegistrationPanel } from '@/components/public/PublicRaceRegistrationPanel'
 import { RaceHeatmap } from '@/components/public/RaceHeatmap'
+import { RaceMediaGallery } from '@/components/public/RaceMediaGallery'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import type { PublicRaceHubLoaderData } from '@/router/publicLoaders'
@@ -214,6 +215,8 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
           <PublicRaceRegistrationPanel raceId={raceId} hub={hub} returnTo={returnTo} />
 
           <RaceHeatmap raceId={raceId} />
+
+          <RaceMediaGallery raceId={raceId} />
 
           <PublicAthleteSearch
             query={query}
