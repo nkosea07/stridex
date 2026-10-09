@@ -26,6 +26,7 @@ build/
 target/
 coverage/
 data/
+uploads/
 .idea/
 .vscode/
 *.tsbuildinfo
