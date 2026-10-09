@@ -42,6 +42,12 @@ public class Payment {
     @Column(precision = 10, scale = 2)
     private BigDecimal amount;
 
+    @Column(name = "discount_amount", precision = 10, scale = 2)
+    private BigDecimal discountAmount;
+
+    @Column(name = "promo_code", length = 40)
+    private String promoCode;
+
     @Column(length = 3)
     private String currency;
 

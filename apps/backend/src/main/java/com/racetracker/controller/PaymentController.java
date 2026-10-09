@@ -27,11 +27,25 @@ public class PaymentController {
     public ResponseEntity<PaymentDto> startCheckout(
         @PathVariable UUID raceId,
         @PathVariable UUID participantId,
+        @RequestParam(required = false) String promoCode,
         Authentication authentication
     ) {
-        PaymentDto payment = paymentService.startCheckout(raceId, participantId);
+        PaymentDto payment = paymentService.startCheckout(raceId, participantId, promoCode);
         auditEventService.recordForActor("PAYMENT_CHECKOUT_STARTED", authentication.getName(), "PARTICIPANT",
             participantId.toString(), "SUCCESS", Map.of("provider", String.valueOf(payment.getProvider())));
+        return ResponseEntity.ok(payment);
+    }
+
+    @PostMapping("/v${racetracker.api.version}/races/{raceId}/participants/{participantId}/payment/refund")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    public ResponseEntity<PaymentDto> refund(
+        @PathVariable UUID raceId,
+        @PathVariable UUID participantId,
+        Authentication authentication
+    ) {
+        PaymentDto payment = paymentService.refund(raceId, participantId);
+        auditEventService.recordForActor("PAYMENT_REFUNDED", authentication.getName(), "PARTICIPANT",
+            participantId.toString(), "SUCCESS", Map.of());
         return ResponseEntity.ok(payment);
     }
 

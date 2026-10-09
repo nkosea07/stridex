@@ -31,24 +31,27 @@ public class PaymentServiceImpl implements PaymentService {
     private final PesepayClient pesepayClient;
     private final RaceTrackerProperties properties;
     private final ObjectMapper objectMapper;
+    private final com.racetracker.service.PromoCodeService promoCodeService;
 
     public PaymentServiceImpl(
         PaymentRepository paymentRepository,
         ParticipantRepository participantRepository,
         PesepayClient pesepayClient,
         RaceTrackerProperties properties,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        com.racetracker.service.PromoCodeService promoCodeService
     ) {
         this.paymentRepository = paymentRepository;
         this.participantRepository = participantRepository;
         this.pesepayClient = pesepayClient;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.promoCodeService = promoCodeService;
     }
 
     @Override
     @Transactional
-    public PaymentDto startCheckout(UUID raceId, UUID participantId) {
+    public PaymentDto startCheckout(UUID raceId, UUID participantId, String promoCode) {
         RaceTrackerProperties.Payments payments = properties.getPayments();
         if (isBlank(payments.getResultUrl()) || isBlank(payments.getReturnUrl())) {
             throw new ApiException("Payment result/return URLs are not configured");
@@ -58,12 +61,21 @@ public class PaymentServiceImpl implements PaymentService {
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
         Race race = participant.getRace();
 
-        BigDecimal amount = participant.getCategory() != null && participant.getCategory().getRegistrationFee() != null
+        BigDecimal baseAmount = participant.getCategory() != null && participant.getCategory().getRegistrationFee() != null
             ? participant.getCategory().getRegistrationFee()
             : race.getRegistrationFee();
-        if (amount == null || amount.signum() <= 0) {
+        if (baseAmount == null || baseAmount.signum() <= 0) {
             throw new ApiException("This race does not require an online payment");
         }
+
+        com.racetracker.service.PromoCodeService.AppliedPromo applied =
+            promoCodeService.apply(promoCode, raceId, baseAmount);
+        BigDecimal discount = applied == null ? BigDecimal.ZERO : applied.discount();
+        BigDecimal payable = baseAmount.subtract(discount);
+        if (payable.signum() <= 0) {
+            throw new ApiException("This promo code covers the full registration fee; no online payment is required");
+        }
+
         String currency = !isBlank(race.getCurrency()) ? race.getCurrency() : payments.getCurrency();
 
         String merchantReference = "RACE-" + raceId + "-P-" + participantId + "-" + UUID.randomUUID().toString().substring(0, 8);
@@ -73,14 +85,16 @@ public class PaymentServiceImpl implements PaymentService {
             .participant(participant)
             .provider(PROVIDER)
             .merchantReference(merchantReference)
-            .amount(amount)
+            .amount(baseAmount)
+            .discountAmount(discount)
+            .promoCode(applied != null ? applied.code() : null)
             .currency(currency)
             .status(Payment.PaymentStatus.PENDING)
             .build();
         payment = paymentRepository.save(payment);
 
         PesepayClient.InitiateResult result = pesepayClient.initiate(
-            amount.doubleValue(),
+            payable.doubleValue(),
             currency,
             "Race registration - " + race.getName(),
             payments.getResultUrl(),
@@ -96,6 +110,24 @@ public class PaymentServiceImpl implements PaymentService {
             participant.setPaymentStatus(Participant.PaymentStatus.PENDING);
             participantRepository.save(participant);
         }
+
+        return toDto(payment);
+    }
+
+    @Override
+    @Transactional
+    public PaymentDto refund(UUID raceId, UUID participantId) {
+        Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
+            .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
+        Payment payment = paymentRepository
+            .findFirstByParticipantIdAndStatusOrderByCreatedAtDesc(participantId, Payment.PaymentStatus.COMPLETED)
+            .orElseThrow(() -> new ApiException("No completed payment found to refund"));
+
+        payment.setStatus(Payment.PaymentStatus.REFUNDED);
+        payment = paymentRepository.save(payment);
+
+        participant.setPaymentStatus(Participant.PaymentStatus.REFUNDED);
+        participantRepository.save(participant);
 
         return toDto(payment);
     }
@@ -143,9 +175,16 @@ public class PaymentServiceImpl implements PaymentService {
                 Participant participant = payment.getParticipant();
                 participant.setPaymentStatus(Participant.PaymentStatus.PAID);
                 participant.setPaymentReference(payment.getProviderRef());
-                participant.setPaymentAmount(payment.getAmount());
+                java.math.BigDecimal payable = payment.getAmount() == null ? null
+                    : payment.getAmount().subtract(payment.getDiscountAmount() == null
+                        ? java.math.BigDecimal.ZERO : payment.getDiscountAmount());
+                participant.setPaymentAmount(payable);
                 participant.setPaymentVerifiedAt(OffsetDateTime.now());
                 participantRepository.save(participant);
+
+                if (payment.getPromoCode() != null) {
+                    promoCodeService.recordUseByCode(payment.getPromoCode());
+                }
             }
             case "FAILED" -> {
                 payment.setStatus(Payment.PaymentStatus.FAILED);
