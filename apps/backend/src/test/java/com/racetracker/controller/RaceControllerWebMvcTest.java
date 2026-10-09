@@ -3,6 +3,7 @@ package com.racetracker.controller;
 import com.racetracker.dto.race.RaceDto;
 import com.racetracker.security.JwtAuthenticationFilter;
 import com.racetracker.service.RaceService;
+import com.racetracker.service.AuditEventService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -34,6 +35,9 @@ class RaceControllerWebMvcTest {
 
     @MockBean
     private RaceService raceService;
+
+    @MockBean
+    private AuditEventService auditEventService;
 
     @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;

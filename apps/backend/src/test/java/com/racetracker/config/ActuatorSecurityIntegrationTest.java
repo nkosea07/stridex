@@ -3,6 +3,7 @@ package com.racetracker.config;
 import com.racetracker.security.CustomUserDetailsService;
 import com.racetracker.security.JwtAuthenticationFilter;
 import com.racetracker.security.JwtService;
+import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import io.micrometer.core.instrument.Clock;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
@@ -57,6 +58,9 @@ class ActuatorSecurityIntegrationTest {
 
     @MockBean
     private CustomUserDetailsService customUserDetailsService;
+
+    @MockBean
+    private MfaAuthenticationServiceImpl mfaAuthenticationService;
 
     @Test
     void healthEndpoints_allowAnonymousAccess() throws Exception {
