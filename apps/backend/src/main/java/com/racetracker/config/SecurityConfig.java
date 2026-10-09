@@ -54,7 +54,17 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/prometheus").authenticated()
                 .requestMatchers(
                     apiPrefix + "/auth/login",
+                    apiPrefix + "/auth/browser/login",
+                    apiPrefix + "/auth/browser/mfa/totp/enroll",
+                    apiPrefix + "/auth/browser/mfa/totp/confirm",
+                    apiPrefix + "/auth/browser/mfa/verify-login",
+                    apiPrefix + "/auth/browser/refresh",
+                    apiPrefix + "/auth/browser/logout",
+                    apiPrefix + "/auth/mfa/totp/enroll",
+                    apiPrefix + "/auth/mfa/totp/confirm",
+                    apiPrefix + "/auth/mfa/verify-login",
                     apiPrefix + "/auth/register",
+                    apiPrefix + "/auth/register-organizer",
                     apiPrefix + "/auth/refresh",
                     apiPrefix + "/auth/forgot-password",
                     apiPrefix + "/auth/reset-password",
@@ -62,6 +72,7 @@ public class SecurityConfig {
                     apiPrefix + "/auth/resend-verification"
                 ).permitAll()
                 .requestMatchers(HttpMethod.POST, apiPrefix + "/rfid/read-events").permitAll()
+                .requestMatchers(HttpMethod.POST, apiPrefix + "/rfid/readers/heartbeat").permitAll()
                 .requestMatchers(HttpMethod.GET, apiPrefix + "/public/races/**").permitAll()
                 .requestMatchers("/ws/**").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()

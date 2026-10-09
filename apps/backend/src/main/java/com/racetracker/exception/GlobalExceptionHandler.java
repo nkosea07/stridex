@@ -3,6 +3,7 @@ package com.racetracker.exception;
 import com.racetracker.dto.error.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
@@ -97,7 +98,22 @@ public class GlobalExceptionHandler {
             .message(ex.getMessage())
             .path(request.getRequestURI())
             .build();
-        return new ResponseEntity<>(errorResponse, HttpStatus.TOO_MANY_REQUESTS);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+            .body(errorResponse);
+    }
+
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleServiceUnavailable(ServiceUnavailableException ex, HttpServletRequest request) {
+        ErrorResponse errorResponse = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.SERVICE_UNAVAILABLE)
+            .statusCode(HttpStatus.SERVICE_UNAVAILABLE.value())
+            .error("Service Unavailable")
+            .message(ex.getMessage())
+            .path(request.getRequestURI())
+            .build();
+        return new ResponseEntity<>(errorResponse, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)

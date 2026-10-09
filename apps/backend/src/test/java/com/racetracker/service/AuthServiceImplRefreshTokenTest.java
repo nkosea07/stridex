@@ -9,6 +9,7 @@ import com.racetracker.repository.UserRepository;
 import com.racetracker.security.JwtService;
 import com.racetracker.service.AuthEmailService;
 import com.racetracker.service.impl.AuthServiceImpl;
+import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import com.racetracker.repository.AuthTokenRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,6 +56,12 @@ class AuthServiceImplRefreshTokenTest {
 
     @Mock
     private AuthEmailService authEmailService;
+
+    @Mock
+    private MfaAuthenticationServiceImpl mfaAuthenticationService;
+
+    @Mock
+    private AuditEventService auditEventService;
 
     @InjectMocks
     private AuthServiceImpl authService;

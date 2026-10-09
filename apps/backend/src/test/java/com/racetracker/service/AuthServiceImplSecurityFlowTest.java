@@ -13,6 +13,7 @@ import com.racetracker.repository.AuthTokenRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.security.JwtService;
 import com.racetracker.service.impl.AuthServiceImpl;
+import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -58,6 +60,12 @@ class AuthServiceImplSecurityFlowTest {
 
     @Mock
     private AuthEmailService authEmailService;
+
+    @Mock
+    private MfaAuthenticationServiceImpl mfaAuthenticationService;
+
+    @Mock
+    private AuditEventService auditEventService;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -105,6 +113,30 @@ class AuthServiceImplSecurityFlowTest {
 
         assertThrows(UnauthorizedException.class, () -> authService.login(request));
         verifyNoInteractions(authenticationManager);
+    }
+
+    @Test
+    void loginForPrivilegedUserReturnsRestrictedMfaChallengeWithoutSessionTokens() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("admin@example.com");
+        request.setPassword("password123");
+        User user = baseUser();
+        user.setRole(User.UserRole.SUPER_ADMIN);
+        user.setEmail("admin@example.com");
+        when(userRepository.findByEmailIgnoreCase("admin@example.com")).thenReturn(Optional.of(user));
+        when(userMapper.toDto(user)).thenReturn(new com.racetracker.dto.auth.UserDto());
+        when(mfaAuthenticationService.isPrivileged(User.UserRole.SUPER_ADMIN)).thenReturn(true);
+        when(mfaAuthenticationService.createChallenge(user))
+            .thenReturn(new MfaAuthenticationServiceImpl.Challenge("restricted-challenge", true));
+
+        AuthResponse response = authService.login(request);
+
+        assertNull(response.getToken());
+        assertNull(response.getRefreshToken());
+        assertTrue(Boolean.TRUE.equals(response.getMfaRequired()));
+        assertTrue(Boolean.TRUE.equals(response.getMfaEnrollmentRequired()));
+        assertThat(response.getMfaChallengeToken()).isEqualTo("restricted-challenge");
+        verifyNoInteractions(jwtService);
     }
 
     @Test

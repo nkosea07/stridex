@@ -13,6 +13,7 @@ import com.racetracker.repository.UserRepository;
 import com.racetracker.security.JwtService;
 import com.racetracker.service.AuthEmailService;
 import com.racetracker.service.AuthService;
+import com.racetracker.service.AuditEventService;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -44,6 +45,8 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
     private final AuthTokenRepository authTokenRepository;
     private final AuthEmailService authEmailService;
+    private final MfaAuthenticationServiceImpl mfaAuthenticationService;
+    private final AuditEventService auditEventService;
 
     public AuthServiceImpl(
         UserRepository userRepository,
@@ -52,7 +55,9 @@ public class AuthServiceImpl implements AuthService {
         JwtService jwtService,
         UserMapper userMapper,
         AuthTokenRepository authTokenRepository,
-        AuthEmailService authEmailService
+        AuthEmailService authEmailService,
+        MfaAuthenticationServiceImpl mfaAuthenticationService,
+        AuditEventService auditEventService
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -61,6 +66,8 @@ public class AuthServiceImpl implements AuthService {
         this.userMapper = userMapper;
         this.authTokenRepository = authTokenRepository;
         this.authEmailService = authEmailService;
+        this.mfaAuthenticationService = mfaAuthenticationService;
+        this.auditEventService = auditEventService;
     }
 
     @Override
@@ -108,6 +115,10 @@ public class AuthServiceImpl implements AuthService {
         } catch (Exception ex) {
             if (user != null) {
                 recordFailedLogin(user);
+                if (mfaAuthenticationService.isPrivileged(user.getRole())) {
+                    auditEventService.record("PRIVILEGED_LOGIN", user.getId(), "USER", user.getId().toString(),
+                        "DENIED", java.util.Map.of("method", "password"));
+                }
             }
             throw new UnauthorizedException("Invalid credentials");
         }
@@ -118,7 +129,17 @@ public class AuthServiceImpl implements AuthService {
         }
 
         resetFailedLoginState(user);
-        return buildAuthenticatedResponse(user);
+        if (mfaAuthenticationService.isPrivileged(user.getRole())) {
+            MfaAuthenticationServiceImpl.Challenge challenge = mfaAuthenticationService.createChallenge(user);
+            return AuthResponse.builder()
+                .requiresEmailVerification(false)
+                .mfaRequired(true)
+                .mfaEnrollmentRequired(challenge.enrollmentRequired())
+                .mfaChallengeToken(challenge.token())
+                .user(userMapper.toDto(user))
+                .build();
+        }
+        return buildAuthenticatedResponse(user, false);
     }
 
     @Override
@@ -142,6 +163,10 @@ public class AuthServiceImpl implements AuthService {
 
         User user = storedToken.getUser();
         ensureUserCanReceiveSession(user);
+        boolean mfaVerified = mfaAuthenticationService.isPrivileged(user.getRole());
+        if (mfaVerified && (!jwtService.isMfaVerified(refreshToken) || !mfaAuthenticationService.isMfaEnabled(user.getId()))) {
+            throw new UnauthorizedException("MFA verification is required");
+        }
 
         org.springframework.security.core.userdetails.UserDetails userDetails = new org.springframework.security.core.userdetails.User(
             user.getEmail(),
@@ -159,7 +184,35 @@ public class AuthServiceImpl implements AuthService {
 
         storedToken.setConsumedAt(OffsetDateTime.now());
         authTokenRepository.save(storedToken);
-        return buildAuthenticatedResponse(user);
+        return buildAuthenticatedResponse(user, mfaVerified);
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse issueMfaSession(UUID userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new UnauthorizedException("Invalid MFA challenge"));
+        ensureUserCanReceiveSession(user);
+        if (!mfaAuthenticationService.isPrivileged(user.getRole()) || !mfaAuthenticationService.isMfaEnabled(userId)) {
+            throw new UnauthorizedException("MFA verification is required");
+        }
+        auditEventService.recordInCurrentTransaction("PRIVILEGED_LOGIN", user.getId(), "USER", user.getId().toString(),
+            "SUCCESS", java.util.Map.of("method", "mfa"));
+        return buildAuthenticatedResponse(user, true);
+    }
+
+    @Override
+    @Transactional
+    public void revokeRefreshToken(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return;
+        }
+        authTokenRepository.findByTokenAndTokenTypeAndConsumedAtIsNull(
+            refreshToken, AuthToken.TokenType.REFRESH
+        ).ifPresent(token -> {
+            token.setConsumedAt(OffsetDateTime.now());
+            authTokenRepository.save(token);
+        });
     }
 
     @Override
@@ -374,13 +427,15 @@ public class AuthServiceImpl implements AuthService {
             .build();
     }
 
-    private AuthResponse buildAuthenticatedResponse(User user) {
+    private AuthResponse buildAuthenticatedResponse(User user, boolean mfaVerified) {
         invalidateOutstandingTokens(user.getId(), AuthToken.TokenType.REFRESH);
-        String refreshToken = jwtService.generateRefreshToken(user);
+        String refreshToken = mfaVerified
+            ? jwtService.generateRefreshToken(user, true)
+            : jwtService.generateRefreshToken(user);
         authTokenRepository.save(createRefreshToken(user, refreshToken));
 
         return AuthResponse.builder()
-            .token(jwtService.generateAccessToken(user))
+            .token(mfaVerified ? jwtService.generateAccessToken(user, true) : jwtService.generateAccessToken(user))
             .refreshToken(refreshToken)
             .requiresEmailVerification(false)
             .user(userMapper.toDto(user))

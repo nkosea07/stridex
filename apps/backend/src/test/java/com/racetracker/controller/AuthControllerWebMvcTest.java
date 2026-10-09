@@ -3,9 +3,14 @@ package com.racetracker.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.racetracker.dto.auth.AuthResponse;
 import com.racetracker.dto.auth.LoginRequest;
+import com.racetracker.dto.auth.RegisterOrganizerRequest;
 import com.racetracker.dto.auth.UserDto;
 import com.racetracker.security.JwtAuthenticationFilter;
+import com.racetracker.security.ClientAddressResolver;
+import com.racetracker.security.RequestRateLimiter;
 import com.racetracker.service.AuthService;
+import com.racetracker.service.OrganizerApplicationService;
+import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -36,7 +41,19 @@ class AuthControllerWebMvcTest {
     private AuthService authService;
 
     @MockBean
+    private OrganizerApplicationService organizerApplicationService;
+
+    @MockBean
+    private MfaAuthenticationServiceImpl mfaAuthenticationService;
+
+    @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @MockBean
+    private RequestRateLimiter requestRateLimiter;
+
+    @MockBean
+    private ClientAddressResolver clientAddressResolver;
 
     @Test
     void login_returnsTokenAndUser() throws Exception {
@@ -64,5 +81,25 @@ class AuthControllerWebMvcTest {
             .andExpect(jsonPath("$.token").value("access-token"))
             .andExpect(jsonPath("$.refreshToken").value("refresh-token"))
             .andExpect(jsonPath("$.user.email").value("athlete@example.com"));
+    }
+
+    @Test
+    void organizerRegistration_usesPendingApplicationBoundary() throws Exception {
+        when(organizerApplicationService.register(any(RegisterOrganizerRequest.class)))
+            .thenReturn(AuthResponse.builder().requiresEmailVerification(true).user(new UserDto()).build());
+
+        mockMvc.perform(post("/v1/auth/register-organizer")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "email": "organizer@example.com",
+                      "password": "password123",
+                      "firstName": "Race",
+                      "lastName": "Organizer",
+                      "organizationName": "City Run Club"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.requiresEmailVerification").value(true));
     }
 }
