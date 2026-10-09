@@ -29,6 +29,18 @@ public interface RaceRepository extends JpaRepository<Race, UUID> {
     @EntityGraph(attributePaths = {"categories", "participants"})
     Page<Race> findByStatusAndRaceDateGreaterThanEqual(Race.RaceStatus status, LocalDate raceDate, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"categories", "participants"})
+    Page<Race> findAllByArchivedAtIsNull(Pageable pageable);
+
+    @EntityGraph(attributePaths = {"categories", "participants"})
+    Page<Race> findByStatusAndArchivedAtIsNull(Race.RaceStatus status, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"categories", "participants"})
+    Page<Race> findByRaceDateGreaterThanEqualAndArchivedAtIsNull(LocalDate raceDate, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"categories", "participants"})
+    Page<Race> findByStatusAndRaceDateGreaterThanEqualAndArchivedAtIsNull(Race.RaceStatus status, LocalDate raceDate, Pageable pageable);
+
     long countByStatusIn(Collection<Race.RaceStatus> statuses);
 
     long countByRaceDateBetween(LocalDate from, LocalDate to);

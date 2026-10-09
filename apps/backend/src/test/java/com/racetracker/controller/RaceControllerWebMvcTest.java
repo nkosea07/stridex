@@ -50,7 +50,7 @@ class RaceControllerWebMvcTest {
         race.setStatus("REGISTRATION_OPEN");
         race.setRaceDate(LocalDate.of(2026, 10, 10));
 
-        when(raceService.list(eq(null), eq(null), any(Pageable.class)))
+        when(raceService.list(eq(null), eq(null), eq(false), any(Pageable.class)))
             .thenReturn(new PageImpl<>(java.util.List.of(race), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/v1/races"))

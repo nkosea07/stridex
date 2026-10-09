@@ -1,6 +1,7 @@
 package com.racetracker.controller;
 
 import com.racetracker.dto.auth.ApiMessageResponse;
+import com.racetracker.dto.race.RaceCloneRequest;
 import com.racetracker.dto.race.RaceCreateRequest;
 import com.racetracker.dto.race.RaceDto;
 import com.racetracker.dto.race.RaceStatusUpdateRequest;
@@ -34,9 +35,10 @@ public class RaceController {
     public ResponseEntity<Page<RaceDto>> list(
         @RequestParam(required = false) String status,
         @RequestParam(required = false) Boolean upcoming,
+        @RequestParam(required = false) Boolean includeArchived,
         Pageable pageable
     ) {
-        return ResponseEntity.ok(raceService.list(status, upcoming, pageable));
+        return ResponseEntity.ok(raceService.list(status, upcoming, Boolean.TRUE.equals(includeArchived), pageable));
     }
 
     @GetMapping("/{id}")
@@ -52,6 +54,31 @@ public class RaceController {
         auditEventService.recordForActor("RACE_CREATED", authentication.getName(), "RACE", created.getId().toString(),
             "SUCCESS", java.util.Map.of());
         return ResponseEntity.ok(created);
+    }
+
+    @PostMapping("/{id}/clone")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    public ResponseEntity<RaceDto> clone(@PathVariable UUID id, @Valid @RequestBody RaceCloneRequest request, Authentication authentication) {
+        RaceDto created = raceService.clone(id, request);
+        auditEventService.recordForActor("RACE_CLONED", authentication.getName(), "RACE", created.getId().toString(),
+            "SUCCESS", java.util.Map.of("sourceRaceId", id.toString()));
+        return ResponseEntity.ok(created);
+    }
+
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    public ResponseEntity<RaceDto> archive(@PathVariable UUID id, Authentication authentication) {
+        RaceDto archived = raceService.archive(id);
+        auditEventService.recordForActor("RACE_ARCHIVED", authentication.getName(), "RACE", id.toString(), "SUCCESS", java.util.Map.of());
+        return ResponseEntity.ok(archived);
+    }
+
+    @PostMapping("/{id}/restore")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    public ResponseEntity<RaceDto> restore(@PathVariable UUID id, Authentication authentication) {
+        RaceDto restored = raceService.restore(id);
+        auditEventService.recordForActor("RACE_RESTORED", authentication.getName(), "RACE", id.toString(), "SUCCESS", java.util.Map.of());
+        return ResponseEntity.ok(restored);
     }
 
     @PutMapping("/{id}")

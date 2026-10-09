@@ -1,6 +1,7 @@
 package com.racetracker.service.impl;
 
 import com.racetracker.dto.participant.RaceRegistrationFieldDto;
+import com.racetracker.dto.race.RaceCloneRequest;
 import com.racetracker.dto.race.RaceCreateRequest;
 import com.racetracker.dto.race.RaceCategoryRequest;
 import com.racetracker.dto.race.RaceDto;
@@ -8,6 +9,7 @@ import com.racetracker.dto.race.RaceUpdateRequest;
 import com.racetracker.exception.ApiException;
 import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.mapper.RaceMapper;
+import com.racetracker.model.Checkpoint;
 import com.racetracker.model.Race;
 import com.racetracker.model.RaceCategory;
 import com.racetracker.model.RaceRegistrationField;
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -43,19 +46,29 @@ public class RaceServiceImpl implements RaceService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<RaceDto> list(String status, Boolean upcoming, Pageable pageable) {
+    public Page<RaceDto> list(String status, Boolean upcoming, boolean includeArchived, Pageable pageable) {
         boolean onlyUpcoming = Boolean.TRUE.equals(upcoming);
         Race.RaceStatus parsedStatus = parseRaceStatusNullable(status);
 
         Page<Race> races;
-        if (onlyUpcoming && parsedStatus != null) {
-            races = raceRepository.findByStatusAndRaceDateGreaterThanEqual(parsedStatus, LocalDate.now(), pageable);
+        if (includeArchived) {
+            if (onlyUpcoming && parsedStatus != null) {
+                races = raceRepository.findByStatusAndRaceDateGreaterThanEqual(parsedStatus, LocalDate.now(), pageable);
+            } else if (onlyUpcoming) {
+                races = raceRepository.findByRaceDateGreaterThanEqual(LocalDate.now(), pageable);
+            } else if (parsedStatus != null) {
+                races = raceRepository.findByStatus(parsedStatus, pageable);
+            } else {
+                races = raceRepository.findAll(pageable);
+            }
+        } else if (onlyUpcoming && parsedStatus != null) {
+            races = raceRepository.findByStatusAndRaceDateGreaterThanEqualAndArchivedAtIsNull(parsedStatus, LocalDate.now(), pageable);
         } else if (onlyUpcoming) {
-            races = raceRepository.findByRaceDateGreaterThanEqual(LocalDate.now(), pageable);
+            races = raceRepository.findByRaceDateGreaterThanEqualAndArchivedAtIsNull(LocalDate.now(), pageable);
         } else if (parsedStatus != null) {
-            races = raceRepository.findByStatus(parsedStatus, pageable);
+            races = raceRepository.findByStatusAndArchivedAtIsNull(parsedStatus, pageable);
         } else {
-            races = raceRepository.findAll(pageable);
+            races = raceRepository.findAllByArchivedAtIsNull(pageable);
         }
 
         return races.map(raceMapper::toDto);
@@ -137,6 +150,121 @@ public class RaceServiceImpl implements RaceService {
         race.setStatus(parseRaceStatus(status));
         Race saved = raceRepository.save(race);
         return raceMapper.toDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public RaceDto clone(UUID id, RaceCloneRequest request) {
+        Race source = raceRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+
+        Race copy = new Race();
+        copy.setName(request.getName());
+        copy.setDescription(source.getDescription());
+        copy.setRaceType(source.getRaceType());
+        copy.setStatus(Race.RaceStatus.DRAFT);
+        copy.setCity(source.getCity());
+        copy.setCountry(source.getCountry());
+        copy.setStartLocationLat(source.getStartLocationLat());
+        copy.setStartLocationLng(source.getStartLocationLng());
+        copy.setFinishLocationLat(source.getFinishLocationLat());
+        copy.setFinishLocationLng(source.getFinishLocationLng());
+        copy.setRaceDate(request.getRaceDate() != null ? request.getRaceDate() : source.getRaceDate());
+        copy.setStartTime(request.getStartTime() != null ? request.getStartTime() : source.getStartTime());
+        copy.setRegistrationOpens(request.getRegistrationOpens() != null ? request.getRegistrationOpens() : source.getRegistrationOpens());
+        copy.setRegistrationCloses(request.getRegistrationCloses() != null ? request.getRegistrationCloses() : source.getRegistrationCloses());
+        copy.setDistanceKm(source.getDistanceKm());
+        copy.setMaxParticipants(source.getMaxParticipants());
+        copy.setRegistrationFee(source.getRegistrationFee());
+        copy.setCurrency(source.getCurrency());
+        copy.setBannerImageUrl(source.getBannerImageUrl());
+        copy.setLogoUrl(source.getLogoUrl());
+        copy.setIsPublicRegistration(source.getIsPublicRegistration());
+        copy.setRequireMedicalClearance(source.getRequireMedicalClearance());
+        copy.setRequireApproval(source.getRequireApproval());
+        copy.setWaitlistEnabled(source.getWaitlistEnabled());
+        copy.setRequireWaiver(source.getRequireWaiver());
+        copy.setWaiverVersion(source.getWaiverVersion());
+        copy.setWaiverText(source.getWaiverText());
+        copy.setResultsPublishedAt(null);
+        copy.setArchivedAt(null);
+
+        if (Boolean.TRUE.equals(request.getCopyCategories())) {
+            source.getCategories().forEach(category -> copy.getCategories().add(cloneCategory(copy, category)));
+        }
+        if (Boolean.TRUE.equals(request.getCopyCheckpoints())) {
+            source.getCheckpoints().forEach(checkpoint -> copy.getCheckpoints().add(cloneCheckpoint(copy, checkpoint)));
+        }
+
+        Race saved = raceRepository.save(copy);
+
+        if (Boolean.TRUE.equals(request.getCopyRegistrationFields())) {
+            List<RaceRegistrationField> sourceFields =
+                registrationFieldRepository.findByRaceIdOrderByDisplayOrderAsc(source.getId());
+            sourceFields.forEach(field -> registrationFieldRepository.save(cloneRegistrationField(saved, field)));
+        }
+
+        return raceMapper.toDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public RaceDto archive(UUID id) {
+        Race race = raceRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        race.setArchivedAt(OffsetDateTime.now());
+        return raceMapper.toDto(raceRepository.save(race));
+    }
+
+    @Override
+    @Transactional
+    public RaceDto restore(UUID id) {
+        Race race = raceRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        race.setArchivedAt(null);
+        return raceMapper.toDto(raceRepository.save(race));
+    }
+
+    private RaceCategory cloneCategory(Race race, RaceCategory source) {
+        return RaceCategory.builder()
+            .race(race)
+            .name(source.getName())
+            .description(source.getDescription())
+            .minAge(source.getMinAge())
+            .maxAge(source.getMaxAge())
+            .gender(source.getGender())
+            .bibPrefix(source.getBibPrefix())
+            .maxParticipants(source.getMaxParticipants())
+            .registrationFee(source.getRegistrationFee())
+            .build();
+    }
+
+    private Checkpoint cloneCheckpoint(Race race, Checkpoint source) {
+        return Checkpoint.builder()
+            .race(race)
+            .name(source.getName())
+            .checkpointType(source.getCheckpointType())
+            .distanceFromStartKm(source.getDistanceFromStartKm())
+            .latitude(source.getLatitude())
+            .longitude(source.getLongitude())
+            .orderIndex(source.getOrderIndex())
+            .cutoffTime(source.getCutoffTime())
+            .hasRfidReader(Boolean.TRUE.equals(source.getHasRfidReader()))
+            .hasQrScanner(Boolean.TRUE.equals(source.getHasQrScanner()))
+            .build();
+    }
+
+    private RaceRegistrationField cloneRegistrationField(Race race, RaceRegistrationField source) {
+        return RaceRegistrationField.builder()
+            .race(race)
+            .fieldKey(source.getFieldKey())
+            .label(source.getLabel())
+            .fieldType(source.getFieldType())
+            .required(Boolean.TRUE.equals(source.getRequired()))
+            .options(source.getOptions() != null ? new java.util.ArrayList<>(source.getOptions()) : new java.util.ArrayList<>())
+            .displayOrder(source.getDisplayOrder())
+            .active(Boolean.TRUE.equals(source.getActive()))
+            .build();
     }
 
     private void applyCommonFields(RaceCreateRequest request, Race race) {

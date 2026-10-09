@@ -118,6 +118,9 @@ public class Race {
     @Column(name = "results_published_at")
     private OffsetDateTime resultsPublishedAt;
 
+    @Column(name = "archived_at")
+    private OffsetDateTime archivedAt;
+
     // Ownership
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")

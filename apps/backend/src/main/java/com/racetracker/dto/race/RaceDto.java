@@ -43,6 +43,7 @@ public class RaceDto {
     private String waiverText;
     private Integer participantCount;
     private OffsetDateTime createdAt;
+    private OffsetDateTime archivedAt;
     private List<RaceCategoryDto> categories;
     private List<com.racetracker.dto.participant.RaceRegistrationFieldDto> registrationFields;
 }
