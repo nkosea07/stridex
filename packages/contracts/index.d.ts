@@ -7,11 +7,17 @@ export type EndpointKey =
   | 'authProfile'
   | 'racesList'
   | 'raceById'
+  | 'raceClone'
+  | 'raceArchive'
+  | 'raceRestore'
   | 'raceRegister'
   | 'publicRaceHub'
   | 'publicRaceLive'
   | 'publicRaceLiveFeed'
   | 'publicRaceResults'
+  | 'publicRaceResultCertificate'
+  | 'raceResultsExport'
+  | 'raceResultCertificate'
   | 'publicRaceSearch'
   | 'publicAthleteTracking'
   | 'publicAthleteTrack'
@@ -23,13 +29,19 @@ export type EndpointKey =
   | 'raceTeams'
   | 'raceParticipantReview'
   | 'raceParticipantPayment'
+  | 'raceParticipantPaymentCheckout'
+  | 'paymentCallbackPesepay'
+  | 'raceParticipantPenalties'
+  | 'raceParticipantPenaltyDelete'
+  | 'checkpointRecordCorrect'
   | 'myRegistrations'
   | 'trackingLocation'
   | 'trackingCheckpoint'
   | 'myResults'
   | 'myResultsPage'
   | 'raceResultsPage'
-  | 'notifications';
+  | 'notifications'
+  | 'notificationDevices';
 
 export interface ApiContract {
   apiVersion: number;
