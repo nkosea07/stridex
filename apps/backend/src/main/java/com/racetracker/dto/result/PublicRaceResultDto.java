@@ -12,5 +12,6 @@ public record PublicRaceResultDto(
     String category,
     Integer overallPosition,
     Integer genderPosition,
-    Integer categoryPosition
+    Integer categoryPosition,
+    String certificateToken
 ) { }
