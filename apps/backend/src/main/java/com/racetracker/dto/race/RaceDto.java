@@ -36,7 +36,13 @@ public class RaceDto {
     private String logoUrl;
     private Boolean isPublicRegistration;
     private Boolean requireMedicalClearance;
+    private Boolean requireApproval;
+    private Boolean waitlistEnabled;
+    private Boolean requireWaiver;
+    private String waiverVersion;
+    private String waiverText;
     private Integer participantCount;
     private OffsetDateTime createdAt;
     private List<RaceCategoryDto> categories;
+    private List<com.racetracker.dto.participant.RaceRegistrationFieldDto> registrationFields;
 }

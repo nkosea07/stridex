@@ -1,5 +1,6 @@
 package com.racetracker.service.impl;
 
+import com.racetracker.dto.participant.RaceRegistrationFieldDto;
 import com.racetracker.dto.race.RaceCreateRequest;
 import com.racetracker.dto.race.RaceCategoryRequest;
 import com.racetracker.dto.race.RaceDto;
@@ -9,6 +10,8 @@ import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.mapper.RaceMapper;
 import com.racetracker.model.Race;
 import com.racetracker.model.RaceCategory;
+import com.racetracker.model.RaceRegistrationField;
+import com.racetracker.repository.RaceRegistrationFieldRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.service.RaceService;
 import org.springframework.data.domain.Page;
@@ -17,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -25,10 +29,16 @@ public class RaceServiceImpl implements RaceService {
 
     private final RaceRepository raceRepository;
     private final RaceMapper raceMapper;
+    private final RaceRegistrationFieldRepository registrationFieldRepository;
 
-    public RaceServiceImpl(RaceRepository raceRepository, RaceMapper raceMapper) {
+    public RaceServiceImpl(
+        RaceRepository raceRepository,
+        RaceMapper raceMapper,
+        RaceRegistrationFieldRepository registrationFieldRepository
+    ) {
         this.raceRepository = raceRepository;
         this.raceMapper = raceMapper;
+        this.registrationFieldRepository = registrationFieldRepository;
     }
 
     @Override
@@ -56,7 +66,27 @@ public class RaceServiceImpl implements RaceService {
     public RaceDto getById(UUID id) {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
-        return raceMapper.toDto(race);
+        RaceDto dto = raceMapper.toDto(race);
+        dto.setRegistrationFields(registrationFieldRepository.findByRaceIdOrderByDisplayOrderAsc(id)
+            .stream()
+            .map(this::toFieldDto)
+            .toList());
+        return dto;
+    }
+
+    private RaceRegistrationFieldDto toFieldDto(RaceRegistrationField field) {
+        RaceRegistrationFieldDto dto = new RaceRegistrationFieldDto();
+        dto.setId(field.getId());
+        dto.setRaceId(field.getRace() != null ? field.getRace().getId() : null);
+        dto.setFieldKey(field.getFieldKey());
+        dto.setLabel(field.getLabel());
+        dto.setFieldType(field.getFieldType() != null ? field.getFieldType().name() : null);
+        dto.setRequired(Boolean.TRUE.equals(field.getRequired()));
+        dto.setOptions(field.getOptions() != null ? field.getOptions() : List.of());
+        dto.setDisplayOrder(field.getDisplayOrder());
+        dto.setActive(Boolean.TRUE.equals(field.getActive()));
+        dto.setCreatedAt(field.getCreatedAt());
+        return dto;
     }
 
     @Override
@@ -131,6 +161,15 @@ public class RaceServiceImpl implements RaceService {
         race.setLogoUrl(request.getLogoUrl());
         race.setIsPublicRegistration(request.getIsPublicRegistration() != null ? request.getIsPublicRegistration() : true);
         race.setRequireMedicalClearance(request.getRequireMedicalClearance() != null ? request.getRequireMedicalClearance() : false);
+        race.setRequireApproval(request.getRequireApproval() != null ? request.getRequireApproval() : false);
+        race.setWaitlistEnabled(request.getWaitlistEnabled() != null ? request.getWaitlistEnabled() : false);
+        race.setRequireWaiver(request.getRequireWaiver() != null ? request.getRequireWaiver() : false);
+        race.setWaiverVersion(request.getWaiverVersion());
+        race.setWaiverText(request.getWaiverText());
+        if (Boolean.TRUE.equals(race.getRequireWaiver())
+            && (race.getWaiverText() == null || race.getWaiverText().isBlank())) {
+            throw new ApiException("Waiver text is required when a waiver is enforced");
+        }
     }
 
     private void applyCommonFields(RaceUpdateRequest request, Race race) {
@@ -155,6 +194,15 @@ public class RaceServiceImpl implements RaceService {
         if (request.getLogoUrl() != null) race.setLogoUrl(request.getLogoUrl());
         if (request.getIsPublicRegistration() != null) race.setIsPublicRegistration(request.getIsPublicRegistration());
         if (request.getRequireMedicalClearance() != null) race.setRequireMedicalClearance(request.getRequireMedicalClearance());
+        if (request.getRequireApproval() != null) race.setRequireApproval(request.getRequireApproval());
+        if (request.getWaitlistEnabled() != null) race.setWaitlistEnabled(request.getWaitlistEnabled());
+        if (request.getRequireWaiver() != null) race.setRequireWaiver(request.getRequireWaiver());
+        if (request.getWaiverVersion() != null) race.setWaiverVersion(request.getWaiverVersion());
+        if (request.getWaiverText() != null) race.setWaiverText(request.getWaiverText());
+        if (Boolean.TRUE.equals(race.getRequireWaiver())
+            && (race.getWaiverText() == null || race.getWaiverText().isBlank())) {
+            throw new ApiException("Waiver text is required when a waiver is enforced");
+        }
     }
 
     private RaceCategory toCategoryEntity(Race race, RaceCategoryRequest request) {

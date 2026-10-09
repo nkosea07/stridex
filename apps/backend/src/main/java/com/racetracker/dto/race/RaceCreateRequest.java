@@ -40,6 +40,11 @@ public class RaceCreateRequest {
     private String logoUrl;
     private Boolean isPublicRegistration;
     private Boolean requireMedicalClearance;
+    private Boolean requireApproval;
+    private Boolean waitlistEnabled;
+    private Boolean requireWaiver;
+    private String waiverVersion;
+    private String waiverText;
 
     @Valid
     private List<RaceCategoryRequest> categories = new ArrayList<>();

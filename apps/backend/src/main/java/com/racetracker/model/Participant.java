@@ -109,6 +109,49 @@ public class Participant {
     @Column(name = "checked_in_at")
     private OffsetDateTime checkedInAt;
 
+    // Registration workflow
+    @Column(name = "shirt_size")
+    private String shirtSize;
+
+    @Column(name = "waiver_accepted_at")
+    private OffsetDateTime waiverAcceptedAt;
+
+    @Column(name = "waiver_version")
+    private String waiverVersion;
+
+    @Column(name = "approved_at")
+    private OffsetDateTime approvedAt;
+
+    @Column(name = "approved_by")
+    private UUID approvedBy;
+
+    @Column(name = "rejection_reason")
+    private String rejectionReason;
+
+    @Column(name = "waitlist_position")
+    private Integer waitlistPosition;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcType(PostgreSQLEnumJdbcType.class)
+    @Column(name = "payment_status", columnDefinition = "payment_status")
+    private PaymentStatus paymentStatus = PaymentStatus.UNPAID;
+
+    @Column(name = "payment_reference")
+    private String paymentReference;
+
+    @Column(name = "payment_amount", precision = 10, scale = 2)
+    private java.math.BigDecimal paymentAmount;
+
+    @Column(name = "payment_verified_by")
+    private UUID paymentVerifiedBy;
+
+    @Column(name = "payment_verified_at")
+    private OffsetDateTime paymentVerifiedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "team_id")
+    private Team team;
+
     // Tracking
     @Column(name = "is_tracking_enabled")
     private Boolean isTrackingEnabled = true;
@@ -134,6 +177,9 @@ public class Participant {
     @OneToMany(mappedBy = "participant", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<CheckpointRecord> checkpointRecords = new HashSet<>();
 
+    @OneToMany(mappedBy = "participant", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<ParticipantCredential> credentials = new HashSet<>();
+
     public String getFullName() {
         return firstName + " " + lastName;
     }
@@ -143,6 +189,11 @@ public class Participant {
     }
 
     public enum ParticipantStatus {
-        REGISTERED, CONFIRMED, CHECKED_IN, STARTED, DNF, DNS, DISQUALIFIED, FINISHED
+        REGISTERED, CONFIRMED, CHECKED_IN, STARTED, DNF, DNS, DISQUALIFIED, FINISHED,
+        PENDING_REVIEW, WAITLISTED, REJECTED
+    }
+
+    public enum PaymentStatus {
+        UNPAID, PENDING, PAID, WAIVED, REFUNDED
     }
 }

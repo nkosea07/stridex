@@ -100,6 +100,24 @@ public class Race {
     @Column(name = "require_medical_clearance")
     private Boolean requireMedicalClearance = false;
 
+    @Column(name = "require_approval")
+    private Boolean requireApproval = false;
+
+    @Column(name = "waitlist_enabled")
+    private Boolean waitlistEnabled = false;
+
+    @Column(name = "require_waiver")
+    private Boolean requireWaiver = false;
+
+    @Column(name = "waiver_version")
+    private String waiverVersion;
+
+    @Column(name = "waiver_text", columnDefinition = "TEXT")
+    private String waiverText;
+
+    @Column(name = "results_published_at")
+    private OffsetDateTime resultsPublishedAt;
+
     // Ownership
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
