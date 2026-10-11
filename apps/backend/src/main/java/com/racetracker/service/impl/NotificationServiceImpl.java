@@ -1,17 +1,19 @@
 package com.racetracker.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.racetracker.dto.notification.NotificationDto;
+import com.racetracker.dto.notification.NotificationPreferenceDto;
 import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.model.Notification;
 import com.racetracker.model.PushDevice;
 import com.racetracker.model.User;
+import com.racetracker.notification.NotificationMessage;
 import com.racetracker.repository.NotificationRepository;
 import com.racetracker.repository.PushDeviceRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.service.NotificationService;
-import com.racetracker.service.PushNotificationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -30,21 +32,24 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final PushDeviceRepository pushDeviceRepository;
-    private final PushNotificationService pushNotificationService;
+    private final NotificationDispatcher notificationDispatcher;
     private final ObjectMapper objectMapper;
+    private final com.racetracker.service.NotificationPreferenceService preferenceService;
 
     public NotificationServiceImpl(
         NotificationRepository notificationRepository,
         UserRepository userRepository,
         PushDeviceRepository pushDeviceRepository,
-        PushNotificationService pushNotificationService,
-        ObjectMapper objectMapper
+        NotificationDispatcher notificationDispatcher,
+        ObjectMapper objectMapper,
+        com.racetracker.service.NotificationPreferenceService preferenceService
     ) {
         this.notificationRepository = notificationRepository;
         this.userRepository = userRepository;
         this.pushDeviceRepository = pushDeviceRepository;
-        this.pushNotificationService = pushNotificationService;
+        this.notificationDispatcher = notificationDispatcher;
         this.objectMapper = objectMapper;
+        this.preferenceService = preferenceService;
     }
 
     @Override
@@ -91,10 +96,9 @@ public class NotificationServiceImpl implements NotificationService {
         notification.setData(serialize(data));
         Notification saved = notificationRepository.save(notification);
 
-        List<String> tokens = pushDeviceRepository.findByUserId(userId).stream()
-            .map(PushDevice::getToken)
-            .toList();
-        pushNotificationService.sendToTokens(tokens, title, message, data);
+        Map<String, String> payload = data == null ? Map.of() : data;
+        notificationDispatcher.dispatch(saved.getId(), new NotificationMessage(
+            userId, user.getEmail(), user.getPhone(), saved.getType(), title, message, payload));
 
         return toDto(saved);
     }
@@ -123,6 +127,18 @@ public class NotificationServiceImpl implements NotificationService {
         }
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public NotificationPreferenceDto getPreferences() {
+        return preferenceService.get(resolveCurrentUser().getId());
+    }
+
+    @Override
+    @Transactional
+    public NotificationPreferenceDto updatePreferences(NotificationPreferenceDto preferences) {
+        return preferenceService.update(resolveCurrentUser().getId(), preferences);
+    }
+
     private String serialize(Map<String, String> data) {
         if (data == null || data.isEmpty()) {
             return null;
@@ -135,6 +151,18 @@ public class NotificationServiceImpl implements NotificationService {
         }
     }
 
+    private Object deserialize(String data) {
+        if (data == null || data.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(data, new TypeReference<Map<String, String>>() { });
+        } catch (Exception ex) {
+            log.warn("Failed to deserialize notification data: {}", ex.getMessage());
+            return null;
+        }
+    }
+
     private NotificationDto toDto(Notification entity) {
         NotificationDto dto = new NotificationDto();
         dto.setId(entity.getId());
@@ -143,7 +171,7 @@ public class NotificationServiceImpl implements NotificationService {
         dto.setType(entity.getType() != null ? entity.getType().name().toLowerCase() : null);
         dto.setTimestamp(entity.getCreatedAt());
         dto.setRead(Boolean.TRUE.equals(entity.getIsRead()));
-        dto.setData(null);
+        dto.setData(deserialize(entity.getData()));
         return dto;
     }
 

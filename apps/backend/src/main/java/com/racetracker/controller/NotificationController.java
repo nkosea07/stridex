@@ -1,6 +1,7 @@
 package com.racetracker.controller;
 
 import com.racetracker.dto.notification.NotificationDto;
+import com.racetracker.dto.notification.NotificationPreferenceDto;
 import com.racetracker.service.NotificationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -46,6 +47,18 @@ public class NotificationController {
     public ResponseEntity<Void> unregisterDevice(@RequestParam String token) {
         notificationService.unregisterDevice(token);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/preferences")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<NotificationPreferenceDto> getPreferences() {
+        return ResponseEntity.ok(notificationService.getPreferences());
+    }
+
+    @PutMapping("/preferences")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<NotificationPreferenceDto> updatePreferences(@RequestBody NotificationPreferenceDto preferences) {
+        return ResponseEntity.ok(notificationService.updatePreferences(preferences));
     }
 
     public static class DeviceRegistrationRequest {

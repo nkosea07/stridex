@@ -20,5 +20,7 @@ public interface MediaService {
 
     MediaContent content(UUID raceId, UUID mediaId, boolean publicOnly);
 
+    MediaContent thumbnail(UUID raceId, UUID mediaId, boolean publicOnly);
+
     record MediaContent(byte[] bytes, String contentType) {}
 }

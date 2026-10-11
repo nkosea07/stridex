@@ -9,6 +9,7 @@ import com.racetracker.model.*;
 import com.racetracker.repository.*;
 import com.racetracker.service.GeoTelemetryService;
 import com.racetracker.service.GpsDriftFilter;
+import com.racetracker.service.CheckpointCutoff;
 import com.racetracker.service.LastCheckpointNameCache;
 import com.racetracker.service.LiveSummaryCacheInvalidator;
 import com.racetracker.service.SpectatorAlertService;
@@ -138,21 +139,27 @@ public class TrackingServiceImpl implements TrackingService {
             throw new ConflictException("Checkpoint already recorded");
         }
 
+        OffsetDateTime recordedAt = parseTimestamp(request.getTimestamp());
+        boolean cutoffMissed = evaluateCutoff(checkpoint, participant, raceId, recordedAt);
+
         CheckpointRecord record = new CheckpointRecord();
         record.setRace(checkpoint.getRace());
         record.setCheckpoint(checkpoint);
         record.setParticipant(participant);
-        record.setRecordedAt(parseTimestamp(request.getTimestamp()));
+        record.setRecordedAt(recordedAt);
         record.setRecordMethod(parseRecordMethod(request.getMethod()));
         record.setRecordedBy(resolveCurrentUser());
         record.setIsVerified(true);
+        record.setIsCutoffMissed(cutoffMissed);
 
         checkpointRecordRepository.save(record);
         
         liveSummaryCacheInvalidator.evictLastCheckpointAfterCommit(participant.getId(), raceId);
 
         Participant.ParticipantStatus previousStatus = participant.getStatus();
-        if (checkpoint.getCheckpointType() == Checkpoint.CheckpointType.FINISH) {
+        if (cutoffMissed) {
+            participant.setStatus(Participant.ParticipantStatus.DNF);
+        } else if (checkpoint.getCheckpointType() == Checkpoint.CheckpointType.FINISH) {
             participant.setStatus(Participant.ParticipantStatus.FINISHED);
         } else if (participant.getStatus() == Participant.ParticipantStatus.REGISTERED
             || participant.getStatus() == Participant.ParticipantStatus.CONFIRMED
@@ -162,13 +169,25 @@ public class TrackingServiceImpl implements TrackingService {
         participantRepository.save(participant);
 
         spectatorAlertService.onCheckpoint(participant, checkpoint);
-        if (participant.getStatus() == Participant.ParticipantStatus.FINISHED
+        if (!cutoffMissed
+            && participant.getStatus() == Participant.ParticipantStatus.FINISHED
             && previousStatus != Participant.ParticipantStatus.FINISHED) {
             spectatorAlertService.onFinished(participant);
-        } else if (participant.getStatus() == Participant.ParticipantStatus.STARTED
+        } else if (!cutoffMissed
+            && participant.getStatus() == Participant.ParticipantStatus.STARTED
             && previousStatus != Participant.ParticipantStatus.STARTED) {
             spectatorAlertService.onStarted(participant);
         }
+    }
+
+    private boolean evaluateCutoff(Checkpoint checkpoint, Participant participant, UUID raceId, OffsetDateTime recordedAt) {
+        if (checkpoint.getCutoffTime() == null) {
+            return false;
+        }
+        List<CheckpointRecord> existing = checkpointRecordRepository
+            .findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participant.getId(), raceId);
+        OffsetDateTime start = CheckpointCutoff.resolveStart(participant, existing);
+        return CheckpointCutoff.isMissed(checkpoint.getCutoffTime(), start, recordedAt);
     }
 
     @Override
@@ -251,11 +270,22 @@ public class TrackingServiceImpl implements TrackingService {
         // Add splits
         List<CheckpointRecord> records = checkpointRecordRepository.findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participant.getId(), raceId);
         row.setSplits(records.stream().map(r -> {
+            Integer distanceMeters = r.getCheckpoint() != null && r.getCheckpoint().getDistanceFromStartKm() != null
+                ? r.getCheckpoint().getDistanceFromStartKm().multiply(BigDecimal.valueOf(1000))
+                    .setScale(0, java.math.RoundingMode.HALF_UP).intValue()
+                : null;
             String timeStr = "---";
+            Long durationSeconds = null;
+            Long paceSecondsPerKm = null;
             if (start != null && r.getRecordedAt() != null) {
-                timeStr = formatDuration(Duration.between(start, r.getRecordedAt()));
+                Duration duration = Duration.between(start, r.getRecordedAt());
+                durationSeconds = duration.getSeconds();
+                timeStr = formatDuration(duration);
+                if (distanceMeters != null && distanceMeters > 0) {
+                    paceSecondsPerKm = Math.round(durationSeconds * 1000.0 / distanceMeters);
+                }
             }
-            return new CheckpointSplitDto(r.getCheckpoint().getName(), timeStr);
+            return new CheckpointSplitDto(r.getCheckpoint().getName(), timeStr, distanceMeters, durationSeconds, paceSecondsPerKm);
         }).collect(Collectors.toList()));
 
         return row;

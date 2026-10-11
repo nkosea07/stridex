@@ -14,4 +14,6 @@ public interface PushDeviceRepository extends JpaRepository<PushDevice, UUID> {
     List<PushDevice> findByUserId(UUID userId);
 
     void deleteByToken(String token);
+
+    void deleteByUserId(UUID userId);
 }

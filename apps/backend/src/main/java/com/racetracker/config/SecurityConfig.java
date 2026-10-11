@@ -65,6 +65,7 @@ public class SecurityConfig {
                     apiPrefix + "/auth/mfa/verify-login",
                     apiPrefix + "/auth/register",
                     apiPrefix + "/auth/register-organizer",
+                    apiPrefix + "/auth/oauth/google",
                     apiPrefix + "/auth/refresh",
                     apiPrefix + "/auth/forgot-password",
                     apiPrefix + "/auth/reset-password",

@@ -42,4 +42,7 @@ public interface CheckpointRecordRepository extends JpaRepository<CheckpointReco
           and c.recordedAt >= :since
     """)
     long countFinishRecordsSince(@Param("since") OffsetDateTime since);
+
+    @Query("select c.participant.id, count(c) from CheckpointRecord c where c.race.id = :raceId and c.isCutoffMissed = true group by c.participant.id")
+    List<Object[]> countCutoffMissedByRace(@Param("raceId") UUID raceId);
 }

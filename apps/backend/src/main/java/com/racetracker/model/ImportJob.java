@@ -32,6 +32,12 @@ public class ImportJob {
     @Column(nullable = false)
     private String fileName;
 
+    @Column(name = "source_path", columnDefinition = "TEXT")
+    private String sourcePath;
+
+    @Column(nullable = false)
+    private Integer attempts = 0;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private JobStatus status = JobStatus.PENDING;

@@ -3,6 +3,9 @@ package com.racetracker.dto.rfid;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Getter
 @Setter
 public class RfidRaceOverviewDto {
@@ -24,4 +27,6 @@ public class RfidRaceOverviewDto {
     private Long oldestQueuedReadAgeSeconds;
     private int readerSilenceTimeoutSeconds;
     private int gatewayBacklogDegradedThreshold;
+    private List<RfidReaderBreakdownDto> readers = new ArrayList<>();
+    private List<RfidEventTrendPointDto> eventTrend = new ArrayList<>();
 }

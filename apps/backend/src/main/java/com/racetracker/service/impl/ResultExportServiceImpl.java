@@ -13,16 +13,14 @@ import com.racetracker.exception.ApiException;
 import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.model.Race;
 import com.racetracker.repository.RaceRepository;
+import com.racetracker.service.ExportedFile;
 import com.racetracker.service.ResultExportService;
 import com.racetracker.service.ResultService;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -49,35 +47,32 @@ public class ResultExportServiceImpl implements ResultExportService {
         Race race = raceRepository.findById(raceId)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
         List<RaceResultDto> results = resultService.listByRace(raceId);
+        List<String[]> rows = toRows(results);
         String safeName = (race.getName() == null ? "race" : race.getName())
             .replaceAll("[^a-zA-Z0-9-_]+", "-")
             .toLowerCase(Locale.ROOT);
         String normalized = format == null ? "csv" : format.trim().toLowerCase(Locale.ROOT);
 
         return switch (normalized) {
-            case "csv" -> new ExportedFile(toCsv(results), "text/csv", safeName + "-results.csv");
+            case "csv" -> new ExportedFile(TabularExportWriter.csv(rows), "text/csv", safeName + "-results.csv");
             case "pdf" -> new ExportedFile(toPdf(race, results), "application/pdf", safeName + "-results.pdf");
-            case "xlsx" -> new ExportedFile(toXlsx(results), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", safeName + "-results.xlsx");
+            case "xlsx" -> new ExportedFile(TabularExportWriter.xlsx("Results", rows),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", safeName + "-results.xlsx");
             default -> throw new ApiException("Unsupported export format: " + format + " (use csv, pdf or xlsx)");
         };
     }
 
-    private byte[] toCsv(List<RaceResultDto> results) {
-        StringBuilder builder = new StringBuilder();
-        builder.append(String.join(",", HEADERS)).append('\n');
+    private List<String[]> toRows(List<RaceResultDto> results) {
+        List<String[]> rows = new ArrayList<>(results.size() + 1);
+        rows.add(HEADERS);
         for (RaceResultDto result : results) {
-            builder.append(csv(cell(result, 0))).append(',')
-                .append(csv(cell(result, 1))).append(',')
-                .append(csv(cell(result, 2))).append(',')
-                .append(csv(cell(result, 3))).append(',')
-                .append(csv(cell(result, 4))).append(',')
-                .append(csv(cell(result, 5))).append(',')
-                .append(csv(cell(result, 6))).append(',')
-                .append(csv(cell(result, 7))).append(',')
-                .append(csv(cell(result, 8))).append(',')
-                .append(csv(cell(result, 9))).append('\n');
+            String[] row = new String[HEADERS.length];
+            for (int i = 0; i < HEADERS.length; i++) {
+                row[i] = nonNull(cell(result, i));
+            }
+            rows.add(row);
         }
-        return builder.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        return rows;
     }
 
     private String cell(RaceResultDto result, int column) {
@@ -97,16 +92,6 @@ public class ResultExportServiceImpl implements ResultExportService {
             case 9 -> result.getPenaltySeconds() != null ? String.valueOf(result.getPenaltySeconds()) : null;
             default -> null;
         };
-    }
-
-    private String csv(String value) {
-        if (value == null) {
-            return "";
-        }
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
-        }
-        return value;
     }
 
     private byte[] toPdf(Race race, List<RaceResultDto> results) {
@@ -130,31 +115,7 @@ public class ResultExportServiceImpl implements ResultExportService {
             document.close();
             return baos.toByteArray();
         } catch (Exception e) {
-            throw new ApiException("Failed to export results as PDF: " + e.getMessage());
-        }
-    }
-
-    private byte[] toXlsx(List<RaceResultDto> results) {
-        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-            Sheet sheet = workbook.createSheet("Results");
-            Row header = sheet.createRow(0);
-            for (int i = 0; i < HEADERS.length; i++) {
-                header.createCell(i).setCellValue(HEADERS[i]);
-            }
-            int rowIndex = 1;
-            for (RaceResultDto result : results) {
-                Row row = sheet.createRow(rowIndex++);
-                for (int i = 0; i < HEADERS.length; i++) {
-                    row.createCell(i).setCellValue(nonNull(cell(result, i)));
-                }
-            }
-            for (int i = 0; i < HEADERS.length; i++) {
-                sheet.autoSizeColumn(i);
-            }
-            workbook.write(baos);
-            return baos.toByteArray();
-        } catch (Exception e) {
-            throw new ApiException("Failed to export results as Excel: " + e.getMessage());
+            throw new ApiException("Failed to export results as PDF");
         }
     }
 

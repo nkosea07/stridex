@@ -47,4 +47,21 @@ public interface RfidReadEventRepository extends JpaRepository<RfidReadEvent, UU
         nativeQuery = true
     )
     Long findAverageIngressLagMillis(@Param("raceId") UUID raceId);
+
+    @Query(
+        value = """
+            select date_trunc('hour', received_at) as bucket,
+                   count(*) as total,
+                   count(*) filter (where status = 'ACCEPTED') as accepted,
+                   count(*) filter (where status = 'DUPLICATE') as duplicate,
+                   count(*) filter (where status = 'UNKNOWN_TAG') as unknown_credential,
+                   count(*) filter (where status = 'ERROR') as error
+            from rfid_read_events
+            where race_id = :raceId
+            group by bucket
+            order by bucket
+            """,
+        nativeQuery = true
+    )
+    List<Object[]> findEventTrendByRaceId(@Param("raceId") UUID raceId);
 }

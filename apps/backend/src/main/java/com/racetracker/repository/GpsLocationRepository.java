@@ -2,6 +2,7 @@ package com.racetracker.repository;
 
 import com.racetracker.model.GpsLocation;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -37,6 +38,13 @@ public interface GpsLocationRepository extends JpaRepository<GpsLocation, UUID> 
 
     @Query("select count(distinct g.participant.id) from GpsLocation g where g.recordedAt >= :since")
     long countDistinctParticipantsActiveSince(@Param("since") OffsetDateTime since);
+
+    @Query("select g.participant.id, count(g) from GpsLocation g where g.race.id = :raceId and g.filtered = true group by g.participant.id")
+    List<Object[]> countFilteredByRace(@Param("raceId") UUID raceId);
+
+    @Modifying
+    @Query("delete from GpsLocation g where g.recordedAt < :cutoff")
+    int deleteByRecordedAtBefore(@Param("cutoff") OffsetDateTime cutoff);
 
     @Query(value = """
         select round(coalesce(smoothed_latitude, latitude)::numeric, :scale)::double precision as latitude,

@@ -4,6 +4,7 @@ import com.racetracker.dto.result.RaceResultDto;
 import com.racetracker.dto.result.RaceResultPageDto;
 import com.racetracker.dto.result.ResultSplitDto;
 import com.racetracker.exception.ApiException;
+import com.racetracker.exception.ConflictException;
 import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.mapper.ParticipantMapper;
@@ -11,11 +12,14 @@ import com.racetracker.model.Checkpoint;
 import com.racetracker.model.CheckpointRecord;
 import com.racetracker.model.Participant;
 import com.racetracker.model.Race;
+import com.racetracker.model.RaceResult;
 import com.racetracker.model.User;
 import com.racetracker.repository.CheckpointRecordRepository;
 import com.racetracker.repository.ParticipantPenaltyRepository;
 import com.racetracker.repository.ParticipantRepository;
+import com.racetracker.repository.RaceCategoryRepository;
 import com.racetracker.repository.RaceRepository;
+import com.racetracker.repository.RaceResultRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.repository.RaceResultRowProjection;
 import com.racetracker.repository.RaceResultRevisionRepository;
@@ -26,13 +30,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -46,6 +51,8 @@ public class ResultServiceImpl implements ResultService {
     private final ParticipantMapper participantMapper;
     private final RaceResultRevisionRepository resultRevisionRepository;
     private final ParticipantPenaltyRepository penaltyRepository;
+    private final RaceResultRepository raceResultRepository;
+    private final RaceCategoryRepository raceCategoryRepository;
 
     public ResultServiceImpl(
         RaceRepository raceRepository,
@@ -54,7 +61,9 @@ public class ResultServiceImpl implements ResultService {
         UserRepository userRepository,
         ParticipantMapper participantMapper,
         RaceResultRevisionRepository resultRevisionRepository,
-        ParticipantPenaltyRepository penaltyRepository
+        ParticipantPenaltyRepository penaltyRepository,
+        RaceResultRepository raceResultRepository,
+        RaceCategoryRepository raceCategoryRepository
     ) {
         this.raceRepository = raceRepository;
         this.participantRepository = participantRepository;
@@ -63,6 +72,8 @@ public class ResultServiceImpl implements ResultService {
         this.participantMapper = participantMapper;
         this.resultRevisionRepository = resultRevisionRepository;
         this.penaltyRepository = penaltyRepository;
+        this.raceResultRepository = raceResultRepository;
+        this.raceCategoryRepository = raceCategoryRepository;
     }
 
     @Override
@@ -109,6 +120,14 @@ public class ResultServiceImpl implements ResultService {
 
         Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
+
+        if (race.getResultsPublishedAt() != null) {
+            Optional<RaceResult> persisted = raceResultRepository.findByRaceIdAndParticipantId(raceId, participantId);
+            if (persisted.isPresent()) {
+                return assemblePersistedResults(List.of(persisted.get())).stream().findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException("Result not found"));
+            }
+        }
 
         List<RaceResultRowProjection> rows = participantRepository.findResultRows(
             raceId, null, false, participantId, PageRequest.of(0, 1)
@@ -157,10 +176,54 @@ public class ResultServiceImpl implements ResultService {
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
 
         if (race.getStatus() != Race.RaceStatus.COMPLETED) {
-            race.setStatus(Race.RaceStatus.COMPLETED);
+            throw new ConflictException("Race must be completed before results can be published");
         }
-        if (race.getResultsPublishedAt() == null) race.setResultsPublishedAt(OffsetDateTime.now());
-        raceRepository.save(race);
+
+        List<RaceResultDto> computed = computeAllResults(raceId);
+        raceResultRepository.deleteByRaceId(raceId);
+        List<RaceResult> snapshots = computed.stream().map(dto -> toSnapshot(race, dto)).toList();
+        raceResultRepository.saveAll(snapshots);
+
+        if (race.getResultsPublishedAt() == null) {
+            race.setResultsPublishedAt(OffsetDateTime.now());
+            raceRepository.save(race);
+        }
+    }
+
+    private List<RaceResultDto> computeAllResults(UUID raceId) {
+        List<RaceResultDto> all = new ArrayList<>();
+        int page = 0;
+        int size = 100;
+        RaceResultPageDto resultPage;
+        do {
+            resultPage = computeResultPage(raceId, null, false, page, size, 0L);
+            all.addAll(resultPage.items());
+            page++;
+        } while (!resultPage.items().isEmpty() && all.size() < resultPage.totalElements());
+        return all;
+    }
+
+    private RaceResult toSnapshot(Race race, RaceResultDto dto) {
+        RaceResult result = new RaceResult();
+        result.setRace(race);
+        result.setParticipant(participantRepository.getReferenceById(dto.getParticipantId()));
+        if (dto.getCategoryId() != null) {
+            result.setCategory(raceCategoryRepository.getReferenceById(dto.getCategoryId()));
+        }
+        result.setGunTime(parseDuration(dto.getGunTime()));
+        result.setChipTime(parseDuration(dto.getChipTime()));
+        result.setOverallPosition(dto.getOverallPosition());
+        result.setGenderPosition(dto.getGenderPosition());
+        result.setCategoryPosition(dto.getCategoryPosition());
+        result.setAgeGroup(dto.getAgeGroup());
+        result.setAgeGroupPosition(dto.getAgeGroupPosition());
+        result.setPenaltySeconds(dto.getPenaltySeconds());
+        result.setAveragePace(parsePace(dto.getAveragePace()));
+        result.setAverageSpeed(dto.getAverageSpeed() == null ? null : BigDecimal.valueOf(dto.getAverageSpeed()));
+        result.setIsOfficial(dto.isOfficial());
+        result.setIsDisqualified(dto.isDisqualified());
+        result.setDisqualificationReason(dto.getDisqualificationReason());
+        return result;
     }
 
     private RaceResultPageDto resultPage(UUID raceId, UUID userId, boolean publishedOnly, int page, int size, Long expectedRevision) {
@@ -171,14 +234,36 @@ public class ResultServiceImpl implements ResultService {
             throw new ApiException("The result revision is required when requesting subsequent pages");
         }
         if (expectedRevision != null && expectedRevision != revision) {
-            throw new com.racetracker.exception.ConflictException("Results changed; restart pagination from the first page");
+            throw new ConflictException("Results changed; restart pagination from the first page");
         }
+
+        if (raceId != null && hasPersistedResults(raceId)) {
+            return persistedResultPage(raceId, userId, page, boundedSize, revision);
+        }
+        return computeResultPage(raceId, userId, publishedOnly, page, boundedSize, revision);
+    }
+
+    private boolean hasPersistedResults(UUID raceId) {
+        Race race = raceRepository.findById(raceId).orElse(null);
+        return race != null
+            && race.getResultsPublishedAt() != null
+            && raceResultRepository.countByRaceId(raceId) > 0;
+    }
+
+    private RaceResultPageDto persistedResultPage(UUID raceId, UUID userId, int page, int size, long revision) {
+        List<RaceResult> rows = raceResultRepository.findPageByRace(raceId, userId, PageRequest.of(page, size));
+        long total = raceResultRepository.countPageByRace(raceId, userId);
+        return new RaceResultPageDto(assemblePersistedResults(rows), page, size, total,
+            total == 0 ? 0 : (int) ((total + size - 1) / size), revision);
+    }
+
+    private RaceResultPageDto computeResultPage(UUID raceId, UUID userId, boolean publishedOnly, int page, int size, long revision) {
         List<RaceResultRowProjection> projections = participantRepository.findResultRows(
-            raceId, userId, publishedOnly, null, PageRequest.of(page, boundedSize)
+            raceId, userId, publishedOnly, null, PageRequest.of(page, size)
         );
         long total = participantRepository.countResultRows(raceId, userId, publishedOnly);
-        return new RaceResultPageDto(assembleResults(projections), page, boundedSize, total,
-            total == 0 ? 0 : (int) ((total + boundedSize - 1) / boundedSize), revision);
+        return new RaceResultPageDto(assembleResults(projections), page, size, total,
+            total == 0 ? 0 : (int) ((total + size - 1) / size), revision);
     }
 
     private List<RaceResultDto> assembleResults(List<RaceResultRowProjection> projections) {
@@ -219,6 +304,54 @@ public class ResultServiceImpl implements ResultService {
         return List.copyOf(results);
     }
 
+    private List<RaceResultDto> assemblePersistedResults(List<RaceResult> rows) {
+        if (rows.isEmpty()) return List.of();
+        List<UUID> participantIds = rows.stream().map(row -> row.getParticipant().getId()).toList();
+        Map<UUID, List<CheckpointRecord>> recordsByParticipant = checkpointRecordRepository
+            .findByParticipantIdInOrderByRecordedAtAsc(participantIds)
+            .stream()
+            .collect(Collectors.groupingBy(record -> record.getParticipant().getId()));
+
+        List<RaceResultDto> results = new ArrayList<>(rows.size());
+        for (RaceResult row : rows) {
+            Participant participant = row.getParticipant();
+            if (participant == null || participant.getRace() == null) continue;
+            int penaltySeconds = row.getPenaltySeconds() == null ? 0 : row.getPenaltySeconds();
+            ResultComputation computed = computeResult(
+                participant.getRace(), participant,
+                recordsByParticipant.getOrDefault(participant.getId(), List.of()),
+                penaltySeconds
+            );
+            RaceResultDto dto = computed.dto();
+            applyPersistedSnapshot(dto, row);
+            results.add(dto);
+        }
+        return List.copyOf(results);
+    }
+
+    private void applyPersistedSnapshot(RaceResultDto dto, RaceResult row) {
+        if (row.getGunTime() != null) dto.setGunTime(formatDuration(row.getGunTime()));
+        if (row.getChipTime() != null) dto.setChipTime(formatDuration(row.getChipTime()));
+        Duration officialTime = row.getChipTime() != null ? row.getChipTime() : row.getGunTime();
+        if (officialTime != null) dto.setTotalTime(formatDuration(officialTime));
+        if (row.getAveragePace() != null) dto.setAveragePace(formatPaceDuration(row.getAveragePace()));
+        if (row.getAverageSpeed() != null) dto.setAverageSpeed(row.getAverageSpeed().doubleValue());
+        dto.setOverallPosition(row.getOverallPosition());
+        dto.setGenderPosition(row.getGenderPosition());
+        dto.setCategoryPosition(row.getCategoryPosition());
+        dto.setAgeGroup(row.getAgeGroup());
+        dto.setAgeGroupPosition(row.getAgeGroupPosition());
+        dto.setPenaltySeconds(row.getPenaltySeconds() == null ? 0 : row.getPenaltySeconds());
+        boolean official = Boolean.TRUE.equals(row.getIsOfficial());
+        boolean disqualified = Boolean.TRUE.equals(row.getIsDisqualified());
+        dto.setOfficial(official);
+        dto.setDisqualified(disqualified);
+        dto.setDisqualificationReason(row.getDisqualificationReason());
+        dto.setCertificateAvailable(official);
+        dto.setMedal(medalFor(row.getOverallPosition() == null ? null : row.getOverallPosition().longValue(),
+            official, disqualified));
+    }
+
     private Race requireRace(UUID raceId) {
         return raceRepository.findById(raceId)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
@@ -238,16 +371,6 @@ public class ResultServiceImpl implements ResultService {
             case 3 -> "BRONZE";
             default -> null;
         };
-    }
-
-    private ResultComputation computeResult(Race race, Participant participant) {
-        List<CheckpointRecord> records = checkpointRecordRepository
-            .findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participant.getId(), race.getId());
-        return computeResult(race, participant, records, 0);
-    }
-
-    private ResultComputation computeResult(Race race, Participant participant, List<CheckpointRecord> records) {
-        return computeResult(race, participant, records, 0);
     }
 
     private ResultComputation computeResult(Race race, Participant participant, List<CheckpointRecord> records, int penaltySeconds) {
@@ -316,38 +439,6 @@ public class ResultServiceImpl implements ResultService {
         return record.getAdjustedRecordedAt() != null ? record.getAdjustedRecordedAt() : record.getRecordedAt();
     }
 
-    private void assignPositions(List<ResultComputation> rows) {
-        List<ResultComputation> finished = rows.stream()
-            .filter(r -> r.finishSeconds() != null && "finished".equals(r.dto().getStatus()) && !r.dto().isDisqualified())
-            .sorted(Comparator.comparingLong(ResultComputation::finishSeconds))
-            .toList();
-
-        for (int i = 0; i < finished.size(); i++) {
-            finished.get(i).dto().setOverallPosition(i + 1);
-        }
-
-        Map<String, List<ResultComputation>> byGender = finished.stream()
-            .collect(Collectors.groupingBy(r -> {
-                String gender = r.dto().getParticipant() != null ? r.dto().getParticipant().getGender() : null;
-                return gender == null ? "UNKNOWN" : gender;
-            }));
-        byGender.values().forEach(list -> {
-            list.sort(Comparator.comparingLong(ResultComputation::finishSeconds));
-            for (int i = 0; i < list.size(); i++) {
-                list.get(i).dto().setGenderPosition(i + 1);
-            }
-        });
-
-        Map<UUID, List<ResultComputation>> byCategory = finished.stream()
-            .collect(Collectors.groupingBy(r -> r.dto().getCategoryId()));
-        byCategory.values().forEach(list -> {
-            list.sort(Comparator.comparingLong(ResultComputation::finishSeconds));
-            for (int i = 0; i < list.size(); i++) {
-                list.get(i).dto().setCategoryPosition(i + 1);
-            }
-        });
-    }
-
     private OffsetDateTime resolveStart(Participant participant, List<CheckpointRecord> records) {
         if (participant.getCheckedInAt() != null) {
             return participant.getCheckedInAt();
@@ -400,13 +491,53 @@ public class ResultServiceImpl implements ResultService {
         }
         double totalSeconds = duration.toSeconds();
         double secondsPerKm = totalSeconds / distanceKm;
-        long minutes = (long) (secondsPerKm / 60);
-        long seconds = Math.round(secondsPerKm % 60);
-        if (seconds == 60) {
-            minutes += 1;
-            seconds = 0;
+        return formatPaceDuration(Duration.ofSeconds(Math.round(secondsPerKm)));
+    }
+
+    private String formatPaceDuration(Duration perKm) {
+        if (perKm == null) {
+            return null;
         }
+        long totalSeconds = perKm.toSeconds();
+        long minutes = totalSeconds / 60;
+        long seconds = totalSeconds % 60;
         return String.format("%02d:%02d/km", minutes, seconds);
+    }
+
+    private Duration parseDuration(String formatted) {
+        if (formatted == null || formatted.isBlank()) {
+            return null;
+        }
+        String[] parts = formatted.split(":");
+        try {
+            if (parts.length != 3) {
+                return null;
+            }
+            long hours = Long.parseLong(parts[0].trim());
+            long minutes = Long.parseLong(parts[1].trim());
+            long seconds = Long.parseLong(parts[2].trim());
+            return Duration.ofHours(hours).plusMinutes(minutes).plusSeconds(seconds);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private Duration parsePace(String formatted) {
+        if (formatted == null || formatted.isBlank()) {
+            return null;
+        }
+        String value = formatted.endsWith("/km") ? formatted.substring(0, formatted.length() - 3) : formatted;
+        String[] parts = value.split(":");
+        try {
+            if (parts.length != 2) {
+                return null;
+            }
+            long minutes = Long.parseLong(parts[0].trim());
+            long seconds = Long.parseLong(parts[1].trim());
+            return Duration.ofMinutes(minutes).plusSeconds(seconds);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     private double round2(double value) {

@@ -79,6 +79,12 @@ public class MediaController {
         return contentResponse(mediaService.content(raceId, mediaId, false));
     }
 
+    @GetMapping("/v${racetracker.api.version}/races/{raceId}/media/{mediaId}/thumbnail")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
+    public ResponseEntity<byte[]> staffThumbnail(@PathVariable UUID raceId, @PathVariable UUID mediaId) {
+        return contentResponse(mediaService.thumbnail(raceId, mediaId, false));
+    }
+
     @GetMapping("/v${racetracker.api.version}/public/races/{raceId}/media")
     public ResponseEntity<List<MediaDto>> publicList(@PathVariable UUID raceId) {
         return ResponseEntity.ok(mediaService.listApproved(raceId));
@@ -87,6 +93,11 @@ public class MediaController {
     @GetMapping("/v${racetracker.api.version}/public/races/{raceId}/media/{mediaId}/content")
     public ResponseEntity<byte[]> publicContent(@PathVariable UUID raceId, @PathVariable UUID mediaId) {
         return contentResponse(mediaService.content(raceId, mediaId, true));
+    }
+
+    @GetMapping("/v${racetracker.api.version}/public/races/{raceId}/media/{mediaId}/thumbnail")
+    public ResponseEntity<byte[]> publicThumbnail(@PathVariable UUID raceId, @PathVariable UUID mediaId) {
+        return contentResponse(mediaService.thumbnail(raceId, mediaId, true));
     }
 
     private ResponseEntity<byte[]> contentResponse(MediaService.MediaContent content) {

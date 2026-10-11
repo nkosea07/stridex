@@ -35,13 +35,14 @@ class RaceServiceImplCloneTest {
     @Mock RaceMapper raceMapper;
     @Mock RaceRegistrationFieldRepository registrationFieldRepository;
     @Mock UserRepository userRepository;
+    @Mock RaceCompletionService raceCompletionService;
 
     private RaceServiceImpl service;
     private final UUID sourceId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        service = new RaceServiceImpl(raceRepository, raceMapper, registrationFieldRepository, userRepository);
+        service = new RaceServiceImpl(raceRepository, raceMapper, registrationFieldRepository, userRepository, raceCompletionService);
         lenient().when(raceMapper.toDto(any(Race.class))).thenReturn(new RaceDto());
         lenient().when(raceRepository.save(any(Race.class))).thenAnswer(inv -> inv.getArgument(0));
     }

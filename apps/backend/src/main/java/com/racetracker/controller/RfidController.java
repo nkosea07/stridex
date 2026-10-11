@@ -10,6 +10,7 @@ import com.racetracker.dto.rfid.RfidRaceOverviewDto;
 import com.racetracker.service.RfidIngestService;
 import com.racetracker.service.RfidReaderService;
 import com.racetracker.service.AuditEventService;
+import com.racetracker.security.RaceAccessGuard;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -28,11 +29,14 @@ public class RfidController {
     private final RfidReaderService rfidReaderService;
     private final RfidIngestService rfidIngestService;
     private final AuditEventService auditEventService;
+    private final RaceAccessGuard raceAccessGuard;
 
-    public RfidController(RfidReaderService rfidReaderService, RfidIngestService rfidIngestService, AuditEventService auditEventService) {
+    public RfidController(RfidReaderService rfidReaderService, RfidIngestService rfidIngestService,
+                          AuditEventService auditEventService, RaceAccessGuard raceAccessGuard) {
         this.rfidReaderService = rfidReaderService;
         this.rfidIngestService = rfidIngestService;
         this.auditEventService = auditEventService;
+        this.raceAccessGuard = raceAccessGuard;
     }
 
     @PostMapping("/v${racetracker.api.version}/races/{raceId}/rfid/readers")
@@ -42,6 +46,7 @@ public class RfidController {
         @Valid @RequestBody RfidReaderCreateRequest request,
         Authentication authentication
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         RfidReaderCreateResponse created = rfidReaderService.create(raceId, request);
         auditEventService.recordForActor("RFID_READER_CREATED", authentication.getName(), "RFID_READER", created.getId().toString(),
             "SUCCESS", java.util.Map.of("raceId", raceId.toString(), "readerClass", String.valueOf(created.getReaderClass())));
@@ -51,18 +56,21 @@ public class RfidController {
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/rfid/readers")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
     public ResponseEntity<List<RfidReaderDto>> listReaders(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(rfidReaderService.list(raceId));
     }
 
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/rfid/overview")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
     public ResponseEntity<RfidRaceOverviewDto> overview(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(rfidReaderService.overview(raceId));
     }
 
     @PatchMapping("/v${racetracker.api.version}/races/{raceId}/rfid/readers/{readerId}/revoke")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
     public ResponseEntity<RfidReaderDto> revokeReader(@PathVariable UUID raceId, @PathVariable UUID readerId, Authentication authentication) {
+        raceAccessGuard.assertCanManage(raceId);
         RfidReaderDto revoked = rfidReaderService.revoke(raceId, readerId);
         auditEventService.recordForActor("RFID_READER_REVOKED", authentication.getName(), "RFID_READER", readerId.toString(),
             "SUCCESS", java.util.Map.of("raceId", raceId.toString()));

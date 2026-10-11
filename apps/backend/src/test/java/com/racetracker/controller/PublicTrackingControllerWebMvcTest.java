@@ -89,7 +89,7 @@ class PublicTrackingControllerWebMvcTest {
         response.setAveragePace("04:48");
         response.setPredictedFinishTime("2026-05-31T10:15:00Z");
         response.setDistanceRemaining(new BigDecimal("5.75"));
-        response.setSplits(List.of(new CheckpointSplitDto("10K", "00:48:00")));
+        response.setSplits(List.of(new CheckpointSplitDto("10K", "00:48:00", 10000, 2880L, 288L)));
 
         when(publicTrackingService.getAthleteTracking(raceId, participantId)).thenReturn(response);
 

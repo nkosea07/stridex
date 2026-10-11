@@ -74,6 +74,11 @@ management:
       base-path: /actuator
       exposure:
         include: health,info,prometheus
+  health:
+    # Readiness must reflect core runtime dependencies (database, Redis), not SMTP
+    # reachability; a transient mail outage should not remove the app from the load balancer.
+    mail:
+      enabled: false
   endpoint:
     health:
       enabled: true
@@ -165,6 +170,9 @@ racetracker:
     enabled: ${PUSH_ENABLED:false}
     service-account-json: ${FCM_SERVICE_ACCOUNT_JSON:}
     project-id: ${FCM_PROJECT_ID:}
+  notifications:
+    sms-enabled: ${SMS_ENABLED:false}
+    whatsapp-enabled: ${WHATSAPP_ENABLED:false}
   payments:
     enabled: ${PAYMENTS_ENABLED:false}
     base-url: ${PESEPAY_BASE_URL:https://api.test.sandbox.pesepay.com/payments-engine/v1}

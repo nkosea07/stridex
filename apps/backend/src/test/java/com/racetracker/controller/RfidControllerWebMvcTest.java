@@ -9,6 +9,7 @@ import com.racetracker.dto.rfid.RfidRaceOverviewDto;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.security.CustomUserDetailsService;
 import com.racetracker.security.JwtService;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import com.racetracker.service.RfidIngestService;
 import com.racetracker.service.RfidReaderService;
@@ -62,6 +63,9 @@ class RfidControllerWebMvcTest {
 
     @MockBean
     private CustomUserDetailsService customUserDetailsService;
+
+    @MockBean
+    private RaceAccessGuard raceAccessGuard;
 
     @Test
     void readerAdminRoutesRejectAnonymousAccess() throws Exception {

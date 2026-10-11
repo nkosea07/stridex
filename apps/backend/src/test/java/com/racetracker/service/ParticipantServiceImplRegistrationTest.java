@@ -15,6 +15,7 @@ import com.racetracker.model.RaceRegistrationField;
 import com.racetracker.model.User;
 import com.racetracker.repository.*;
 import com.racetracker.service.impl.ParticipantServiceImpl;
+import com.racetracker.service.impl.ParticipantImportProcessor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,7 @@ class ParticipantServiceImplRegistrationTest {
     @Mock ParticipantRegistrationAnswerRepository registrationAnswerRepository;
     @Mock RegistrationEmailService registrationEmailService;
     @Mock NotificationService notificationService;
+    @Mock ParticipantImportProcessor importProcessor;
 
     private ParticipantServiceImpl service;
     private User user;
@@ -69,7 +71,7 @@ class ParticipantServiceImplRegistrationTest {
             participantRepository, raceRepository, raceCategoryRepository, userRepository,
             importJobRepository, participantMapper, importJobMapper, new RaceTrackerProperties(),
             participantCredentialService, teamRepository, registrationFieldRepository,
-            registrationAnswerRepository, registrationEmailService, notificationService
+            registrationAnswerRepository, registrationEmailService, notificationService, importProcessor
         );
 
         user = User.builder()

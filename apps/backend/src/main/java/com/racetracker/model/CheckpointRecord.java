@@ -61,6 +61,9 @@ public class CheckpointRecord {
     @Column(name = "is_verified")
     private Boolean isVerified = false;
 
+    @Column(name = "is_cutoff_missed")
+    private Boolean isCutoffMissed = false;
+
     @Column(name = "adjusted_recorded_at")
     private OffsetDateTime adjustedRecordedAt;
 

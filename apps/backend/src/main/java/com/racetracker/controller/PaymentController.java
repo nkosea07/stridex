@@ -1,6 +1,7 @@
 package com.racetracker.controller;
 
 import com.racetracker.dto.participant.PaymentDto;
+import com.racetracker.dto.participant.PaymentRefundRequest;
 import com.racetracker.service.AuditEventService;
 import com.racetracker.service.PaymentService;
 import org.springframework.http.ResponseEntity;
@@ -41,9 +42,12 @@ public class PaymentController {
     public ResponseEntity<PaymentDto> refund(
         @PathVariable UUID raceId,
         @PathVariable UUID participantId,
+        @RequestBody(required = false) PaymentRefundRequest request,
         Authentication authentication
     ) {
-        PaymentDto payment = paymentService.refund(raceId, participantId);
+        PaymentRefundRequest effective = request == null ? new PaymentRefundRequest() : request;
+        PaymentDto payment = paymentService.refund(raceId, participantId, effective.getAmount(), effective.getReason(),
+            authentication.getName());
         auditEventService.recordForActor("PAYMENT_REFUNDED", authentication.getName(), "PARTICIPANT",
             participantId.toString(), "SUCCESS", Map.of());
         return ResponseEntity.ok(payment);

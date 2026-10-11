@@ -18,6 +18,7 @@ public class CheckpointRecordDto {
     private String splitTime;
     private String elapsedTime;
     private Boolean isVerified;
+    private Boolean isCutoffMissed;
     private String notes;
     private String adjustedRecordedAt;
     private String adjustmentReason;

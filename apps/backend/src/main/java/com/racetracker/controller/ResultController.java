@@ -9,6 +9,7 @@ import com.racetracker.dto.result.RankingEntryDto;
 import com.racetracker.security.CertificateTokenService;
 import com.racetracker.service.CertificateService;
 import com.racetracker.service.RankingService;
+import com.racetracker.service.ExportedFile;
 import com.racetracker.service.ResultExportService;
 import com.racetracker.service.ResultService;
 import com.racetracker.service.AuditEventService;
@@ -80,9 +81,8 @@ public class ResultController {
         @PathVariable UUID raceId,
         @RequestParam(defaultValue = "csv") String format
     ) {
-        ResultExportService.ExportedFile file = resultExportService.export(raceId, format);
-        return fileResponse(file);
-    }
+        ExportedFile file = resultExportService.export(raceId, format);
+        return fileResponse(file);    }
 
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/results/{participantId}/certificate")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
@@ -170,7 +170,7 @@ public class ResultController {
         return ResponseEntity.ok(new ApiMessageResponse("Results published"));
     }
 
-    private ResponseEntity<byte[]> fileResponse(ResultExportService.ExportedFile file) {
+    private ResponseEntity<byte[]> fileResponse(ExportedFile file) {
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.filename() + "\"")
             .contentType(MediaType.parseMediaType(file.contentType()))

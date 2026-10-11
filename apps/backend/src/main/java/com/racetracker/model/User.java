@@ -59,6 +59,15 @@ public class User {
     @Column(name = "lockout_until")
     private OffsetDateTime lockoutUntil;
 
+    @Column(name = "data_processing_consent_at")
+    private OffsetDateTime dataProcessingConsentAt;
+
+    @Column(name = "marketing_consent")
+    private Boolean marketingConsent = false;
+
+    @Column(name = "deleted_at")
+    private OffsetDateTime deletedAt;
+
     @CreationTimestamp
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

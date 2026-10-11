@@ -18,6 +18,7 @@ import com.racetracker.repository.RaceRegistrationFieldRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.service.RaceService;
+import com.racetracker.service.RaceCompletionService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -39,17 +40,20 @@ public class RaceServiceImpl implements RaceService {
     private final RaceMapper raceMapper;
     private final RaceRegistrationFieldRepository registrationFieldRepository;
     private final UserRepository userRepository;
+    private final RaceCompletionService raceCompletionService;
 
     public RaceServiceImpl(
         RaceRepository raceRepository,
         RaceMapper raceMapper,
         RaceRegistrationFieldRepository registrationFieldRepository,
-        UserRepository userRepository
+        UserRepository userRepository,
+        RaceCompletionService raceCompletionService
     ) {
         this.raceRepository = raceRepository;
         this.raceMapper = raceMapper;
         this.registrationFieldRepository = registrationFieldRepository;
         this.userRepository = userRepository;
+        this.raceCompletionService = raceCompletionService;
     }
 
     @Override
@@ -57,29 +61,23 @@ public class RaceServiceImpl implements RaceService {
     public Page<RaceDto> list(String status, Boolean upcoming, boolean includeArchived, Pageable pageable) {
         boolean onlyUpcoming = Boolean.TRUE.equals(upcoming);
         Race.RaceStatus parsedStatus = parseRaceStatusNullable(status);
-
-        Page<Race> races;
-        if (includeArchived) {
-            if (onlyUpcoming && parsedStatus != null) {
-                races = raceRepository.findByStatusAndRaceDateGreaterThanEqual(parsedStatus, LocalDate.now(), pageable);
-            } else if (onlyUpcoming) {
-                races = raceRepository.findByRaceDateGreaterThanEqual(LocalDate.now(), pageable);
-            } else if (parsedStatus != null) {
-                races = raceRepository.findByStatus(parsedStatus, pageable);
-            } else {
-                races = raceRepository.findAll(pageable);
-            }
-        } else if (onlyUpcoming && parsedStatus != null) {
-            races = raceRepository.findByStatusAndRaceDateGreaterThanEqualAndArchivedAtIsNull(parsedStatus, LocalDate.now(), pageable);
-        } else if (onlyUpcoming) {
-            races = raceRepository.findByRaceDateGreaterThanEqualAndArchivedAtIsNull(LocalDate.now(), pageable);
-        } else if (parsedStatus != null) {
-            races = raceRepository.findByStatusAndArchivedAtIsNull(parsedStatus, pageable);
-        } else {
-            races = raceRepository.findAllByArchivedAtIsNull(pageable);
-        }
-
+        UUID ownerScope = resolveOwnerScope();
+        Page<Race> races = raceRepository.search(ownerScope, parsedStatus, onlyUpcoming, includeArchived,
+            LocalDate.now(), pageable);
         return races.map(raceMapper::toDto);
+    }
+
+    private UUID resolveOwnerScope() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return null;
+        }
+        boolean superAdmin = hasRole(authentication, "ROLE_SUPER_ADMIN");
+        boolean raceAdmin = hasRole(authentication, "ROLE_RACE_ADMIN");
+        if (superAdmin || !raceAdmin) {
+            return null;
+        }
+        return userRepository.findByEmailIgnoreCase(authentication.getName()).map(User::getId).orElse(null);
     }
 
     @Override
@@ -199,9 +197,37 @@ public class RaceServiceImpl implements RaceService {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
         assertCanManage(race);
-        race.setStatus(parseRaceStatus(status));
+
+        Race.RaceStatus target = parseRaceStatus(status);
+        if (race.getStatus() == target) {
+            return raceMapper.toDto(race);
+        }
+        assertTransitionAllowed(race.getStatus(), target);
+
+        if (target == Race.RaceStatus.COMPLETED) {
+            return raceMapper.toDto(raceCompletionService.completeRace(id));
+        }
+
+        race.setStatus(target);
         Race saved = raceRepository.save(race);
         return raceMapper.toDto(saved);
+    }
+
+    private void assertTransitionAllowed(Race.RaceStatus from, Race.RaceStatus to) {
+        if (from == null) {
+            return;
+        }
+        boolean allowed = switch (from) {
+            case DRAFT -> to == Race.RaceStatus.REGISTRATION_OPEN || to == Race.RaceStatus.CANCELLED;
+            case REGISTRATION_OPEN -> to == Race.RaceStatus.REGISTRATION_CLOSED || to == Race.RaceStatus.CANCELLED;
+            case REGISTRATION_CLOSED -> to == Race.RaceStatus.IN_PROGRESS
+                || to == Race.RaceStatus.REGISTRATION_OPEN || to == Race.RaceStatus.CANCELLED;
+            case IN_PROGRESS -> to == Race.RaceStatus.COMPLETED || to == Race.RaceStatus.CANCELLED;
+            case COMPLETED, CANCELLED -> false;
+        };
+        if (!allowed) {
+            throw new ApiException("Invalid race status transition from " + from + " to " + to);
+        }
     }
 
     @Override

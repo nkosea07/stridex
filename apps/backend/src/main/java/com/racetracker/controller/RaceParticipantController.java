@@ -6,6 +6,7 @@ import com.racetracker.exception.ApiException;
 import com.racetracker.model.Participant;
 import com.racetracker.service.ParticipantService;
 import com.racetracker.service.AuditEventService;
+import com.racetracker.security.RaceAccessGuard;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -26,10 +27,13 @@ public class RaceParticipantController {
 
     private final ParticipantService participantService;
     private final AuditEventService auditEventService;
+    private final RaceAccessGuard raceAccessGuard;
 
-    public RaceParticipantController(ParticipantService participantService, AuditEventService auditEventService) {
+    public RaceParticipantController(ParticipantService participantService, AuditEventService auditEventService,
+                                     RaceAccessGuard raceAccessGuard) {
         this.participantService = participantService;
         this.auditEventService = auditEventService;
+        this.raceAccessGuard = raceAccessGuard;
     }
 
     @GetMapping("")
@@ -38,30 +42,35 @@ public class RaceParticipantController {
         @PathVariable UUID raceId,
         @RequestParam(required = false) String status
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(participantService.listByRace(raceId, parseStatus(status)));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<ParticipantDto> get(@PathVariable UUID raceId, @PathVariable UUID id) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(participantService.getByRaceAndId(raceId, id));
     }
 
     @PostMapping("")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<ParticipantDto> create(@PathVariable UUID raceId, @Valid @RequestBody ParticipantCreateRequest request) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(participantService.create(raceId, request));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<ParticipantDto> update(@PathVariable UUID raceId, @PathVariable UUID id, @RequestBody ParticipantUpdateRequest request) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(participantService.update(raceId, id, request));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<ApiMessageResponse> delete(@PathVariable UUID raceId, @PathVariable UUID id) {
+        raceAccessGuard.assertCanManage(raceId);
         participantService.delete(raceId, id);
         return ResponseEntity.ok(new ApiMessageResponse("Participant deleted"));
     }
@@ -69,6 +78,7 @@ public class RaceParticipantController {
     @PostMapping("/{id}/check-in")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<ParticipantDto> checkIn(@PathVariable UUID raceId, @PathVariable UUID id) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(participantService.checkIn(raceId, id));
     }
 
@@ -80,6 +90,7 @@ public class RaceParticipantController {
         @Valid @RequestBody RegistrationApprovalRequest request,
         Authentication authentication
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         ParticipantDto dto = participantService.reviewRegistration(raceId, id, request, authentication.getName());
         auditEventService.recordForActor("REGISTRATION_" + request.getDecision().trim().toUpperCase(Locale.ROOT),
             authentication.getName(), "RACE_PARTICIPANT", id.toString(), "SUCCESS", Map.of());
@@ -94,6 +105,7 @@ public class RaceParticipantController {
         @Valid @RequestBody PaymentVerifyRequest request,
         Authentication authentication
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         ParticipantDto dto = participantService.verifyPayment(raceId, id, request, authentication.getName());
         auditEventService.recordForActor("PAYMENT_VERIFIED", authentication.getName(), "RACE_PARTICIPANT",
             id.toString(), "SUCCESS", Map.of("status", request.getStatus().toUpperCase(Locale.ROOT)));
@@ -103,12 +115,14 @@ public class RaceParticipantController {
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<ImportJobDto> importCsv(@PathVariable UUID raceId, @RequestPart("file") MultipartFile file) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(participantService.importCsv(raceId, file));
     }
 
     @GetMapping("/import-jobs")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<ImportJobDto>> listImportJobs(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(participantService.listImportJobs(raceId));
     }
 
@@ -121,6 +135,7 @@ public class RaceParticipantController {
     @GetMapping(value = "/export", produces = "text/csv")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<String> exportCsv(@PathVariable UUID raceId, Authentication authentication) {
+        raceAccessGuard.assertCanManage(raceId);
         String content = participantService.exportCsv(raceId);
         auditEventService.recordForActor("PARTICIPANT_DATA_EXPORTED", authentication.getName(), "RACE", raceId.toString(),
             "SUCCESS", java.util.Map.of("format", "csv"));

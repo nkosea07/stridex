@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -43,11 +44,32 @@ public interface RaceRepository extends JpaRepository<Race, UUID> {
 
     long countByStatusIn(Collection<Race.RaceStatus> statuses);
 
+    List<Race> findByStatusAndRaceDateBefore(Race.RaceStatus status, LocalDate raceDate);
+
     long countByRaceDateBetween(LocalDate from, LocalDate to);
 
     @Override
     @EntityGraph(attributePaths = {"categories", "participants"})
     Optional<Race> findById(UUID id);
+
+    @EntityGraph(attributePaths = {"categories", "participants"})
+    @Query("""
+        select r from Race r
+        where (:ownerId is null
+               or r.createdBy.id = :ownerId
+               or exists (select 1 from Race rr join rr.admins a where rr.id = r.id and a.id = :ownerId))
+          and (:status is null or r.status = :status)
+          and (:upcoming = false or r.raceDate >= :today)
+          and (:includeArchived = true or r.archivedAt is null)
+    """)
+    Page<Race> search(
+        @Param("ownerId") UUID ownerId,
+        @Param("status") Race.RaceStatus status,
+        @Param("upcoming") boolean upcoming,
+        @Param("includeArchived") boolean includeArchived,
+        @Param("today") LocalDate today,
+        Pageable pageable
+    );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from Race r where r.id = :id")

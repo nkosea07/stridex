@@ -19,6 +19,8 @@ public class RaceTrackerProperties {
     private Rfid rfid = new Rfid();
     private Push push = new Push();
     private Payments payments = new Payments();
+    private Notifications notifications = new Notifications();
+    private OAuth oauth = new OAuth();
 
     @Getter
     @Setter
@@ -30,6 +32,7 @@ public class RaceTrackerProperties {
     @Setter
     public static class Storage {
         private String uploadDir = "uploads";
+        private String provider = "local";
     }
 
     @Getter
@@ -50,6 +53,7 @@ public class RaceTrackerProperties {
         private double minDistanceForAccumulationMeters = 5;
         private int maxTrackPoints = 1000;
         private int heatmapScale = 3;
+        private int retentionDays = 0;
     }
 
     @Getter
@@ -96,5 +100,19 @@ public class RaceTrackerProperties {
         private String currency = "USD";
         private String resultUrl;
         private String returnUrl;
+        private String refundPath = "/payments/refund";
+    }
+
+    @Getter
+    @Setter
+    public static class Notifications {
+        private boolean smsEnabled = false;
+        private boolean whatsappEnabled = false;
+    }
+
+    @Getter
+    @Setter
+    public static class OAuth {
+        private String googleClientId;
     }
 }

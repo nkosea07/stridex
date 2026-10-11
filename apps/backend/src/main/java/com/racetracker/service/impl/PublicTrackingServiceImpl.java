@@ -353,18 +353,37 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
 
     private List<CheckpointSplitDto> buildSplits(Participant participant, List<CheckpointRecord> records) {
         OffsetDateTime start = participant.getCheckedInAt() != null ? participant.getCheckedInAt() : participant.getRegisteredAt();
-        return records.stream()
-            .map(record -> {
-                String time = "---";
-                if (start != null && record.getRecordedAt() != null) {
-                    time = formatDuration(Duration.between(start, record.getRecordedAt()));
+        List<CheckpointSplitDto> splits = new ArrayList<>(records.size());
+        for (CheckpointRecord record : records) {
+            Integer distanceMeters = null;
+            if (record.getCheckpoint() != null && record.getCheckpoint().getDistanceFromStartKm() != null) {
+                distanceMeters = record.getCheckpoint().getDistanceFromStartKm()
+                    .multiply(BigDecimal.valueOf(1000))
+                    .setScale(0, java.math.RoundingMode.HALF_UP)
+                    .intValue();
+            }
+
+            String time = "---";
+            Long durationSeconds = null;
+            Long paceSecondsPerKm = null;
+            if (start != null && record.getRecordedAt() != null) {
+                Duration duration = Duration.between(start, record.getRecordedAt());
+                durationSeconds = duration.getSeconds();
+                time = formatDuration(duration);
+                if (distanceMeters != null && distanceMeters > 0) {
+                    paceSecondsPerKm = Math.round(durationSeconds * 1000.0 / distanceMeters);
                 }
-                return new CheckpointSplitDto(
-                    record.getCheckpoint() != null ? record.getCheckpoint().getName() : null,
-                    time
-                );
-            })
-            .toList();
+            }
+
+            splits.add(new CheckpointSplitDto(
+                record.getCheckpoint() != null ? record.getCheckpoint().getName() : null,
+                time,
+                distanceMeters,
+                durationSeconds,
+                paceSecondsPerKm
+            ));
+        }
+        return List.copyOf(splits);
     }
 
     private String resolveLastCheckpoint(Participant participant, List<CheckpointRecord> records, UUID raceId) {

@@ -11,4 +11,6 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Optional<Payment> findByProviderAndProviderRef(String provider, String providerRef);
 
     Optional<Payment> findFirstByParticipantIdAndStatusOrderByCreatedAtDesc(UUID participantId, Payment.PaymentStatus status);
+
+    Optional<Payment> findFirstByParticipantIdOrderByCreatedAtDesc(UUID participantId);
 }

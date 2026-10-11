@@ -1,35 +1,36 @@
 package com.racetracker.service.impl;
 
-import com.racetracker.dto.notification.NotificationDto;
 import com.racetracker.model.AthleteFollow;
 import com.racetracker.model.Checkpoint;
 import com.racetracker.model.Notification;
 import com.racetracker.model.Participant;
 import com.racetracker.repository.AthleteFollowRepository;
 import com.racetracker.repository.NotificationRepository;
+import com.racetracker.service.NotificationService;
 import com.racetracker.service.SpectatorAlertService;
-import com.racetracker.websocket.TrackingLivePublisher;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 
+@Slf4j
 @Service
 public class SpectatorAlertServiceImpl implements SpectatorAlertService {
 
     private final AthleteFollowRepository followRepository;
     private final NotificationRepository notificationRepository;
-    private final TrackingLivePublisher trackingLivePublisher;
+    private final NotificationService notificationService;
 
     public SpectatorAlertServiceImpl(
         AthleteFollowRepository followRepository,
         NotificationRepository notificationRepository,
-        TrackingLivePublisher trackingLivePublisher
+        NotificationService notificationService
     ) {
         this.followRepository = followRepository;
         this.notificationRepository = notificationRepository;
-        this.trackingLivePublisher = trackingLivePublisher;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -72,6 +73,7 @@ public class SpectatorAlertServiceImpl implements SpectatorAlertService {
         }
         List<AthleteFollow> follows = followRepository.findByRaceIdAndParticipantId(
             participant.getRace().getId(), participant.getId());
+        Map<String, String> data = Map.of("participantId", participant.getId().toString());
         for (AthleteFollow follow : follows) {
             if (follow.getUser() == null) {
                 continue;
@@ -79,26 +81,12 @@ public class SpectatorAlertServiceImpl implements SpectatorAlertService {
             if (notificationRepository.existsByUserIdAndTitle(follow.getUser().getId(), title)) {
                 continue;
             }
-            Notification saved = notificationRepository.save(Notification.builder()
-                .user(follow.getUser())
-                .title(title)
-                .message(message)
-                .type(type)
-                .build());
-            trackingLivePublisher.publishUserAlert(follow.getUser().getId(), toDto(saved));
+            try {
+                notificationService.notify(follow.getUser().getId(), type, title, message, data);
+            } catch (RuntimeException ex) {
+                log.warn("Failed to deliver spectator alert to user {}: {}", follow.getUser().getId(), ex.getMessage());
+            }
         }
-    }
-
-    private NotificationDto toDto(Notification notification) {
-        NotificationDto dto = new NotificationDto();
-        dto.setId(notification.getId());
-        dto.setTitle(notification.getTitle());
-        dto.setMessage(notification.getMessage());
-        dto.setType(notification.getType() != null ? notification.getType().name().toLowerCase() : null);
-        dto.setTimestamp(notification.getCreatedAt() != null ? notification.getCreatedAt() : OffsetDateTime.now());
-        dto.setRead(Boolean.TRUE.equals(notification.getIsRead()));
-        dto.setData(null);
-        return dto;
     }
 
     private String bibPrefix(Participant participant) {

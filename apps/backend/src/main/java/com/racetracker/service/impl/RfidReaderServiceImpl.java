@@ -3,6 +3,8 @@ package com.racetracker.service.impl;
 import com.racetracker.dto.rfid.RfidReaderCreateRequest;
 import com.racetracker.dto.rfid.RfidReaderCreateResponse;
 import com.racetracker.dto.rfid.RfidReaderDto;
+import com.racetracker.dto.rfid.RfidReaderBreakdownDto;
+import com.racetracker.dto.rfid.RfidEventTrendPointDto;
 import com.racetracker.dto.rfid.RfidReaderHeartbeatRequest;
 import com.racetracker.dto.rfid.RfidRaceOverviewDto;
 import com.racetracker.exception.ApiException;
@@ -134,7 +136,45 @@ public class RfidReaderServiceImpl implements RfidReaderService {
         dto.setOldestQueuedReadAgeSeconds(oldestQueuedAgeSeconds(raceId));
         dto.setReaderSilenceTimeoutSeconds(raceTrackerProperties.getRfid().getReaderSilenceTimeoutSeconds());
         dto.setGatewayBacklogDegradedThreshold(raceTrackerProperties.getRfid().getGatewayBacklogDegradedThreshold());
+        dto.setReaders(readers.stream().map(this::toBreakdown).toList());
+        dto.setEventTrend(rfidReadEventRepository.findEventTrendByRaceId(raceId).stream()
+            .map(this::toTrendPoint)
+            .toList());
         return dto;
+    }
+
+    private RfidReaderBreakdownDto toBreakdown(RfidReader reader) {
+        RfidReaderBreakdownDto breakdown = new RfidReaderBreakdownDto();
+        breakdown.setReaderId(reader.getId());
+        breakdown.setName(reader.getName());
+        breakdown.setCheckpointId(reader.getCheckpoint() != null ? reader.getCheckpoint().getId() : null);
+        breakdown.setStatus(reader.getStatus() != null ? reader.getStatus().name() : null);
+        breakdown.setGatewayStatus(deriveGatewayStatus(reader).name());
+        breakdown.setBacklog(reader.getGatewayBacklog());
+        OffsetDateTime lastHeartbeatAt = reader.getLastHeartbeatAt();
+        breakdown.setLastHeartbeatAgeSeconds(lastHeartbeatAt == null ? null
+            : Math.max(Duration.between(lastHeartbeatAt, OffsetDateTime.now()).getSeconds(), 0));
+        breakdown.setFirmwareVersion(reader.getFirmwareVersion());
+        breakdown.setHardwareModel(reader.getHardwareModel());
+        breakdown.setHardwareProfile(reader.getHardwareProfile());
+        breakdown.setReaderClass(reader.getReaderClass());
+        breakdown.setLastError(reader.getLastError());
+        return breakdown;
+    }
+
+    private RfidEventTrendPointDto toTrendPoint(Object[] row) {
+        RfidEventTrendPointDto point = new RfidEventTrendPointDto();
+        point.setBucket(row[0] == null ? null : row[0].toString());
+        point.setTotal(asLong(row[1]));
+        point.setAccepted(asLong(row[2]));
+        point.setDuplicate(asLong(row[3]));
+        point.setUnknownCredential(asLong(row[4]));
+        point.setError(asLong(row[5]));
+        return point;
+    }
+
+    private long asLong(Object value) {
+        return value == null ? 0L : ((Number) value).longValue();
     }
 
     @Override

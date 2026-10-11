@@ -13,6 +13,11 @@ import com.racetracker.repository.*;
 import com.racetracker.service.ParticipantService;
 import com.racetracker.service.ParticipantCredentialService;
 import com.racetracker.service.RegistrationEmailService;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -25,6 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.StringWriter;
 import java.math.BigDecimal;
@@ -63,6 +69,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     private final ParticipantRegistrationAnswerRepository registrationAnswerRepository;
     private final RegistrationEmailService registrationEmailService;
     private final com.racetracker.service.NotificationService notificationService;
+    private final ParticipantImportProcessor importProcessor;
 
     public ParticipantServiceImpl(
         ParticipantRepository participantRepository,
@@ -78,7 +85,8 @@ public class ParticipantServiceImpl implements ParticipantService {
         RaceRegistrationFieldRepository registrationFieldRepository,
         ParticipantRegistrationAnswerRepository registrationAnswerRepository,
         RegistrationEmailService registrationEmailService,
-        com.racetracker.service.NotificationService notificationService
+        com.racetracker.service.NotificationService notificationService,
+        ParticipantImportProcessor importProcessor
     ) {
         this.participantRepository = participantRepository;
         this.raceRepository = raceRepository;
@@ -94,6 +102,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         this.registrationAnswerRepository = registrationAnswerRepository;
         this.registrationEmailService = registrationEmailService;
         this.notificationService = notificationService;
+        this.importProcessor = importProcessor;
     }
 
     @Override
@@ -181,6 +190,8 @@ public class ParticipantServiceImpl implements ParticipantService {
         participant.setCheckedInAt(OffsetDateTime.now());
         participant.setStatus(Participant.ParticipantStatus.CHECKED_IN);
         Participant saved = participantRepository.save(participant);
+        notifyParticipant(saved, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
+            "Check-in confirmed", "You are checked in for " + raceName(saved) + ".");
         return participantMapper.toDto(saved);
     }
 
@@ -207,12 +218,13 @@ public class ParticipantServiceImpl implements ParticipantService {
             .race(race)
             .createdBy(user)
             .fileName(originalFilename)
+            .sourcePath(uploadPath.resolve(storageName).toString())
             .status(ImportJob.JobStatus.PENDING)
             .build();
 
         job = importJobRepository.save(job);
 
-        processImportAsync(job.getId(), uploadPath.resolve(storageName).toString());
+        importProcessor.process(job.getId());
 
         return importJobMapper.toDto(job);
     }
@@ -233,92 +245,6 @@ public class ParticipantServiceImpl implements ParticipantService {
             .stream()
             .map(importJobMapper::toDto)
             .toList();
-    }
-
-    @Async
-    public void processImportAsync(UUID jobId, String filePath) {
-        ImportJob job = importJobRepository.findById(jobId).orElse(null);
-        if (job == null) return;
-
-        job.setStatus(ImportJob.JobStatus.PROCESSING);
-        job.setStartedAt(OffsetDateTime.now());
-        importJobRepository.save(job);
-
-        Race race = job.getRace();
-        int imported = 0;
-        int skipped = 0;
-        int total = 0;
-        Set<String> seenEmails = new HashSet<>(participantRepository.findEmailsByRaceId(race.getId()));
-
-        try (CSVReader reader = new CSVReader(new InputStreamReader(new FileInputStream(filePath), StandardCharsets.UTF_8))) {
-            String[] headers = reader.readNext();
-            if (headers != null) {
-                Map<String, Integer> index = headerIndex(headers);
-                String[] row;
-                while ((row = reader.readNext()) != null) {
-                    total++;
-                    try {
-                        String email = requiredCell(row, index, "email").toLowerCase(Locale.ROOT);
-                        if (!seenEmails.add(email)) {
-                            skipped++;
-                            continue;
-                        }
-                        Participant participant = new Participant();
-                        participant.setRace(race);
-                        participant.setFirstName(requiredCell(row, index, "firstName"));
-                        participant.setLastName(requiredCell(row, index, "lastName"));
-                        participant.setEmail(email);
-                        participant.setPhone(cell(row, index, "phone"));
-                        participant.setNationality(cell(row, index, "nationality"));
-                        participant.setBibNumber(cell(row, index, "bibNumber"));
-                        participant.setRfidTag(cell(row, index, "rfidTag"));
-                        participant.setRegistrationSource(Optional.ofNullable(cell(row, index, "registrationSource")).orElse("CSV_IMPORT"));
-                        participant.setStatus(parseStatusNullable(cell(row, index, "status"), Participant.ParticipantStatus.REGISTERED));
-                        participant.setGender(parseGenderNullable(cell(row, index, "gender")));
-                        participant.setIsTrackingEnabled(parseBoolean(cell(row, index, "isTrackingEnabled"), true));
-                        participant.setPaymentStatus(defaultPaymentStatus(race));
-
-                        String dob = cell(row, index, "dateOfBirth");
-                        if (dob != null && !dob.isBlank()) {
-                            participant.setDateOfBirth(LocalDate.parse(dob));
-                        }
-
-                        String categoryId = cell(row, index, "categoryId");
-                        if (categoryId != null && !categoryId.isBlank()) {
-                            participant.setCategory(resolveCategory(race.getId(), UUID.fromString(categoryId)));
-                        }
-
-                        participant.setRegisteredAt(OffsetDateTime.now());
-                        Participant savedParticipant = participantRepository.save(participant);
-                        participantCredentialService.syncParticipantCredentials(savedParticipant, cell(row, index, "rfidTag"), null);
-                        imported++;
-                    } catch (Exception e) {
-                        skipped++;
-                    }
-
-                    if (total % 10 == 0) {
-                        job.setProcessedRows(total);
-                        job.setSuccessCount(imported);
-                        job.setErrorCount(skipped);
-                        importJobRepository.save(job);
-                    }
-                }
-            }
-            job.setStatus(ImportJob.JobStatus.COMPLETED);
-        } catch (Exception e) {
-            job.setStatus(ImportJob.JobStatus.FAILED);
-            job.setErrorMessage(e.getMessage());
-        } finally {
-            job.setTotalRows(total);
-            job.setProcessedRows(total);
-            job.setSuccessCount(imported);
-            job.setErrorCount(skipped);
-            job.setCompletedAt(OffsetDateTime.now());
-            importJobRepository.save(job);
-
-            // Delete temp file
-            try { Files.deleteIfExists(Paths.get(filePath)); } catch (IOException ignored) {}
-        }
     }
 
     @Override

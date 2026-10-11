@@ -8,7 +8,8 @@ import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceMediaRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
-import com.racetracker.service.impl.FileStorageService;
+import com.racetracker.service.impl.ImageThumbnailService;
+import com.racetracker.service.impl.LocalMediaStorage;
 import com.racetracker.service.impl.MediaServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,8 +46,9 @@ class MediaServiceImplTest {
     void setUp() {
         RaceTrackerProperties properties = new RaceTrackerProperties();
         properties.getStorage().setUploadDir(tempDir.toString());
-        FileStorageService storage = new FileStorageService(properties);
-        service = new MediaServiceImpl(mediaRepository, raceRepository, participantRepository, userRepository, storage, properties);
+        LocalMediaStorage storage = new LocalMediaStorage(properties);
+        service = new MediaServiceImpl(mediaRepository, raceRepository, participantRepository, userRepository,
+            storage, new ImageThumbnailService(), properties);
         lenient().when(mediaRepository.save(any(RaceMedia.class))).thenAnswer(inv -> {
             RaceMedia media = inv.getArgument(0);
             if (media.getId() == null) media.setId(UUID.randomUUID());

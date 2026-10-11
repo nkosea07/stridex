@@ -14,6 +14,9 @@ public class MediaDto {
     private UUID participantId;
     private String mediaType;
     private String url;
+    private String thumbnailUrl;
+    private Integer width;
+    private Integer height;
     private String caption;
     private String status;
     private OffsetDateTime createdAt;

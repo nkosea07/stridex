@@ -118,6 +118,9 @@ public class Race {
     @Column(name = "results_published_at")
     private OffsetDateTime resultsPublishedAt;
 
+    @Column(name = "completed_at")
+    private OffsetDateTime completedAt;
+
     @Column(name = "archived_at")
     private OffsetDateTime archivedAt;
 

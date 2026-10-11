@@ -34,13 +34,14 @@ class RaceServiceImplWaiverTest {
     @Mock RaceMapper raceMapper;
     @Mock RaceRegistrationFieldRepository registrationFieldRepository;
     @Mock UserRepository userRepository;
+    @Mock RaceCompletionService raceCompletionService;
 
     private RaceServiceImpl service;
     private final UUID raceId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        service = new RaceServiceImpl(raceRepository, raceMapper, registrationFieldRepository, userRepository);
+        service = new RaceServiceImpl(raceRepository, raceMapper, registrationFieldRepository, userRepository, raceCompletionService);
     }
 
     private RaceCreateRequest createRequest(boolean requireWaiver, String waiverText) {

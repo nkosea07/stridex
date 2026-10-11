@@ -1,6 +1,8 @@
 package com.racetracker.service;
 
 import com.racetracker.config.RaceTrackerProperties;
+import com.racetracker.model.Checkpoint;
+import com.racetracker.model.CheckpointRecord;
 import com.racetracker.model.GpsLocation;
 import com.racetracker.model.Participant;
 import com.racetracker.model.Race;
@@ -102,6 +104,51 @@ class PublicTrackingServiceTrackTest {
         var response = newService(races, participants, gps, checkpoints, revisions).getAthleteTrack(raceId, participantId);
 
         assertThat(response.getPoints()).isEmpty();
+    }
+
+    @Test
+    void athleteTrackingSplitsCarryNumericPaceData() {
+        RaceRepository races = mock(RaceRepository.class);
+        ParticipantRepository participants = mock(ParticipantRepository.class);
+        GpsLocationRepository gps = mock(GpsLocationRepository.class);
+        CheckpointRecordRepository checkpoints = mock(CheckpointRecordRepository.class);
+        RaceFeedRevisionRepository revisions = mock(RaceFeedRevisionRepository.class);
+
+        UUID raceId = UUID.randomUUID();
+        UUID participantId = UUID.randomUUID();
+        Race race = new Race();
+        race.setId(raceId);
+        race.setStatus(Race.RaceStatus.IN_PROGRESS);
+
+        OffsetDateTime start = OffsetDateTime.parse("2026-06-02T06:00:00Z");
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setRace(race);
+        participant.setCheckedInAt(start);
+
+        Checkpoint checkpoint = new Checkpoint();
+        checkpoint.setName("10K");
+        checkpoint.setDistanceFromStartKm(BigDecimal.valueOf(10));
+        CheckpointRecord record = new CheckpointRecord();
+        record.setParticipant(participant);
+        record.setCheckpoint(checkpoint);
+        record.setRecordedAt(start.plusMinutes(48));
+
+        when(races.findById(raceId)).thenReturn(Optional.of(race));
+        when(participants.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
+        when(gps.findLatestByRaceIdAndParticipantIds(raceId, List.of(participantId))).thenReturn(List.of());
+        when(checkpoints.findByRaceIdAndParticipantIdInOrderByRecordedAtAsc(raceId, List.of(participantId)))
+            .thenReturn(List.of(record));
+        when(checkpoints.findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participantId, raceId))
+            .thenReturn(List.of(record));
+
+        var response = newService(races, participants, gps, checkpoints, revisions)
+            .getAthleteTracking(raceId, participantId);
+
+        assertThat(response.getSplits()).hasSize(1);
+        assertThat(response.getSplits().get(0).getDistanceMeters()).isEqualTo(10000);
+        assertThat(response.getSplits().get(0).getDurationSeconds()).isEqualTo(2880L);
+        assertThat(response.getSplits().get(0).getPaceSecondsPerKm()).isEqualTo(288L);
     }
 
     @Test

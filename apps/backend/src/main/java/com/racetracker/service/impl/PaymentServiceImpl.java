@@ -8,9 +8,12 @@ import com.racetracker.exception.ApiException;
 import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.model.Participant;
 import com.racetracker.model.Payment;
+import com.racetracker.model.PaymentRefund;
 import com.racetracker.model.Race;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.PaymentRepository;
+import com.racetracker.repository.UserRepository;
+import com.racetracker.service.PaymentProvider;
 import com.racetracker.service.PaymentService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,6 +35,10 @@ public class PaymentServiceImpl implements PaymentService {
     private final RaceTrackerProperties properties;
     private final ObjectMapper objectMapper;
     private final com.racetracker.service.PromoCodeService promoCodeService;
+    private final com.racetracker.service.NotificationService notificationService;
+    private final java.util.List<com.racetracker.service.PaymentProvider> paymentProviders;
+    private final com.racetracker.repository.PaymentRefundRepository paymentRefundRepository;
+    private final UserRepository userRepository;
 
     public PaymentServiceImpl(
         PaymentRepository paymentRepository,
@@ -39,7 +46,11 @@ public class PaymentServiceImpl implements PaymentService {
         PesepayClient pesepayClient,
         RaceTrackerProperties properties,
         ObjectMapper objectMapper,
-        com.racetracker.service.PromoCodeService promoCodeService
+        com.racetracker.service.PromoCodeService promoCodeService,
+        com.racetracker.service.NotificationService notificationService,
+        java.util.List<com.racetracker.service.PaymentProvider> paymentProviders,
+        com.racetracker.repository.PaymentRefundRepository paymentRefundRepository,
+        UserRepository userRepository
     ) {
         this.paymentRepository = paymentRepository;
         this.participantRepository = participantRepository;
@@ -47,6 +58,10 @@ public class PaymentServiceImpl implements PaymentService {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.promoCodeService = promoCodeService;
+        this.notificationService = notificationService;
+        this.paymentProviders = paymentProviders;
+        this.paymentRefundRepository = paymentRefundRepository;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -116,18 +131,71 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional
-    public PaymentDto refund(UUID raceId, UUID participantId) {
+    public PaymentDto refund(UUID raceId, UUID participantId, BigDecimal amount, String reason, String actorEmail) {
         Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
         Payment payment = paymentRepository
-            .findFirstByParticipantIdAndStatusOrderByCreatedAtDesc(participantId, Payment.PaymentStatus.COMPLETED)
-            .orElseThrow(() -> new ApiException("No completed payment found to refund"));
+            .findFirstByParticipantIdOrderByCreatedAtDesc(participantId)
+            .orElseThrow(() -> new ApiException("No payment found to refund"));
 
-        // The configured provider (Pesepay) has no automated refund integration wired yet.
-        // Refuse instead of falsely marking the payment/participant as refunded.
-        throw new ApiException(
-            "Automated refunds are not supported by the configured payment provider. "
-                + "Process the refund with the provider and record the reversal manually (payment " + payment.getId() + ").");
+        if (payment.getStatus() == Payment.PaymentStatus.REFUNDED) {
+            return toDto(payment);
+        }
+        if (payment.getStatus() != Payment.PaymentStatus.COMPLETED) {
+            throw new ApiException("No completed payment found to refund");
+        }
+
+        PaymentProvider provider = providerFor(payment.getProvider());
+        BigDecimal refundAmount = amount != null ? amount : payableAmount(payment);
+        if (refundAmount == null || refundAmount.signum() <= 0) {
+            throw new ApiException("Refund amount must be positive");
+        }
+
+        String providerRef = provider.refund(payment, refundAmount, reason);
+
+        PaymentRefund refund = PaymentRefund.builder()
+            .payment(payment)
+            .amount(refundAmount)
+            .currency(payment.getCurrency())
+            .reason(reason)
+            .status(PaymentRefund.RefundStatus.REFUNDED)
+            .providerRef(providerRef)
+            .requestedBy(resolveActorId(actorEmail))
+            .completedAt(OffsetDateTime.now())
+            .build();
+        paymentRefundRepository.save(refund);
+
+        payment.setStatus(Payment.PaymentStatus.REFUNDED);
+        paymentRepository.save(payment);
+        participant.setPaymentStatus(Participant.PaymentStatus.REFUNDED);
+        participantRepository.save(participant);
+
+        notifyPayment(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
+            "Refund processed", "Your payment for " + raceName(participant) + " has been refunded.");
+
+        return toDto(payment);
+    }
+
+    private PaymentProvider providerFor(String providerKey) {
+        return paymentProviders.stream()
+            .filter(provider -> provider.key().equalsIgnoreCase(providerKey))
+            .findFirst()
+            .orElseThrow(() -> new ApiException("No refund provider configured for " + providerKey));
+    }
+
+    private BigDecimal payableAmount(Payment payment) {
+        if (payment.getAmount() == null) {
+            return null;
+        }
+        BigDecimal discount = payment.getDiscountAmount() == null ? BigDecimal.ZERO : payment.getDiscountAmount();
+        return payment.getAmount().subtract(discount);
+    }
+
+    private UUID resolveActorId(String actorEmail) {
+        if (actorEmail == null) {
+            return null;
+        }
+        return userRepository.findByEmailIgnoreCase(actorEmail).map(user -> user.getId()).orElse(null);
     }
 
     @Override
@@ -183,10 +251,15 @@ public class PaymentServiceImpl implements PaymentService {
                 if (payment.getPromoCode() != null) {
                     promoCodeService.recordUseByCode(payment.getPromoCode());
                 }
+
+                notifyPayment(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
+                    "Payment received", "Your payment for " + raceName(participant) + " has been received.");
             }
             case "FAILED" -> {
                 payment.setStatus(Payment.PaymentStatus.FAILED);
                 paymentRepository.save(payment);
+                notifyPayment(payment.getParticipant(), com.racetracker.model.Notification.NotificationType.ALERT,
+                    "Payment failed", "Your payment for " + raceName(payment.getParticipant()) + " did not complete.");
             }
             case "CANCELLED" -> {
                 payment.setStatus(Payment.PaymentStatus.CANCELLED);
@@ -215,5 +288,25 @@ public class PaymentServiceImpl implements PaymentService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private void notifyPayment(Participant participant, com.racetracker.model.Notification.NotificationType type,
+                               String title, String message) {
+        if (participant == null || participant.getUser() == null) {
+            return;
+        }
+        try {
+            notificationService.notify(participant.getUser().getId(), type, title, message,
+                java.util.Map.of("participantId", participant.getId().toString()));
+        } catch (RuntimeException ex) {
+            log.warn("Failed to notify participant {} about payment: {}", participant.getId(), ex.getMessage());
+        }
+    }
+
+    private String raceName(Participant participant) {
+        if (participant == null || participant.getRace() == null || participant.getRace().getName() == null) {
+            return "your race";
+        }
+        return participant.getRace().getName();
     }
 }

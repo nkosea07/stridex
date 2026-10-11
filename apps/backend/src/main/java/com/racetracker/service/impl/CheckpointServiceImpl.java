@@ -16,6 +16,7 @@ import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.service.CheckpointService;
+import com.racetracker.service.CheckpointCutoff;
 import com.racetracker.service.LiveSummaryCacheInvalidator;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -130,12 +131,20 @@ public class CheckpointServiceImpl implements CheckpointService {
         record.setRace(checkpoint.getRace());
         record.setCheckpoint(checkpoint);
         record.setParticipant(participant);
-        record.setRecordedAt(OffsetDateTime.now());
+        OffsetDateTime recordedAt = OffsetDateTime.now();
+        record.setRecordedAt(recordedAt);
         record.setRecordMethod(parseRecordMethod(request.getMethod()));
         record.setIsVerified(true);
         record.setRecordedBy(resolveCurrentUserOrNull());
 
+        boolean cutoffMissed = evaluateCutoff(checkpoint, participant, raceId, recordedAt);
+        record.setIsCutoffMissed(cutoffMissed);
+
         CheckpointRecord saved = checkpointRecordRepository.save(record);
+        if (cutoffMissed) {
+            participant.setStatus(Participant.ParticipantStatus.DNF);
+            participantRepository.save(participant);
+        }
         liveSummaryCacheInvalidator.evictLastCheckpointAfterCommit(participant.getId(), raceId);
         return checkpointMapper.toRecordDto(saved);
     }
@@ -163,6 +172,16 @@ public class CheckpointServiceImpl implements CheckpointService {
         CheckpointRecord saved = checkpointRecordRepository.save(record);
         liveSummaryCacheInvalidator.evictLastCheckpointAfterCommit(saved.getParticipant().getId(), raceId);
         return checkpointMapper.toRecordDto(saved);
+    }
+
+    private boolean evaluateCutoff(Checkpoint checkpoint, Participant participant, UUID raceId, OffsetDateTime recordedAt) {
+        if (checkpoint.getCutoffTime() == null) {
+            return false;
+        }
+        List<CheckpointRecord> existing = checkpointRecordRepository
+            .findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participant.getId(), raceId);
+        OffsetDateTime start = CheckpointCutoff.resolveStart(participant, existing);
+        return CheckpointCutoff.isMissed(checkpoint.getCutoffTime(), start, recordedAt);
     }
 
     private Participant resolveParticipant(UUID raceId, CheckpointRecordRequest request) {

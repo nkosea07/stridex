@@ -47,6 +47,9 @@ class RfidReadEventProcessorTest {
     @Mock
     private LiveSummaryCacheInvalidator liveSummaryCacheInvalidator;
 
+    @Mock
+    private SpectatorAlertService spectatorAlertService;
+
     private RfidReadEventProcessorImpl service;
 
     @BeforeEach
@@ -58,7 +61,8 @@ class RfidReadEventProcessorTest {
             rfidReaderRepository,
             participantCredentialService,
             rfidIngestMetrics,
-            liveSummaryCacheInvalidator
+            liveSummaryCacheInvalidator,
+            spectatorAlertService
         );
     }
 

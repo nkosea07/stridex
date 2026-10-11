@@ -12,4 +12,7 @@ import lombok.Setter;
 public class CheckpointSplitDto {
     private String name;
     private String time;
+    private Integer distanceMeters;
+    private Long durationSeconds;
+    private Long paceSecondsPerKm;
 }

@@ -11,12 +11,14 @@ import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RfidReadEventRepository;
 import com.racetracker.repository.RfidReaderRepository;
 import com.racetracker.service.ParticipantCredentialService;
+import com.racetracker.service.CheckpointCutoff;
 import com.racetracker.service.LiveSummaryCacheInvalidator;
 import com.racetracker.service.RfidReadEventProcessor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -30,6 +32,7 @@ public class RfidReadEventProcessorImpl implements RfidReadEventProcessor {
     private final ParticipantCredentialService participantCredentialService;
     private final RfidIngestMetrics rfidIngestMetrics;
     private final LiveSummaryCacheInvalidator liveSummaryCacheInvalidator;
+    private final com.racetracker.service.SpectatorAlertService spectatorAlertService;
 
     public RfidReadEventProcessorImpl(
         RfidReadEventRepository rfidReadEventRepository,
@@ -38,7 +41,8 @@ public class RfidReadEventProcessorImpl implements RfidReadEventProcessor {
         RfidReaderRepository rfidReaderRepository,
         ParticipantCredentialService participantCredentialService,
         RfidIngestMetrics rfidIngestMetrics,
-        LiveSummaryCacheInvalidator liveSummaryCacheInvalidator
+        LiveSummaryCacheInvalidator liveSummaryCacheInvalidator,
+        com.racetracker.service.SpectatorAlertService spectatorAlertService
     ) {
         this.rfidReadEventRepository = rfidReadEventRepository;
         this.checkpointRecordRepository = checkpointRecordRepository;
@@ -47,6 +51,7 @@ public class RfidReadEventProcessorImpl implements RfidReadEventProcessor {
         this.participantCredentialService = participantCredentialService;
         this.rfidIngestMetrics = rfidIngestMetrics;
         this.liveSummaryCacheInvalidator = liveSummaryCacheInvalidator;
+        this.spectatorAlertService = spectatorAlertService;
     }
 
     @Override
@@ -115,11 +120,21 @@ public class RfidReadEventProcessorImpl implements RfidReadEventProcessor {
         record.setRecordedAt(event.getReadAt());
         record.setRecordMethod(CheckpointRecord.RecordMethod.RFID);
         record.setIsVerified(true);
+        boolean cutoffMissed = evaluateCutoff(
+            reader.getCheckpoint(), participant, reader.getRace().getId(), event.getReadAt());
+        record.setIsCutoffMissed(cutoffMissed);
         CheckpointRecord savedRecord = checkpointRecordRepository.save(record);
         liveSummaryCacheInvalidator.evictLastCheckpointAfterCommit(participant.getId(), reader.getRace().getId());
 
-        updateParticipantStatusForCheckpoint(participant, reader.getCheckpoint());
+        updateParticipantStatusForCheckpoint(participant, reader.getCheckpoint(), cutoffMissed);
         participantRepository.save(participant);
+
+        spectatorAlertService.onCheckpoint(participant, reader.getCheckpoint());
+        if (!cutoffMissed && participant.getStatus() == Participant.ParticipantStatus.FINISHED) {
+            spectatorAlertService.onFinished(participant);
+        } else if (!cutoffMissed && participant.getStatus() == Participant.ParticipantStatus.STARTED) {
+            spectatorAlertService.onStarted(participant);
+        }
 
         markReaderProcessed(reader);
         markEvent(event, RfidReadEvent.RfidReadEventStatus.ACCEPTED, participant, savedRecord, null);
@@ -139,7 +154,11 @@ public class RfidReadEventProcessorImpl implements RfidReadEventProcessor {
         rfidReadEventRepository.save(event);
     }
 
-    private void updateParticipantStatusForCheckpoint(Participant participant, Checkpoint checkpoint) {
+    private void updateParticipantStatusForCheckpoint(Participant participant, Checkpoint checkpoint, boolean cutoffMissed) {
+        if (cutoffMissed) {
+            participant.setStatus(Participant.ParticipantStatus.DNF);
+            return;
+        }
         if (checkpoint.getCheckpointType() == Checkpoint.CheckpointType.FINISH) {
             participant.setStatus(Participant.ParticipantStatus.FINISHED);
             return;
@@ -149,6 +168,16 @@ public class RfidReadEventProcessorImpl implements RfidReadEventProcessor {
             || participant.getStatus() == Participant.ParticipantStatus.CHECKED_IN) {
             participant.setStatus(Participant.ParticipantStatus.STARTED);
         }
+    }
+
+    private boolean evaluateCutoff(Checkpoint checkpoint, Participant participant, UUID raceId, OffsetDateTime recordedAt) {
+        if (checkpoint.getCutoffTime() == null) {
+            return false;
+        }
+        List<CheckpointRecord> existing = checkpointRecordRepository
+            .findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participant.getId(), raceId);
+        OffsetDateTime start = CheckpointCutoff.resolveStart(participant, existing);
+        return CheckpointCutoff.isMissed(checkpoint.getCutoffTime(), start, recordedAt);
     }
 
     private void markReaderProcessed(RfidReader reader) {
