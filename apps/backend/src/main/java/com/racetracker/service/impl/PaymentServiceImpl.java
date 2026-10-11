@@ -144,6 +144,11 @@ public class PaymentServiceImpl implements PaymentService {
         if (payment.getStatus() != Payment.PaymentStatus.COMPLETED) {
             throw new ApiException("No completed payment found to refund");
         }
+        if (paymentRefundRepository
+            .findFirstByPaymentIdAndStatus(payment.getId(), PaymentRefund.RefundStatus.REFUNDED)
+            .isPresent()) {
+            return toDto(payment);
+        }
 
         PaymentProvider provider = providerFor(payment.getProvider());
         BigDecimal refundAmount = amount != null ? amount : payableAmount(payment);
@@ -151,18 +156,32 @@ public class PaymentServiceImpl implements PaymentService {
             throw new ApiException("Refund amount must be positive");
         }
 
-        String providerRef = provider.refund(payment, refundAmount, reason);
-
+        // Record the attempt before calling the provider so a crash mid-call is auditable and a
+        // retry can be recognised rather than triggering a second provider refund.
         PaymentRefund refund = PaymentRefund.builder()
             .payment(payment)
             .amount(refundAmount)
             .currency(payment.getCurrency())
             .reason(reason)
-            .status(PaymentRefund.RefundStatus.REFUNDED)
-            .providerRef(providerRef)
+            .status(PaymentRefund.RefundStatus.PENDING)
             .requestedBy(resolveActorId(actorEmail))
-            .completedAt(OffsetDateTime.now())
             .build();
+        paymentRefundRepository.save(refund);
+
+        String providerRef;
+        try {
+            providerRef = provider.refund(payment, refundAmount, reason);
+        } catch (RuntimeException ex) {
+            refund.setStatus(PaymentRefund.RefundStatus.FAILED);
+            refund.setErrorMessage(ex.getMessage());
+            paymentRefundRepository.save(refund);
+            throw ex instanceof ApiException apiException
+                ? apiException : new ApiException("Provider refund failed: " + ex.getMessage());
+        }
+
+        refund.setStatus(PaymentRefund.RefundStatus.REFUNDED);
+        refund.setProviderRef(providerRef);
+        refund.setCompletedAt(OffsetDateTime.now());
         paymentRefundRepository.save(refund);
 
         payment.setStatus(Payment.PaymentStatus.REFUNDED);

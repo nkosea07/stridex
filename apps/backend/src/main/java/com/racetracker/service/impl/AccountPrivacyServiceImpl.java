@@ -32,6 +32,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
     private final PushDeviceRepository pushDeviceRepository;
     private final AuthTokenRepository authTokenRepository;
     private final PasswordEncoder passwordEncoder;
+    private final com.racetracker.service.AuditEventService auditEventService;
 
     public AccountPrivacyServiceImpl(
         UserRepository userRepository,
@@ -39,7 +40,8 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         NotificationRepository notificationRepository,
         PushDeviceRepository pushDeviceRepository,
         AuthTokenRepository authTokenRepository,
-        PasswordEncoder passwordEncoder
+        PasswordEncoder passwordEncoder,
+        com.racetracker.service.AuditEventService auditEventService
     ) {
         this.userRepository = userRepository;
         this.participantRepository = participantRepository;
@@ -47,12 +49,15 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         this.pushDeviceRepository = pushDeviceRepository;
         this.authTokenRepository = authTokenRepository;
         this.passwordEncoder = passwordEncoder;
+        this.auditEventService = auditEventService;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Map<String, Object> exportData(UUID userId) {
         User user = requireUser(userId);
+        auditEventService.recordInCurrentTransaction("ACCOUNT_DATA_EXPORTED", userId, "USER", userId.toString(),
+            "SUCCESS", Map.of());
         Map<String, Object> profile = new LinkedHashMap<>();
         profile.put("email", user.getEmail());
         profile.put("firstName", user.getFirstName());
@@ -143,6 +148,9 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         user.setDataProcessingConsentAt(null);
         user.setDeletedAt(now);
         userRepository.save(user);
+
+        auditEventService.recordInCurrentTransaction("ACCOUNT_ERASED", userId, "USER", userId.toString(),
+            "SUCCESS", Map.of());
     }
 
     private void anonymize(Participant participant) {

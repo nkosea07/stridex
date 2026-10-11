@@ -36,10 +36,13 @@ public class PaymentRefund {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private RefundStatus status = RefundStatus.REFUNDED;
+    private RefundStatus status = RefundStatus.PENDING;
 
     @Column(name = "provider_ref", length = 160)
     private String providerRef;
+
+    @Column(name = "error_message", columnDefinition = "TEXT")
+    private String errorMessage;
 
     @Column(name = "requested_by")
     private UUID requestedBy;
@@ -52,6 +55,6 @@ public class PaymentRefund {
     private OffsetDateTime completedAt;
 
     public enum RefundStatus {
-        REFUNDED, FAILED
+        PENDING, REFUNDED, FAILED
     }
 }

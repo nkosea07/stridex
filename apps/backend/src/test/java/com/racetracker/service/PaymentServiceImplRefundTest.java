@@ -97,9 +97,32 @@ class PaymentServiceImplRefundTest {
         assertThat(participant.getPaymentStatus()).isEqualTo(Participant.PaymentStatus.REFUNDED);
 
         ArgumentCaptor<PaymentRefund> captor = ArgumentCaptor.forClass(PaymentRefund.class);
-        verify(paymentRefundRepository).save(captor.capture());
-        assertThat(captor.getValue().getAmount()).isEqualByComparingTo(BigDecimal.valueOf(100));
-        assertThat(captor.getValue().getProviderRef()).isEqualTo("REF-1");
+        verify(paymentRefundRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        PaymentRefund savedRefund = captor.getValue();
+        assertThat(savedRefund.getAmount()).isEqualByComparingTo(BigDecimal.valueOf(100));
+        assertThat(savedRefund.getProviderRef()).isEqualTo("REF-1");
+        assertThat(savedRefund.getStatus()).isEqualTo(PaymentRefund.RefundStatus.REFUNDED);
+    }
+
+    @Test
+    void failedProviderRefundIsRecordedAndNotMarkedRefunded() {
+        Participant participant = participant();
+        Payment payment = payment(Payment.PaymentStatus.COMPLETED);
+        when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
+        when(paymentRepository.findFirstByParticipantIdOrderByCreatedAtDesc(participantId)).thenReturn(Optional.of(payment));
+        when(paymentProvider.key()).thenReturn("PESEPAY");
+        when(paymentProvider.refund(eq(payment), any(), any())).thenThrow(new ApiException("provider down"));
+        when(paymentRefundRepository.save(any(PaymentRefund.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThatThrownBy(() -> service.refund(raceId, participantId, null, null, "admin@example.com"))
+            .isInstanceOf(ApiException.class);
+
+        assertThat(payment.getStatus()).isEqualTo(Payment.PaymentStatus.COMPLETED);
+        assertThat(participant.getPaymentStatus()).isEqualTo(Participant.PaymentStatus.PAID);
+        ArgumentCaptor<PaymentRefund> captor = ArgumentCaptor.forClass(PaymentRefund.class);
+        verify(paymentRefundRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(PaymentRefund.RefundStatus.FAILED);
+        assertThat(captor.getValue().getErrorMessage()).contains("provider down");
     }
 
     @Test

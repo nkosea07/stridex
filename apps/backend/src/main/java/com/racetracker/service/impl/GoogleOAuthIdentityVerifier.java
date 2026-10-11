@@ -41,6 +41,12 @@ public class GoogleOAuthIdentityVerifier implements OAuthIdentityVerifier {
                 .body(String.class);
             JsonNode node = objectMapper.readTree(raw == null ? "{}" : raw);
 
+            String issuer = text(node, "iss");
+            if (issuer == null
+                || !("accounts.google.com".equals(issuer) || "https://accounts.google.com".equals(issuer))) {
+                throw new ApiException("Google token issuer is not trusted");
+            }
+
             String clientId = properties.getOauth() == null ? null : properties.getOauth().getGoogleClientId();
             if (clientId != null && !clientId.isBlank()) {
                 String audience = text(node, "aud");

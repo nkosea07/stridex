@@ -36,6 +36,7 @@ class AccountPrivacyServiceImplTest {
     @Mock PushDeviceRepository pushDeviceRepository;
     @Mock AuthTokenRepository authTokenRepository;
     @Mock PasswordEncoder passwordEncoder;
+    @Mock AuditEventService auditEventService;
 
     private AccountPrivacyServiceImpl service;
     private final UUID userId = UUID.randomUUID();
@@ -43,7 +44,7 @@ class AccountPrivacyServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new AccountPrivacyServiceImpl(userRepository, participantRepository, notificationRepository,
-            pushDeviceRepository, authTokenRepository, passwordEncoder);
+            pushDeviceRepository, authTokenRepository, passwordEncoder, auditEventService);
     }
 
     private User user() {
