@@ -69,6 +69,8 @@ class ControllerAuthorizationMatrixTest {
         assertGuard(CheckpointController.class, "update", opsGuard);
         assertGuard(CheckpointController.class, "delete", opsGuard);
         assertGuard(CheckpointController.class, "record", opsGuard);
+        assertGuard(CheckpointController.class, "export", opsGuard);
+        assertGuard(CheckpointController.class, "correctRecord", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')");
     }
 
     @Test
@@ -76,6 +78,7 @@ class ControllerAuthorizationMatrixTest {
         String opsGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')";
         assertGuard(RfidController.class, "createReader", opsGuard);
         assertGuard(RfidController.class, "listReaders", opsGuard);
+        assertGuard(RfidController.class, "overview", opsGuard);
         assertGuard(RfidController.class, "revokeReader", opsGuard);
         assertThat(Arrays.stream(RfidController.class.getDeclaredMethods())
             .filter(method -> method.getName().equals("ingestReads"))
@@ -124,6 +127,55 @@ class ControllerAuthorizationMatrixTest {
     void notificationControllerGuards() {
         assertGuard(NotificationController.class, "list", "isAuthenticated()");
         assertGuard(NotificationController.class, "markRead", "isAuthenticated()");
+        assertGuard(NotificationController.class, "registerDevice", "isAuthenticated()");
+        assertGuard(NotificationController.class, "unregisterDevice", "isAuthenticated()");
+        assertGuard(NotificationController.class, "getPreferences", "isAuthenticated()");
+        assertGuard(NotificationController.class, "updatePreferences", "isAuthenticated()");
+    }
+
+    @Test
+    void accountPrivacyControllerGuards() {
+        assertGuard(AccountPrivacyController.class, "exportData", "isAuthenticated()");
+        assertGuard(AccountPrivacyController.class, "updateConsent", "isAuthenticated()");
+        assertGuard(AccountPrivacyController.class, "eraseAccount", "isAuthenticated()");
+    }
+
+    @Test
+    void notificationTemplateControllerGuards() {
+        assertGuard(NotificationTemplateController.class, "list", "hasRole('SUPER_ADMIN')");
+        assertGuard(NotificationTemplateController.class, "create", "hasRole('SUPER_ADMIN')");
+        assertGuard(NotificationTemplateController.class, "update", "hasRole('SUPER_ADMIN')");
+        assertGuard(NotificationTemplateController.class, "delete", "hasRole('SUPER_ADMIN')");
+    }
+
+    @Test
+    void raceInsightsControllerGuards() {
+        String guard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')";
+        assertGuard(RaceInsightsController.class, "summary", guard);
+        assertGuard(RaceInsightsController.class, "anomalies", guard);
+    }
+
+    @Test
+    void emergencyAlertControllerGuards() {
+        assertGuard(EmergencyAlertController.class, "raise", "isAuthenticated()");
+        assertGuard(EmergencyAlertController.class, "list", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')");
+    }
+
+    @Test
+    void raceRouteControllerGuards() {
+        assertGuard(RaceRouteController.class, "importGpx", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')");
+        assertGuard(RaceRouteController.class, "route", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL', 'ATHLETE')");
+        assertThat(Arrays.stream(RaceRouteController.class.getDeclaredMethods())
+            .filter(method -> method.getName().equals("publicRoute"))
+            .noneMatch(method -> method.isAnnotationPresent(PreAuthorize.class)))
+            .isTrue();
+    }
+
+    @Test
+    void oauthControllerIsPublic() {
+        assertThat(Arrays.stream(OAuthController.class.getDeclaredMethods())
+            .noneMatch(method -> method.isAnnotationPresent(PreAuthorize.class)))
+            .isTrue();
     }
 
     @Test
