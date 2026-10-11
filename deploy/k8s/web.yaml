@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: race-tracker-web
+  namespace: race-tracker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: race-tracker-web
+  template:
+    metadata:
+      labels:
+        app: race-tracker-web
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/nkosea07/race-tracker-web:latest
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: race-tracker-web
+  namespace: race-tracker
+spec:
+  selector:
+    app: race-tracker-web
+  ports:
+    - port: 80
+      targetPort: 80

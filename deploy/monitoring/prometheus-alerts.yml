@@ -1,0 +1,40 @@
+groups:
+  - name: race-tracker
+    rules:
+      - alert: BackendDown
+        expr: up{job="race-tracker-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Race Tracker backend is down"
+          description: "No scrape targets are up for the backend job."
+      - alert: HighErrorRate
+        expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) > 1
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "Elevated 5xx rate on the API"
+      - alert: RfidIngestBacklog
+        expr: rfid_read_events_queue_depth > 500
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "RFID ingest backlog is growing"
+          description: "Queued RFID read events exceed the degraded threshold for 5 minutes."
+      - alert: GpsIngestStalled
+        expr: increase(tracking_ingest_location_seconds_count[10m]) == 0 and increase(tracking_live_aggregate_seconds_count[10m]) > 0
+        for: 10m
+        labels:
+          severity: medium
+        annotations:
+          summary: "No GPS location ingestion observed while live reads continue"
+      - alert: ReadinessFailing
+        expr: up{job="race-tracker-backend"} == 1 and probe_success{probe="race-tracker-readiness"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend readiness probe failing"

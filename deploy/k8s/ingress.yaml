@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: race-tracker
+  namespace: race-tracker
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - racetracker.example.com
+      secretName: race-tracker-tls
+  rules:
+    - host: racetracker.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: race-tracker-backend
+                port:
+                  number: 8081
+          - path: /ws-tracking
+            pathType: Prefix
+            backend:
+              service:
+                name: race-tracker-backend
+                port:
+                  number: 8081
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: race-tracker-web
+                port:
+                  number: 80

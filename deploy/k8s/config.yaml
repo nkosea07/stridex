@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: race-tracker-config
+  namespace: race-tracker
+data:
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_NAME: "race_tracker"
+  SERVER_PORT: "8081"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  FRONTEND_URL: "https://racetracker.example.com"
+  MAIL_ENABLED: "true"
+  PUSH_ENABLED: "true"
+  PAYMENTS_ENABLED: "true"
+  RFID_SIMULATION_ENABLED: "false"
+---
+# Populate with `kubectl create secret generic race-tracker-secrets --from-env-file=.env.pilot -n race-tracker`
+# Required keys: DB_USERNAME, DB_PASSWORD, JWT_SECRET, MFA_ENCRYPTION_KEY,
+# MAIL_USERNAME, MAIL_PASSWORD, FCM_SERVICE_ACCOUNT_JSON, FCM_PROJECT_ID,
+# PESEPAY_INTEGRATION_KEY, PESEPAY_ENCRYPTION_KEY, PAYMENTS_RESULT_URL, PAYMENTS_RETURN_URL.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: race-tracker-secrets
+  namespace: race-tracker
+type: Opaque
+stringData: {}
