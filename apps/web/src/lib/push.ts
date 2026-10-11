@@ -38,7 +38,29 @@ export async function enableWebPush(): Promise<boolean> {
   })
 
   const messaging = getMessaging(app)
-  const token = await getToken(messaging, { vapidKey })
+
+  let serviceWorkerRegistration: ServiceWorkerRegistration | undefined
+  if ('serviceWorker' in navigator) {
+    try {
+      serviceWorkerRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js')
+      await navigator.serviceWorker.ready
+      serviceWorkerRegistration.active?.postMessage({
+        type: 'FIREBASE_CONFIG',
+        config: {
+          apiKey: firebaseConfig.apiKey,
+          authDomain: firebaseConfig.authDomain,
+          projectId: firebaseConfig.projectId,
+          storageBucket: firebaseConfig.storageBucket,
+          messagingSenderId: firebaseConfig.messagingSenderId,
+          appId: firebaseConfig.appId,
+        },
+      })
+    } catch (error) {
+      console.warn('Failed to register Firebase messaging service worker', error)
+    }
+  }
+
+  const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration })
   if (!token) {
     return false
   }

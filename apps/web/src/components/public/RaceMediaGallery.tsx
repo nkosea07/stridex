@@ -38,7 +38,12 @@ export function RaceMediaGallery({ raceId }: RaceMediaGalleryProps) {
             {item.mediaType === 'VIDEO' ? (
               <video src={item.url} className="aspect-square h-full w-full object-cover" controls />
             ) : (
-              <img src={item.url} alt={item.caption || 'Race media'} className="aspect-square h-full w-full object-cover" />
+              <img
+                src={item.thumbnailUrl || item.url}
+                alt={item.caption || 'Race media'}
+                className="aspect-square h-full w-full object-cover"
+                loading="lazy"
+              />
             )}
             {item.caption && <figcaption className="px-2 py-1 text-xs text-slate-300">{item.caption}</figcaption>}
           </figure>

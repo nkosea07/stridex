@@ -87,6 +87,13 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) =>
     )
   }
 
+  if (url.includes('/public/races/') && url.includes('/media')) {
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
   if (url.includes('/public/races/') && url.includes('/athletes/live')) {
     return new Response(JSON.stringify([]), {
       status: 200,

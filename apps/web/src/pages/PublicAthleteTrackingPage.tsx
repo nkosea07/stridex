@@ -1,8 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { Activity, ArrowLeft, ChevronRight, Copy, Flag, MapPin, RefreshCcw, Timer } from 'lucide-react'
+import useSWR from 'swr'
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { publicTrackingApi } from '@/lib/api'
-import type { PublicAthleteTracking } from '@/types'
+import type { PublicAthleteTracking, PublicCheckpointSplit } from '@/types'
 import { AthleteTrackPlayback } from '@/components/public/AthleteTrackPlayback'
 import { FollowButton } from '@/components/public/FollowButton'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +21,8 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { PublicAthleteTrackingLoaderData } from '@/router/publicLoaders'
 
+const TRACKING_POLL_INTERVAL_MS = 15000
+
 function formatPredictedFinish(value?: string) {
   if (!value) return '---'
 
@@ -18,6 +30,22 @@ function formatPredictedFinish(value?: string) {
   if (Number.isNaN(parsed.getTime())) return value
 
   return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatPaceTick(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = Math.round(totalSeconds % 60)
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+function buildPaceSeries(splits: PublicCheckpointSplit[]) {
+  return splits
+    .filter((split) => split.paceSecondsPerKm != null && split.distanceMeters != null && split.distanceMeters > 0)
+    .map((split, index) => ({
+      label: split.name ?? `Split ${index + 1}`,
+      distanceKm: Number(((split.distanceMeters as number) / 1000).toFixed(1)),
+      paceSeconds: split.paceSecondsPerKm as number,
+    }))
 }
 
 function statusTone(status: string) {
@@ -49,71 +77,37 @@ export function PublicAthleteTrackingPage({
   const raceId = routeRaceId ?? params.raceId
   const participantId = routeParticipantId ?? params.participantId
   const location = useLocation()
-  const requestIdRef = useRef(0)
   const hasInitialData = initialData?.raceId === raceId && initialData?.participantId === participantId
-  const [tracking, setTracking] = useState<PublicAthleteTracking | null>(initialData?.tracking ?? null)
-  const [isLoading, setIsLoading] = useState(!hasInitialData)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const returnTo = `${location.pathname}${location.search}${location.hash}`
 
-  useEffect(() => {
-    if (!hasInitialData || !initialData) return
-
-    requestIdRef.current += 1
-    setTracking(initialData.tracking)
-    setIsLoading(false)
-  }, [hasInitialData, initialData])
-
-  const loadTracking = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
-    if (!raceId || !participantId) return
-
-    if (mode === 'initial') {
-      setIsLoading(true)
-    } else {
-      setIsRefreshing(true)
-    }
-
-    const requestId = ++requestIdRef.current
-
-    try {
-      const data = await publicTrackingApi.getAthleteTracking(raceId, participantId)
-      if (requestId === requestIdRef.current) {
-        setTracking(data)
-      }
-    } catch {
-      if (requestId === requestIdRef.current) {
-        toast.error(mode === 'refresh' ? 'Failed to refresh athlete tracking' : 'Failed to load athlete tracking')
-      }
-    } finally {
-      if (requestId === requestIdRef.current) {
-        if (mode === 'initial') {
-          setIsLoading(false)
-        } else {
-          setIsRefreshing(false)
-        }
-      }
-    }
-  }, [participantId, raceId])
+  const {
+    data: tracking = null,
+    error,
+    isLoading,
+    isValidating,
+    mutate,
+  } = useSWR<PublicAthleteTracking>(
+    raceId && participantId ? ['public-athlete-tracking', raceId, participantId] : null,
+    () => publicTrackingApi.getAthleteTracking(raceId as string, participantId as string),
+    {
+      fallbackData: hasInitialData ? initialData?.tracking : undefined,
+      revalidateOnMount: hasInitialData ? false : undefined,
+      refreshInterval: TRACKING_POLL_INTERVAL_MS,
+      keepPreviousData: true,
+    },
+  )
 
   useEffect(() => {
-    if (!raceId || !participantId) return
-
-    if (hasInitialData) {
-      setIsLoading(false)
-      return
+    if (error) {
+      toast.error('Failed to refresh athlete tracking')
     }
-
-    void loadTracking('initial')
-
-    return () => {
-      requestIdRef.current += 1
-    }
-  }, [hasInitialData, loadTracking, participantId, raceId])
+  }, [error])
 
   const recentSplits = useMemo(() => tracking?.splits.slice(-6).reverse() ?? [], [tracking])
+  const paceSeries = useMemo(() => buildPaceSeries(tracking?.splits ?? []), [tracking])
 
-  const handleRefresh = async () => {
-    await loadTracking('refresh')
+  const handleRefresh = () => {
+    void mutate()
   }
 
   const handleCopyLink = async () => {
@@ -180,9 +174,9 @@ export function PublicAthleteTrackingPage({
               variant="secondary"
               className="rounded-full border border-white/10 bg-white/5 px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-100 hover:bg-white/10"
               onClick={() => void handleRefresh()}
-              disabled={isRefreshing}
+              disabled={isValidating}
             >
-              <RefreshCcw className={`mr-2 h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCcw className={`mr-2 h-3.5 w-3.5 ${isValidating ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
@@ -289,6 +283,65 @@ export function PublicAthleteTrackingPage({
                 </Button>
               </div>
             </div>
+          </section>
+
+          <section className="rounded-[28px] border border-white/10 bg-white/6 p-4 text-white shadow-[0_20px_60px_rgba(2,6,23,0.35)] backdrop-blur-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Pace Profile</p>
+                <h2 className="mt-1 text-2xl font-black uppercase tracking-[-0.04em] text-white">Pace by Split</h2>
+              </div>
+              <Badge variant="outline" className="rounded-full border-white/15 bg-white/5 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-200">
+                min/km
+              </Badge>
+            </div>
+
+            {paceSeries.length > 0 ? (
+              <div className="mt-4 h-56 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={paceSeries} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="paceFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.6} />
+                        <stop offset="95%" stopColor="#22d3ee" stopOpacity={0.05} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
+                    <XAxis
+                      dataKey="label"
+                      stroke="#94a3b8"
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      stroke="#94a3b8"
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={formatPaceTick}
+                      width={48}
+                    />
+                    <Tooltip
+                      contentStyle={{ background: '#020617', border: '1px solid rgba(148,163,184,0.3)', borderRadius: 12 }}
+                      labelStyle={{ color: '#e2e8f0' }}
+                      formatter={(value) => [`${formatPaceTick(Number(value))} /km`, 'Pace']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="paceSeconds"
+                      stroke="#22d3ee"
+                      strokeWidth={2}
+                      fill="url(#paceFill)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-3xl border border-dashed border-white/10 bg-slate-950/40 px-4 py-10 text-center text-sm text-slate-400">
+                Pace data appears once checkpoint distances are recorded.
+              </div>
+            )}
           </section>
 
           <section className="rounded-[28px] border border-white/10 bg-white/6 p-4 text-white shadow-[0_20px_60px_rgba(2,6,23,0.35)] backdrop-blur-sm">

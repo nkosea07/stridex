@@ -3,9 +3,10 @@ import Map, { Layer, Source } from 'react-map-gl'
 import { Flame } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { publicTrackingApi } from '@/lib/api'
+import { getMapAccessToken, resolveMapStyleUrl } from '@/lib/map-provider'
 import type { HeatCell } from '@/types'
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
+const MAPBOX_TOKEN = getMapAccessToken()
 
 interface RaceHeatmapProps {
   raceId: string
@@ -67,7 +68,7 @@ export function RaceHeatmap({ raceId }: RaceHeatmapProps) {
         <div className="mt-4 h-72 overflow-hidden rounded-3xl border border-white/10">
           <Map
             initialViewState={{ longitude: center.longitude, latitude: center.latitude, zoom: 11 }}
-            mapStyle="mapbox://styles/mapbox/dark-v11"
+            mapStyle={resolveMapStyleUrl()}
             mapboxAccessToken={MAPBOX_TOKEN}
             style={{ width: '100%', height: '100%' }}
           >

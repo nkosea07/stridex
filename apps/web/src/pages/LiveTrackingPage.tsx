@@ -5,6 +5,7 @@ import { Maximize2, Minimize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { connectLiveTracking, trackingApi, checkpointsApi, racesApi } from '@/lib/api'
+import { getMapAccessToken, resolveMapStyleUrl } from '@/lib/map-provider'
 import type { LiveTrackingData, Checkpoint, Race } from '@/types'
 import { toast } from 'sonner'
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
@@ -15,7 +16,7 @@ import { AeroPanel } from '@/components/dashboard/AeroPanel'
 import { FreshnessIndicator } from '@/components/dashboard/FreshnessIndicator'
 import { SecurityAuditor } from '@/components/dashboard/SecurityAuditor'
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
+const MAPBOX_TOKEN = getMapAccessToken()
 type LiveTrackingViewModel = LiveTrackingData & { lastSeen?: number }
 
 export function LiveTrackingPage() {
@@ -151,7 +152,7 @@ export function LiveTrackingPage() {
           {...viewState}
           ref={mapRef}
           onMove={(evt) => setViewState(evt.viewState)}
-          mapStyle="mapbox://styles/mapbox/dark-v11"
+          mapStyle={resolveMapStyleUrl()}
           mapboxAccessToken={MAPBOX_TOKEN}
           style={{ width: '100%', height: '100%' }}
         >

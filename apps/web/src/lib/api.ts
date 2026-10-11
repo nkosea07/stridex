@@ -35,7 +35,9 @@ import type {
   RaceAnalyticsSummary,
   Demographics,
   RegistrationPoint,
-  PromoCode
+  PromoCode,
+  RoutePoint,
+  EmergencyAlert
 } from '@/types'
 import { API_CONTRACT } from '@race-tracker/contracts'
 
@@ -169,12 +171,34 @@ async function fetchPublicApi<T>(endpoint: string, options?: RequestInit): Promi
   return response.json()
 }
 
+async function downloadExport(path: string): Promise<Blob> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    credentials: 'include',
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Export failed' }))
+    throw new ApiError(response.status, error.message)
+  }
+
+  return response.blob()
+}
+
 // Auth API
 export const authApi = {
   login: (email: string, password: string) =>
     fetchApi<BrowserAuthResponse>('/auth/browser/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+    }),
+
+  loginWithGoogle: (idToken: string) =>
+    fetchApi<BrowserAuthResponse>(buildContractPath(API_CONTRACT.endpoints.authOAuthGoogle, {}), {
+      method: 'POST',
+      body: JSON.stringify({ idToken, provider: 'google' }),
     }),
 
   beginMfaEnrollment: (challengeToken: string) =>
@@ -475,6 +499,9 @@ export const checkpointsApi = {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
+
+  exportCheckpoints: (raceId: string, format: 'csv' | 'xlsx') =>
+    downloadExport(buildContractPath(API_CONTRACT.endpoints.raceCheckpointExport, { raceId }, { format })),
 }
 
 export const rfidApi = {
@@ -537,16 +564,8 @@ export const resultsApi = {
   countryRankings: (raceId: string) =>
     fetchApi<RankingEntry[]>(`/races/${raceId}/rankings/countries`),
 
-  exportResults: async (raceId: string, format: 'csv' | 'pdf' | 'xlsx') => {
-    const response = await fetch(`${API_BASE}/races/${raceId}/results/export?format=${format}`, {
-      credentials: 'include',
-      headers: {
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-    })
-    if (!response.ok) throw new Error('Failed to export results')
-    return response.blob()
-  },
+  exportResults: (raceId: string, format: 'csv' | 'pdf' | 'xlsx') =>
+    downloadExport(buildContractPath(API_CONTRACT.endpoints.raceResultsExport, { raceId }, { format })),
 
   publicCertificateUrl: (raceId: string, participantId: string, token: string) =>
     `${API_BASE}${buildContractPath(API_CONTRACT.endpoints.publicRaceResultCertificate, { raceId, participantId })}?token=${encodeURIComponent(token)}`,
@@ -606,6 +625,9 @@ export const publicTrackingApi = {
     fetchPublicApi<HeatCell[]>(
       buildContractPath(API_CONTRACT.endpoints.publicRaceHeatmap, { raceId }, options),
     ),
+
+  getRoute: (raceId: string) =>
+    fetchPublicApi<RoutePoint[]>(buildContractPath(API_CONTRACT.endpoints.publicRaceRoute, { raceId })),
 }
 
 export const favoritesApi = {
@@ -676,6 +698,37 @@ export const analyticsApi = {
   demographics: (raceId: string) => fetchApi<Demographics>(`/races/${raceId}/analytics/demographics`),
   registrations: (raceId: string, days = 30) =>
     fetchApi<RegistrationPoint[]>(`/races/${raceId}/analytics/registrations?days=${days}`),
+
+  exportAnalytics: (raceId: string, format: 'csv' | 'xlsx') =>
+    downloadExport(buildContractPath(API_CONTRACT.endpoints.raceAnalyticsExport, { raceId }, { format })),
+}
+
+export const routeApi = {
+  get: (raceId: string) =>
+    fetchApi<RoutePoint[]>(buildContractPath(API_CONTRACT.endpoints.raceRoute, { raceId })),
+
+  importGpx: async (raceId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(`${API_BASE}${buildContractPath(API_CONTRACT.endpoints.raceRouteGpx, { raceId })}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      body: formData,
+    })
+    if (!response.ok) throw new Error('Failed to import GPX route')
+    return response.json() as Promise<RoutePoint[]>
+  },
+}
+
+export const emergencyApi = {
+  raise: (raceId: string, data: { latitude: number; longitude: number; message?: string }) =>
+    fetchApi<EmergencyAlert>(buildContractPath(API_CONTRACT.endpoints.raceEmergency, { raceId }), {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 }
 
 export const promoApi = {
@@ -755,7 +808,7 @@ let userAlertClient: Client | null = null
 export function connectUserAlerts(userId: string, onMessage: (data: UserAlertPayload) => void) {
   const envUrl = (import.meta.env.VITE_WS_URL as string | undefined)?.trim()
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = envUrl || `${protocol}//${window.location.host}/ws-tracking`
+  const wsUrl = envUrl || `${protocol}//${window.location.host}${API_CONTRACT.web.wsTrackingPath}`
 
   userAlertClient = new Client({
     brokerURL: wsUrl,

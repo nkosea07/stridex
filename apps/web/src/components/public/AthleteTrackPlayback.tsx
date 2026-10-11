@@ -3,10 +3,11 @@ import Map, { Layer, MapRef, Marker, Source } from 'react-map-gl'
 import { Pause, Play, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { publicTrackingApi } from '@/lib/api'
+import { getMapAccessToken, resolveMapStyleUrl } from '@/lib/map-provider'
 import { formatClock, resolvePlaybackPosition, trackDurationMs } from '@/lib/playback'
 import type { TrackPoint } from '@/types'
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
+const MAPBOX_TOKEN = getMapAccessToken()
 
 interface AthleteTrackPlaybackProps {
   raceId: string
@@ -89,7 +90,7 @@ export function AthleteTrackPlayback({ raceId, participantId }: AthleteTrackPlay
         <Map
           ref={mapRef}
           initialViewState={{ longitude: start.lng, latitude: start.lat, zoom: 13 }}
-          mapStyle="mapbox://styles/mapbox/dark-v11"
+          mapStyle={resolveMapStyleUrl()}
           mapboxAccessToken={MAPBOX_TOKEN}
           style={{ width: '100%', height: '100%' }}
         >

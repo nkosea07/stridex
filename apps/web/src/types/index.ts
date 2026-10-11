@@ -301,6 +301,32 @@ export interface RfidRaceOverview {
   oldestQueuedReadAgeSeconds?: number
   readerSilenceTimeoutSeconds: number
   gatewayBacklogDegradedThreshold: number
+  readers?: RfidReaderBreakdown[]
+  eventTrend?: RfidEventTrendPoint[]
+}
+
+export interface RfidReaderBreakdown {
+  readerId: string
+  name?: string
+  checkpointId?: string
+  status?: string
+  gatewayStatus?: string
+  backlog?: number
+  lastHeartbeatAgeSeconds?: number
+  firmwareVersion?: string
+  hardwareModel?: string
+  hardwareProfile?: string
+  readerClass?: string
+  lastError?: string
+}
+
+export interface RfidEventTrendPoint {
+  bucket?: string
+  total: number
+  accepted: number
+  duplicate: number
+  unknownCredential: number
+  error: number
 }
 
 export interface GpsLocation {
@@ -378,6 +404,9 @@ export interface MediaItem {
   participantId?: string | null
   mediaType: string
   url: string
+  thumbnailUrl?: string | null
+  width?: number | null
+  height?: number | null
   caption?: string | null
   status: string
   createdAt?: string
@@ -512,6 +541,9 @@ export interface PublicRaceLiveFeed {
 export interface PublicCheckpointSplit {
   name?: string
   time?: string
+  distanceMeters?: number
+  durationSeconds?: number
+  paceSecondsPerKm?: number
 }
 
 export interface TrackPoint {
@@ -529,6 +561,25 @@ export interface HeatCell {
   latitude: number
   longitude: number
   weight: number
+}
+
+export interface RoutePoint {
+  sequence: number
+  latitude: number
+  longitude: number
+  elevation?: number | null
+}
+
+export interface EmergencyAlert {
+  id: string
+  raceId: string
+  participantId?: string | null
+  participantName?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  message?: string | null
+  status: string
+  createdAt?: string
 }
 
 export interface FavoriteAthlete {
