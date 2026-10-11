@@ -121,10 +121,7 @@ public class PromoCodeServiceImpl implements PromoCodeService {
     @Override
     @Transactional
     public void recordUse(UUID promoCodeId) {
-        promoCodeRepository.findById(promoCodeId).ifPresent(promo -> {
-            promo.setUsedCount((promo.getUsedCount() == null ? 0 : promo.getUsedCount()) + 1);
-            promoCodeRepository.save(promo);
-        });
+        promoCodeRepository.incrementUsedCountIfAvailable(promoCodeId);
     }
 
     @Override
@@ -133,10 +130,8 @@ public class PromoCodeServiceImpl implements PromoCodeService {
         if (code == null || code.isBlank()) {
             return;
         }
-        promoCodeRepository.findByCodeIgnoreCase(code.trim()).ifPresent(promo -> {
-            promo.setUsedCount((promo.getUsedCount() == null ? 0 : promo.getUsedCount()) + 1);
-            promoCodeRepository.save(promo);
-        });
+        promoCodeRepository.findByCodeIgnoreCase(code.trim())
+            .ifPresent(promo -> promoCodeRepository.incrementUsedCountIfAvailable(promo.getId()));
     }
 
     private PromoCodeDto toDto(PromoCode promo) {

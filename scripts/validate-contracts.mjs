@@ -48,6 +48,12 @@ assert(
   `contract.web.apiBasePath must be "${expectedWebBase}" but is "${contract.web.apiBasePath}".`,
 );
 
+const expectedWsPath = `${contract.apiPath}/ws-tracking`;
+assert(
+  contract.web.wsTrackingPath === expectedWsPath,
+  `contract.web.wsTrackingPath must be "${expectedWsPath}" but is "${contract.web.wsTrackingPath}".`,
+);
+
 const backendConfig = read(backendConfigPath);
 const backendVersionMatch = backendConfig.match(/racetracker:\s*[\s\S]*?api:\s*[\s\S]*?version:\s*([0-9]+)/);
 if (!backendVersionMatch) {
@@ -87,6 +93,17 @@ assert(
 assert(
   !/const API_BASE\s*=\s*['"]\/api\/v[0-9]+['"]/.test(webApi),
   'Web API client still hardcodes /api/vN.',
+);
+assert(
+  webApi.includes('API_CONTRACT.web.wsTrackingPath'),
+  'Web live-tracking client must resolve the WebSocket path from API_CONTRACT.web.wsTrackingPath.',
+);
+
+const backendWebSocketPath = path.join(root, 'apps/backend/src/main/java/com/racetracker/config/WebSocketConfig.java');
+const backendWebSocket = read(backendWebSocketPath);
+assert(
+  backendWebSocket.includes('"/ws-tracking"'),
+  'WebSocketConfig must register the "/ws-tracking" STOMP endpoint.',
 );
 
 const mobileApi = read(mobileApiPath);
@@ -145,6 +162,10 @@ assert(
 assert(
   contractPackage.includes(`defaultApiRoot: '${contract.mobile.defaultApiRoot}'`),
   'packages/contracts/index.js mobile.defaultApiRoot is out of sync with contract.json.',
+);
+assert(
+  contractPackage.includes(`wsTrackingPath: '${contract.web.wsTrackingPath}'`),
+  'packages/contracts/index.js web.wsTrackingPath is out of sync with contract.json.',
 );
 assert(
   /requestMatchers\s*\(\s*HttpMethod\.GET\s*,\s*apiPrefix \+ "\/public\/races\/\*\*"\s*\)/.test(backendSecurity),

@@ -3,7 +3,7 @@ export const API_CONTRACT = {
   apiPath: '/api',
   web: {
     apiBasePath: '/api/v1',
-    wsTrackingPath: '/api/ws/tracking',
+    wsTrackingPath: '/api/ws-tracking',
   },
   mobile: {
     defaultApiRoot: 'http://localhost:8081/api',

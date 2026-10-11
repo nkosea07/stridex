@@ -248,6 +248,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         int imported = 0;
         int skipped = 0;
         int total = 0;
+        Set<String> seenEmails = new HashSet<>(participantRepository.findEmailsByRaceId(race.getId()));
 
         try (CSVReader reader = new CSVReader(new InputStreamReader(new FileInputStream(filePath), StandardCharsets.UTF_8))) {
             String[] headers = reader.readNext();
@@ -257,11 +258,16 @@ public class ParticipantServiceImpl implements ParticipantService {
                 while ((row = reader.readNext()) != null) {
                     total++;
                     try {
+                        String email = requiredCell(row, index, "email").toLowerCase(Locale.ROOT);
+                        if (!seenEmails.add(email)) {
+                            skipped++;
+                            continue;
+                        }
                         Participant participant = new Participant();
                         participant.setRace(race);
                         participant.setFirstName(requiredCell(row, index, "firstName"));
                         participant.setLastName(requiredCell(row, index, "lastName"));
-                        participant.setEmail(requiredCell(row, index, "email").toLowerCase(Locale.ROOT));
+                        participant.setEmail(email);
                         participant.setPhone(cell(row, index, "phone"));
                         participant.setNationality(cell(row, index, "nationality"));
                         participant.setBibNumber(cell(row, index, "bibNumber"));

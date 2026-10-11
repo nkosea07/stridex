@@ -13,11 +13,16 @@ import com.racetracker.model.Checkpoint;
 import com.racetracker.model.Race;
 import com.racetracker.model.RaceCategory;
 import com.racetracker.model.RaceRegistrationField;
+import com.racetracker.model.User;
 import com.racetracker.repository.RaceRegistrationFieldRepository;
 import com.racetracker.repository.RaceRepository;
+import com.racetracker.repository.UserRepository;
 import com.racetracker.service.RaceService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,15 +38,18 @@ public class RaceServiceImpl implements RaceService {
     private final RaceRepository raceRepository;
     private final RaceMapper raceMapper;
     private final RaceRegistrationFieldRepository registrationFieldRepository;
+    private final UserRepository userRepository;
 
     public RaceServiceImpl(
         RaceRepository raceRepository,
         RaceMapper raceMapper,
-        RaceRegistrationFieldRepository registrationFieldRepository
+        RaceRegistrationFieldRepository registrationFieldRepository,
+        UserRepository userRepository
     ) {
         this.raceRepository = raceRepository;
         this.raceMapper = raceMapper;
         this.registrationFieldRepository = registrationFieldRepository;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -102,10 +110,51 @@ public class RaceServiceImpl implements RaceService {
         return dto;
     }
 
+    /**
+     * Enforces per-race ownership for race administrators: a RACE_ADMIN may only manage a
+     * race they created or were assigned to. SUPER_ADMIN bypasses the check; unowned legacy
+     * races (no creator and no assigned admins) remain manageable to avoid lockouts.
+     */
+    private void assertCanManage(Race race) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return;
+        }
+        if (hasRole(authentication, "ROLE_SUPER_ADMIN") || !hasRole(authentication, "ROLE_RACE_ADMIN")) {
+            return;
+        }
+        User owner = race.getCreatedBy();
+        boolean legacyUnowned = owner == null && (race.getAdmins() == null || race.getAdmins().isEmpty());
+        if (legacyUnowned) {
+            return;
+        }
+        String username = authentication.getName();
+        boolean owns = owner != null && username.equalsIgnoreCase(owner.getEmail());
+        boolean assigned = race.getAdmins() != null && race.getAdmins().stream()
+            .anyMatch(admin -> username.equalsIgnoreCase(admin.getEmail()));
+        if (!owns && !assigned) {
+            throw new AccessDeniedException("You do not have access to this race");
+        }
+    }
+
+    private boolean hasRole(Authentication authentication, String role) {
+        return authentication.getAuthorities().stream()
+            .anyMatch(authority -> role.equals(authority.getAuthority()));
+    }
+
+    private User currentUserOrNull() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            return null;
+        }
+        return userRepository.findByEmailIgnoreCase(authentication.getName()).orElse(null);
+    }
+
     @Override
     @Transactional
     public RaceDto create(RaceCreateRequest request) {
         Race race = new Race();
+        race.setCreatedBy(currentUserOrNull());
         applyCommonFields(request, race);
 
         race.getCategories().clear();
@@ -122,6 +171,7 @@ public class RaceServiceImpl implements RaceService {
     public RaceDto update(UUID id, RaceUpdateRequest request) {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        assertCanManage(race);
 
         applyCommonFields(request, race);
 
@@ -139,6 +189,7 @@ public class RaceServiceImpl implements RaceService {
     public void delete(UUID id) {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        assertCanManage(race);
         raceRepository.delete(race);
     }
 
@@ -147,6 +198,7 @@ public class RaceServiceImpl implements RaceService {
     public RaceDto updateStatus(UUID id, String status) {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        assertCanManage(race);
         race.setStatus(parseRaceStatus(status));
         Race saved = raceRepository.save(race);
         return raceMapper.toDto(saved);
@@ -157,8 +209,10 @@ public class RaceServiceImpl implements RaceService {
     public RaceDto clone(UUID id, RaceCloneRequest request) {
         Race source = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        assertCanManage(source);
 
         Race copy = new Race();
+        copy.setCreatedBy(currentUserOrNull());
         copy.setName(request.getName());
         copy.setDescription(source.getDescription());
         copy.setRaceType(source.getRaceType());
@@ -212,6 +266,7 @@ public class RaceServiceImpl implements RaceService {
     public RaceDto archive(UUID id) {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        assertCanManage(race);
         race.setArchivedAt(OffsetDateTime.now());
         return raceMapper.toDto(raceRepository.save(race));
     }
@@ -221,6 +276,7 @@ public class RaceServiceImpl implements RaceService {
     public RaceDto restore(UUID id) {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        assertCanManage(race);
         race.setArchivedAt(null);
         return raceMapper.toDto(raceRepository.save(race));
     }

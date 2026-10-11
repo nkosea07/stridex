@@ -8,6 +8,7 @@ import com.racetracker.mapper.RaceMapper;
 import com.racetracker.model.Race;
 import com.racetracker.repository.RaceRegistrationFieldRepository;
 import com.racetracker.repository.RaceRepository;
+import com.racetracker.repository.UserRepository;
 import com.racetracker.service.impl.RaceServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,13 +33,14 @@ class RaceServiceImplWaiverTest {
     @Mock RaceRepository raceRepository;
     @Mock RaceMapper raceMapper;
     @Mock RaceRegistrationFieldRepository registrationFieldRepository;
+    @Mock UserRepository userRepository;
 
     private RaceServiceImpl service;
     private final UUID raceId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        service = new RaceServiceImpl(raceRepository, raceMapper, registrationFieldRepository);
+        service = new RaceServiceImpl(raceRepository, raceMapper, registrationFieldRepository, userRepository);
     }
 
     private RaceCreateRequest createRequest(boolean requireWaiver, String waiverText) {

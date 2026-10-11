@@ -222,6 +222,9 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     Optional<Participant> findByRaceIdAndRfidTag(UUID raceId, String rfidTag);
 
+    @Query("select lower(p.email) from Participant p where p.race.id = :raceId and p.email is not null")
+    List<String> findEmailsByRaceId(@Param("raceId") UUID raceId);
+
     @Modifying
     @Query("UPDATE Participant p SET p.totalDistance = COALESCE(p.totalDistance, 0.0) + :delta WHERE p.id = :id")
     void incrementTotalDistance(@Param("id") UUID id, @Param("delta") BigDecimal delta);

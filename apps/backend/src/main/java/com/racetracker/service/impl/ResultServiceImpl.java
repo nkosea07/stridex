@@ -68,7 +68,8 @@ public class ResultServiceImpl implements ResultService {
     @Override
     @Transactional(readOnly = true)
     public List<RaceResultDto> listByRace(UUID raceId) {
-        return listByRacePage(raceId, 0, 100).items();
+        requireRace(raceId);
+        return collectAllResultPages(raceId, null, false);
     }
 
     @Override
@@ -119,7 +120,27 @@ public class ResultServiceImpl implements ResultService {
     @Override
     @Transactional(readOnly = true)
     public List<RaceResultDto> getMyResults() {
-        return getMyResultsPage(0, 100).items();
+        User user = resolveCurrentUser();
+        return collectAllResultPages(null, user.getId(), false);
+    }
+
+    /**
+     * Iterates every result page so callers that need the full set (exports, team/country
+     * rankings) are never silently truncated at a single page limit.
+     */
+    private List<RaceResultDto> collectAllResultPages(UUID raceId, UUID userId, boolean publishedOnly) {
+        List<RaceResultDto> all = new ArrayList<>();
+        int page = 0;
+        int size = 100;
+        Long revision = null;
+        RaceResultPageDto resultPage;
+        do {
+            resultPage = resultPage(raceId, userId, publishedOnly, page, size, revision);
+            all.addAll(resultPage.items());
+            revision = resultPage.revision();
+            page++;
+        } while (!resultPage.items().isEmpty() && all.size() < resultPage.totalElements());
+        return all;
     }
 
     @Override

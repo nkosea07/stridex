@@ -123,13 +123,11 @@ public class PaymentServiceImpl implements PaymentService {
             .findFirstByParticipantIdAndStatusOrderByCreatedAtDesc(participantId, Payment.PaymentStatus.COMPLETED)
             .orElseThrow(() -> new ApiException("No completed payment found to refund"));
 
-        payment.setStatus(Payment.PaymentStatus.REFUNDED);
-        payment = paymentRepository.save(payment);
-
-        participant.setPaymentStatus(Participant.PaymentStatus.REFUNDED);
-        participantRepository.save(participant);
-
-        return toDto(payment);
+        // The configured provider (Pesepay) has no automated refund integration wired yet.
+        // Refuse instead of falsely marking the payment/participant as refunded.
+        throw new ApiException(
+            "Automated refunds are not supported by the configured payment provider. "
+                + "Process the refund with the provider and record the reversal manually (payment " + payment.getId() + ").");
     }
 
     @Override

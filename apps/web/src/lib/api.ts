@@ -702,8 +702,8 @@ let stompClient: Client | null = null
 export function connectLiveTracking(raceId: string, onMessage: (data: LiveTrackingData) => void) {
   const envUrl = (import.meta.env.VITE_WS_URL as string | undefined)?.trim()
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  // The backend endpoint is /ws-tracking
-  const wsUrl = envUrl || `${protocol}//${window.location.host}/ws-tracking`
+  // Served by the backend at the API context path and proxied by the web server.
+  const wsUrl = envUrl || `${protocol}//${window.location.host}${API_CONTRACT.web.wsTrackingPath}`
   
   const token = accessToken
   
