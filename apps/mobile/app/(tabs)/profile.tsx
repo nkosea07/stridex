@@ -90,7 +90,7 @@ export default function ProfileScreen() {
   const menuItems = [
     { icon: 'person-outline', label: 'Edit Profile', onPress: openProfileEditor },
     { icon: 'medical-outline', label: 'Emergency Contact', onPress: () => unavailable('Emergency Contact') },
-    { icon: 'notifications-outline', label: 'Notifications', onPress: () => unavailable('Notifications') },
+    { icon: 'notifications-outline', label: 'Notifications', onPress: () => router.push('/notifications') },
     { icon: 'shield-checkmark-outline', label: 'Privacy & Security', onPress: () => unavailable('Privacy & Security') },
     { icon: 'help-circle-outline', label: 'Help & Support', onPress: () => unavailable('Help & Support') },
     { icon: 'document-text-outline', label: 'Terms & Conditions', onPress: () => unavailable('Terms & Conditions') },

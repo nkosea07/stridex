@@ -1,4 +1,4 @@
-import { View, StyleSheet, Alert, ActivityIndicator, AppState } from 'react-native';
+import { View, Text, StyleSheet, Alert, ActivityIndicator, AppState, TouchableOpacity } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useTrackingStore } from '@/store/tracking';
@@ -41,6 +41,7 @@ export default function TrackingScreen() {
   const { isTracking, liveStats, locations, startTracking, stopTracking, currentRace, batterySaver, setBatterySaver, rehydrateFromLocalDb } = useTrackingStore();
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSendingSos, setIsSendingSos] = useState(false);
   const [selectedRace, setSelectedRace] = useState<Race | null>(currentRace);
   const { colors } = useTheme();
 
@@ -183,6 +184,38 @@ export default function TrackingScreen() {
     ? locations[locations.length - 1]
     : routePoints[0] || { latitude: -34.0523, longitude: 18.4731 };
 
+  const sendSos = async (targetRaceId: string) => {
+    setIsSendingSos(true);
+    try {
+      await api.reportEmergency(targetRaceId, {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        message: 'Emergency SOS raised from the mobile app',
+      });
+      Alert.alert('SOS sent', 'Race organizers have been alerted with your location.');
+    } catch (error) {
+      Alert.alert('SOS failed', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setIsSendingSos(false);
+    }
+  };
+
+  const handleSos = () => {
+    const targetRaceId = raceId || currentRace?.id || selectedRace?.id;
+    if (!targetRaceId) {
+      Alert.alert('No active race', 'Start tracking a race before raising an SOS.');
+      return;
+    }
+    Alert.alert(
+      'Send emergency SOS?',
+      'This alerts race organizers with your current location.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Send SOS', style: 'destructive', onPress: () => void sendSos(targetRaceId) },
+      ],
+    );
+  };
+
   if (isLoading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -245,6 +278,23 @@ export default function TrackingScreen() {
         isTracking={isTracking}
       />
 
+      <TouchableOpacity
+        style={[styles.sosButton, { borderColor: colors.cardBackground }]}
+        onPress={handleSos}
+        disabled={isSendingSos}
+        accessibilityRole="button"
+        accessibilityLabel="Send emergency SOS"
+      >
+        {isSendingSos ? (
+          <ActivityIndicator color="#FFFFFF" />
+        ) : (
+          <>
+            <Ionicons name="alert-circle" size={20} color="#FFFFFF" />
+            <Text style={styles.sosText}>SOS</Text>
+          </>
+        )}
+      </TouchableOpacity>
+
       <BottomDrawer
         raceName={selectedRace?.name}
         elapsedTime={formatTime(liveStats?.elapsedTime || elapsedTime)}
@@ -280,5 +330,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 3,
     borderColor: '#FFFFFF',
+  },
+  sosButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#DC2626',
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  sosText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14,
+    letterSpacing: 1,
   },
 });

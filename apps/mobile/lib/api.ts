@@ -297,6 +297,29 @@ class ApiClient {
       method: 'PUT',
     });
   }
+
+  async registerDevice(token: string, platform?: string): Promise<void> {
+    return this.request<void>('/notifications/devices', {
+      method: 'POST',
+      body: JSON.stringify({ token, platform }),
+    });
+  }
+
+  async unregisterDevice(token: string): Promise<void> {
+    return this.request<void>(`/notifications/devices?token=${encodeURIComponent(token)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async reportEmergency(
+    raceId: string,
+    payload: { latitude: number; longitude: number; message?: string },
+  ): Promise<void> {
+    return this.request<void>(`/races/${raceId}/emergency`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
 }
 
 export const api = new ApiClient();

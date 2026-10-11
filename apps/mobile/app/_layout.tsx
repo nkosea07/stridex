@@ -118,6 +118,13 @@ function RootNavigator() {
             presentation: 'modal',
           }}
         />
+        <Stack.Screen
+          name="notifications"
+          options={{
+            title: 'Notifications',
+            presentation: 'card',
+          }}
+        />
       </Stack>
     </GestureHandlerRootView>
   );
