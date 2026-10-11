@@ -8,6 +8,10 @@ export const API_CONTRACT = {
   mobile: {
     defaultApiRoot: 'http://localhost:8081/api',
   },
+  legal: {
+    privacyPolicyVersion: '2026-10-11',
+    privacyPolicyPath: '/privacy',
+  },
   endpoints: {
     authLogin: '/auth/login',
     authRegister: '/auth/register',

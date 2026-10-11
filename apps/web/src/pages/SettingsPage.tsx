@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { API_CONTRACT } from '@race-tracker/contracts'
 import { 
   User, 
   Shield, 
@@ -396,6 +398,24 @@ export function SettingsPage() {
                   </div>
                   <Button variant="outline" disabled>Coming soon</Button>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Privacy</CardTitle>
+                <CardDescription>How we handle your personal data</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Review what we collect, how it is used, and your rights, including data export and account deletion.
+                </p>
+                <Button asChild variant="outline">
+                  <Link to={API_CONTRACT.legal?.privacyPolicyPath ?? '/privacy'} target="_blank" rel="noreferrer">
+                    <Shield className="mr-2 h-4 w-4" />
+                    Read the Privacy Policy
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
 

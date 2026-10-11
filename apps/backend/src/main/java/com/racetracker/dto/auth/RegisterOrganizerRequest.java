@@ -28,4 +28,9 @@ public class RegisterOrganizerRequest {
     @NotBlank
     @Size(max = 200)
     private String organizationName;
+
+    private Boolean privacyPolicyAccepted;
+
+    @Size(max = 40)
+    private String privacyPolicyVersion;
 }

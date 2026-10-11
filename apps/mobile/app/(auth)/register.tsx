@@ -2,6 +2,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Keyboa
 import { Link, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
+import { API_CONTRACT } from '@race-tracker/contracts';
 import { useAuthStore } from '@/store/auth';
 
 export default function RegisterScreen() {
@@ -13,6 +14,7 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const { register } = useAuthStore();
 
   const handleRegister = async () => {
@@ -36,6 +38,11 @@ export default function RegisterScreen() {
       return;
     }
 
+    if (!acceptedPrivacy) {
+      Alert.alert('Error', 'Please accept the Privacy Policy to continue');
+      return;
+    }
+
     setIsLoading(true);
     try {
       console.log('[Register] Calling authStore.register...');
@@ -44,7 +51,9 @@ export default function RegisterScreen() {
         lastName: lastName.trim(), 
         email: email.trim(), 
         phone: phone.trim(), 
-        password 
+        password,
+        privacyPolicyAccepted: true,
+        privacyPolicyVersion: API_CONTRACT.legal?.privacyPolicyVersion,
       });
 
       if (response.requiresEmailVerification || !response.token) {
@@ -174,12 +183,28 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.termsContainer}>
-            <Text style={styles.termsText}>
-              {"By signing up, you agree to our "}
-              <Text style={styles.termsLink}>Terms of Service</Text>
-              {" and "}
-              <Text style={styles.termsLink}>Privacy Policy</Text>
-            </Text>
+            <TouchableOpacity
+              style={styles.checkboxRow}
+              onPress={() => setAcceptedPrivacy((value) => !value)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: acceptedPrivacy }}
+            >
+              <Ionicons
+                name={acceptedPrivacy ? 'checkbox' : 'square-outline'}
+                size={20}
+                color={acceptedPrivacy ? '#0F766E' : '#6B7280'}
+              />
+              <Text style={styles.termsText}>
+                {"I have read and accept the "}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => router.push('/privacy')}
+                >
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity 
@@ -268,7 +293,13 @@ const styles = StyleSheet.create({
   termsContainer: {
     marginTop: 8,
   },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
   termsText: {
+    flex: 1,
     fontSize: 14,
     color: '#6B7280',
     lineHeight: 20,

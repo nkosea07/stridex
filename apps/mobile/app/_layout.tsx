@@ -125,6 +125,13 @@ function RootNavigator() {
             presentation: 'card',
           }}
         />
+        <Stack.Screen
+          name="privacy"
+          options={{
+            title: 'Privacy Policy',
+            presentation: 'card',
+          }}
+        />
       </Stack>
     </GestureHandlerRootView>
   );

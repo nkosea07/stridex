@@ -65,6 +65,12 @@ public class User {
     @Column(name = "marketing_consent")
     private Boolean marketingConsent = false;
 
+    @Column(name = "privacy_policy_version", length = 40)
+    private String privacyPolicyVersion;
+
+    @Column(name = "privacy_policy_accepted_at")
+    private OffsetDateTime privacyPolicyAcceptedAt;
+
     @Column(name = "deleted_at")
     private OffsetDateTime deletedAt;
 

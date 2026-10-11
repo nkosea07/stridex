@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -177,6 +178,34 @@ class AuthServiceImplSecurityFlowTest {
         assertTrue(Boolean.TRUE.equals(response.getRequiresEmailVerification()));
         verify(authTokenRepository, atLeastOnce()).save(any(AuthToken.class));
         verify(authEmailService).sendEmailVerification(eq(saved), anyString());
+    }
+
+    @Test
+    void register_recordsPrivacyPolicyAcceptance() {
+        RegisterRequest request = new RegisterRequest();
+        request.setEmail("privacy@example.com");
+        request.setPassword("12345678");
+        request.setFirstName("Pri");
+        request.setLastName("Vacy");
+        request.setPrivacyPolicyAccepted(true);
+        request.setPrivacyPolicyVersion("2026-10-11");
+
+        when(userRepository.existsByEmailIgnoreCase("privacy@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("12345678")).thenReturn("hashed");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            User user = inv.getArgument(0);
+            user.setId(UUID.randomUUID());
+            return user;
+        });
+        when(authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(any(), any())).thenReturn(List.of());
+        when(userMapper.toDto(any(User.class))).thenReturn(new com.racetracker.dto.auth.UserDto());
+
+        authService.register(request);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        assertThat(captor.getValue().getPrivacyPolicyVersion()).isEqualTo("2026-10-11");
+        assertThat(captor.getValue().getPrivacyPolicyAcceptedAt()).isNotNull();
     }
 
     @Test

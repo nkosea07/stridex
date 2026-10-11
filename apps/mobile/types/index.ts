@@ -35,6 +35,8 @@ export interface RegisterRequest {
   email: string;
   password: string;
   phone?: string;
+  privacyPolicyAccepted?: boolean;
+  privacyPolicyVersion?: string;
 }
 
 // Race Types

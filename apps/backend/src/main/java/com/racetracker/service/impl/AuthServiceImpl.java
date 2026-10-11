@@ -89,6 +89,7 @@ public class AuthServiceImpl implements AuthService {
             .emailVerified(false)
             .failedLoginAttempts(0)
             .build();
+        applyPrivacyAcceptance(user, request.getPrivacyPolicyAccepted(), request.getPrivacyPolicyVersion());
 
         User saved = userRepository.save(user);
         issueEmailVerificationToken(saved);
@@ -418,8 +419,14 @@ public class AuthServiceImpl implements AuthService {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 
-    private AuthResponse buildVerificationRequiredResponse(User user) {
-        return AuthResponse.builder()
+    private void applyPrivacyAcceptance(User user, Boolean accepted, String version) {
+        if (Boolean.TRUE.equals(accepted)) {
+            user.setPrivacyPolicyAcceptedAt(OffsetDateTime.now());
+            user.setPrivacyPolicyVersion(version);
+        }
+    }
+
+    private AuthResponse buildVerificationRequiredResponse(User user) {        return AuthResponse.builder()
             .token(null)
             .refreshToken(null)
             .requiresEmailVerification(true)

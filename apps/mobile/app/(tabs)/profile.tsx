@@ -91,7 +91,7 @@ export default function ProfileScreen() {
     { icon: 'person-outline', label: 'Edit Profile', onPress: openProfileEditor },
     { icon: 'medical-outline', label: 'Emergency Contact', onPress: () => unavailable('Emergency Contact') },
     { icon: 'notifications-outline', label: 'Notifications', onPress: () => router.push('/notifications') },
-    { icon: 'shield-checkmark-outline', label: 'Privacy & Security', onPress: () => unavailable('Privacy & Security') },
+    { icon: 'shield-checkmark-outline', label: 'Privacy & Security', onPress: () => router.push('/privacy') },
     { icon: 'help-circle-outline', label: 'Help & Support', onPress: () => unavailable('Help & Support') },
     { icon: 'document-text-outline', label: 'Terms & Conditions', onPress: () => unavailable('Terms & Conditions') },
     { icon: 'information-circle-outline', label: 'About', onPress: () => Alert.alert('Race Tracker', 'Pilot mobile app. Version 1.0.0') },

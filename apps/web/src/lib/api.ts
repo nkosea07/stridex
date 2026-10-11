@@ -222,7 +222,15 @@ export const authApi = {
   restoreBrowserSession: refreshBrowserSession,
   setAccessToken,
   
-  register: (data: { email: string; password: string; firstName: string; lastName: string; phone?: string }) =>
+  register: (data: {
+    email: string
+    password: string
+    firstName: string
+    lastName: string
+    phone?: string
+    privacyPolicyAccepted?: boolean
+    privacyPolicyVersion?: string
+  }) =>
     fetchApi<BrowserAuthResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),

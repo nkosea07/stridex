@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Flag, Loader2 } from 'lucide-react'
+import { API_CONTRACT } from '@race-tracker/contracts'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,6 +25,9 @@ export function RegisterPage() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
+  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false)
+  const privacyPolicyPath = API_CONTRACT.legal?.privacyPolicyPath ?? '/privacy'
+  const privacyPolicyVersion = API_CONTRACT.legal?.privacyPolicyVersion
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -50,6 +54,11 @@ export function RegisterPage() {
       return
     }
 
+    if (!acceptedPrivacy) {
+      toast.error('Please accept the Privacy Policy to continue.')
+      return
+    }
+
     setIsLoading(true)
     try {
       const commonData = {
@@ -58,6 +67,8 @@ export function RegisterPage() {
         email: form.email.trim(),
         phone: form.phone.trim() || undefined,
         password: form.password,
+        privacyPolicyAccepted: true,
+        privacyPolicyVersion,
       }
       if (organizerIntent) {
         await authApi.registerOrganizer({ ...commonData, organizationName: form.organizationName.trim() })
@@ -184,6 +195,23 @@ export function RegisterPage() {
                   className="bg-muted/50"
                 />
               </div>
+
+              <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-border"
+                  checked={acceptedPrivacy}
+                  onChange={(e) => setAcceptedPrivacy(e.target.checked)}
+                  required
+                />
+                <span>
+                  I have read and accept the{' '}
+                  <Link to={privacyPolicyPath} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
+                    Privacy Policy
+                  </Link>
+                  .
+                </span>
+              </label>
 
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? (

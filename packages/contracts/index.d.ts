@@ -82,6 +82,10 @@ export interface ApiContract {
   mobile: {
     defaultApiRoot: string;
   };
+  legal: {
+    privacyPolicyVersion: string;
+    privacyPolicyPath: string;
+  };
   endpoints: Record<EndpointKey, string>;
 }
 

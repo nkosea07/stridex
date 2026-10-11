@@ -54,6 +54,15 @@ assert(
   `contract.web.wsTrackingPath must be "${expectedWsPath}" but is "${contract.web.wsTrackingPath}".`,
 );
 
+assert(
+  contract.legal && typeof contract.legal.privacyPolicyVersion === 'string' && contract.legal.privacyPolicyVersion.length > 0,
+  'contract.legal.privacyPolicyVersion must be a non-empty string.',
+);
+assert(
+  contract.legal && contract.legal.privacyPolicyPath === '/privacy',
+  'contract.legal.privacyPolicyPath must be "/privacy".',
+);
+
 const backendConfig = read(backendConfigPath);
 const backendVersionMatch = backendConfig.match(/racetracker:\s*[\s\S]*?api:\s*[\s\S]*?version:\s*([0-9]+)/);
 if (!backendVersionMatch) {
@@ -166,6 +175,11 @@ assert(
 assert(
   contractPackage.includes(`wsTrackingPath: '${contract.web.wsTrackingPath}'`),
   'packages/contracts/index.js web.wsTrackingPath is out of sync with contract.json.',
+);
+assert(
+  contractPackage.includes(`privacyPolicyVersion: '${contract.legal.privacyPolicyVersion}'`)
+    && contractPackage.includes(`privacyPolicyPath: '${contract.legal.privacyPolicyPath}'`),
+  'packages/contracts/index.js legal block is out of sync with contract.json.',
 );
 assert(
   /requestMatchers\s*\(\s*HttpMethod\.GET\s*,\s*apiPrefix \+ "\/public\/races\/\*\*"\s*\)/.test(backendSecurity),

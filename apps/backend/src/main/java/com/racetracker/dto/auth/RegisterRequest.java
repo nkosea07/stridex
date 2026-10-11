@@ -24,4 +24,9 @@ public class RegisterRequest {
     private String lastName;
 
     private String phone;
+
+    private Boolean privacyPolicyAccepted;
+
+    @Size(max = 40)
+    private String privacyPolicyVersion;
 }
