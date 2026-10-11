@@ -3,6 +3,7 @@ name: pilot-validation
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -74,3 +75,92 @@ jobs:
       - run: docker build -f apps/backend/Dockerfile apps/backend
       - run: docker build -f apps/web/Dockerfile .
       - run: docker build -f apps/rfid-gateway/Dockerfile apps/rfid-gateway
+
+  load-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgis:
+        image: postgis/postgis:15-3.4-alpine
+        env:
+          POSTGRES_DB: race_tracker
+          POSTGRES_USER: race_test
+          POSTGRES_PASSWORD: race_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U race_test -d race_tracker"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FLYWAY_TEST_URL: jdbc:postgresql://localhost:5432/race_tracker
+      FLYWAY_TEST_USERNAME: race_test
+      FLYWAY_TEST_PASSWORD: race_test_password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+          cache-dependency-path: apps/backend/pom.xml
+      - name: Prepare database (clean migrate)
+        working-directory: apps/backend
+        run: mvn -B -Dtest=FlywayPostgresMigrationSmokeTest test
+      - name: Start backend
+        working-directory: apps/backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_NAME: race_tracker
+          DB_USERNAME: race_test
+          DB_PASSWORD: race_test_password
+          JWT_SECRET: ci-load-smoke-secret-key-at-least-32-bytes-long
+          REDIS_HOST: localhost
+          REDIS_PORT: "6379"
+          MAIL_ENABLED: "false"
+          PUSH_ENABLED: "false"
+          PAYMENTS_ENABLED: "false"
+          RFID_SIMULATION_ENABLED: "false"
+        run: |
+          mvn -q -DskipTests spring-boot:run > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8081/api/actuator/health > /dev/null; then echo "backend up"; break; fi
+            sleep 3
+          done
+          curl -sf http://localhost:8081/api/actuator/health > /dev/null || (tail -200 /tmp/backend.log; exit 1)
+      - uses: grafana/setup-k6-action@v1
+      - run: k6 run -e BASE_URL=http://localhost:8081 tests/load/api-smoke.js
+
+  e2e:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm contracts:validate
+      - run: pnpm --filter web build
+      - name: Cypress run
+        uses: cypress-io/github-action@v6
+        with:
+          working-directory: tests/e2e
+          install-command: npm install
+          start: npx --yes serve ../../apps/web/dist/client -l 4173
+          wait-on: "http://localhost:4173"
+

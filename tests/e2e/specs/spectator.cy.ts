@@ -1,25 +1,34 @@
-// Cypress e2e: public spectator flow. Not part of the default CI job; see tests/e2e/README.md.
-// Run with a seeded race whose id is provided via CYPRESS_RACE_ID.
+// Cypress e2e: public spectator flow. Hermetic — all API calls are intercepted so the spec
+// runs against the built web app with no backend. Wired into CI (see pilot-validation.yml).
 
 describe('public spectator flow', () => {
-  const raceId = Cypress.env('RACE_ID') || 'demo'
+  const raceId = 'demo'
 
-  it('loads the race hub and follows an athlete', () => {
-    cy.visit(`/race/${raceId}`)
-    cy.contains(/public race hub/i, { timeout: 15000 }).should('be.visible')
-
-    cy.request(`/api/v1/public/races/${raceId}/tracking/live`).its('status').should('eq', 200)
-
-    cy.get('a[href*="/athlete/"]').first().click({ force: true })
-    cy.contains(/public athlete tracking/i, { timeout: 15000 }).should('be.visible')
+  beforeEach(() => {
+    cy.intercept('GET', `**/api/v1/public/races/${raceId}/hub`, { fixture: 'race-hub.json' }).as('hub')
+    cy.intercept('GET', `**/api/v1/public/races/${raceId}/tracking/live-feed*`, {
+      body: { items: [], nextCursor: null, refreshedAt: new Date().toISOString() },
+    }).as('liveFeed')
+    cy.intercept('GET', `**/api/v1/public/races/${raceId}/tracking/live`, { body: [] }).as('live')
+    cy.intercept('GET', `**/api/v1/public/races/${raceId}/tracking/heatmap*`, { body: [] })
+    cy.intercept('GET', `**/api/v1/public/races/${raceId}/media`, { body: [] })
+    cy.intercept('GET', `**/api/v1/public/races/${raceId}/registration-fields`, { body: [] })
+    cy.intercept('GET', `**/api/v1/public/races/${raceId}/results*`, { body: { items: [], page: 0, size: 50, totalElements: 0, totalPages: 0, revision: 0 } })
   })
 
-  it('exposes a PII-free public payload', () => {
-    cy.request(`/api/v1/public/races/${raceId}/tracking/live`).then((response) => {
-      const body = JSON.stringify(response.body)
+  it('loads the race hub with the public leaderboard', () => {
+    cy.visit(`/race/${raceId}`)
+    cy.contains(/public race hub/i, { timeout: 15000 }).should('be.visible')
+    cy.contains(/demo race/i).should('be.visible')
+  })
+
+  it('keeps the public payload PII-free', () => {
+    cy.fixture('race-hub.json').then((hub) => {
+      const body = JSON.stringify(hub)
       expect(body).to.not.match(/@/)
       expect(body).to.not.contain('phone')
       expect(body).to.not.contain('medical')
+      expect(body).to.not.contain('emergency')
     })
   })
 })

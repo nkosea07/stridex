@@ -1,0 +1,33 @@
+{
+  "raceId": "demo",
+  "raceName": "Demo Race",
+  "status": "IN_PROGRESS",
+  "raceDate": "2026-05-31T06:00:00.000Z",
+  "city": "Harare",
+  "country": "Zimbabwe",
+  "distanceKm": 42.2,
+  "bannerImageUrl": null,
+  "logoUrl": null,
+  "resultsPublished": false,
+  "maxParticipants": 500,
+  "registrationFee": 0,
+  "currency": "USD",
+  "isPublicRegistration": true,
+  "requireApproval": false,
+  "waitlistEnabled": false,
+  "requireWaiver": false,
+  "participantCount": 1,
+  "categories": [],
+  "leaderboard": [
+    {
+      "participantId": "athlete-1",
+      "participantName": "Demo Athlete",
+      "bibNumber": "101",
+      "status": "STARTED",
+      "lastCheckpoint": "10K",
+      "elapsedTime": "00:40:00",
+      "averagePace": "04:00",
+      "distanceRemaining": 32.2
+    }
+  ]
+}
