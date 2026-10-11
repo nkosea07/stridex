@@ -37,7 +37,8 @@ import type {
   RegistrationPoint,
   PromoCode,
   RoutePoint,
-  EmergencyAlert
+  EmergencyAlert,
+  DeletionStatus
 } from '@/types'
 import { API_CONTRACT } from '@race-tracker/contracts'
 
@@ -248,6 +249,20 @@ export const authApi = {
     fetchApi<User>('/auth/profile', {
       method: 'PUT',
       body: JSON.stringify(data),
+    }),
+
+  deleteAccount: (password: string, confirmation: string) =>
+    fetchApi<DeletionStatus>(buildContractPath(API_CONTRACT.endpoints.myAccount, {}), {
+      method: 'DELETE',
+      body: JSON.stringify({ password, confirmation }),
+    }),
+
+  deletionStatus: () =>
+    fetchApi<DeletionStatus>(buildContractPath(API_CONTRACT.endpoints.myDeletionStatus, {})),
+
+  cancelDeletion: () =>
+    fetchApi<DeletionStatus>(buildContractPath(API_CONTRACT.endpoints.myDeletionCancel, {}), {
+      method: 'POST',
     }),
 
   forgotPassword: (email: string) =>

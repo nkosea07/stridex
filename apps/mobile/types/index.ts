@@ -286,3 +286,9 @@ export interface TrackingState {
   rehydrateFromLocalDb: (raceId: string) => Promise<void>;
   recoverActiveTrackingSession: () => Promise<void>;
 }
+
+export interface DeletionStatus {
+  deletionRequested: boolean;
+  requestedAt?: string | null;
+  scheduledFor?: string | null;
+}

@@ -2,8 +2,11 @@ package com.racetracker.controller;
 
 import com.racetracker.dto.privacy.ConsentDto;
 import com.racetracker.dto.privacy.ConsentUpdateRequest;
+import com.racetracker.dto.privacy.DeleteAccountRequest;
+import com.racetracker.dto.privacy.DeletionStatusDto;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.repository.UserRepository;
+import com.racetracker.service.AccountDeletionService;
 import com.racetracker.service.AccountPrivacyService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,10 +21,16 @@ import java.util.UUID;
 public class AccountPrivacyController {
 
     private final AccountPrivacyService accountPrivacyService;
+    private final AccountDeletionService accountDeletionService;
     private final UserRepository userRepository;
 
-    public AccountPrivacyController(AccountPrivacyService accountPrivacyService, UserRepository userRepository) {
+    public AccountPrivacyController(
+        AccountPrivacyService accountPrivacyService,
+        AccountDeletionService accountDeletionService,
+        UserRepository userRepository
+    ) {
         this.accountPrivacyService = accountPrivacyService;
+        this.accountDeletionService = accountDeletionService;
         this.userRepository = userRepository;
     }
 
@@ -38,11 +47,25 @@ public class AccountPrivacyController {
         return ResponseEntity.ok(accountPrivacyService.updateConsent(currentUserId(authentication), request));
     }
 
+    @GetMapping("/deletion")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<DeletionStatusDto> deletionStatus(Authentication authentication) {
+        return ResponseEntity.ok(accountDeletionService.status(currentUserId(authentication)));
+    }
+
+    @PostMapping("/deletion/cancel")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<DeletionStatusDto> cancelDeletion(Authentication authentication) {
+        return ResponseEntity.ok(accountDeletionService.cancel(currentUserId(authentication)));
+    }
+
     @DeleteMapping("")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Void> eraseAccount(Authentication authentication) {
-        accountPrivacyService.eraseAccount(currentUserId(authentication));
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<DeletionStatusDto> requestDeletion(
+        @RequestBody(required = false) DeleteAccountRequest request,
+        Authentication authentication
+    ) {
+        return ResponseEntity.accepted().body(accountDeletionService.request(currentUserId(authentication), request));
     }
 
     private UUID currentUserId(Authentication authentication) {

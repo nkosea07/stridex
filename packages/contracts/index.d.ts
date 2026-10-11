@@ -9,6 +9,8 @@ export type EndpointKey =
   | 'myDataExport'
   | 'myConsent'
   | 'myAccount'
+  | 'myDeletionStatus'
+  | 'myDeletionCancel'
   | 'racesList'
   | 'raceById'
   | 'raceClone'

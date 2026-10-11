@@ -13,6 +13,7 @@ import type {
   RaceResultPage,
   Notification,
   BackendCheckpointDto,
+  DeletionStatus,
 } from '@/types';
 import { API_CONTRACT, getVersionedApiBase } from '@race-tracker/contracts';
 
@@ -318,6 +319,21 @@ class ApiClient {
     return this.request<void>(`/races/${raceId}/emergency`, {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  }
+
+  async deletionStatus(): Promise<DeletionStatus> {
+    return this.request<DeletionStatus>('/me/deletion');
+  }
+
+  async cancelDeletion(): Promise<DeletionStatus> {
+    return this.request<DeletionStatus>('/me/deletion/cancel', { method: 'POST' });
+  }
+
+  async deleteAccount(password: string, confirmation: string): Promise<DeletionStatus> {
+    return this.request<DeletionStatus>('/me', {
+      method: 'DELETE',
+      body: JSON.stringify({ password, confirmation }),
     });
   }
 }

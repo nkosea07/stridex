@@ -5,10 +5,16 @@ import com.racetracker.dto.privacy.ConsentUpdateRequest;
 import com.racetracker.model.Participant;
 import com.racetracker.model.Race;
 import com.racetracker.model.User;
+import com.racetracker.repository.AthleteFollowRepository;
 import com.racetracker.repository.AuthTokenRepository;
+import com.racetracker.repository.EmergencyAlertRepository;
+import com.racetracker.repository.GpsLocationRepository;
+import com.racetracker.repository.NotificationPreferenceRepository;
 import com.racetracker.repository.NotificationRepository;
+import com.racetracker.repository.ParticipantCredentialRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.PushDeviceRepository;
+import com.racetracker.repository.RaceMediaRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.service.impl.AccountPrivacyServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +41,12 @@ class AccountPrivacyServiceImplTest {
     @Mock NotificationRepository notificationRepository;
     @Mock PushDeviceRepository pushDeviceRepository;
     @Mock AuthTokenRepository authTokenRepository;
+    @Mock ParticipantCredentialRepository participantCredentialRepository;
+    @Mock GpsLocationRepository gpsLocationRepository;
+    @Mock NotificationPreferenceRepository notificationPreferenceRepository;
+    @Mock AthleteFollowRepository athleteFollowRepository;
+    @Mock RaceMediaRepository raceMediaRepository;
+    @Mock EmergencyAlertRepository emergencyAlertRepository;
     @Mock PasswordEncoder passwordEncoder;
     @Mock AuditEventService auditEventService;
 
@@ -44,7 +56,9 @@ class AccountPrivacyServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new AccountPrivacyServiceImpl(userRepository, participantRepository, notificationRepository,
-            pushDeviceRepository, authTokenRepository, passwordEncoder, auditEventService);
+            pushDeviceRepository, authTokenRepository, participantCredentialRepository, gpsLocationRepository,
+            notificationPreferenceRepository, athleteFollowRepository, raceMediaRepository, emergencyAlertRepository,
+            passwordEncoder, auditEventService);
     }
 
     private User user() {
@@ -71,7 +85,7 @@ class AccountPrivacyServiceImplTest {
     }
 
     @Test
-    void eraseAnonymizesUserAndParticipants() {
+    void eraseAnonymizesUserAndParticipantsAndRemovesPersonalData() {
         User user = user();
         Race race = new Race();
         race.setId(UUID.randomUUID());
@@ -80,7 +94,6 @@ class AccountPrivacyServiceImplTest {
             .emergencyContactPhone("0711").build();
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(participantRepository.findByUserIdOrderByRegisteredAtDesc(userId)).thenReturn(List.of(participant));
-        when(authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(any(), any())).thenReturn(List.of());
         when(passwordEncoder.encode(any())).thenReturn("newhash");
 
         service.eraseAccount(userId);
@@ -92,7 +105,16 @@ class AccountPrivacyServiceImplTest {
         assertThat(participant.getFirstName()).isEqualTo("Anonymous");
         assertThat(participant.getPhone()).isNull();
         assertThat(participant.getEmergencyContactPhone()).isNull();
+
         verify(pushDeviceRepository).deleteByUserId(userId);
+        verify(participantCredentialRepository).deleteByParticipantIdIn(List.of(participant.getId()));
+        verify(gpsLocationRepository).deleteByParticipantIdIn(List.of(participant.getId()));
+        verify(notificationRepository).deleteByUserId(userId);
+        verify(notificationPreferenceRepository).deleteByUserId(userId);
+        verify(athleteFollowRepository).deleteByUserId(userId);
+        verify(authTokenRepository).deleteByUserId(userId);
+        verify(raceMediaRepository).deleteByUploadedBy(userId);
+        verify(emergencyAlertRepository).anonymizeReporterByUserId(userId);
     }
 
     @Test

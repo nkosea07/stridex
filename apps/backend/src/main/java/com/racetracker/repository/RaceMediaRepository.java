@@ -16,4 +16,6 @@ public interface RaceMediaRepository extends JpaRepository<RaceMedia, UUID> {
     Optional<RaceMedia> findByRaceIdAndId(UUID raceId, UUID id);
 
     long countByRaceIdAndStatus(UUID raceId, RaceMedia.MediaStatus status);
+
+    void deleteByUploadedBy(UUID uploadedBy);
 }

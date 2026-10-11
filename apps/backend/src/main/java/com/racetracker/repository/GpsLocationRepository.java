@@ -64,4 +64,6 @@ public interface GpsLocationRepository extends JpaRepository<GpsLocation, UUID> 
         @Param("to") OffsetDateTime to,
         @Param("scale") int scale
     );
+
+    void deleteByParticipantIdIn(java.util.Collection<UUID> participantIds);
 }

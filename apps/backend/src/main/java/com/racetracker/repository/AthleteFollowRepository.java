@@ -19,4 +19,6 @@ public interface AthleteFollowRepository extends JpaRepository<AthleteFollow, UU
 
     @EntityGraph(attributePaths = {"user"})
     List<AthleteFollow> findByRaceIdAndParticipantId(UUID raceId, UUID participantId);
+
+    void deleteByUserId(UUID userId);
 }

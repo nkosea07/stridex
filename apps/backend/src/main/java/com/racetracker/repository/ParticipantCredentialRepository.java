@@ -3,6 +3,7 @@ package com.racetracker.repository;
 import com.racetracker.model.ParticipantCredential;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,4 +30,6 @@ public interface ParticipantCredentialRepository extends JpaRepository<Participa
         String credentialValue,
         UUID participantId
     );
+
+    void deleteByParticipantIdIn(Collection<UUID> participantIds);
 }

@@ -3,13 +3,18 @@ package com.racetracker.service.impl;
 import com.racetracker.dto.privacy.ConsentDto;
 import com.racetracker.dto.privacy.ConsentUpdateRequest;
 import com.racetracker.exception.ResourceNotFoundException;
-import com.racetracker.model.AuthToken;
 import com.racetracker.model.Participant;
 import com.racetracker.model.User;
+import com.racetracker.repository.AthleteFollowRepository;
 import com.racetracker.repository.AuthTokenRepository;
+import com.racetracker.repository.EmergencyAlertRepository;
+import com.racetracker.repository.GpsLocationRepository;
+import com.racetracker.repository.NotificationPreferenceRepository;
 import com.racetracker.repository.NotificationRepository;
+import com.racetracker.repository.ParticipantCredentialRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.PushDeviceRepository;
+import com.racetracker.repository.RaceMediaRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.service.AccountPrivacyService;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,6 +36,12 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
     private final NotificationRepository notificationRepository;
     private final PushDeviceRepository pushDeviceRepository;
     private final AuthTokenRepository authTokenRepository;
+    private final ParticipantCredentialRepository participantCredentialRepository;
+    private final GpsLocationRepository gpsLocationRepository;
+    private final NotificationPreferenceRepository notificationPreferenceRepository;
+    private final AthleteFollowRepository athleteFollowRepository;
+    private final RaceMediaRepository raceMediaRepository;
+    private final EmergencyAlertRepository emergencyAlertRepository;
     private final PasswordEncoder passwordEncoder;
     private final com.racetracker.service.AuditEventService auditEventService;
 
@@ -40,6 +51,12 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         NotificationRepository notificationRepository,
         PushDeviceRepository pushDeviceRepository,
         AuthTokenRepository authTokenRepository,
+        ParticipantCredentialRepository participantCredentialRepository,
+        GpsLocationRepository gpsLocationRepository,
+        NotificationPreferenceRepository notificationPreferenceRepository,
+        AthleteFollowRepository athleteFollowRepository,
+        RaceMediaRepository raceMediaRepository,
+        EmergencyAlertRepository emergencyAlertRepository,
         PasswordEncoder passwordEncoder,
         com.racetracker.service.AuditEventService auditEventService
     ) {
@@ -48,6 +65,12 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         this.notificationRepository = notificationRepository;
         this.pushDeviceRepository = pushDeviceRepository;
         this.authTokenRepository = authTokenRepository;
+        this.participantCredentialRepository = participantCredentialRepository;
+        this.gpsLocationRepository = gpsLocationRepository;
+        this.notificationPreferenceRepository = notificationPreferenceRepository;
+        this.athleteFollowRepository = athleteFollowRepository;
+        this.raceMediaRepository = raceMediaRepository;
+        this.emergencyAlertRepository = emergencyAlertRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditEventService = auditEventService;
     }
@@ -118,24 +141,27 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         User user = requireUser(userId);
 
         List<Participant> participants = participantRepository.findByUserIdOrderByRegisteredAtDesc(userId);
+        List<UUID> participantIds = participants.stream().map(Participant::getId).toList();
         for (Participant participant : participants) {
             anonymize(participant);
         }
         if (!participants.isEmpty()) {
             participantRepository.saveAll(participants);
+            participantCredentialRepository.deleteByParticipantIdIn(participantIds);
+            gpsLocationRepository.deleteByParticipantIdIn(participantIds);
         }
 
+        // Personal interaction and device data is removed outright.
         pushDeviceRepository.deleteByUserId(userId);
-        List<AuthToken> activeRefreshTokens = authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(
-            userId, AuthToken.TokenType.REFRESH);
-        OffsetDateTime now = OffsetDateTime.now();
-        for (AuthToken token : activeRefreshTokens) {
-            token.setConsumedAt(now);
-        }
-        if (!activeRefreshTokens.isEmpty()) {
-            authTokenRepository.saveAll(activeRefreshTokens);
-        }
+        athleteFollowRepository.deleteByUserId(userId);
+        notificationRepository.deleteByUserId(userId);
+        notificationPreferenceRepository.deleteByUserId(userId);
+        authTokenRepository.deleteByUserId(userId);
+        raceMediaRepository.deleteByUploadedBy(userId);
+        // Safety records are retained but de-identified.
+        emergencyAlertRepository.anonymizeReporterByUserId(userId);
 
+        OffsetDateTime now = OffsetDateTime.now();
         String anonymizedEmail = "deleted+" + userId + "@deleted.local";
         user.setEmail(anonymizedEmail);
         user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
@@ -146,6 +172,8 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         user.setEmailVerified(false);
         user.setMarketingConsent(false);
         user.setDataProcessingConsentAt(null);
+        user.setPrivacyPolicyVersion(null);
+        user.setPrivacyPolicyAcceptedAt(null);
         user.setDeletedAt(now);
         userRepository.save(user);
 

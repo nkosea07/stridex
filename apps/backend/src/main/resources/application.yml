@@ -173,6 +173,8 @@ racetracker:
   notifications:
     sms-enabled: ${SMS_ENABLED:false}
     whatsapp-enabled: ${WHATSAPP_ENABLED:false}
+  privacy:
+    deletion-grace-days: ${PRIVACY_DELETION_GRACE_DAYS:30}
   payments:
     enabled: ${PAYMENTS_ENABLED:false}
     base-url: ${PESEPAY_BASE_URL:https://api.test.sandbox.pesepay.com/payments-engine/v1}

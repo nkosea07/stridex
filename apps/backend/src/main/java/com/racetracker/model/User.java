@@ -71,6 +71,12 @@ public class User {
     @Column(name = "privacy_policy_accepted_at")
     private OffsetDateTime privacyPolicyAcceptedAt;
 
+    @Column(name = "deletion_requested_at")
+    private OffsetDateTime deletionRequestedAt;
+
+    @Column(name = "deletion_scheduled_for")
+    private OffsetDateTime deletionScheduledFor;
+
     @Column(name = "deleted_at")
     private OffsetDateTime deletedAt;
 

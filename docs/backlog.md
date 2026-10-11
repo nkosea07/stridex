@@ -8,6 +8,13 @@ state, the required scope, and acceptance criteria. Decisions that block work li
 
 ## B1. Self-service account deletion (full user-data erasure)
 
+**Status: delivered (2026-10-11).** Re-auth (password) + typed `DELETE` confirmation, a 30-day
+grace window (`racetracker.privacy.deletion-grace-days`), cancel, scheduled hard erase
+(`AccountDeletionServiceImpl`), and expanded coverage (credentials, GPS, notifications,
+preferences, follows, tokens, media, de-identified emergency alerts; payments/audit retained).
+Endpoints `DELETE /me`, `GET /me/deletion`, `POST /me/deletion/cancel`; web Settings dialog and
+mobile deletion screen. Email confirmation/completion notices remain a follow-up.
+
 **Goal.** Give a user an option to delete their account and have **all data related to that
 user** erased — or anonymized where a legal/financial retention obligation applies — following
 GDPR best practice.
@@ -63,6 +70,11 @@ for large datasets, and user communication.
 ---
 
 ## B2. Privacy policy page (web + mobile, referenced across both apps)
+
+**Status: delivered (2026-10-11).** Contract `legal` block (version + path), web `/privacy`
+page, mobile `privacy` screen, links from register (with acknowledgement) and settings, and the
+accepted version recorded at registration (`V32`). Client i18n still tracked in
+`open-decisions.md` #6.
 
 **Goal.** Publish a single, canonical privacy policy that is reachable from both the web and
 mobile apps, and reference it wherever personal data is collected or managed.

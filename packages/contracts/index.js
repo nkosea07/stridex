@@ -23,6 +23,8 @@ export const API_CONTRACT = {
     myDataExport: '/me/data',
     myConsent: '/me/consent',
     myAccount: '/me',
+    myDeletionStatus: '/me/deletion',
+    myDeletionCancel: '/me/deletion/cancel',
     racesList: '/races',
     raceById: '/races/:id',
     raceClone: '/races/:id/clone',

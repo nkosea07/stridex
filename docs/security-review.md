@@ -37,5 +37,6 @@ internal review to de-risk the pilot, not a substitute for an independent audit.
   the exact Pesepay reversal contract against the provider's docs before enabling in prod.
 - **Tokeninfo dependency**: Google verification relies on the remote tokeninfo endpoint; it
   fails closed on network errors, but consider local JWKS cache validation for resilience.
-- **Erase irreversibility**: `DELETE /me` is immediate and unrecoverable; consider a
-  confirmation step (re-auth) and a soft-delete grace window for production.
+- **Erase irreversibility**: `DELETE /me` now requires password re-auth + typed confirmation and
+  starts a grace period (default 30 days) with a cancel path before the hard erase runs; consider
+  a re-auth-confirmation email for production.

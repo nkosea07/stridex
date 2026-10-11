@@ -13,4 +13,5 @@ public interface AuthTokenRepository extends JpaRepository<AuthToken, UUID> {
     Optional<AuthToken> findByTokenAndTokenTypeAndConsumedAtIsNull(String token, AuthToken.TokenType tokenType);
     List<AuthToken> findByUserIdAndTokenTypeAndConsumedAtIsNull(UUID userId, AuthToken.TokenType tokenType);
     void deleteByExpiresAtBefore(OffsetDateTime cutoff);
+    void deleteByUserId(UUID userId);
 }

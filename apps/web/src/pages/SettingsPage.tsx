@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { API_CONTRACT } from '@race-tracker/contracts'
 import { 
   User, 
@@ -18,6 +18,14 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -32,11 +40,16 @@ import { enableWebPush, isWebPushConfigured } from '@/lib/push'
 
 export function SettingsPage() {
   const { user, updateUser } = useAuth()
+  const navigate = useNavigate()
   const { theme, resolvedTheme, setTheme } = useTheme()
   const [profileSaving, setProfileSaving] = useState(false)
   const [passwordResetSending, setPasswordResetSending] = useState(false)
   const [pushBusy, setPushBusy] = useState(false)
   const [pushRegistered, setPushRegistered] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [deleteBusy, setDeleteBusy] = useState(false)
   const [profile, setProfile] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -100,6 +113,25 @@ export function SettingsPage() {
       toast.error(error instanceof Error ? error.message : 'Unable to start password reset')
     } finally {
       setPasswordResetSending(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmation.trim().toUpperCase() !== 'DELETE') {
+      toast.error('Type DELETE to confirm.')
+      return
+    }
+    setDeleteBusy(true)
+    try {
+      await authApi.deleteAccount(deletePassword, deleteConfirmation.trim())
+      setDeleteDialogOpen(false)
+      toast.success('Your account is scheduled for deletion and you have been signed out.')
+      authApi.logout()
+      navigate('/login', { replace: true })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to delete account')
+    } finally {
+      setDeleteBusy(false)
     }
   }
 
@@ -428,15 +460,59 @@ export function SettingsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">Delete Account</p>
-                    <p className="text-xs text-muted-foreground">Account deletion requires a retention and legal workflow that is not available yet.</p>
+                    <p className="text-xs text-muted-foreground">
+                      Deactivates your account immediately and erases your personal data after a grace period.
+                      You can cancel during the grace period by signing back in.
+                    </p>
                   </div>
-                  <Button variant="destructive" disabled>Unavailable</Button>
+                  <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>Delete Account</Button>
                 </div>
               </CardContent>
             </Card>
           </div>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete your account</DialogTitle>
+            <DialogDescription>
+              This deactivates your account and schedules your personal data for erasure after a grace period.
+              Export any data you need first.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="delete-password">Confirm your password</Label>
+              <Input
+                id="delete-password"
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="delete-confirmation">Type DELETE to confirm</Label>
+              <Input
+                id="delete-confirmation"
+                value={deleteConfirmation}
+                onChange={(e) => setDeleteConfirmation(e.target.value)}
+                placeholder="DELETE"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleteBusy}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleDeleteAccount()} disabled={deleteBusy}>
+              {deleteBusy ? 'Scheduling…' : 'Delete my account'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

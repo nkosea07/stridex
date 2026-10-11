@@ -21,6 +21,7 @@ public class RaceTrackerProperties {
     private Payments payments = new Payments();
     private Notifications notifications = new Notifications();
     private OAuth oauth = new OAuth();
+    private Privacy privacy = new Privacy();
 
     @Getter
     @Setter
@@ -114,5 +115,11 @@ public class RaceTrackerProperties {
     @Setter
     public static class OAuth {
         private String googleClientId;
+    }
+
+    @Getter
+    @Setter
+    public static class Privacy {
+        private int deletionGraceDays = 30;
     }
 }

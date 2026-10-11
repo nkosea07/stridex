@@ -7,6 +7,7 @@ import com.racetracker.model.User;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.security.CustomUserDetailsService;
 import com.racetracker.security.JwtService;
+import com.racetracker.service.AccountDeletionService;
 import com.racetracker.service.AccountPrivacyService;
 import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,9 @@ class AccountPrivacyControllerWebMvcTest {
 
     @MockBean
     private AccountPrivacyService accountPrivacyService;
+
+    @MockBean
+    private AccountDeletionService accountDeletionService;
 
     @MockBean
     private UserRepository userRepository;

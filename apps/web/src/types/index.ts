@@ -605,3 +605,9 @@ export interface PublicAthleteTracking {
   distanceRemaining?: number
   splits: PublicCheckpointSplit[]
 }
+
+export interface DeletionStatus {
+  deletionRequested: boolean
+  requestedAt?: string | null
+  scheduledFor?: string | null
+}
