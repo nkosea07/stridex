@@ -26,14 +26,20 @@ Per-app docs: `apps/backend/README.md`, `apps/mobile/README.md`, `apps/rfid-gate
 
 ## Verify (matches CI)
 
-From the root:
-- `pnpm contracts:validate`
+CI is `.github/workflows/pilot-validation.yml` (runs on push and PR). Reproduce locally.
+
+From the root (after `pnpm install --frozen-lockfile`):
+- `pnpm contracts:validate` (gates the web build — run it before/with any web build)
 - `pnpm --filter web lint && pnpm --filter web typecheck && pnpm --filter web test && pnpm --filter web build`
 - `pnpm --dir apps/mobile lint`, `pnpm --dir apps/mobile exec tsc --noEmit`, `pnpm --dir apps/mobile test`
 - `pnpm --filter rfid-gateway test`
-- Backend (Java 17, from `apps/backend`): `mvn -B test`; focused: `mvn -Dtest=ClassName test`.
 
-`pnpm contracts:validate` gates the web build, so run it before/with any web build.
+Java 17, each command from its own app directory:
+- `apps/backend`: `mvn -B test` (focused: `mvn -Dtest=ClassName test`)
+- `apps/rfid-reader-demo`: `mvn -B test`
+- `apps/rfid-reader-impinj`: `mvn -B test`
+
+CI runs the JS job on Node 22; the local floor is Node 20.19 (`.node-version`).
 
 ## API contract (do not hand-edit clients)
 
@@ -58,3 +64,21 @@ From the root:
 - Public spectator endpoints (`/api/v1/public/races/**`) are anonymous and must stay spectator-safe/PII-free: no emails, phones, emergency/medical data, device tokens, or audit fields.
 - RFID reader ingest authenticates with `X-RFID-Reader-Key`; reader admin routes use JWT. A reader API key is shown once at creation and stored only as a SHA-256 hash.
 - CI is `.github/workflows/pilot-validation.yml`: JS job (order above) → backend on Java 17 + PostGIS service → Docker image builds.
+
+## Agent workflow
+
+OpenCode subagents live in `.opencode/agents/` (tracked in git). The primary agent
+orchestrates non-trivial work through them in this order:
+
+- `architect` — first, for diagnosis and a precise implementation plan. Read-only (`edit` denied).
+- `developer` — implement an approved plan; run focused tests, then the wider Verify set.
+- `tester` — independently verify the change; fix straightforward defects only.
+- `reviewer` — final independent review (correctness, security, contracts, regressions).
+
+Rules:
+- Read the relevant `apps/<app>/README.md` before changing that app (backend/mobile/gateway
+  READMEs load via `instructions` in `opencode.jsonc`).
+- Verify against the Verify section above; never claim a test/build passed unless it ran.
+- Load a skill via the skill tool when the task matches one (e.g. `frontend-design`,
+  `postgresql-code-review`). Skills are user-global (`~/.agents/skills`, `~/.claude/skills`);
+  the repo defines none.
