@@ -1,0 +1,38 @@
+server:
+  port: ${ADAPTER_PORT:8091}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+adapter:
+  gateway:
+    base-url: ${RFID_GATEWAY_BASE_URL:http://localhost:8090}
+    reads-path: ${RFID_GATEWAY_READS_PATH:/reads}
+    batch-size: ${RFID_GATEWAY_BATCH_SIZE:50}
+    flush-interval-ms: ${RFID_GATEWAY_FLUSH_INTERVAL_MS:500}
+    timeout-ms: ${RFID_GATEWAY_TIMEOUT_MS:5000}
+    retry-initial-delay-ms: ${RFID_GATEWAY_RETRY_INITIAL_DELAY_MS:1000}
+    retry-max-delay-ms: ${RFID_GATEWAY_RETRY_MAX_DELAY_MS:10000}
+  reader:
+    mode: ${IMPINJ_READER_MODE:mock}
+    host: ${IMPINJ_READER_HOST:127.0.0.1}
+    port: ${IMPINJ_READER_PORT:5084}
+    name: ${IMPINJ_READER_NAME:impinj-r700}
+    sdk-dir: ${IMPINJ_SDK_DIR:}
+    enabled-antennas: ${IMPINJ_ENABLED_ANTENNAS:1,2,3,4}
+    tx-power-db-m: ${IMPINJ_TX_POWER_DBM:}
+    rx-sensitivity-db-m: ${IMPINJ_RX_SENSITIVITY_DBM:}
+    session: ${IMPINJ_SESSION:2}
+    search-mode: ${IMPINJ_SEARCH_MODE:DualTarget}
+    keepalive-interval-ms: ${IMPINJ_KEEPALIVE_INTERVAL_MS:5000}
+    connect-retry-initial-delay-ms: ${IMPINJ_CONNECT_RETRY_INITIAL_DELAY_MS:1000}
+    connect-retry-max-delay-ms: ${IMPINJ_CONNECT_RETRY_MAX_DELAY_MS:15000}
+    health-check-interval-ms: ${IMPINJ_HEALTH_CHECK_INTERVAL_MS:3000}
+  mock:
+    enabled: ${IMPINJ_MOCK_ENABLED:true}
+    emit-interval-ms: ${IMPINJ_MOCK_EMIT_INTERVAL_MS:2000}
+    tag-prefix: ${IMPINJ_MOCK_TAG_PREFIX:MOCK-TAG}
+    antenna: ${IMPINJ_MOCK_ANTENNA:A1}

@@ -1,44 +1,63 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, Pressable } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/auth';
+import { api } from '@/lib/api';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuthStore();
+  const [challenge, setChallenge] = useState<{ token: string; enrollmentRequired: boolean } | null>(null);
+  const [setup, setSetup] = useState<{ secret: string; provisioningUri: string } | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const { login, completeMfa } = useAuthStore();
 
   const handleLogin = async () => {
-    console.log('[Login] Attempting login with:', email);
-    
     if (!email || !password) {
-      console.warn('[Login] Validation failed: email or password missing');
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
     setIsLoading(true);
     try {
-      console.log('[Login] Calling authStore.login...');
-      await login(email.trim(), password);
-      console.log('[Login] Login successful. Navigating to (tabs)...');
-      
-      // Use setImmediate or setTimeout to ensure state updates have propagated
-      setTimeout(() => {
+      const result = await login(email.trim(), password);
+      if (result.kind === 'mfa') {
+        setChallenge({ token: result.challengeToken, enrollmentRequired: result.enrollmentRequired });
+        if (result.enrollmentRequired) setSetup(await api.beginTotpEnrollment(result.challengeToken));
+      } else {
         router.replace('/(tabs)');
-      }, 0);
-      
+      }
     } catch (error: any) {
-      console.error('[Login] Login process failed:', error);
       const errorMessage = error?.message || 'Invalid email or password';
-      Alert.alert('Login Failed', errorMessage);
+      Alert.alert('Login Failed', errorMessage === 'Email verification required'
+        ? 'Verify your email before signing in.'
+        : errorMessage);
     } finally {
-      console.log('[Login] Login process completed');
       setIsLoading(false);
     }
+  };
+
+  const handleMfa = async () => {
+    if (!challenge || !mfaCode.trim()) return;
+    setIsLoading(true);
+    try {
+      const response = await completeMfa(challenge.token, mfaCode.trim(), challenge.enrollmentRequired);
+      if (response.recoveryCodes?.length) setRecoveryCodes(response.recoveryCodes);
+      else router.replace('/(tabs)');
+    } catch (error: any) {
+      Alert.alert('Verification failed', error?.message || 'The code was rejected or the challenge expired.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const continueAfterRecoveryCodes = () => {
+    setRecoveryCodes([]);
+    router.replace('/(tabs)');
   };
 
   return (
@@ -56,6 +75,40 @@ export default function LoginScreen() {
         </View>
 
         {/* Form */}
+        {recoveryCodes.length > 0 ? (
+          <View style={styles.form}>
+            <Text style={styles.subtitle}>Store these one-use recovery codes somewhere safe:</Text>
+            <Text selectable style={styles.recoveryCodes}>{recoveryCodes.join('\n')}</Text>
+            <TouchableOpacity style={styles.signInButton} onPress={continueAfterRecoveryCodes}>
+              <Text style={styles.signInButtonText}>Continue</Text>
+            </TouchableOpacity>
+          </View>
+        ) : challenge ? (
+          <View style={styles.form}>
+            {setup && (
+              <View style={styles.setupBox}>
+                <Text style={styles.setupText}>Add Race Tracker to your authenticator with this setup key:</Text>
+                <Text selectable style={styles.secret}>{setup.secret}</Text>
+                <Text selectable style={styles.setupUri}>{setup.provisioningUri}</Text>
+              </View>
+            )}
+            <TextInput
+              style={styles.mfaInput}
+              placeholder="Authenticator or recovery code"
+              value={mfaCode}
+              onChangeText={setMfaCode}
+              autoCapitalize="characters"
+              autoComplete="one-time-code"
+              maxLength={64}
+            />
+            <TouchableOpacity style={[styles.signInButton, isLoading && styles.signInButtonDisabled]} onPress={handleMfa} disabled={isLoading}>
+              <Text style={styles.signInButtonText}>{isLoading ? 'Verifying...' : challenge.enrollmentRequired ? 'Enable MFA and continue' : 'Verify and continue'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setChallenge(null); setSetup(null); setMfaCode(''); }} disabled={isLoading}>
+              <Text style={styles.forgotPasswordText}>Back to sign in</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
         <View style={styles.form}>
           <View style={styles.inputContainer}>
             <Ionicons name="mail-outline" size={20} color="#6B7280" style={styles.inputIcon} />
@@ -109,25 +162,7 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
         </View>
-
-        {/* Social Login */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or continue with</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <View style={styles.socialButtons}>
-          <TouchableOpacity style={styles.socialButton}>
-            <Ionicons name="logo-google" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.socialButton}>
-            <Ionicons name="logo-apple" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.socialButton}>
-            <Ionicons name="logo-facebook" size={24} color="#1F2937" />
-          </TouchableOpacity>
-        </View>
+        )}
 
         {/* Sign Up Link */}
         <View style={styles.signUpContainer}>
@@ -167,6 +202,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6B7280',
     marginTop: 8,
+  },
+  setupBox: {
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    backgroundColor: '#F9FAFB',
+    gap: 8,
+  },
+  setupText: {
+    color: '#374151',
+    fontSize: 14,
+  },
+  secret: {
+    color: '#111827',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '700',
+  },
+  setupUri: {
+    color: '#6B7280',
+    fontSize: 11,
+  },
+  mfaInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  recoveryCodes: {
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    color: '#111827',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 28,
   },
   form: {
     gap: 16,

@@ -7,19 +7,32 @@ spring:
   # Database Configuration
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:race_tracker}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
+    username: ${DB_USERNAME:race_admin}
+    password: ${DB_PASSWORD:localdevpassword}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
       idle-timeout: 30000
       connection-timeout: 20000
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    clean-disabled: true
   
   # JPA Configuration
   jpa:
     hibernate:
-      ddl-auto: update  # Use 'update' for development, 'validate' for production
+      ddl-auto: validate
     show-sql: ${SHOW_SQL:false}
     properties:
       hibernate:
@@ -54,10 +67,38 @@ server:
   servlet:
     context-path: /api
 
+management:
+  endpoints:
+    enabled-by-default: false
+    web:
+      base-path: /actuator
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      enabled: true
+      probes:
+        enabled: true
+      show-details: never
+    info:
+      enabled: true
+    prometheus:
+      enabled: true
+  info:
+    defaults:
+      enabled: false
+    build:
+      enabled: true
+
+info:
+  app:
+    name: race-tracker-backend
+    description: Backend service for Race/Marathon Tracking Platform
+
 # JWT Configuration
 jwt:
   secret: ${JWT_SECRET}
-  access-token-expiration: 86400000    # 24 hours
+  access-token-expiration: 900000      # 15 minutes
   refresh-token-expiration: 604800000   # 7 days
 
 # CORS Configuration
@@ -95,12 +136,24 @@ logging:
 
 # Race Tracker Custom Configuration
 racetracker:
+  security:
+    trusted-proxies: ${TRUSTED_PROXIES:}
+  auth:
+    browser-cookie-secure: ${BROWSER_COOKIE_SECURE:false}
+  mfa:
+    encryption-key: ${MFA_ENCRYPTION_KEY:}
   bib:
     qr-code-size: 200
     default-prefix: "RT"
   tracking:
     gps-update-interval-seconds: 5
     checkpoint-radius-meters: 50
+    accuracy-threshold-meters: ${TRACKING_ACCURACY_THRESHOLD_METERS:100}
+    max-plausible-speed-kmh: ${TRACKING_MAX_PLAUSIBLE_SPEED_KMH:60}
+    smoothing-factor: ${TRACKING_SMOOTHING_FACTOR:0.4}
+    min-distance-for-accumulation-meters: ${TRACKING_MIN_DISTANCE_METERS:5}
+    max-track-points: ${TRACKING_MAX_TRACK_POINTS:1000}
+    heatmap-scale: ${TRACKING_HEATMAP_SCALE:3}
   email:
     enabled: ${MAIL_ENABLED:false}
     from-address: ${MAIL_FROM:noreply@racetracker.com}
@@ -108,6 +161,29 @@ racetracker:
     frontend-base-url: ${FRONTEND_URL:http://localhost:5173}
     verification-path: /verify-email
     reset-password-path: /reset-password
+  push:
+    enabled: ${PUSH_ENABLED:false}
+    service-account-json: ${FCM_SERVICE_ACCOUNT_JSON:}
+    project-id: ${FCM_PROJECT_ID:}
+  payments:
+    enabled: ${PAYMENTS_ENABLED:false}
+    base-url: ${PESEPAY_BASE_URL:https://api.test.sandbox.pesepay.com/payments-engine/v1}
+    integration-key: ${PESEPAY_INTEGRATION_KEY:}
+    encryption-key: ${PESEPAY_ENCRYPTION_KEY:}
+    currency: ${PAYMENTS_CURRENCY:USD}
+    result-url: ${PAYMENTS_RESULT_URL:}
+    return-url: ${PAYMENTS_RETURN_URL:}
+  rfid:
+    simulation-enabled: ${RFID_SIMULATION_ENABLED:true}
+    stream-key: ${RFID_STREAM_KEY:race.rfid.ingest}
+    consumer-group: ${RFID_CONSUMER_GROUP:race-tracker-rfid}
+    consumer-name: ${RFID_CONSUMER_NAME:${spring.application.name}}
+    worker-batch-size: ${RFID_WORKER_BATCH_SIZE:50}
+    worker-poll-timeout-millis: ${RFID_WORKER_POLL_TIMEOUT_MILLIS:1000}
+    worker-fixed-delay-millis: ${RFID_WORKER_FIXED_DELAY_MILLIS:500}
+    recovery-fixed-delay-millis: ${RFID_RECOVERY_FIXED_DELAY_MILLIS:5000}
+    reader-silence-timeout-seconds: ${RFID_READER_SILENCE_TIMEOUT_SECONDS:120}
+    gateway-backlog-degraded-threshold: ${RFID_GATEWAY_BACKLOG_DEGRADED_THRESHOLD:100}
   api:
     version: 1
   seed:
@@ -130,6 +206,10 @@ logging:
     com.racetracker: DEBUG
 
 racetracker:
+  auth:
+    browser-cookie-secure: true
+  rfid:
+    simulation-enabled: true
   seed:
     default-admin:
       enabled: true
@@ -144,8 +224,35 @@ spring:
     hibernate:
       ddl-auto: validate
     show-sql: false
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+cors:
+  allowed-origins:
+    - ${FRONTEND_URL}
+
+websocket:
+  allowed-origins:
+    - ${FRONTEND_URL}
 
 logging:
   level:
     root: WARN
     com.racetracker: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+
+racetracker:
+  auth:
+    browser-cookie-secure: true
+  rfid:
+    simulation-enabled: false

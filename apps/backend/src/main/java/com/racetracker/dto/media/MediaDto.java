@@ -1,0 +1,20 @@
+package com.racetracker.dto.media;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+@Getter
+@Setter
+public class MediaDto {
+    private UUID id;
+    private UUID raceId;
+    private UUID participantId;
+    private String mediaType;
+    private String url;
+    private String caption;
+    private String status;
+    private OffsetDateTime createdAt;
+}

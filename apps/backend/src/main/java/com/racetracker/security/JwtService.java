@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
@@ -34,11 +36,40 @@ public class JwtService {
     }
 
     public String generateAccessToken(User user) {
-        return buildToken(user, jwtProperties.getAccessTokenExpiration(), TOKEN_TYPE_ACCESS);
+        return generateAccessToken(user, false);
+    }
+
+    public String generateAccessToken(User user, boolean mfaVerified) {
+        return buildToken(user, jwtProperties.getAccessTokenExpiration(), TOKEN_TYPE_ACCESS, mfaVerified, null, null);
     }
 
     public String generateRefreshToken(User user) {
-        return buildToken(user, jwtProperties.getRefreshTokenExpiration(), TOKEN_TYPE_REFRESH);
+        return generateRefreshToken(user, false);
+    }
+
+    public String generateRefreshToken(User user, boolean mfaVerified) {
+        return buildToken(user, jwtProperties.getRefreshTokenExpiration(), TOKEN_TYPE_REFRESH, mfaVerified, null, null);
+    }
+
+    public String generateMfaChallengeToken(User user, UUID challengeId, String purpose) {
+        return buildToken(user, java.time.Duration.ofMinutes(5).toMillis(), "mfa_challenge", false, challengeId, purpose);
+    }
+
+    public boolean isMfaVerified(String token) {
+        try {
+            return Boolean.TRUE.equals(extractAllClaims(token).get("mfa", Boolean.class));
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    public UUID extractMfaChallengeId(String token) {
+        String value = extractAllClaims(token).get("cid", String.class);
+        return value == null ? null : UUID.fromString(value);
+    }
+
+    public String extractMfaPurpose(String token) {
+        return extractAllClaims(token).get("purpose", String.class);
     }
 
     public String extractTokenType(String token) {
@@ -63,28 +94,48 @@ public class JwtService {
         return value == null ? null : UUID.fromString(value);
     }
 
+    public OffsetDateTime extractExpiration(String token) {
+        return extractAllClaims(token).getExpiration().toInstant().atOffset(ZoneOffset.UTC);
+    }
+
     public boolean isTokenValid(String token, org.springframework.security.core.userdetails.UserDetails userDetails) {
         try {
             String username = extractUsername(token);
             return username != null
                 && username.equals(userDetails.getUsername())
+                && userDetails.isEnabled()
+                && userDetails.isAccountNonExpired()
+                && userDetails.isAccountNonLocked()
+                && userDetails.isCredentialsNonExpired()
                 && !isTokenExpired(token);
         } catch (Exception ex) {
             return false;
         }
     }
 
-    private String buildToken(User user, long expirationMillis, String tokenType) {
+    private String buildToken(
+        User user,
+        long expirationMillis,
+        String tokenType,
+        boolean mfaVerified,
+        UUID challengeId,
+        String challengePurpose
+    ) {
         Instant now = Instant.now();
-        return Jwts.builder()
+        var token = Jwts.builder()
             .subject(user.getEmail())
             .claim("uid", user.getId().toString())
             .claim("role", user.getRole().name())
             .claim("typ", tokenType)
             .issuedAt(Date.from(now))
-            .expiration(Date.from(now.plusMillis(expirationMillis)))
-            .signWith(signingKey)
-            .compact();
+            .expiration(Date.from(now.plusMillis(expirationMillis)));
+        if (TOKEN_TYPE_ACCESS.equals(tokenType) || TOKEN_TYPE_REFRESH.equals(tokenType)) {
+            token.claim("mfa", mfaVerified);
+        }
+        if (challengeId != null) {
+            token.claim("cid", challengeId.toString()).claim("purpose", challengePurpose);
+        }
+        return token.signWith(signingKey).compact();
     }
 
     private boolean isTokenExpired(String token) {

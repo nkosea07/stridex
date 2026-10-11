@@ -123,22 +123,22 @@ export function RaceDetailPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="cursor-pointer" onClick={() => navigate(`/races/${raceId}/participants`)}>
+        <Card className="cursor-pointer" onClick={() => navigate(`/admin/races/${raceId}/participants`)}>
           <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Participants</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{participants.length.toLocaleString()}</div><Progress value={registrationProgress} className="mt-2 h-1" /></CardContent>
         </Card>
 
-        <Card className="cursor-pointer" onClick={() => navigate(`/races/${raceId}/live`)}>
+        <Card className="cursor-pointer" onClick={() => navigate(`/admin/races/${raceId}/live`)}>
           <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Live Tracking</CardTitle><MapPin className="h-4 w-4 text-live" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{live.length.toLocaleString()}</div><p className="text-xs text-muted-foreground">Athletes on course</p></CardContent>
         </Card>
 
-        <Card className="cursor-pointer" onClick={() => navigate(`/races/${raceId}/checkpoints`)}>
+        <Card className="cursor-pointer" onClick={() => navigate(`/admin/races/${raceId}/checkpoints`)}>
           <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Checkpoints</CardTitle><Timer className="h-4 w-4 text-muted-foreground" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{checkpoints.length}</div><p className="text-xs text-muted-foreground">Configured timing points</p></CardContent>
         </Card>
 
-        <Card className="cursor-pointer" onClick={() => navigate(`/races/${raceId}/results`)}>
+        <Card className="cursor-pointer" onClick={() => navigate(`/admin/races/${raceId}/results`)}>
           <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Finished</CardTitle><Trophy className="h-4 w-4 text-primary" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{byStatus.finished.toLocaleString()}</div><Progress value={finishProgress} className="mt-2 h-1" /></CardContent>
         </Card>

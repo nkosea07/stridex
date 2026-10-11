@@ -1,7 +1,9 @@
 package com.racetracker.service.impl;
 
 import com.racetracker.dto.result.RaceResultDto;
+import com.racetracker.dto.result.RaceResultPageDto;
 import com.racetracker.dto.result.ResultSplitDto;
+import com.racetracker.exception.ApiException;
 import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.mapper.ParticipantMapper;
@@ -11,9 +13,13 @@ import com.racetracker.model.Participant;
 import com.racetracker.model.Race;
 import com.racetracker.model.User;
 import com.racetracker.repository.CheckpointRecordRepository;
+import com.racetracker.repository.ParticipantPenaltyRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
+import com.racetracker.repository.RaceResultRowProjection;
+import com.racetracker.repository.RaceResultRevisionRepository;
+import org.springframework.data.domain.PageRequest;
 import com.racetracker.service.ResultService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -38,37 +44,61 @@ public class ResultServiceImpl implements ResultService {
     private final CheckpointRecordRepository checkpointRecordRepository;
     private final UserRepository userRepository;
     private final ParticipantMapper participantMapper;
+    private final RaceResultRevisionRepository resultRevisionRepository;
+    private final ParticipantPenaltyRepository penaltyRepository;
 
     public ResultServiceImpl(
         RaceRepository raceRepository,
         ParticipantRepository participantRepository,
         CheckpointRecordRepository checkpointRecordRepository,
         UserRepository userRepository,
-        ParticipantMapper participantMapper
+        ParticipantMapper participantMapper,
+        RaceResultRevisionRepository resultRevisionRepository,
+        ParticipantPenaltyRepository penaltyRepository
     ) {
         this.raceRepository = raceRepository;
         this.participantRepository = participantRepository;
         this.checkpointRecordRepository = checkpointRecordRepository;
         this.userRepository = userRepository;
         this.participantMapper = participantMapper;
+        this.resultRevisionRepository = resultRevisionRepository;
+        this.penaltyRepository = penaltyRepository;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<RaceResultDto> listByRace(UUID raceId) {
-        Race race = raceRepository.findById(raceId)
-            .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        requireRace(raceId);
+        return collectAllResultPages(raceId, null, false);
+    }
 
-        List<Participant> participants = participantRepository.findByRaceId(raceId);
-        List<ResultComputation> rows = participants.stream()
-            .map(p -> computeResult(race, p))
-            .toList();
+    @Override
+    @Transactional(readOnly = true)
+    public RaceResultPageDto listByRacePage(UUID raceId, int page, int size) {
+        return listByRacePage(raceId, page, size, null);
+    }
 
-        assignPositions(rows);
+    @Override
+    @Transactional(readOnly = true)
+    public RaceResultPageDto listByRacePage(UUID raceId, int page, int size, Long expectedRevision) {
+        requireRace(raceId);
+        return resultPage(raceId, null, false, page, size, expectedRevision);
+    }
 
-        return rows.stream()
-            .map(ResultComputation::dto)
-            .toList();
+    @Override
+    @Transactional(readOnly = true)
+    public RaceResultPageDto listPublishedByRacePage(UUID raceId, int page, int size) {
+        return listPublishedByRacePage(raceId, page, size, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RaceResultPageDto listPublishedByRacePage(UUID raceId, int page, int size, Long expectedRevision) {
+        Race race = requireRace(raceId);
+        if (race.getResultsPublishedAt() == null) {
+            throw new ResourceNotFoundException("Race results are not published");
+        }
+        return resultPage(raceId, null, true, page, size, expectedRevision);
     }
 
     @Override
@@ -80,22 +110,44 @@ public class ResultServiceImpl implements ResultService {
         Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
 
-        List<RaceResultDto> all = listByRace(raceId);
-        return all.stream()
-            .filter(r -> participantId.equals(r.getParticipantId()))
-            .findFirst()
-            .orElseGet(() -> computeResult(race, participant).dto());
+        List<RaceResultRowProjection> rows = participantRepository.findResultRows(
+            raceId, null, false, participantId, PageRequest.of(0, 1)
+        );
+        return assembleResults(rows).stream().findFirst()
+            .orElseThrow(() -> new ResourceNotFoundException("Result not found"));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<RaceResultDto> getMyResults() {
         User user = resolveCurrentUser();
-        List<Participant> participants = participantRepository.findByUserIdOrderByRegisteredAtDesc(user.getId());
+        return collectAllResultPages(null, user.getId(), false);
+    }
 
-        return participants.stream()
-            .map(participant -> getByRaceAndParticipant(participant.getRace().getId(), participant.getId()))
-            .toList();
+    /**
+     * Iterates every result page so callers that need the full set (exports, team/country
+     * rankings) are never silently truncated at a single page limit.
+     */
+    private List<RaceResultDto> collectAllResultPages(UUID raceId, UUID userId, boolean publishedOnly) {
+        List<RaceResultDto> all = new ArrayList<>();
+        int page = 0;
+        int size = 100;
+        Long revision = null;
+        RaceResultPageDto resultPage;
+        do {
+            resultPage = resultPage(raceId, userId, publishedOnly, page, size, revision);
+            all.addAll(resultPage.items());
+            revision = resultPage.revision();
+            page++;
+        } while (!resultPage.items().isEmpty() && all.size() < resultPage.totalElements());
+        return all;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RaceResultPageDto getMyResultsPage(int page, int size) {
+        User user = resolveCurrentUser();
+        return resultPage(null, user.getId(), false, page, size, null);
     }
 
     @Override
@@ -106,13 +158,99 @@ public class ResultServiceImpl implements ResultService {
 
         if (race.getStatus() != Race.RaceStatus.COMPLETED) {
             race.setStatus(Race.RaceStatus.COMPLETED);
-            raceRepository.save(race);
         }
+        if (race.getResultsPublishedAt() == null) race.setResultsPublishedAt(OffsetDateTime.now());
+        raceRepository.save(race);
+    }
+
+    private RaceResultPageDto resultPage(UUID raceId, UUID userId, boolean publishedOnly, int page, int size, Long expectedRevision) {
+        if (page < 0 || size < 1) throw new ApiException("Page must be non-negative and size must be positive");
+        int boundedSize = Math.min(size, 100);
+        long revision = raceId == null ? 0 : resultRevisionRepository.currentRevision(raceId);
+        if (raceId != null && page > 0 && expectedRevision == null) {
+            throw new ApiException("The result revision is required when requesting subsequent pages");
+        }
+        if (expectedRevision != null && expectedRevision != revision) {
+            throw new com.racetracker.exception.ConflictException("Results changed; restart pagination from the first page");
+        }
+        List<RaceResultRowProjection> projections = participantRepository.findResultRows(
+            raceId, userId, publishedOnly, null, PageRequest.of(page, boundedSize)
+        );
+        long total = participantRepository.countResultRows(raceId, userId, publishedOnly);
+        return new RaceResultPageDto(assembleResults(projections), page, boundedSize, total,
+            total == 0 ? 0 : (int) ((total + boundedSize - 1) / boundedSize), revision);
+    }
+
+    private List<RaceResultDto> assembleResults(List<RaceResultRowProjection> projections) {
+        if (projections.isEmpty()) return List.of();
+        List<UUID> participantIds = projections.stream().map(RaceResultRowProjection::getParticipantId).toList();
+        Map<UUID, Participant> participantById = participantRepository.findByIdIn(participantIds).stream()
+            .collect(Collectors.toMap(Participant::getId, participant -> participant));
+        Map<UUID, List<CheckpointRecord>> recordsByParticipant = checkpointRecordRepository
+            .findByParticipantIdInOrderByRecordedAtAsc(participantIds)
+            .stream()
+            .collect(Collectors.groupingBy(record -> record.getParticipant().getId()));
+
+        Map<UUID, Integer> penaltySecondsByParticipant = penaltyRepository.findByParticipantIdIn(participantIds)
+            .stream()
+            .collect(Collectors.groupingBy(
+                penalty -> penalty.getParticipant().getId(),
+                Collectors.summingInt(penalty -> penalty.getSeconds() == null ? 0 : penalty.getSeconds())
+            ));
+
+        List<RaceResultDto> results = new ArrayList<>(projections.size());
+        for (RaceResultRowProjection projection : projections) {
+            Participant participant = participantById.get(projection.getParticipantId());
+            if (participant == null || participant.getRace() == null) continue;
+            ResultComputation computed = computeResult(
+                participant.getRace(), participant,
+                recordsByParticipant.getOrDefault(participant.getId(), List.of()),
+                penaltySecondsByParticipant.getOrDefault(participant.getId(), 0)
+            );
+            RaceResultDto dto = computed.dto();
+            dto.setOverallPosition(toPosition(projection.getOverallPosition()));
+            dto.setGenderPosition(toPosition(projection.getGenderPosition()));
+            dto.setCategoryPosition(toPosition(projection.getCategoryPosition()));
+            dto.setAgeGroup(projection.getAgeGroup());
+            dto.setAgeGroupPosition(toPosition(projection.getAgeGroupPosition()));
+            dto.setMedal(medalFor(projection.getOverallPosition(), dto.isOfficial(), dto.isDisqualified()));
+            results.add(dto);
+        }
+        return List.copyOf(results);
+    }
+
+    private Race requireRace(UUID raceId) {
+        return raceRepository.findById(raceId)
+            .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+    }
+
+    private Integer toPosition(Long position) {
+        return position == null ? null : Math.toIntExact(position);
+    }
+
+    private String medalFor(Long overallPosition, boolean official, boolean disqualified) {
+        if (!official || disqualified || overallPosition == null) {
+            return null;
+        }
+        return switch (overallPosition.intValue()) {
+            case 1 -> "GOLD";
+            case 2 -> "SILVER";
+            case 3 -> "BRONZE";
+            default -> null;
+        };
     }
 
     private ResultComputation computeResult(Race race, Participant participant) {
         List<CheckpointRecord> records = checkpointRecordRepository
             .findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participant.getId(), race.getId());
+        return computeResult(race, participant, records, 0);
+    }
+
+    private ResultComputation computeResult(Race race, Participant participant, List<CheckpointRecord> records) {
+        return computeResult(race, participant, records, 0);
+    }
+
+    private ResultComputation computeResult(Race race, Participant participant, List<CheckpointRecord> records, int penaltySeconds) {
 
         RaceResultDto dto = new RaceResultDto();
         dto.setId(participant.getId());
@@ -125,6 +263,7 @@ public class ResultServiceImpl implements ResultService {
         dto.setStatus(mapStatus(participant.getStatus()));
         dto.setDisqualified(participant.getStatus() == Participant.ParticipantStatus.DISQUALIFIED);
         dto.setDisqualificationReason(dto.isDisqualified() ? "Disqualified" : null);
+        dto.setPenaltySeconds(penaltySeconds);
 
         OffsetDateTime start = resolveStart(participant, records);
         OffsetDateTime finish = resolveFinish(records);
@@ -132,9 +271,10 @@ public class ResultServiceImpl implements ResultService {
         dto.setStartTime(start != null ? start.toString() : null);
         dto.setFinishTime(finish != null ? finish.toString() : null);
 
-        Duration duration = (start != null && finish != null && !finish.isBefore(start))
+        Duration rawDuration = (start != null && finish != null && !finish.isBefore(start))
             ? Duration.between(start, finish)
             : null;
+        Duration duration = rawDuration != null ? rawDuration.plusSeconds(penaltySeconds) : null;
 
         String durationStr = formatDuration(duration);
         dto.setTotalTime(durationStr);
@@ -151,16 +291,18 @@ public class ResultServiceImpl implements ResultService {
         }
 
         dto.setOfficial(participant.getStatus() == Participant.ParticipantStatus.FINISHED && !dto.isDisqualified());
+        dto.setCertificateAvailable(dto.isOfficial());
 
         if (start != null) {
             for (CheckpointRecord record : records) {
+                OffsetDateTime effective = effectiveTime(record);
                 ResultSplitDto split = new ResultSplitDto();
                 split.setId(record.getId());
                 split.setCheckpointId(record.getCheckpoint() != null ? record.getCheckpoint().getId() : null);
-                split.setTimestamp(record.getRecordedAt() != null ? record.getRecordedAt().toString() : null);
+                split.setTimestamp(effective != null ? effective.toString() : null);
                 split.setMethod(record.getRecordMethod() != null ? record.getRecordMethod().name().toLowerCase(Locale.ROOT) : null);
-                if (record.getRecordedAt() != null && !record.getRecordedAt().isBefore(start)) {
-                    split.setSplitTime(formatDuration(Duration.between(start, record.getRecordedAt())));
+                if (effective != null && !effective.isBefore(start)) {
+                    split.setSplitTime(formatDuration(Duration.between(start, effective)));
                 }
                 dto.getSplits().add(split);
             }
@@ -168,6 +310,10 @@ public class ResultServiceImpl implements ResultService {
 
         Long finishSeconds = duration != null ? duration.toSeconds() : null;
         return new ResultComputation(dto, finishSeconds);
+    }
+
+    private OffsetDateTime effectiveTime(CheckpointRecord record) {
+        return record.getAdjustedRecordedAt() != null ? record.getAdjustedRecordedAt() : record.getRecordedAt();
     }
 
     private void assignPositions(List<ResultComputation> rows) {
@@ -209,7 +355,7 @@ public class ResultServiceImpl implements ResultService {
 
         for (CheckpointRecord record : records) {
             if (record.getCheckpoint() != null && record.getCheckpoint().getCheckpointType() == Checkpoint.CheckpointType.START) {
-                return record.getRecordedAt();
+                return effectiveTime(record);
             }
         }
 
@@ -220,7 +366,7 @@ public class ResultServiceImpl implements ResultService {
         for (int i = records.size() - 1; i >= 0; i--) {
             CheckpointRecord record = records.get(i);
             if (record.getCheckpoint() != null && record.getCheckpoint().getCheckpointType() == Checkpoint.CheckpointType.FINISH) {
-                return record.getRecordedAt();
+                return effectiveTime(record);
             }
         }
         return null;

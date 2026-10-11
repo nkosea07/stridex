@@ -18,6 +18,9 @@ A cross-platform React Native mobile application built with Expo for athletes to
 - **React Native Maps**: Interactive map display
 - **Expo Location**: GPS tracking
 - **Expo Camera**: QR code scanning
+- **Expo SQLite**: Local GPS queue and active tracking session recovery
+- **Expo BackgroundTask**: Opportunistic catch-up sync for queued GPS points
+- **Expo Updates**: OTA update readiness with app-version runtime policy
 
 ## Project Structure
 
@@ -46,37 +49,33 @@ apps/mobile/
 │   └── tracking.ts       # Tracking state management
 ├── types/
 │   └── index.ts          # TypeScript types
-└── assets/               # Images and fonts
 ```
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+
-- Expo CLI (`npm install -g expo-cli`)
+- Node.js 20.19+
+- pnpm
 - iOS Simulator (Mac) or Android Emulator
-- Expo Go app on your device (for testing)
+- Development build for native-module, background-location, notification, and OTA-update validation
 
 ### Installation
 
 ```bash
-# Navigate to mobile app
-cd apps/mobile
-
-# Install dependencies
-npm install
+# Install dependencies from the monorepo root
+pnpm install
 
 # Start the development server
-npm start
-# or
-expo start
+pnpm --filter race-tracker-mobile start
 ```
 
 ### Running on Device
 
 1. **iOS Simulator**: Press `i` in the terminal
 2. **Android Emulator**: Press `a` in the terminal
-3. **Physical Device**: Scan the QR code with Expo Go app
+3. **Physical Device**: use a development build for background tracking, native module, notification, and update testing
+
+Expo Go is useful for quick UI checks, but it is not the validation target for race-day tracking. Android remote push notifications require a development build from Expo SDK 53 onward, and native background behavior should be verified in a development build.
 
 ## Configuration
 
@@ -107,6 +106,16 @@ The app tracks GPS location during races:
 - Distance covered tracking
 - Checkpoint detection
 - Data sync to backend
+- Active tracking session recovery after app restart
+- SQLite-backed GPS queue for offline or failed sync scenarios
+
+### Offline Tracking Model
+
+GPS points are written to a local SQLite queue. Each point has idempotency metadata, retry counts, last error details, and sync status. Failed network delivery does not delete or mark unsent points as synced; points remain queued for the next foreground sync interval, live background-location callback, or opportunistic background sync task.
+
+The active race session is also stored locally. When the app starts, it attempts to recover the active race, battery-saver mode, start time, and local path before the splash screen is hidden. If recovery fails, queued GPS points are kept for later retry.
+
+`expo-background-task` is only a catch-up worker. iOS and Android decide when it runs, so it must not be treated as immediate race timing infrastructure. Live tracking still depends on Expo Location background updates and foreground sync while the app is open.
 
 ### QR Code Scanning
 
@@ -124,6 +133,14 @@ Uses `react-native-maps` for:
 - Tracked path overlay
 
 ## Building for Production
+
+This app is configured for EAS build channels in `eas.json`:
+
+- `development`: internal development client, channel `development`
+- `preview`: internal preview build, channel `preview`
+- `production`: store-ready build, channel `production`
+
+OTA update readiness is configured with `runtimeVersion.policy = appVersion`. Do not publish OTA updates that require native changes without shipping a new binary with a new app version.
 
 ### iOS (App Store)
 
@@ -163,8 +180,19 @@ See the backend README for full API documentation.
 ## Permissions Required
 
 - **Location**: For GPS tracking during races
+- **Background Location**: For continuing race tracking while the app is backgrounded
 - **Camera**: For QR code scanning at checkpoints
 - **Notifications**: For race updates (optional)
+
+## Validation
+
+Run these from the monorepo root:
+
+```bash
+pnpm --filter race-tracker-mobile exec tsc --noEmit
+pnpm --filter race-tracker-mobile lint
+pnpm --filter race-tracker-mobile exec expo-doctor
+```
 
 ## Troubleshooting
 

@@ -41,12 +41,17 @@ export default function ResultsScreen() {
   const [results, setResults] = useState<ResultRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [resultPage, setResultPage] = useState(0);
+  const [hasMoreResults, setHasMoreResults] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const loadResults = useCallback(async () => {
-    const [myResults, races] = await Promise.all([api.getMyResults(), api.getRaces()]);
+  const loadResults = useCallback(async (page = 0, append = false) => {
+    if (append) setIsLoadingMore(true);
+    try {
+    const [resultPageData, races] = await Promise.all([api.getMyResultsPage(page, 50), api.getRaces()]);
     const raceMap = new Map((races as any[]).map((race) => [String(race.id), race]));
 
-    const mapped = (myResults as any[])
+    const mapped = resultPageData.items
       .map((result) => {
         const race = raceMap.get(String(result.raceId));
         const raceDate = race?.raceDate;
@@ -64,7 +69,12 @@ export default function ResultsScreen() {
       })
       .sort((a, b) => b.raceDateTs - a.raceDateTs);
 
-    setResults(mapped);
+    setResults((current) => append ? [...current, ...mapped] : mapped);
+    setResultPage(resultPageData.page);
+    setHasMoreResults(resultPageData.page + 1 < resultPageData.totalPages);
+    } finally {
+      if (append) setIsLoadingMore(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -73,7 +83,7 @@ export default function ResultsScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadResults().finally(() => setRefreshing(false));
+    loadResults(0).finally(() => setRefreshing(false));
   }, [loadResults]);
 
   const stats = useMemo(() => {
@@ -237,6 +247,11 @@ export default function ResultsScreen() {
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>No results available yet</Text>
           </View>
+        )}
+        {hasMoreResults && (
+          <TouchableOpacity disabled={isLoadingMore} onPress={() => void loadResults(resultPage + 1, true)}>
+            <Text style={styles.seeAllText}>{isLoadingMore ? 'Loading more results…' : 'Load more results'}</Text>
+          </TouchableOpacity>
         )}
       </View>
 

@@ -2,9 +2,13 @@ package com.racetracker.exception;
 
 import com.racetracker.dto.error.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -14,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -33,6 +38,19 @@ public class GlobalExceptionHandler {
                 .details(errors)
                 .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.FORBIDDEN)
+                .statusCode(HttpStatus.FORBIDDEN.value())
+                .error("Forbidden")
+                .message("You do not have permission to perform this action")
+                .path(request.getRequestURI())
+                .build();
+        return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler({BadCredentialsException.class, UnauthorizedException.class})
@@ -97,7 +115,22 @@ public class GlobalExceptionHandler {
             .message(ex.getMessage())
             .path(request.getRequestURI())
             .build();
-        return new ResponseEntity<>(errorResponse, HttpStatus.TOO_MANY_REQUESTS);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+            .body(errorResponse);
+    }
+
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleServiceUnavailable(ServiceUnavailableException ex, HttpServletRequest request) {
+        ErrorResponse errorResponse = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.SERVICE_UNAVAILABLE)
+            .statusCode(HttpStatus.SERVICE_UNAVAILABLE.value())
+            .error("Service Unavailable")
+            .message(ex.getMessage())
+            .path(request.getRequestURI())
+            .build();
+        return new ResponseEntity<>(errorResponse, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
@@ -116,12 +149,17 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex, HttpServletRequest request) {
+        String requestId = MDC.get("requestId");
+        log.error("Unhandled exception for {} (requestId={})", request.getRequestURI(), requestId, ex);
+        String message = requestId != null
+                ? "An unexpected error occurred. Please contact support with request id " + requestId + "."
+                : "An unexpected error occurred. Please contact support.";
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
                 .error("Internal Server Error")
-                .message("An unexpected error occurred: " + ex.getMessage())
+                .message(message)
                 .path(request.getRequestURI())
                 .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);

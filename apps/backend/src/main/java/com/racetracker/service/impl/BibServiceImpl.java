@@ -30,6 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -52,10 +54,20 @@ public class BibServiceImpl implements BibService {
     @Override
     @Transactional(readOnly = true)
     public byte[] generateBatchBibsPdf(UUID raceId, List<UUID> participantIds) {
-        List<Participant> participants = participantRepository.findAllById(participantIds);
-        if (participants.isEmpty()) {
-            throw new ApiException("No participants found for batch printing");
+        if (participantIds == null || participantIds.isEmpty()) {
+            throw new ApiException("At least one participant is required for batch printing");
         }
+
+        Set<UUID> uniqueParticipantIds = new LinkedHashSet<>(participantIds);
+        if (uniqueParticipantIds.size() != participantIds.size()) {
+            throw new ApiException("Participant IDs must be unique for batch printing");
+        }
+
+        List<Participant> participants = participantRepository.findByRaceIdAndIdIn(raceId, uniqueParticipantIds);
+        if (participants.size() != uniqueParticipantIds.size()) {
+            throw new ResourceNotFoundException("One or more participants were not found in this race");
+        }
+
         return createPdf(participants);
     }
 

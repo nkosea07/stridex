@@ -9,6 +9,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -19,10 +20,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
+    private final MfaAuthenticationServiceImpl mfaAuthenticationService;
 
-    public JwtAuthenticationFilter(JwtService jwtService, CustomUserDetailsService userDetailsService) {
+    public JwtAuthenticationFilter(
+        JwtService jwtService,
+        CustomUserDetailsService userDetailsService,
+        MfaAuthenticationServiceImpl mfaAuthenticationService
+    ) {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
+        this.mfaAuthenticationService = mfaAuthenticationService;
     }
 
     @Override
@@ -52,6 +59,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            if (!mfaAuthenticationService.isPrivilegedSessionVerified(username, jwt)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
             if (jwtService.isTokenValid(jwt, userDetails)) {
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(

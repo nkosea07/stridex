@@ -3,6 +3,7 @@ package com.racetracker.controller;
 import com.racetracker.dto.race.RaceDto;
 import com.racetracker.security.JwtAuthenticationFilter;
 import com.racetracker.service.RaceService;
+import com.racetracker.service.AuditEventService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -36,6 +37,9 @@ class RaceControllerWebMvcTest {
     private RaceService raceService;
 
     @MockBean
+    private AuditEventService auditEventService;
+
+    @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Test
@@ -46,7 +50,7 @@ class RaceControllerWebMvcTest {
         race.setStatus("REGISTRATION_OPEN");
         race.setRaceDate(LocalDate.of(2026, 10, 10));
 
-        when(raceService.list(eq(null), eq(null), any(Pageable.class)))
+        when(raceService.list(eq(null), eq(null), eq(false), any(Pageable.class)))
             .thenReturn(new PageImpl<>(java.util.List.of(race), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/v1/races"))

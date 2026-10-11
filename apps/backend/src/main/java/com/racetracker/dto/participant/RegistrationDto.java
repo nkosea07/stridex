@@ -3,6 +3,7 @@ package com.racetracker.dto.participant;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -17,6 +18,13 @@ public class RegistrationDto {
     private String status;
     private OffsetDateTime registrationDate;
     private EmergencyContact emergencyContact;
+    private String shirtSize;
+    private String paymentStatus;
+    private BigDecimal paymentAmount;
+    private UUID teamId;
+    private String teamName;
+    private String rejectionReason;
+    private Integer waitlistPosition;
 
     @Getter
     @Setter

@@ -12,6 +12,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "types": ["vite/client"],
+    "rootDirs": [".", "./.react-router/types"],
     "strict": true,
     "noImplicitAny": false,
     "noUnusedLocals": false,
@@ -22,6 +23,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"],
+  "include": ["app", "src", ".react-router/types/**/*"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

@@ -1,8 +1,11 @@
+import { useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { BarChart3, Home, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
+import { connectUserAlerts } from '@/lib/api'
+import { toast } from 'sonner'
 import { ThemeSelect } from '@/components/theme/ThemeSelect'
 
 const navItems = [
@@ -13,6 +16,14 @@ const navItems = [
 export function UserLayout() {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+
+  useEffect(() => {
+    if (!user?.id) return
+    const disconnect = connectUserAlerts(user.id, (alert) => {
+      toast(alert.title, { description: alert.message })
+    })
+    return () => disconnect()
+  }, [user?.id])
 
   const handleLogout = () => {
     logout()

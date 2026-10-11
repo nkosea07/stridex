@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Plus, Search, Upload, Download, MoreHorizontal, Trash2, CheckCircle, Filter, Printer, History } from 'lucide-react'
+import { Plus, Search, Upload, Download, MoreHorizontal, Trash2, CheckCircle, XCircle, Clock, CreditCard, Filter, Printer, History, Timer, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Label } from '@/components/ui/label'
 import { participantsApi } from '@/lib/api'
 import { toast } from 'sonner'
-import type { Participant, ParticipantStatus } from '@/types'
+import type { ImportJob, Participant, ParticipantStatus } from '@/types'
 
 const statusColors: Record<ParticipantStatus, string> = {
   REGISTERED: 'bg-muted text-muted-foreground',
@@ -23,12 +23,23 @@ const statusColors: Record<ParticipantStatus, string> = {
   DNS: 'bg-muted text-muted-foreground',
   DISQUALIFIED: 'bg-destructive/20 text-destructive',
   FINISHED: 'bg-success/20 text-success',
+  PENDING_REVIEW: 'bg-warning/20 text-warning-foreground',
+  WAITLISTED: 'bg-info/20 text-info',
+  REJECTED: 'bg-destructive/20 text-destructive',
+}
+
+const paymentColors: Record<string, string> = {
+  UNPAID: 'bg-destructive/20 text-destructive',
+  PENDING: 'bg-warning/20 text-warning-foreground',
+  PAID: 'bg-success/20 text-success',
+  WAIVED: 'bg-muted text-muted-foreground',
+  REFUNDED: 'bg-info/20 text-info',
 }
 
 export function ParticipantsPage() {
   const { raceId } = useParams()
   const [participants, setParticipants] = useState<Participant[]>([])
-  const [importJobs, setImportJobs] = useState<any[]>([])
+  const [importJobs, setImportJobs] = useState<ImportJob[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -151,6 +162,77 @@ export function ParticipantsPage() {
     }
   }
 
+  const handleReview = async (participantId: string, decision: 'APPROVE' | 'REJECT' | 'WAITLIST') => {
+    if (!raceId) return
+    let reason: string | undefined
+    if (decision === 'REJECT') {
+      reason = window.prompt('Reason for rejection (optional)') ?? undefined
+    }
+    try {
+      await participantsApi.review(raceId, participantId, decision, reason)
+      toast.success(`Registration ${decision.toLowerCase()}d`)
+      await loadParticipants()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update registration')
+    }
+  }
+
+  const handleVerifyPayment = async (participantId: string) => {
+    if (!raceId) return
+    try {
+      await participantsApi.verifyPayment(raceId, participantId, { status: 'PAID' })
+      toast.success('Payment marked as verified')
+      await loadParticipants()
+    } catch {
+      toast.error('Failed to verify payment')
+    }
+  }
+
+  const handleStartPayment = async (participantId: string) => {
+    if (!raceId) return
+    const promoCode = window.prompt('Promo code (optional)') ?? undefined
+    try {
+      const payment = await participantsApi.startCheckout(raceId, participantId, promoCode || undefined)
+      if (payment.checkoutUrl) {
+        window.open(payment.checkoutUrl, '_blank', 'noopener')
+        toast.success('Payment checkout opened in a new tab')
+      } else {
+        toast.error('No checkout URL returned')
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to start payment')
+    }
+  }
+
+  const handleRefundPayment = async (participantId: string) => {
+    if (!raceId) return
+    try {
+      await participantsApi.refundPayment(raceId, participantId)
+      toast.success('Payment marked as refunded')
+      await loadParticipants()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to refund payment')
+    }
+  }
+
+  const handleAddPenalty = async (participantId: string) => {
+    if (!raceId) return
+    const secondsRaw = window.prompt('Time penalty in seconds (e.g. 120):')
+    if (!secondsRaw) return
+    const seconds = Number(secondsRaw)
+    if (!Number.isFinite(seconds) || seconds === 0) {
+      toast.error('Enter a non-zero number of seconds')
+      return
+    }
+    const reason = window.prompt('Reason (optional)') ?? undefined
+    try {
+      await participantsApi.addPenalty(raceId, participantId, { seconds, reason })
+      toast.success('Penalty added')
+    } catch {
+      toast.error('Failed to add penalty')
+    }
+  }
+
   const handleAddParticipant = async () => {
     if (!raceId) return
     try {
@@ -228,6 +310,9 @@ export function ParticipantsPage() {
             <SelectItem value="FINISHED">Finished</SelectItem>
             <SelectItem value="DNF">DNF</SelectItem>
             <SelectItem value="DNS">DNS</SelectItem>
+            <SelectItem value="PENDING_REVIEW">Pending Review</SelectItem>
+            <SelectItem value="WAITLISTED">Waitlisted</SelectItem>
+            <SelectItem value="REJECTED">Rejected</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -241,6 +326,7 @@ export function ParticipantsPage() {
                 <TableHead>Bib</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Payment</TableHead>
                 <TableHead>Checked In</TableHead>
                 <TableHead className="w-[120px]">Actions</TableHead>
               </TableRow>
@@ -251,7 +337,12 @@ export function ParticipantsPage() {
                   <TableCell className="font-medium">{p.firstName} {p.lastName}</TableCell>
                   <TableCell className="font-mono">{p.bibNumber || '-'}</TableCell>
                   <TableCell>{p.email}</TableCell>
-                  <TableCell><Badge className={statusColors[p.status]}>{p.status.replace('_', ' ')}</Badge></TableCell>
+                  <TableCell><Badge className={statusColors[p.status]}>{p.status.replace(/_/g, ' ')}</Badge></TableCell>
+                  <TableCell>
+                    {p.paymentStatus ? (
+                      <Badge className={paymentColors[p.paymentStatus] ?? 'bg-muted text-muted-foreground'}>{p.paymentStatus}</Badge>
+                    ) : '-'}
+                  </TableCell>
                   <TableCell>{p.checkedInAt ? new Date(p.checkedInAt).toLocaleString() : '-'}</TableCell>
                   <TableCell>
                     <DropdownMenu>
@@ -259,6 +350,45 @@ export function ParticipantsPage() {
                         <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        {p.status === 'PENDING_REVIEW' && (
+                          <>
+                            <DropdownMenuItem onClick={() => void handleReview(p.id, 'APPROVE')}>
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                              Approve
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void handleReview(p.id, 'WAITLIST')}>
+                              <Clock className="mr-2 h-4 w-4" />
+                              Waitlist
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void handleReview(p.id, 'REJECT')}>
+                              <XCircle className="mr-2 h-4 w-4" />
+                              Reject
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
+                        {(p.paymentStatus === 'UNPAID' || p.paymentStatus === 'PENDING') && (
+                          <>
+                            <DropdownMenuItem onClick={() => void handleStartPayment(p.id)}>
+                              <CreditCard className="mr-2 h-4 w-4" />
+                              Start Online Payment
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void handleVerifyPayment(p.id)}>
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                              Verify Payment
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
+                        {p.paymentStatus === 'PAID' && (
+                          <>
+                            <DropdownMenuItem onClick={() => void handleRefundPayment(p.id)}>
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Refund Payment
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
                         <DropdownMenuItem onClick={() => void handleCheckIn(p.id)}>
                           <CheckCircle className="mr-2 h-4 w-4" />
                           Check In
@@ -266,6 +396,10 @@ export function ParticipantsPage() {
                         <DropdownMenuItem onClick={() => void handleDownloadBib(p.id, `${p.firstName} ${p.lastName}`)}>
                           <Printer className="mr-2 h-4 w-4" />
                           Print Bib
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => void handleAddPenalty(p.id)}>
+                          <Timer className="mr-2 h-4 w-4" />
+                          Add Time Penalty
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive" onClick={() => void handleDelete(p.id)}>

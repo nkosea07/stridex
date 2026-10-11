@@ -17,6 +17,7 @@ import {
   FiraCode_700Bold 
 } from '@expo-google-fonts/fira-code';
 import { initializeAuth } from '@/store/auth';
+import { useTrackingStore } from '@/store/tracking';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 import { ThemeProvider, useTheme } from '@/contexts/theme';
@@ -38,18 +39,28 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    if (!fontsLoaded) return;
+
+    let isMounted = true;
+
     const init = async () => {
       try {
         await initializeAuth();
+        await useTrackingStore.getState().recoverActiveTrackingSession();
       } catch (error) {
-        console.error('Failed to initialize auth:', error);
+        console.error('Failed to initialize app state:', error);
       } finally {
-        if (fontsLoaded) {
+        if (isMounted) {
           await SplashScreen.hideAsync();
         }
       }
     };
+
     init();
+
+    return () => {
+      isMounted = false;
+    };
   }, [fontsLoaded]);
 
   if (!fontsLoaded) {

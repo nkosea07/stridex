@@ -3,6 +3,7 @@ package com.racetracker.service;
 import com.racetracker.dto.auth.ForgotPasswordRequest;
 import com.racetracker.dto.auth.LoginRequest;
 import com.racetracker.dto.auth.RegisterRequest;
+import com.racetracker.dto.auth.AuthResponse;
 import com.racetracker.exception.TooManyRequestsException;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.mapper.UserMapper;
@@ -12,6 +13,7 @@ import com.racetracker.repository.AuthTokenRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.security.JwtService;
 import com.racetracker.service.impl.AuthServiceImpl;
+import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -27,7 +29,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -55,6 +60,12 @@ class AuthServiceImplSecurityFlowTest {
 
     @Mock
     private AuthEmailService authEmailService;
+
+    @Mock
+    private MfaAuthenticationServiceImpl mfaAuthenticationService;
+
+    @Mock
+    private AuditEventService auditEventService;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -91,6 +102,44 @@ class AuthServiceImplSecurityFlowTest {
     }
 
     @Test
+    void login_rejectsUnverifiedUserBeforeIssuingSession() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("athlete@example.com");
+        request.setPassword("password123");
+
+        User user = baseUser();
+        user.setEmailVerified(false);
+        when(userRepository.findByEmailIgnoreCase("athlete@example.com")).thenReturn(Optional.of(user));
+
+        assertThrows(UnauthorizedException.class, () -> authService.login(request));
+        verifyNoInteractions(authenticationManager);
+    }
+
+    @Test
+    void loginForPrivilegedUserReturnsRestrictedMfaChallengeWithoutSessionTokens() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("admin@example.com");
+        request.setPassword("password123");
+        User user = baseUser();
+        user.setRole(User.UserRole.SUPER_ADMIN);
+        user.setEmail("admin@example.com");
+        when(userRepository.findByEmailIgnoreCase("admin@example.com")).thenReturn(Optional.of(user));
+        when(userMapper.toDto(user)).thenReturn(new com.racetracker.dto.auth.UserDto());
+        when(mfaAuthenticationService.isPrivileged(User.UserRole.SUPER_ADMIN)).thenReturn(true);
+        when(mfaAuthenticationService.createChallenge(user))
+            .thenReturn(new MfaAuthenticationServiceImpl.Challenge("restricted-challenge", true));
+
+        AuthResponse response = authService.login(request);
+
+        assertNull(response.getToken());
+        assertNull(response.getRefreshToken());
+        assertTrue(Boolean.TRUE.equals(response.getMfaRequired()));
+        assertTrue(Boolean.TRUE.equals(response.getMfaEnrollmentRequired()));
+        assertThat(response.getMfaChallengeToken()).isEqualTo("restricted-challenge");
+        verifyNoInteractions(jwtService);
+    }
+
+    @Test
     void forgotPassword_doesNotFailForUnknownEmail() {
         ForgotPasswordRequest request = new ForgotPasswordRequest();
         request.setEmail("unknown@example.com");
@@ -119,13 +168,47 @@ class AuthServiceImplSecurityFlowTest {
         when(authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(saved.getId(), AuthToken.TokenType.EMAIL_VERIFICATION))
             .thenReturn(List.of());
 
-        when(jwtService.generateAccessToken(saved)).thenReturn("access");
-        when(jwtService.generateRefreshToken(saved)).thenReturn("refresh");
         when(userMapper.toDto(saved)).thenReturn(new com.racetracker.dto.auth.UserDto());
 
-        assertDoesNotThrow(() -> authService.register(request));
+        AuthResponse response = authService.register(request);
+
+        assertNull(response.getToken());
+        assertNull(response.getRefreshToken());
+        assertTrue(Boolean.TRUE.equals(response.getRequiresEmailVerification()));
         verify(authTokenRepository, atLeastOnce()).save(any(AuthToken.class));
         verify(authEmailService).sendEmailVerification(eq(saved), anyString());
+    }
+
+    @Test
+    void resetPassword_revokesOutstandingRefreshTokens() {
+        User user = baseUser();
+        AuthToken passwordResetToken = AuthToken.builder()
+            .id(UUID.randomUUID())
+            .user(user)
+            .token("reset-token")
+            .tokenType(AuthToken.TokenType.PASSWORD_RESET)
+            .expiresAt(OffsetDateTime.now().plusMinutes(10))
+            .build();
+        AuthToken refreshToken = AuthToken.builder()
+            .id(UUID.randomUUID())
+            .user(user)
+            .token("refresh-token")
+            .tokenType(AuthToken.TokenType.REFRESH)
+            .expiresAt(OffsetDateTime.now().plusDays(1))
+            .build();
+
+        com.racetracker.dto.auth.ResetPasswordRequest request = new com.racetracker.dto.auth.ResetPasswordRequest();
+        request.setToken("reset-token");
+        request.setNewPassword("new-password");
+
+        when(authTokenRepository.findByToken("reset-token")).thenReturn(Optional.of(passwordResetToken));
+        when(authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(user.getId(), AuthToken.TokenType.REFRESH))
+            .thenReturn(List.of(refreshToken));
+        when(authTokenRepository.save(passwordResetToken)).thenReturn(passwordResetToken);
+
+        assertDoesNotThrow(() -> authService.resetPassword(request));
+        verify(authTokenRepository).save(passwordResetToken);
+        verify(authTokenRepository).saveAll(anyList());
     }
 
     private User baseUser() {
@@ -137,7 +220,7 @@ class AuthServiceImplSecurityFlowTest {
             .lastName("One")
             .role(User.UserRole.ATHLETE)
             .isActive(true)
-            .emailVerified(false)
+            .emailVerified(true)
             .failedLoginAttempts(0)
             .build();
     }

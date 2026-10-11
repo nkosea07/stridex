@@ -12,15 +12,21 @@
     "dev:stack": "bash scripts/dev-stack.sh",
     "dev:down": "bash scripts/dev-stack.sh down",
     "dev:web": "pnpm --filter web dev",
+    "dev:gateway": "pnpm --filter rfid-gateway dev",
     "dev:mobile": "pnpm --filter race-tracker-mobile start",
+    "dev:demo-reader": "cd apps/rfid-reader-demo && mvn spring-boot:run",
+    "dev:impinj-reader": "cd apps/rfid-reader-impinj && mvn spring-boot:run",
     "build": "pnpm contracts:validate && pnpm --filter web build",
     "build:web": "pnpm contracts:validate && pnpm --filter web build",
+    "test:gateway": "pnpm --filter rfid-gateway test",
+    "test:demo-reader": "cd apps/rfid-reader-demo && mvn test",
+    "test:impinj-reader": "cd apps/rfid-reader-impinj && mvn test",
     "lint": "pnpm -r lint"
   },
   "devDependencies": {
     "typescript": "5.7.3"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.19"
   }
 }

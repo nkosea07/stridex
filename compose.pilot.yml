@@ -1,0 +1,131 @@
+services:
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 8081
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-race_tracker}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?Set MFA_ENCRYPTION_KEY}
+      FRONTEND_URL: ${FRONTEND_URL:?Set FRONTEND_URL to the public HTTPS origin}
+      BROWSER_COOKIE_SECURE: "true"
+      RFID_SIMULATION_ENABLED: "false"
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.29.42.10}
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    expose:
+      - "8081"
+    networks:
+      pilot:
+        ipv4_address: 172.29.42.20
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "${WEB_HOST_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      pilot:
+        ipv4_address: 172.29.42.10
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      pilot:
+        ipv4_address: 172.29.42.30
+
+  # Local migration/dev profile only. Production pilots should use managed PostGIS.
+  db:
+    image: postgis/postgis:15-3.4-alpine
+    profiles: [local-db]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-race_tracker}
+      POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_HOST_PORT:-5435}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      pilot:
+        ipv4_address: 172.29.42.40
+
+  rfid-gateway:
+    build:
+      context: ./apps/rfid-gateway
+      dockerfile: Dockerfile
+    profiles: [rfid]
+    restart: unless-stopped
+    environment:
+      RFID_BACKEND_BASE_URL: http://backend:8081
+      RFID_BACKEND_READER_KEY: ${RFID_BACKEND_READER_KEY:?Set RFID_BACKEND_READER_KEY}
+      RFID_GATEWAY_PORT: 8090
+      RFID_GATEWAY_SPOOL_DIR: /var/lib/rfid-gateway
+      RFID_GATEWAY_MODE: ${RFID_GATEWAY_MODE:-simulation}
+      RFID_GATEWAY_NAME: ${RFID_GATEWAY_NAME:-pilot-edge}
+      RFID_GATEWAY_HARDWARE_MODEL: ${RFID_GATEWAY_HARDWARE_MODEL:-generic-edge}
+      RFID_GATEWAY_HARDWARE_PROFILE: ${RFID_GATEWAY_HARDWARE_PROFILE:-UNSPECIFIED}
+      RFID_GATEWAY_READER_CLASS: ${RFID_GATEWAY_READER_CLASS:-UNKNOWN}
+      RFID_GATEWAY_READER_SERIAL: ${RFID_GATEWAY_READER_SERIAL:-}
+    volumes:
+      - rfid_spool:/var/lib/rfid-gateway
+    ports:
+      - "127.0.0.1:${RFID_GATEWAY_HOST_PORT:-8090}:8090"
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - pilot
+
+volumes:
+  redis_data:
+  postgres_data:
+  rfid_spool:
+
+networks:
+  pilot:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.42.0/24

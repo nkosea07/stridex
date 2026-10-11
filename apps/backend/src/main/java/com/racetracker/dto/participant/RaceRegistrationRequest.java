@@ -1,9 +1,11 @@
 package com.racetracker.dto.participant;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -14,6 +16,18 @@ public class RaceRegistrationRequest {
 
     @NotNull
     private EmergencyContact emergencyContact;
+
+    private Boolean waiverAccepted;
+
+    private String shirtSize;
+
+    private UUID teamId;
+
+    private String clubName;
+
+    private String teamName;
+
+    private List<@Valid RegistrationAnswerRequest> answers;
 
     @Getter
     @Setter

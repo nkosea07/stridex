@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Registration approved</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
+        .header { background: #16A34A; color: white; padding: 10px; text-align: center; }
+        .content { padding: 20px; }
+        .footer { font-size: 12px; color: #777; margin-top: 20px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Race Tracker</h1>
+        </div>
+        <div class="content">
+            <p>Hello <span th:text="${firstName}">Athlete</span>,</p>
+            <p>Your registration for <strong th:text="${raceName}">the race</strong> is confirmed.</p>
+            <p th:if="${bibNumber}">Your bib number is <strong th:text="${bibNumber}">-</strong>.</p>
+            <p>We look forward to seeing you on race day.</p>
+            <p>Thank you,<br/>The Race Tracker Team</p>
+        </div>
+        <div class="footer">
+            &copy; 2026 Race Tracker Platform. All rights reserved.
+        </div>
+    </div>
+</body>
+</html>

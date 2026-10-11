@@ -61,6 +61,18 @@ public class CheckpointRecord {
     @Column(name = "is_verified")
     private Boolean isVerified = false;
 
+    @Column(name = "adjusted_recorded_at")
+    private OffsetDateTime adjustedRecordedAt;
+
+    @Column(name = "adjustment_reason")
+    private String adjustmentReason;
+
+    @Column(name = "adjusted_by")
+    private UUID adjustedBy;
+
+    @Column(name = "adjusted_at")
+    private OffsetDateTime adjustedAt;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 

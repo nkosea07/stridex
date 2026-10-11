@@ -1,13 +1,19 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import type { User, UserRole } from '@/types'
-import { authApi } from '@/lib/api'
+import { authApi, type BrowserAuthResponse } from '@/lib/api'
+
+export type LoginResult =
+  | { kind: 'authenticated'; user: User }
+  | { kind: 'mfa'; challengeToken: string; enrollmentRequired: boolean; user: User }
 
 interface AuthContextType {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<User>
+  login: (email: string, password: string) => Promise<LoginResult>
+  completeSession: (response: BrowserAuthResponse) => User
   logout: () => void
+  updateUser: (user: User) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -22,34 +28,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('auth_token')
-    if (token) {
-      authApi.me()
-        .then((currentUser) => setUser(currentUser))
-        .catch(() => {
-          localStorage.removeItem('auth_token')
-          setUser(null)
-        })
-        .finally(() => setIsLoading(false))
-    } else {
-      setIsLoading(false)
-    }
+    localStorage.removeItem('auth_token')
+    authApi.restoreBrowserSession()
+      .then((restored) => restored ? authApi.me() : null)
+      .then((currentUser) => setUser(currentUser))
+      .catch(() => {
+        authApi.setAccessToken(null)
+        setUser(null)
+      })
+      .finally(() => setIsLoading(false))
   }, [])
 
   const login = async (email: string, password: string) => {
-    const { token, user: loggedInUser } = await authApi.login(email, password)
-    localStorage.setItem('auth_token', token)
-    setUser(loggedInUser)
-    return loggedInUser
+    const response = await authApi.login(email, password)
+    if (response.token) {
+      return { kind: 'authenticated' as const, user: completeSession(response) }
+    }
+    if (response.mfaRequired && response.mfaChallengeToken) {
+      return {
+        kind: 'mfa' as const,
+        challengeToken: response.mfaChallengeToken,
+        enrollmentRequired: Boolean(response.mfaEnrollmentRequired),
+        user: response.user,
+      }
+    }
+    throw new Error(response.requiresEmailVerification ? 'Email verification required' : 'Login did not return a session')
+  }
+
+  const completeSession = (response: BrowserAuthResponse) => {
+    if (!response.token || !response.user) throw new Error('Authentication response did not contain a session')
+    authApi.setAccessToken(response.token)
+    setUser(response.user)
+    return response.user
   }
 
   const logout = () => {
-    authApi.logout()
+    void authApi.logout()
     setUser(null)
   }
 
+  const updateUser = (updatedUser: User) => setUser(updatedUser)
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, completeSession, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   )
@@ -61,4 +82,8 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
+}
+
+export function useAuthOptional() {
+  return useContext(AuthContext) ?? null
 }

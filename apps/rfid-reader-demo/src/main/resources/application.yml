@@ -1,0 +1,26 @@
+server:
+  port: ${ADAPTER_PORT:8092}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+adapter:
+  gateway:
+    base-url: ${RFID_GATEWAY_BASE_URL:http://localhost:8090}
+    reads-path: ${RFID_GATEWAY_READS_PATH:/reads}
+    batch-size: ${RFID_GATEWAY_BATCH_SIZE:25}
+    flush-interval-ms: ${RFID_GATEWAY_FLUSH_INTERVAL_MS:500}
+    timeout-ms: ${RFID_GATEWAY_TIMEOUT_MS:5000}
+  reader:
+    mode: ${DEMO_READER_MODE:bridge}
+    name: ${DEMO_READER_NAME:compact-uhf-demo}
+    hardware-model: ${DEMO_READER_HARDWARE_MODEL:compact-fixed-uhf}
+    expected-antennas: ${DEMO_READER_EXPECTED_ANTENNAS:2}
+  mock:
+    enabled: ${DEMO_MOCK_ENABLED:true}
+    emit-interval-ms: ${DEMO_MOCK_EMIT_INTERVAL_MS:2500}
+    tag-prefix: ${DEMO_MOCK_TAG_PREFIX:DEMO-TAG}
+    antenna: ${DEMO_MOCK_ANTENNA:A1}

@@ -49,6 +49,18 @@ public class GpsLocation {
     @Column(name = "battery_level")
     private Integer batteryLevel;
 
+    @Column(name = "filtered", nullable = false)
+    private Boolean filtered = false;
+
+    @Column(name = "filter_reason")
+    private String filterReason;
+
+    @Column(name = "smoothed_latitude", precision = 10, scale = 8)
+    private BigDecimal smoothedLatitude;
+
+    @Column(name = "smoothed_longitude", precision = 11, scale = 8)
+    private BigDecimal smoothedLongitude;
+
     @Column(name = "recorded_at", nullable = false)
     private OffsetDateTime recordedAt;
 

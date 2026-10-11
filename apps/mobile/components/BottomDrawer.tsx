@@ -1,8 +1,7 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Dimensions, Platform, Switch } from 'react-native';
-import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
+import React from 'react';
+import { View, Text, StyleSheet, Switch } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
-  useAnimatedGestureHandler,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -11,7 +10,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '@/contexts/theme';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DRAWER_MIN_HEIGHT = 120;
 const DRAWER_MAX_HEIGHT = 350;
 
@@ -40,25 +38,25 @@ export const BottomDrawer: React.FC<BottomDrawerProps> = ({
 }) => {
   const { colors } = useTheme();
   const translateY = useSharedValue(0);
+  const gestureStartY = useSharedValue(0);
 
-  const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent, { startY: number }>({
-    onStart: (_, context) => {
-      context.startY = translateY.value;
-    },
-    onActive: (event, context) => {
+  const panGesture = Gesture.Pan()
+    .onBegin(() => {
+      gestureStartY.value = translateY.value;
+    })
+    .onUpdate((event) => {
       translateY.value = Math.max(
         -(DRAWER_MAX_HEIGHT - DRAWER_MIN_HEIGHT),
-        Math.min(0, context.startY + event.translationY)
+        Math.min(0, gestureStartY.value + event.translationY)
       );
-    },
-    onEnd: (event) => {
+    })
+    .onEnd((event) => {
       if (event.velocityY < -500 || translateY.value < -(DRAWER_MAX_HEIGHT - DRAWER_MIN_HEIGHT) / 2) {
         translateY.value = withSpring(-(DRAWER_MAX_HEIGHT - DRAWER_MIN_HEIGHT));
       } else {
         translateY.value = withSpring(0);
       }
-    },
-  });
+    });
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -78,7 +76,7 @@ export const BottomDrawer: React.FC<BottomDrawerProps> = ({
   });
 
   return (
-    <PanGestureHandler onGestureEvent={gestureHandler}>
+    <GestureDetector gesture={panGesture}>
       <Animated.View style={[styles.container, { backgroundColor: colors.cardBackground, height: DRAWER_MAX_HEIGHT }, animatedStyle]}>
         {/* Handle */}
         <View style={styles.handleContainer}>
@@ -136,7 +134,7 @@ export const BottomDrawer: React.FC<BottomDrawerProps> = ({
           </View>
         </Animated.View>
       </Animated.View>
-    </PanGestureHandler>
+    </GestureDetector>
   );
 };
 

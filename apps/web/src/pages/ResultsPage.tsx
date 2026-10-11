@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Search, Trophy, Download, Send, Filter, Clock, TrendingUp } from 'lucide-react'
+import { Search, Trophy, Download, Send, Filter, Clock, TrendingUp, Medal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,24 +8,71 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { resultsApi } from '@/lib/api'
-import type { RaceResult } from '@/types'
+import type { RaceResult, RankingEntry } from '@/types'
 import { toast } from 'sonner'
 
 export function ResultsPage() {
   const { raceId } = useParams()
   const [results, setResults] = useState<RaceResult[]>([])
+  const [resultTotal, setResultTotal] = useState(0)
+  const [resultPage, setResultPage] = useState(0)
+  const [resultRevision, setResultRevision] = useState<number | null>(null)
+  const [hasMoreResults, setHasMoreResults] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [search, setSearch] = useState('')
   const [genderFilter, setGenderFilter] = useState<string>('all')
   const [activeTab, setActiveTab] = useState('overall')
+  const [teamRankings, setTeamRankings] = useState<RankingEntry[]>([])
+  const [countryRankings, setCountryRankings] = useState<RankingEntry[]>([])
+  const [rankingsLoading, setRankingsLoading] = useState(false)
 
-  const loadResults = async () => {
+  useEffect(() => {
+    if (!raceId || (activeTab !== 'teams' && activeTab !== 'countries')) return
+    let cancelled = false
+    setRankingsLoading(true)
+    const load = async () => {
+      try {
+        if (activeTab === 'teams') {
+          const data = await resultsApi.teamRankings(raceId)
+          if (!cancelled) setTeamRankings(data)
+        } else {
+          const data = await resultsApi.countryRankings(raceId)
+          if (!cancelled) setCountryRankings(data)
+        }
+      } catch {
+        toast.error('Failed to load rankings')
+      } finally {
+        if (!cancelled) setRankingsLoading(false)
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, raceId])
+
+  const loadResults = async (page = 0, append = false) => {
     if (!raceId) return
     try {
-      const data = await resultsApi.list(raceId)
-      setResults(data)
-    } catch {
+      if (append) setIsLoadingMore(true)
+      const data = await resultsApi.page(raceId, page, 50, append ? resultRevision ?? undefined : undefined)
+      setResults((current) => append ? [...current, ...data.items] : data.items)
+      setResultTotal(data.totalElements)
+      setResultPage(data.page)
+      setResultRevision(data.revision)
+      setHasMoreResults(data.page + 1 < data.totalPages)
+    } catch (error) {
+      if (append && error instanceof Error && error.message.toLowerCase().includes('results changed')) {
+        toast.error('Results changed. Reloading from the first page.')
+        setResultRevision(null)
+        await loadResults(0, false)
+        return
+      }
       toast.error('Failed to load results')
+    } finally {
+      if (append) setIsLoadingMore(false)
     }
   }
 
@@ -60,24 +107,19 @@ export function ResultsPage() {
     }
   }
 
-  const handleExportResults = () => {
-    const headers = ['position', 'name', 'bib', 'chipTime', 'pace', 'speed']
-    const rows = filteredResults.map((r) => [
-      r.overallPosition ?? '',
-      `${r.participant?.firstName || ''} ${r.participant?.lastName || ''}`.trim(),
-      r.participant?.bibNumber || '',
-      r.chipTime || '',
-      r.averagePace || '',
-      r.averageSpeed ?? '',
-    ])
-    const csv = [headers.join(','), ...rows.map((row) => row.map((v) => `"${String(v)}"`).join(','))].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', `results-${raceId || 'race'}.csv`)
-    link.click()
-    URL.revokeObjectURL(url)
+  const handleExportResults = async (format: 'csv' | 'pdf' | 'xlsx' = 'csv') => {
+    if (!raceId) return
+    try {
+      const blob = await resultsApi.exportResults(raceId, format)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `results-${raceId}.${format}`)
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Failed to export results')
+    }
   }
 
   const ResultsTable = ({ list, showGenderPosition = false }: { list: RaceResult[]; showGenderPosition?: boolean }) => (
@@ -88,6 +130,7 @@ export function ResultsPage() {
           <TableHead>Athlete</TableHead>
           <TableHead>Bib</TableHead>
           <TableHead>Chip Time</TableHead>
+          <TableHead>Age Group</TableHead>
           <TableHead>Pace</TableHead>
           <TableHead>Speed</TableHead>
           {showGenderPosition && <TableHead>Gender Pos</TableHead>}
@@ -97,7 +140,12 @@ export function ResultsPage() {
       <TableBody>
         {list.map((result) => (
           <TableRow key={result.id}>
-            <TableCell>{showGenderPosition ? result.genderPosition : result.overallPosition}</TableCell>
+            <TableCell>
+              <div className="flex items-center gap-1">
+                {result.medal && <Medal className="h-3.5 w-3.5 text-amber-400" />}
+                {showGenderPosition ? result.genderPosition : result.overallPosition}
+              </div>
+            </TableCell>
             <TableCell>
               <div>
                 <p className="font-medium">{result.participant?.firstName} {result.participant?.lastName}</p>
@@ -106,10 +154,38 @@ export function ResultsPage() {
             </TableCell>
             <TableCell className="font-mono">{result.participant?.bibNumber}</TableCell>
             <TableCell><div className="flex items-center gap-1"><Clock className="h-3 w-3 text-muted-foreground" />{result.chipTime || '--:--:--'}</div></TableCell>
+            <TableCell>{result.ageGroup || '-'}{result.ageGroupPosition ? ` (#${result.ageGroupPosition})` : ''}</TableCell>
             <TableCell>{result.averagePace || '-'}</TableCell>
             <TableCell><div className="flex items-center gap-1"><TrendingUp className="h-3 w-3 text-muted-foreground" />{result.averageSpeed ?? '-'} km/h</div></TableCell>
             {showGenderPosition && <TableCell>{result.genderPosition}</TableCell>}
             <TableCell>{result.isOfficial ? <Badge className="bg-success/20 text-success">Official</Badge> : <Badge variant="outline">Provisional</Badge>}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  )
+
+  const RankingTable = ({ list, label }: { list: RankingEntry[]; label: string }) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Pos</TableHead>
+          <TableHead>{label}</TableHead>
+          <TableHead>Finishers</TableHead>
+          <TableHead>Total Time</TableHead>
+          <TableHead>Average</TableHead>
+          <TableHead>Best</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {list.map((entry, index) => (
+          <TableRow key={entry.name}>
+            <TableCell>{index + 1}</TableCell>
+            <TableCell className="font-medium">{entry.name}</TableCell>
+            <TableCell>{entry.finishers}</TableCell>
+            <TableCell className="font-mono">{entry.totalTime || '-'}</TableCell>
+            <TableCell className="font-mono">{entry.averageTime || '-'}</TableCell>
+            <TableCell className="font-mono">{entry.bestTime || '-'}</TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -124,13 +200,25 @@ export function ResultsPage() {
           <p className="text-muted-foreground">Race results and rankings</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleExportResults}><Download className="mr-2 h-4 w-4" />Export</Button>
+          <Button variant="outline" onClick={() => void handleExportResults('csv')}><Download className="mr-2 h-4 w-4" />Export</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" aria-label="Export format">
+                <Download className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => void handleExportResults('csv')}>CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handleExportResults('xlsx')}>Excel (XLSX)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handleExportResults('pdf')}>PDF</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button onClick={() => void handlePublishResults()}><Send className="mr-2 h-4 w-4" />Publish Results</Button>
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Finishers</CardTitle></CardHeader><CardContent><div className="flex items-center gap-2"><Trophy className="h-5 w-5 text-chart-3" /><span className="text-2xl font-bold">{filteredResults.length}</span></div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Results</CardTitle></CardHeader><CardContent><div className="flex items-center gap-2"><Trophy className="h-5 w-5 text-chart-3" /><span className="text-2xl font-bold">{resultTotal}</span></div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Male Finishers</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{maleResults.length}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Female Finishers</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{femaleResults.length}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Best Time</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold font-mono">{filteredResults[0]?.chipTime || '--:--:--'}</div></CardContent></Card>
@@ -156,11 +244,38 @@ export function ResultsPage() {
           <TabsTrigger value="overall">Overall</TabsTrigger>
           <TabsTrigger value="men">Men</TabsTrigger>
           <TabsTrigger value="women">Women</TabsTrigger>
+          <TabsTrigger value="teams">Teams</TabsTrigger>
+          <TabsTrigger value="countries">Countries</TabsTrigger>
         </TabsList>
         <TabsContent value="overall"><ResultsTable list={filteredResults} /></TabsContent>
         <TabsContent value="men"><ResultsTable list={maleResults} showGenderPosition /></TabsContent>
         <TabsContent value="women"><ResultsTable list={femaleResults} showGenderPosition /></TabsContent>
+        <TabsContent value="teams">
+          {rankingsLoading ? (
+            <p className="py-6 text-sm text-muted-foreground">Loading team rankings…</p>
+          ) : teamRankings.length === 0 ? (
+            <p className="py-6 text-sm text-muted-foreground">No team results available.</p>
+          ) : (
+            <RankingTable list={teamRankings} label="Team" />
+          )}
+        </TabsContent>
+        <TabsContent value="countries">
+          {rankingsLoading ? (
+            <p className="py-6 text-sm text-muted-foreground">Loading country rankings…</p>
+          ) : countryRankings.length === 0 ? (
+            <p className="py-6 text-sm text-muted-foreground">No country results available.</p>
+          ) : (
+            <RankingTable list={countryRankings} label="Country" />
+          )}
+        </TabsContent>
       </Tabs>
+      {hasMoreResults && (
+        <div className="flex justify-center">
+          <Button variant="outline" disabled={isLoadingMore} onClick={() => void loadResults(resultPage + 1, true)}>
+            {isLoadingMore ? 'Loading…' : 'Load more results'}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

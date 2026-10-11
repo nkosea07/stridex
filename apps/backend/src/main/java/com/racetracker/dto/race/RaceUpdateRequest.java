@@ -33,5 +33,10 @@ public class RaceUpdateRequest {
     private String logoUrl;
     private Boolean isPublicRegistration;
     private Boolean requireMedicalClearance;
+    private Boolean requireApproval;
+    private Boolean waitlistEnabled;
+    private Boolean requireWaiver;
+    private String waiverVersion;
+    private String waiverText;
     private List<RaceCategoryRequest> categories;
 }

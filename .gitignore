@@ -10,6 +10,11 @@ __v0_jsx-dev-runtime.ts
 .env
 .env.*
 .env*.local
+!.env.pilot.example
+
+# Local agent tooling (track agent prompts, ignore the rest)
+.opencode/*
+!.opencode/agents/
 
 # Common ignores
 node_modules
@@ -21,6 +26,8 @@ dist/
 build/
 target/
 coverage/
+data/
+uploads/
 .idea/
 .vscode/
 *.tsbuildinfo

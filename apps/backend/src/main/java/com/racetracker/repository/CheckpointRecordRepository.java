@@ -18,6 +18,8 @@ public interface CheckpointRecordRepository extends JpaRepository<CheckpointReco
     @EntityGraph(attributePaths = {"participant", "checkpoint", "race", "recordedBy"})
     Optional<CheckpointRecord> findByParticipantIdAndCheckpointId(UUID participantId, UUID checkpointId);
 
+    Optional<CheckpointRecord> findByRaceIdAndCheckpointIdAndId(UUID raceId, UUID checkpointId, UUID id);
+
     @EntityGraph(attributePaths = {"participant", "checkpoint", "race", "recordedBy"})
     List<CheckpointRecord> findByRaceIdOrderByRecordedAtDesc(UUID raceId);
 
@@ -26,6 +28,12 @@ public interface CheckpointRecordRepository extends JpaRepository<CheckpointReco
 
     @EntityGraph(attributePaths = {"participant", "checkpoint", "race", "recordedBy"})
     List<CheckpointRecord> findByParticipantIdAndRaceIdOrderByRecordedAtAsc(UUID participantId, UUID raceId);
+
+    @EntityGraph(attributePaths = {"participant", "checkpoint", "race", "recordedBy"})
+    List<CheckpointRecord> findByRaceIdAndParticipantIdInOrderByRecordedAtAsc(UUID raceId, List<UUID> participantIds);
+
+    @EntityGraph(attributePaths = {"participant", "checkpoint", "race", "recordedBy"})
+    List<CheckpointRecord> findByParticipantIdInOrderByRecordedAtAsc(List<UUID> participantIds);
 
     @Query("""
         select count(c)

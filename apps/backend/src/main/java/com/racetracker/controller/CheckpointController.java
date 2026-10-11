@@ -59,4 +59,15 @@ public class CheckpointController {
     ) {
         return ResponseEntity.ok(checkpointService.record(raceId, checkpointId, request));
     }
+
+    @PatchMapping("/{raceId}/checkpoints/{checkpointId}/records/{recordId}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    public ResponseEntity<CheckpointRecordDto> correctRecord(
+        @PathVariable UUID raceId,
+        @PathVariable UUID checkpointId,
+        @PathVariable UUID recordId,
+        @RequestBody CheckpointRecordCorrectionRequest request
+    ) {
+        return ResponseEntity.ok(checkpointService.correctRecord(raceId, checkpointId, recordId, request));
+    }
 }

@@ -2,10 +2,12 @@ package com.racetracker.dto.participant;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.Valid;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -39,4 +41,5 @@ public class ParticipantCreateRequest {
     private String teamName;
     private String registrationSource;
     private Boolean isTrackingEnabled;
+    private List<@Valid ParticipantCredentialRequest> credentials;
 }

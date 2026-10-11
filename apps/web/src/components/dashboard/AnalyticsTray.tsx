@@ -1,4 +1,4 @@
-import { TrendingUp, Clock, AlertTriangle, CheckCircle2, Activity, Map as MapIcon, Timer } from 'lucide-react';
+import { TrendingUp, Clock, AlertTriangle, CheckCircle2, Activity, Timer } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -157,20 +157,18 @@ export function AnalyticsTray({ selectedParticipant, mode, checkpoints }: Analyt
         </div>
 
         <div className="space-y-2 mt-4">
-          <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] px-1">Recent Splits</h4>
+          <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] px-1">Latest Checkpoint</h4>
           <div className="space-y-1.5">
-            {selectedParticipant.splits && selectedParticipant.splits.length > 0 ? (
-              selectedParticipant.splits.slice(-3).reverse().map((split, i) => (
-                <div key={i} className="flex items-center justify-between p-2.5 rounded-md bg-muted/20 border border-white/5 text-xs backdrop-blur-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                    <span className="font-bold uppercase tracking-tighter">{split.name}</span>
-                  </div>
-                  <span className="font-mono font-bold text-muted-foreground">{split.time}</span>
+            {selectedParticipant.lastCheckpoint ? (
+              <div className="flex items-center justify-between p-2.5 rounded-md bg-muted/20 border border-white/5 text-xs backdrop-blur-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                  <span className="font-bold uppercase tracking-tighter">{selectedParticipant.lastCheckpoint}</span>
                 </div>
-              ))
+                <span className="font-mono font-bold text-muted-foreground">{selectedParticipant.elapsedTime || '--'}</span>
+              </div>
             ) : (
-              <p className="text-[10px] text-muted-foreground italic px-1">No splits recorded yet</p>
+              <p className="text-[10px] text-muted-foreground italic px-1">No checkpoints recorded yet</p>
             )}
           </div>
         </div>

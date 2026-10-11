@@ -4,6 +4,9 @@ import com.racetracker.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.actuate.info.Info;
+import org.springframework.boot.actuate.info.InfoContributor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -47,15 +50,31 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
+                .requestMatchers("/actuator/prometheus").authenticated()
                 .requestMatchers(
                     apiPrefix + "/auth/login",
+                    apiPrefix + "/auth/browser/login",
+                    apiPrefix + "/auth/browser/mfa/totp/enroll",
+                    apiPrefix + "/auth/browser/mfa/totp/confirm",
+                    apiPrefix + "/auth/browser/mfa/verify-login",
+                    apiPrefix + "/auth/browser/refresh",
+                    apiPrefix + "/auth/browser/logout",
+                    apiPrefix + "/auth/mfa/totp/enroll",
+                    apiPrefix + "/auth/mfa/totp/confirm",
+                    apiPrefix + "/auth/mfa/verify-login",
                     apiPrefix + "/auth/register",
+                    apiPrefix + "/auth/register-organizer",
                     apiPrefix + "/auth/refresh",
                     apiPrefix + "/auth/forgot-password",
                     apiPrefix + "/auth/reset-password",
                     apiPrefix + "/auth/verify-email",
                     apiPrefix + "/auth/resend-verification"
                 ).permitAll()
+                .requestMatchers(HttpMethod.POST, apiPrefix + "/rfid/read-events").permitAll()
+                .requestMatchers(HttpMethod.POST, apiPrefix + "/rfid/readers/heartbeat").permitAll()
+                .requestMatchers(HttpMethod.POST, apiPrefix + "/payments/callback/**").permitAll()
+                .requestMatchers(HttpMethod.GET, apiPrefix + "/public/races/**").permitAll()
                 .requestMatchers("/ws/**").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/error").permitAll()
@@ -88,6 +107,17 @@ public class SecurityConfig {
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
+    }
+
+    @Bean
+    public InfoContributor appInfoContributor(
+        @Value("${spring.application.name}") String applicationName,
+        @Value("${info.app.description:}") String applicationDescription
+    ) {
+        return (Info.Builder builder) -> builder.withDetail("app", java.util.Map.of(
+            "name", applicationName,
+            "description", applicationDescription
+        ));
     }
 
     private List<String> emptyFallback(List<String> input, List<String> fallback) {

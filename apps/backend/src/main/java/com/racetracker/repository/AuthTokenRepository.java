@@ -10,6 +10,7 @@ import java.util.UUID;
 
 public interface AuthTokenRepository extends JpaRepository<AuthToken, UUID> {
     Optional<AuthToken> findByToken(String token);
+    Optional<AuthToken> findByTokenAndTokenTypeAndConsumedAtIsNull(String token, AuthToken.TokenType tokenType);
     List<AuthToken> findByUserIdAndTokenTypeAndConsumedAtIsNull(UUID userId, AuthToken.TokenType tokenType);
     void deleteByExpiresAtBefore(OffsetDateTime cutoff);
 }

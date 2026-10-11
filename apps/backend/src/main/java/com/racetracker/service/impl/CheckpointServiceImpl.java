@@ -16,6 +16,7 @@ import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.service.CheckpointService;
+import com.racetracker.service.LiveSummaryCacheInvalidator;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ public class CheckpointServiceImpl implements CheckpointService {
     private final RaceRepository raceRepository;
     private final UserRepository userRepository;
     private final CheckpointMapper checkpointMapper;
+    private final LiveSummaryCacheInvalidator liveSummaryCacheInvalidator;
 
     public CheckpointServiceImpl(
         CheckpointRepository checkpointRepository,
@@ -43,7 +45,8 @@ public class CheckpointServiceImpl implements CheckpointService {
         ParticipantRepository participantRepository,
         RaceRepository raceRepository,
         UserRepository userRepository,
-        CheckpointMapper checkpointMapper
+        CheckpointMapper checkpointMapper,
+        LiveSummaryCacheInvalidator liveSummaryCacheInvalidator
     ) {
         this.checkpointRepository = checkpointRepository;
         this.checkpointRecordRepository = checkpointRecordRepository;
@@ -51,6 +54,7 @@ public class CheckpointServiceImpl implements CheckpointService {
         this.raceRepository = raceRepository;
         this.userRepository = userRepository;
         this.checkpointMapper = checkpointMapper;
+        this.liveSummaryCacheInvalidator = liveSummaryCacheInvalidator;
     }
 
     @Override
@@ -99,6 +103,7 @@ public class CheckpointServiceImpl implements CheckpointService {
         if (request.getHasRfidReader() != null) checkpoint.setHasRfidReader(request.getHasRfidReader());
         if (request.getHasQrScanner() != null) checkpoint.setHasQrScanner(request.getHasQrScanner());
 
+        liveSummaryCacheInvalidator.evictAllLastCheckpointsAfterCommit();
         Checkpoint saved = checkpointRepository.save(checkpoint);
         return checkpointMapper.toDto(saved);
     }
@@ -108,6 +113,7 @@ public class CheckpointServiceImpl implements CheckpointService {
     public void delete(UUID raceId, UUID checkpointId) {
         Checkpoint checkpoint = getCheckpoint(raceId, checkpointId);
         checkpointRepository.delete(checkpoint);
+        liveSummaryCacheInvalidator.evictAllLastCheckpointsAfterCommit();
     }
 
     @Override
@@ -130,6 +136,32 @@ public class CheckpointServiceImpl implements CheckpointService {
         record.setRecordedBy(resolveCurrentUserOrNull());
 
         CheckpointRecord saved = checkpointRecordRepository.save(record);
+        liveSummaryCacheInvalidator.evictLastCheckpointAfterCommit(participant.getId(), raceId);
+        return checkpointMapper.toRecordDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public CheckpointRecordDto correctRecord(UUID raceId, UUID checkpointId, UUID recordId, CheckpointRecordCorrectionRequest request) {
+        getCheckpoint(raceId, checkpointId);
+        CheckpointRecord record = checkpointRecordRepository.findByRaceIdAndCheckpointIdAndId(raceId, checkpointId, recordId)
+            .orElseThrow(() -> new ResourceNotFoundException("Checkpoint record not found"));
+
+        if (request.getAdjustedRecordedAt() != null) {
+            record.setAdjustedRecordedAt(request.getAdjustedRecordedAt());
+        }
+        if (request.getVerified() != null) {
+            record.setIsVerified(request.getVerified());
+        }
+        if (request.getReason() != null) {
+            record.setAdjustmentReason(request.getReason());
+        }
+        User actor = resolveCurrentUserOrNull();
+        record.setAdjustedBy(actor != null ? actor.getId() : null);
+        record.setAdjustedAt(OffsetDateTime.now());
+
+        CheckpointRecord saved = checkpointRecordRepository.save(record);
+        liveSummaryCacheInvalidator.evictLastCheckpointAfterCommit(saved.getParticipant().getId(), raceId);
         return checkpointMapper.toRecordDto(saved);
     }
 

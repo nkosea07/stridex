@@ -23,6 +23,9 @@ public class RaceResultDto {
     private Integer overallPosition;
     private Integer genderPosition;
     private Integer categoryPosition;
+    private String ageGroup;
+    private Integer ageGroupPosition;
+    private String medal;
     private String averagePace;
     private Double averageSpeed;
     @JsonProperty("isOfficial")
@@ -38,6 +41,8 @@ public class RaceResultDto {
     private String startTime;
     private String finishTime;
     private String totalTime;
+    private Integer penaltySeconds;
+    private boolean certificateAvailable;
     private List<ResultSplitDto> splits = new ArrayList<>();
     private String status;
 }

@@ -24,7 +24,7 @@ This guide provides detailed instructions and prompts to help you complete the r
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Mobile App    │     │   Web Admin     │     │  Public Website │
+│   Mobile App    │     │     Web App     │     │  Public Website │
 │  (React Native) │     │  (React Vite)   │     │   (Optional)    │
 └────────┬────────┘     └────────┬────────┘     └────────┬────────┘
          │                       │                       │
@@ -46,11 +46,77 @@ This guide provides detailed instructions and prompts to help you complete the r
 | Layer | Technology | Purpose |
 |-------|------------|---------|
 | Mobile | React Native + Expo | Athlete app (iOS/Android) |
-| Web Admin | React + Vite + Tailwind | Race management dashboard |
-| Backend | Spring Boot 3.x | REST API + WebSocket server |
-| Database | PostgreSQL 15+ | Primary data store |
+| Web App | React + Vite + Tailwind | Public spectator and race operations surface |
+| Backend | Spring Boot 3.5 | REST API + WebSocket server |
+| Database | PostgreSQL 15+ with PostGIS | Primary data store and spatial query support |
 | Cache | Redis (optional) | Session/caching layer |
 | Auth | JWT + Spring Security | Authentication/Authorization |
+
+### Public Spectator Flow
+
+Phase 1 adds a public spectator web surface without changing the protected admin and athlete flows:
+- Public web routes: `/race/:raceId` and `/race/:raceId/athlete/:participantId`
+- Public backend endpoints: `GET /api/v1/public/races/{raceId}/hub`, `GET /api/v1/public/races/{raceId}/tracking/live`, `GET /api/v1/public/races/{raceId}/tracking/search?q=<term>`, and `GET /api/v1/public/races/{raceId}/tracking/athletes/{participantId}`
+- Security model: anonymous `GET` access is limited to the public endpoint prefix; admin and athlete routes remain authenticated
+
+### Backend-to-Web Public Data Path
+
+The public spectator path is now:
+1. Tracking data is recorded through the existing tracking domain and race operations flow.
+2. The backend exposes a spectator-safe public read layer under `/api/v1/public/races/...`.
+3. The web app consumes those endpoints for the shareable race hub and athlete detail routes.
+
+Keep this phase intentionally narrow. Premium mobile fan experiences and RFID/device ingest remain later-phase work and are out of scope here.
+
+### Web Modernization Direction
+
+The web app is moving toward React Router route-managed data loading so routing, loader lifecycles, and revalidation for the public spectator surface are owned by route modules instead of ad hoc page bootstrapping. This keeps data requirements close to the route boundary and makes the public web surface easier to evolve without rewriting the rest of `apps/web`.
+
+Current route modules live in `apps/web/app/`, with most reusable UI, page composition, API clients, and shared logic still living in `apps/web/src/`.
+
+This foundation does not include deeper prerender or SSR rollout, broad admin/operator data-loading refactors, or non-web modernization work. Those remain deferred to later modernization plans.
+
+### Backend Platform and Observability Direction
+
+The backend platform modernization follows the public web routing work because the public spectator surface depends on reliable backend reads, tracking writes, and live tracking fanout. The current backend baseline is Spring Boot 3.5 with Actuator enabled under the existing `/api` servlet context.
+
+Management endpoint policy:
+- Public probes: `GET /api/actuator/health`, `GET /api/actuator/health/liveness`, and `GET /api/actuator/health/readiness`
+- Public safe metadata: `GET /api/actuator/info`
+- Authenticated metrics scrape: `GET /api/actuator/prometheus`
+
+Micrometer `@Observed` instrumentation exists on the public tracking and tracking ingest hot paths. The stable observation names are `tracking.public.race_hub`, `tracking.public.live_athletes`, `tracking.public.athlete_detail`, `tracking.ingest.location`, `tracking.ingest.location_batch`, `tracking.ingest.checkpoint`, `tracking.live.aggregate`, and `tracking.live.participant_track`.
+
+This phase does not include external OpenTelemetry collector/exporter setup or telemetry partitioning. The PostGIS/geospatial schema foundation is in place, and RFID/bib bridge ingest now exists as a backend-only foundation with device API keys, raw read storage, and checkpoint-record normalization.
+
+### Mobile Runtime and Offline Tracking Direction
+
+The mobile app now targets Expo SDK 54 with React Native 0.81 and React 19.1. This is the bridge runtime before a later Expo SDK 55 / mandatory New Architecture migration.
+
+Mobile runtime policy:
+- Node baseline is `>=20.19`
+- package management is pnpm only
+- `pnpm --filter race-tracker-mobile exec expo-doctor` is part of the verification loop
+- native behavior should be tested with a development build, not only Expo Go
+
+Offline tracking model:
+1. Expo Location remains the primary live tracking mechanism.
+2. GPS points are queued in SQLite with sync status, retry counts, last error, and idempotency metadata.
+3. Failed sync attempts keep points queued for retry; they are not marked synced after a network failure.
+4. Active tracking sessions are persisted locally and recovered during app startup before the splash screen is hidden.
+5. `expo-background-task` is an opportunistic catch-up worker for queued points, not immediate race timing infrastructure.
+
+EAS Update readiness:
+- `apps/mobile/eas.json` defines `development`, `preview`, and `production` channels.
+- `app.json` uses an app-version runtime policy for OTA compatibility.
+- No fake Expo project id or update URL is checked in. Add account-backed EAS values only when publishing real updates.
+
+Deferred mobile work:
+- Expo SDK 55 / New Architecture-only migration
+- backend push-token registration and notification preferences
+- premium mobile fan features
+- mobile crash/error observability
+- RFID operator UI and vendor-specific mobile/device adapters
 
 ---
 
@@ -291,7 +357,7 @@ Requirements:
      - /api/races/*/manage/** - hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')
      - /api/checkpoints/record - hasAnyRole('RACE_ADMIN', 'VOLUNTEER')
      - /api/** - authenticated
-     - /ws/** - permitAll (WebSocket, auth handled differently)
+     - /ws-tracking/** - permitAll (WebSocket, auth handled differently)
    - Disable CSRF (stateless API)
    - Configure CORS
    - Add JWT filter before UsernamePasswordAuthenticationFilter
@@ -406,7 +472,7 @@ Requirements:
    - Enable STOMP over WebSocket
    - Configure message broker with /topic prefix
    - Application destination prefix: /app
-   - WebSocket endpoint: /ws
+   - WebSocket endpoint: /ws-tracking
    - Configure CORS for web and mobile clients
    - Add JWT authentication interceptor
 
@@ -605,6 +671,24 @@ GET /api/v1/tracking/live/{raceId}:
 
 ## Database Setup
 
+### Geospatial Foundation
+
+The backend schema now enables PostGIS and adds `geography(Point, 4326)` query columns for race start/finish locations, checkpoints, and GPS locations. Existing decimal latitude/longitude columns remain the compatibility fields for DTOs, JPA entities, and current API payloads. Database triggers keep the spatial query columns synchronized when coordinates are inserted or updated.
+
+Use the spatial columns through repository/service boundaries instead of spreading raw spatial SQL across controllers. `ST_DWithin` plus GiST indexes is the intended path for proximity checks such as checkpoint geofencing.
+
+The backend now uses Flyway migrations under `apps/backend/src/main/resources/db/migration`; clean databases migrate on application startup. For existing deployments, take and verify a backup, compare the database schema against the baseline and intended forward migrations, and manually baseline only the exact matching schema. The date-named scripts under `apps/backend/database/migrations` do not prove deployment history and must not be applied blindly.
+
+Telemetry table growth remains a production risk. Convert `gps_locations` to range partitioning on `recorded_at` in a dedicated migration when race-day volume justifies it; do not rewrite the table inside the current schema foundation. RFID/bib ingest should stay deferred until this location storage and proximity-query foundation is stable.
+
+### RFID / Bib Bridge Ingest Foundation
+
+The backend supports a generic HTTP bridge for RFID/chip timing systems. Operators create checkpoint readers with `POST /api/v1/races/{raceId}/rfid/readers`; creation returns a plaintext `apiKey` once and stores only a SHA-256 hash in `rfid_readers`.
+
+Timing bridges submit batches to `POST /api/v1/rfid/read-events` with `X-RFID-Reader-Key`. Each read includes `rfidTag`, `readAt`, optional `sourceEventId`, `antenna`, `rssi`, and `rawPayload`. The API durably stores raw reads with `RECEIVED` status, publishes them to Redis Streams, and normalizes them asynchronously into official `checkpoint_records` with `recordMethod=RFID`. Participant timing identity now resolves through `participant_credentials`, while the legacy participant `rfidTag` field remains backward-compatible and auto-synced to `RFID_UHF_TIMING` credentials. Gateways report health to `POST /api/v1/rfid/readers/heartbeat`, which updates reader backlog, firmware/model metadata, hardware profile metadata, and heartbeat status for admin surfaces.
+
+RFID scaling and organizer schema changes are included in the versioned Flyway migrations. Before upgrading an existing database, resolve any duplicate RFID source-event groups reported by migration preflight without deleting timing data. CSV timing imports, reader health dashboards, operator correction workflows, and vendor-specific device SDK integrations are still deferred.
+
 ### Initial Setup Commands
 
 ```bash
@@ -615,9 +699,11 @@ docker-compose up -d
 # Or connect to existing PostgreSQL
 export DATABASE_URL=postgresql://user:password@localhost:5432/racetracker
 
-# Run schema (using psql or your preferred tool)
-psql $DATABASE_URL -f database/schema.sql
+# Start the backend; Flyway applies versioned migrations before Hibernate validates the schema.
+mvn spring-boot:run
 ```
+
+The target database must support PostGIS before the schema is applied. Managed PostgreSQL providers usually require enabling the extension at the database level first.
 
 ### Sample Data Script
 
@@ -759,9 +845,9 @@ public class AuthService {
 
 ## Integration Points
 
-### Web Admin -> Backend
+### Web App -> Backend
 
-The web admin is pre-configured to call `VITE_API_URL` (default: `http://localhost:8080/api/v1`).
+The web app is pre-configured to call `VITE_API_URL` (default: `http://localhost:8080/api/v1`).
 
 Update `apps/web/.env`:
 ```
@@ -878,6 +964,7 @@ SENTRY_DSN=your-sentry-dsn
 
 - [ ] Set strong JWT secret (min 256 bits)
 - [ ] Configure HTTPS/TLS
+- [ ] Confirm PostGIS is available before applying production schema changes
 - [ ] Set up database connection pooling
 - [ ] Configure rate limiting
 - [ ] Set up health check endpoint (/actuator/health)
@@ -896,17 +983,15 @@ cd apps/backend
 docker-compose up -d
 
 # 2. Run backend (after implementing)
-./mvnw spring-boot:run
+mvn spring-boot:run
 
-# 3. Run web admin
+# 3. Run web app
 cd apps/web
 pnpm install
 pnpm dev
 
 # 4. Run mobile app
-cd apps/mobile
-npx expo install
-npx expo start
+pnpm --filter race-tracker-mobile start
 ```
 
 ---
