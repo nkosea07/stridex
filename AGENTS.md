@@ -65,6 +65,37 @@ CI runs the JS job on Node 22; the local floor is Node 20.19 (`.node-version`).
 - RFID reader ingest authenticates with `X-RFID-Reader-Key`; reader admin routes use JWT. A reader API key is shown once at creation and stored only as a SHA-256 hash.
 - CI is `.github/workflows/pilot-validation.yml`: JS job (order above) → backend on Java 17 + PostGIS service → Docker image builds.
 
+## Engineering standards
+
+Always apply production-grade best practices in every implementation, regardless of how
+small the change. Load the matching skill before working in an area:
+`java-spring-backend` (Java backend), `postgresql-code-review` (database),
+`shadcn-ui` / `frontend-design` / `vercel-react-best-practices` (frontend). Prefer the
+smallest complete change that follows existing patterns.
+
+- **General:** read the surrounding code first; reuse existing utilities; no unrelated
+  rewrites or reformatting; no comments unless asked; handle errors explicitly; never claim
+  a test/build passed unless it actually ran.
+- **Java backend:** constructor injection, no field injection; keep controller (HTTP) →
+  service (logic) → repository (data) layering; use DTOs + MapStruct mappers, never expose
+  entities; explicit `@Transactional` boundaries; validate inputs at the edge; throw domain
+  exceptions (ApiException/ResourceNotFoundException/ConflictException, `AccessDeniedException`
+  for authz) — never leak internal exception messages; enforce authorization/ownership
+  server-side; add focused JUnit/Mockito tests.
+- **Database:** Flyway is the only schema source — add a new versioned migration for every
+  change and never edit an applied one; keep Hibernate `ddl-auto: validate` passing; snake_case
+  columns; explicit FKs and indexes for query paths; use parameterized queries (no string
+  concatenation); avoid unbounded/`SELECT *` full-table reads — paginate or stream; watch
+  high-volume tables (`gps_locations`, audit/events) for partitioning/retention.
+- **Frontend:** TypeScript strict; React Router 7 framework mode; server state via the
+  established data layer, not ad-hoc `useState` for remote data; no hardcoded API/WS paths —
+  resolve them from `@race-tracker/contracts`; reuse `apps/web/src/components/ui` (shadcn)
+  primitives; responsive, dark-mode-aware, accessible (labels, roles, keyboard, `aria-live`);
+  keep bundle/map-heavy views lazy where practical.
+- **API/contract:** the contract is the source of truth — change `contract.json` + version and
+  both clients together, then run `pnpm contracts:validate`. Public spectator endpoints stay
+  PII-free.
+
 ## Agent workflow
 
 OpenCode subagents live in `.opencode/agents/` (tracked in git). The primary agent
