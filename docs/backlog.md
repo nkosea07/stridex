@@ -59,3 +59,40 @@ for large datasets, and user communication.
 
 **Related.** `docs/security-review.md` (erase irreversibility note), `docs/open-decisions.md`
 (rate limiting), existing `DELETE /me`.
+
+---
+
+## B2. Privacy policy page (web + mobile, referenced across both apps)
+
+**Goal.** Publish a single, canonical privacy policy that is reachable from both the web and
+mobile apps, and reference it wherever personal data is collected or managed.
+
+**Current state.** No privacy policy page or route exists; registration/waiver flows and the
+account/privacy settings do not link to one.
+
+**Scope.**
+
+1. **Canonical content + source of truth.** Author the policy (data collected, purposes, legal
+   basis, retention — tied to the B1 exceptions, sharing/sub-processors, user rights including
+   export/erasure, contact). Keep it versioned (e.g. `privacyVersion`) so consent can reference
+   a specific revision. Serve from one maintained source so web and mobile stay in sync.
+2. **Web.** Add a public `/privacy` route (React Router 7) that is anonymous and PII-free,
+   reachable without auth; link from the footer, sign-up, and Privacy/Settings.
+3. **Mobile.** Add a `privacy` screen (Expo Router) with the same content; link it from
+   registration and the profile → Privacy entry; open externally if content is hosted.
+4. **References.** Link the policy from: registration (with an "I agree" acknowledgement),
+   the profile/privacy settings, the account-deletion flow (B1), and the waiver acceptance.
+5. **Caching/updates.** Cache-bust on version change; show the "last updated" date and the
+   version; prompt re-acknowledgement when the version changes.
+6. **Accessibility/i18n.** Accessible headings and contrast; ready for the client-i18n work
+   (`open-decisions.md` #6).
+
+**Acceptance criteria.**
+- `/privacy` on web renders anonymously and is linked from sign-up and privacy settings.
+- A mobile privacy screen exists and is linked from registration and profile.
+- The policy version is stored and surfaced; the registration acknowledgement records the
+  accepted version.
+- No PII is transmitted or logged to render the page.
+
+**Related.** B1 (account deletion), `open-decisions.md` #6 (client i18n), contract if the
+version is exposed via the API.
