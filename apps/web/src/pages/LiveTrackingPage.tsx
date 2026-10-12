@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import Map, { Marker, MapRef } from 'react-map-gl'
+import Map, { Marker, MapRef, Source, Layer } from 'react-map-gl'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { connectLiveTracking, trackingApi, checkpointsApi, racesApi } from '@/lib/api'
+import { connectLiveTracking, trackingApi, checkpointsApi, racesApi, routeApi } from '@/lib/api'
 import { getMapAccessToken, resolveMapStyleUrl } from '@/lib/map-provider'
-import type { LiveTrackingData, Checkpoint, Race } from '@/types'
+import type { LiveTrackingData, Checkpoint, Race, RoutePoint } from '@/types'
 import { toast } from 'sonner'
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
 import { CommandBar, TrackingMode } from '@/components/dashboard/CommandBar'
@@ -32,6 +32,7 @@ export function LiveTrackingPage() {
   }, [])
 
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([])
+  const [route, setRoute] = useState<RoutePoint[]>([])
   const [search, setSearch] = useState('')
   const [selectedParticipant, setSelectedParticipant] = useState<LiveTrackingViewModel | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -49,14 +50,16 @@ export function LiveTrackingPage() {
   const loadLiveData = async () => {
     if (!raceId) return
     try {
-      const [rows, cps, raceData] = await Promise.all([
+      const [rows, cps, raceData, routePoints] = await Promise.all([
         trackingApi.getLiveData(raceId),
         checkpointsApi.list(raceId),
-        racesApi.get(raceId)
+        racesApi.get(raceId),
+        routeApi.get(raceId).catch(() => [] as RoutePoint[]),
       ])
       setData(rows.map(r => ({ ...r, lastSeen: Date.now() })))
       setCheckpoints(cps.sort((a, b) => a.orderIndex - b.orderIndex))
       setRace(raceData)
+      setRoute(routePoints)
     } catch {
       toast.error('Failed to load race data')
     }
@@ -111,6 +114,18 @@ export function LiveTrackingPage() {
     [data],
   )
 
+  const routeGeoJson = useMemo(
+    () => ({
+      type: 'Feature' as const,
+      properties: {},
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: route.map((point) => [point.longitude, point.latitude]),
+      },
+    }),
+    [route],
+  )
+
   const DataStrip = (
     <Sidebar
       participants={filteredParticipants}
@@ -156,6 +171,15 @@ export function LiveTrackingPage() {
           mapboxAccessToken={MAPBOX_TOKEN}
           style={{ width: '100%', height: '100%' }}
         >
+          {route.length > 1 && (
+            <Source id="race-route" type="geojson" data={routeGeoJson}>
+              <Layer
+                id="race-route-line"
+                type="line"
+                paint={{ 'line-color': '#22d3ee', 'line-width': 3, 'line-opacity': 0.7 }}
+              />
+            </Source>
+          )}
           {data.map((participant) => (
             <Marker
               key={participant.participantId}

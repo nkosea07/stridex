@@ -10,6 +10,8 @@ import java.util.UUID;
 public class CheckpointRecordDto {
     private UUID id;
     private UUID participantId;
+    private String participantName;
+    private String bibNumber;
     private UUID checkpointId;
     private UUID raceId;
     private String recordedAt;

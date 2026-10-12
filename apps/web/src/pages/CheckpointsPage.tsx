@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Plus, Search, MoreHorizontal, Trash2, PlayCircle, Wifi, QrCode, Download } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Trash2, PlayCircle, Wifi, QrCode, Download, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { checkpointsApi, routeApi } from '@/lib/api'
 import { toast } from 'sonner'
-import type { Checkpoint, CheckpointType } from '@/types'
+import type { Checkpoint, CheckpointType, CheckpointRecord } from '@/types'
 
 const checkpointTypeColors: Record<CheckpointType, string> = {
   START: 'bg-primary/20 text-primary',
@@ -32,6 +32,26 @@ export function CheckpointsPage() {
   const [recordBib, setRecordBib] = useState('')
   const [recordMethod, setRecordMethod] = useState<string>('MANUAL')
   const [exporting, setExporting] = useState(false)
+  const [recordsOpen, setRecordsOpen] = useState(false)
+  const [recordsCheckpoint, setRecordsCheckpoint] = useState<Checkpoint | null>(null)
+  const [records, setRecords] = useState<CheckpointRecord[]>([])
+  const [recordsLoading, setRecordsLoading] = useState(false)
+  const [correctionRecord, setCorrectionRecord] = useState<CheckpointRecord | null>(null)
+  const [correctionForm, setCorrectionForm] = useState({ adjustedRecordedAt: '', reason: '' })
+  const [correcting, setCorrecting] = useState(false)
+  const gpxInputRef = useRef<HTMLInputElement>(null)
+
+  const handleImportGpx = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !raceId) return
+    try {
+      const points = await routeApi.importGpx(raceId, file)
+      toast.success(`Imported ${points.length} route points`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to import GPX')
+    }
+  }
   const [newCheckpoint, setNewCheckpoint] = useState({
     name: '',
     checkpointType: 'INTERMEDIATE' as CheckpointType,
@@ -64,6 +84,48 @@ export function CheckpointsPage() {
       toast.error(`Failed to export ${format.toUpperCase()}`)
     } finally {
       setExporting(false)
+    }
+  }
+
+  const openRecords = async (checkpoint: Checkpoint) => {
+    if (!raceId) return
+    setRecordsCheckpoint(checkpoint)
+    setRecordsOpen(true)
+    setRecordsLoading(true)
+    try {
+      setRecords(await checkpointsApi.listRecords(raceId, checkpoint.id))
+    } catch {
+      toast.error('Failed to load records')
+    } finally {
+      setRecordsLoading(false)
+    }
+  }
+
+  const beginCorrection = (record: CheckpointRecord) => {
+    setCorrectionRecord(record)
+    setCorrectionForm({
+      adjustedRecordedAt: record.adjustedRecordedAt ? record.adjustedRecordedAt.slice(0, 16) : '',
+      reason: record.adjustmentReason ?? '',
+    })
+  }
+
+  const handleCorrect = async () => {
+    if (!raceId || !recordsCheckpoint || !correctionRecord) return
+    setCorrecting(true)
+    try {
+      await checkpointsApi.correctRecord(raceId, recordsCheckpoint.id, correctionRecord.id, {
+        adjustedRecordedAt: correctionForm.adjustedRecordedAt
+          ? new Date(correctionForm.adjustedRecordedAt).toISOString()
+          : undefined,
+        reason: correctionForm.reason.trim() || undefined,
+      })
+      toast.success('Record corrected')
+      setCorrectionRecord(null)
+      setRecords(await checkpointsApi.listRecords(raceId, recordsCheckpoint.id))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to correct record')
+    } finally {
+      setCorrecting(false)
     }
   }
 
@@ -167,6 +229,17 @@ export function CheckpointsPage() {
             <Download className="mr-2 h-4 w-4" />
             Export GPX
           </Button>
+          <Button variant="outline" onClick={() => gpxInputRef.current?.click()}>
+            <Upload className="mr-2 h-4 w-4" />
+            Import GPX
+          </Button>
+          <input
+            ref={gpxInputRef}
+            type="file"
+            accept=".gpx,application/gpx+xml"
+            className="hidden"
+            onChange={(e) => void handleImportGpx(e)}
+          />
           <Button onClick={() => setIsAddDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Checkpoint
@@ -226,6 +299,7 @@ export function CheckpointsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => openRecordDialog(checkpoint)}>Record Time</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => void openRecords(checkpoint)}>View Records</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive" onClick={() => void handleDelete(checkpoint.id)}>
                           <Trash2 className="mr-2 h-4 w-4" />Delete
@@ -278,6 +352,70 @@ export function CheckpointsPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsRecordDialogOpen(false)}>Cancel</Button>
             <Button onClick={() => void handleRecordTime()}>Record</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={recordsOpen} onOpenChange={(open) => { setRecordsOpen(open); if (!open) setCorrectionRecord(null) }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Records — {recordsCheckpoint?.name}</DialogTitle>
+          </DialogHeader>
+          {recordsLoading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+          ) : records.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No records for this checkpoint.</p>
+          ) : (
+            <div className="space-y-2">
+              {records.map((record) => (
+                <div key={record.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
+                  <div>
+                    <div className="font-medium">
+                      {record.participantName ?? record.participantId}
+                      {record.bibNumber ? ` · ${record.bibNumber}` : ''}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(record.recordedAt).toLocaleString()} · {record.recordMethod}
+                      {record.isCutoffMissed ? ' · cutoff missed' : ''}
+                      {record.adjustedRecordedAt ? ` · adjusted ${new Date(record.adjustedRecordedAt).toLocaleString()}` : ''}
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => beginCorrection(record)}>Adjust</Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {correctionRecord && (
+            <div className="mt-2 space-y-3 rounded-md border border-primary/30 bg-primary/5 p-3">
+              <p className="text-sm font-medium">Adjust {correctionRecord.participantName ?? correctionRecord.participantId}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Adjusted time</Label>
+                  <Input
+                    type="datetime-local"
+                    value={correctionForm.adjustedRecordedAt}
+                    onChange={(e) => setCorrectionForm((f) => ({ ...f, adjustedRecordedAt: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>Reason</Label>
+                  <Input
+                    value={correctionForm.reason}
+                    onChange={(e) => setCorrectionForm((f) => ({ ...f, reason: e.target.value }))}
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCorrectionRecord(null)} disabled={correcting}>Cancel</Button>
+                <Button size="sm" onClick={() => void handleCorrect()} disabled={correcting}>{correcting ? 'Saving…' : 'Apply'}</Button>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecordsOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

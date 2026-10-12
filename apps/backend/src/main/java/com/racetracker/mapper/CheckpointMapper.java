@@ -19,6 +19,8 @@ public interface CheckpointMapper {
     CheckpointDto toDto(Checkpoint entity);
 
     @Mapping(target = "participantId", expression = "java(entity.getParticipant() != null ? entity.getParticipant().getId() : null)")
+    @Mapping(target = "participantName", expression = "java(entity.getParticipant() != null ? entity.getParticipant().getFullName() : null)")
+    @Mapping(target = "bibNumber", expression = "java(entity.getParticipant() != null ? entity.getParticipant().getBibNumber() : null)")
     @Mapping(target = "checkpointId", expression = "java(entity.getCheckpoint() != null ? entity.getCheckpoint().getId() : null)")
     @Mapping(target = "raceId", expression = "java(entity.getRace() != null ? entity.getRace().getId() : null)")
     @Mapping(target = "recordedAt", expression = "java(entity.getRecordedAt() != null ? entity.getRecordedAt().toString() : null)")

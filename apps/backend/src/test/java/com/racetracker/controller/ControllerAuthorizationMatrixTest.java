@@ -70,7 +70,16 @@ class ControllerAuthorizationMatrixTest {
         assertGuard(CheckpointController.class, "delete", opsGuard);
         assertGuard(CheckpointController.class, "record", opsGuard);
         assertGuard(CheckpointController.class, "export", opsGuard);
+        assertGuard(CheckpointController.class, "listRecords", opsGuard);
         assertGuard(CheckpointController.class, "correctRecord", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')");
+    }
+
+    @Test
+    void raceCategoryControllerGuards() {
+        assertGuard(RaceCategoryController.class, "list", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')");
+        assertGuard(RaceCategoryController.class, "create", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')");
+        assertGuard(RaceCategoryController.class, "update", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')");
+        assertGuard(RaceCategoryController.class, "delete", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')");
     }
 
     @Test

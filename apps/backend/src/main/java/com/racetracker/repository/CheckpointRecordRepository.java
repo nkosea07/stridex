@@ -21,6 +21,9 @@ public interface CheckpointRecordRepository extends JpaRepository<CheckpointReco
     Optional<CheckpointRecord> findByRaceIdAndCheckpointIdAndId(UUID raceId, UUID checkpointId, UUID id);
 
     @EntityGraph(attributePaths = {"participant", "checkpoint", "race", "recordedBy"})
+    List<CheckpointRecord> findByRaceIdAndCheckpointIdOrderByRecordedAtAsc(UUID raceId, UUID checkpointId);
+
+    @EntityGraph(attributePaths = {"participant", "checkpoint", "race", "recordedBy"})
     List<CheckpointRecord> findByRaceIdOrderByRecordedAtDesc(UUID raceId);
 
     @EntityGraph(attributePaths = {"participant", "checkpoint", "race", "recordedBy"})

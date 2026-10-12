@@ -10,6 +10,8 @@ import {
   Trophy,
   ClipboardList,
   BarChart3,
+  Layers,
+  UsersRound,
   Image as ImageIcon,
   Tag,
   Bell,
@@ -43,6 +45,8 @@ const mainNavItems = [
 const raceNavItems = [
   { to: 'participants', icon: Users, label: 'Participants' },
   { to: 'registration', icon: ClipboardList, label: 'Registration' },
+  { to: 'categories', icon: Layers, label: 'Categories' },
+  { to: 'teams', icon: UsersRound, label: 'Teams' },
   { to: 'live', icon: MapPin, label: 'Live Tracking' },
   { to: 'checkpoints', icon: Timer, label: 'Checkpoints' },
   { to: 'rfid', icon: Wifi, label: 'RFID' },

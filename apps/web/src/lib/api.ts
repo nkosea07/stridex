@@ -42,7 +42,8 @@ import type {
   NotificationPreference,
   ConsentState,
   RaceInsightsSummary,
-  ParticipantAnomaly
+  ParticipantAnomaly,
+  RfidReaderCreateResponse
 } from '@/types'
 import { API_CONTRACT } from '@race-tracker/contracts'
 
@@ -539,6 +540,9 @@ export const checkpointsApi = {
       body: JSON.stringify(data),
     }),
 
+  listRecords: (raceId: string, checkpointId: string) =>
+    fetchApi<CheckpointRecord[]>(buildContractPath(API_CONTRACT.endpoints.checkpointRecords, { raceId, checkpointId })),
+
   exportCheckpoints: (raceId: string, format: 'csv' | 'xlsx') =>
     downloadExport(buildContractPath(API_CONTRACT.endpoints.raceCheckpointExport, { raceId }, { format })),
 }
@@ -546,6 +550,11 @@ export const checkpointsApi = {
 export const rfidApi = {
   listReaders: (raceId: string) => fetchApi<RfidReader[]>(`/races/${raceId}/rfid/readers`),
   getOverview: (raceId: string) => fetchApi<RfidRaceOverview>(`/races/${raceId}/rfid/overview`),
+  createReader: (raceId: string, data: { checkpointId: string; name: string; externalId: string }) =>
+    fetchApi<RfidReaderCreateResponse>(`/races/${raceId}/rfid/readers`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   revokeReader: (raceId: string, readerId: string) =>
     fetchApi<RfidReader>(`/races/${raceId}/rfid/readers/${readerId}/revoke`, {
       method: 'PATCH',

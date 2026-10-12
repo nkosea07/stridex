@@ -15,6 +15,8 @@ export default [
     route('races/:raceId', 'routes/admin-race-detail.tsx'),
     route('races/:raceId/participants', 'routes/admin-race-participants.tsx'),
     route('races/:raceId/registration', 'routes/admin-race-registration.tsx'),
+    route('races/:raceId/categories', 'routes/admin-race-categories.tsx'),
+    route('races/:raceId/teams', 'routes/admin-race-teams.tsx'),
     route('races/:raceId/live', 'routes/admin-race-live.tsx'),
     route('races/:raceId/checkpoints', 'routes/admin-race-checkpoints.tsx'),
     route('races/:raceId/rfid', 'routes/admin-race-rfid.tsx'),

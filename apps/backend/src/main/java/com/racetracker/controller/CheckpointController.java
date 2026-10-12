@@ -100,4 +100,14 @@ public class CheckpointController {
         raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(checkpointService.correctRecord(raceId, checkpointId, recordId, request));
     }
+
+    @GetMapping("/{raceId}/checkpoints/{checkpointId}/records")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
+    public ResponseEntity<List<CheckpointRecordDto>> listRecords(
+        @PathVariable UUID raceId,
+        @PathVariable UUID checkpointId
+    ) {
+        raceAccessGuard.assertCanManage(raceId);
+        return ResponseEntity.ok(checkpointService.listRecords(raceId, checkpointId));
+    }
 }

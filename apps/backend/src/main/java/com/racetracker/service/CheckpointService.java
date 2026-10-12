@@ -11,6 +11,8 @@ public interface CheckpointService {
     CheckpointDto update(UUID raceId, UUID checkpointId, CheckpointUpdateRequest request);
     void delete(UUID raceId, UUID checkpointId);
     CheckpointRecordDto record(UUID raceId, UUID checkpointId, CheckpointRecordRequest request);
+
+    List<CheckpointRecordDto> listRecords(UUID raceId, UUID checkpointId);
     CheckpointRecordDto correctRecord(UUID raceId, UUID checkpointId, UUID recordId,
                                        com.racetracker.dto.checkpoint.CheckpointRecordCorrectionRequest request);
 }

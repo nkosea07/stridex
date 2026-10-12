@@ -150,9 +150,17 @@ public class CheckpointServiceImpl implements CheckpointService {
     }
 
     @Override
-    @Transactional
-    public CheckpointRecordDto correctRecord(UUID raceId, UUID checkpointId, UUID recordId, CheckpointRecordCorrectionRequest request) {
+    @Transactional(readOnly = true)
+    public List<CheckpointRecordDto> listRecords(UUID raceId, UUID checkpointId) {
         getCheckpoint(raceId, checkpointId);
+        return checkpointRecordRepository.findByRaceIdAndCheckpointIdOrderByRecordedAtAsc(raceId, checkpointId).stream()
+            .map(checkpointMapper::toRecordDto)
+            .toList();
+    }
+
+    @Override
+    @Transactional
+    public CheckpointRecordDto correctRecord(UUID raceId, UUID checkpointId, UUID recordId, CheckpointRecordCorrectionRequest request) {        getCheckpoint(raceId, checkpointId);
         CheckpointRecord record = checkpointRecordRepository.findByRaceIdAndCheckpointIdAndId(raceId, checkpointId, recordId)
             .orElseThrow(() -> new ResourceNotFoundException("Checkpoint record not found"));
 

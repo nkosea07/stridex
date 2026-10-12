@@ -1,12 +1,29 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Activity, AlertTriangle, Clock3, Cpu, Radio, RefreshCw, Wifi } from 'lucide-react'
+import { Activity, AlertTriangle, Clock3, Cpu, KeyRound, Plus, Radio, RefreshCw, Wifi } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { checkpointsApi, racesApi, rfidApi } from '@/lib/api'
-import type { Checkpoint, Race, RfidRaceOverview, RfidReader } from '@/types'
+import type { Checkpoint, Race, RfidRaceOverview, RfidReader, RfidReaderCreateResponse } from '@/types'
 import { toast } from 'sonner'
 
 const gatewayStatusColors = {
@@ -31,6 +48,10 @@ export function RfidReadersPage() {
   const [readers, setReaders] = useState<RfidReader[]>([])
   const [overview, setOverview] = useState<RfidRaceOverview | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [createdReader, setCreatedReader] = useState<RfidReaderCreateResponse | null>(null)
+  const [createForm, setCreateForm] = useState({ checkpointId: '', name: '', externalId: '' })
 
   const checkpointNames = useMemo(
     () => new Map(checkpoints.map((checkpoint) => [checkpoint.id, checkpoint.name])),
@@ -63,6 +84,54 @@ export function RfidReadersPage() {
   useEffect(() => {
     void load()
   }, [raceId])
+
+  const rfidCheckpoints = useMemo(
+    () => checkpoints.filter((checkpoint) => checkpoint.hasRfidReader),
+    [checkpoints],
+  )
+
+  const openCreate = () => {
+    setCreatedReader(null)
+    setCreateForm({
+      checkpointId: rfidCheckpoints[0]?.id ?? '',
+      name: '',
+      externalId: '',
+    })
+    setCreateOpen(true)
+  }
+
+  const handleCreate = async () => {
+    if (!raceId) return
+    if (!createForm.checkpointId || !createForm.name.trim() || !createForm.externalId.trim()) {
+      toast.error('Checkpoint, name, and external id are required')
+      return
+    }
+    setCreating(true)
+    try {
+      const created = await rfidApi.createReader(raceId, {
+        checkpointId: createForm.checkpointId,
+        name: createForm.name.trim(),
+        externalId: createForm.externalId.trim(),
+      })
+      setCreatedReader(created)
+      await load()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create reader')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleRevoke = async (reader: RfidReader) => {
+    if (!raceId) return
+    try {
+      await rfidApi.revokeReader(raceId, reader.id)
+      toast.success('Reader revoked')
+      await load()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to revoke reader')
+    }
+  }
 
   const cards = [
     {
@@ -110,10 +179,16 @@ export function RfidReadersPage() {
             {race?.name ?? 'Race'} reader health, ingest backlog, and timing-event quality signals.
           </p>
         </div>
-        <Button variant="outline" onClick={() => void load()}>
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => void load()}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+          <Button onClick={openCreate} disabled={rfidCheckpoints.length === 0}>
+            <Plus className="mr-2 h-4 w-4" />
+            New reader
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -148,6 +223,7 @@ export function RfidReadersPage() {
                 <TableHead>Last Seen</TableHead>
                 <TableHead>Last Processed</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -181,11 +257,21 @@ export function RfidReadersPage() {
                     </div>
                     <div className="text-xs text-destructive">{reader.lastError || ''}</div>
                   </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void handleRevoke(reader)}
+                      disabled={reader.status === 'REVOKED'}
+                    >
+                      Revoke
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
               {readers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-sm text-muted-foreground">
+                  <TableCell colSpan={9} className="text-sm text-muted-foreground">
                     No RFID readers registered for this race.
                   </TableCell>
                 </TableRow>
@@ -194,6 +280,94 @@ export function RfidReadersPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New RFID reader</DialogTitle>
+            <DialogDescription>
+              Register an edge reader for a checkpoint that has RFID enabled.
+            </DialogDescription>
+          </DialogHeader>
+
+          {createdReader ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Reader <span className="font-medium text-foreground">{createdReader.name}</span> was created. Copy the
+                API key now — it is shown only once.
+              </p>
+              <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-3">
+                <KeyRound className="h-4 w-4 text-primary" />
+                <code className="flex-1 break-all font-mono text-sm">{createdReader.apiKey}</code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(createdReader.apiKey)
+                    toast.success('API key copied')
+                  }}
+                >
+                  Copy
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="reader-checkpoint">Checkpoint</Label>
+                <Select
+                  value={createForm.checkpointId}
+                  onValueChange={(value) => setCreateForm((form) => ({ ...form, checkpointId: value }))}
+                >
+                  <SelectTrigger id="reader-checkpoint">
+                    <SelectValue placeholder="Select a checkpoint" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {rfidCheckpoints.map((checkpoint) => (
+                      <SelectItem key={checkpoint.id} value={checkpoint.id}>
+                        {checkpoint.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reader-name">Name</Label>
+                <Input
+                  id="reader-name"
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm((form) => ({ ...form, name: e.target.value }))}
+                  placeholder="Finish line reader"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reader-external">External id</Label>
+                <Input
+                  id="reader-external"
+                  value={createForm.externalId}
+                  onChange={(e) => setCreateForm((form) => ({ ...form, externalId: e.target.value }))}
+                  placeholder="reader-01"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            {createdReader ? (
+              <Button onClick={() => setCreateOpen(false)}>Done</Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
+                  Cancel
+                </Button>
+                <Button onClick={() => void handleCreate()} disabled={creating}>
+                  {creating ? 'Creating…' : 'Create reader'}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

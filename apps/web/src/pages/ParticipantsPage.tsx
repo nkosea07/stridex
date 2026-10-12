@@ -10,9 +10,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { participantsApi } from '@/lib/api'
+import { participantsApi, categoriesApi } from '@/lib/api'
 import { toast } from 'sonner'
-import type { ImportJob, Participant, ParticipantStatus } from '@/types'
+import type { ImportJob, Participant, ParticipantStatus, Penalty, RaceCategory } from '@/types'
 
 const statusColors: Record<ParticipantStatus, string> = {
   REGISTERED: 'bg-muted text-muted-foreground',
@@ -55,6 +55,25 @@ export function ParticipantsPage() {
     gender: '',
     nationality: '',
   })
+  const [categories, setCategories] = useState<RaceCategory[]>([])
+  const [editOpen, setEditOpen] = useState(false)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editForm, setEditForm] = useState({
+    id: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    bibNumber: '',
+    categoryId: '',
+    status: '' as ParticipantStatus | '',
+  })
+  const [penaltyOpen, setPenaltyOpen] = useState(false)
+  const [penaltyParticipant, setPenaltyParticipant] = useState<Participant | null>(null)
+  const [penalties, setPenalties] = useState<Penalty[]>([])
+  const [penaltySeconds, setPenaltySeconds] = useState('')
+  const [penaltyReason, setPenaltyReason] = useState('')
+  const [penaltyBusy, setPenaltyBusy] = useState(false)
 
   const loadParticipants = async () => {
     if (!raceId) return
@@ -82,6 +101,9 @@ export function ParticipantsPage() {
   useEffect(() => {
     void loadParticipants()
     void loadImportJobs()
+    if (raceId) {
+      categoriesApi.list(raceId).then(setCategories).catch(() => undefined)
+    }
   }, [raceId])
 
   const filteredParticipants = useMemo(
@@ -215,21 +237,97 @@ export function ParticipantsPage() {
     }
   }
 
-  const handleAddPenalty = async (participantId: string) => {
+  const openEdit = (participant: Participant) => {
+    setEditForm({
+      id: participant.id,
+      firstName: participant.firstName,
+      lastName: participant.lastName,
+      email: participant.email,
+      phone: participant.phone ?? '',
+      bibNumber: participant.bibNumber ?? '',
+      categoryId: participant.categoryId ?? '',
+      status: participant.status,
+    })
+    setEditOpen(true)
+  }
+
+  const handleSaveEdit = async () => {
     if (!raceId) return
-    const secondsRaw = window.prompt('Time penalty in seconds (e.g. 120):')
-    if (!secondsRaw) return
-    const seconds = Number(secondsRaw)
+    if (!editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.email.trim()) {
+      toast.error('First name, last name, and email are required')
+      return
+    }
+    setEditSaving(true)
+    try {
+      await participantsApi.update(raceId, editForm.id, {
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        email: editForm.email.trim(),
+        phone: editForm.phone.trim() || undefined,
+        bibNumber: editForm.bibNumber.trim() || undefined,
+        categoryId: editForm.categoryId || undefined,
+        status: editForm.status || undefined,
+      })
+      toast.success('Participant updated')
+      setEditOpen(false)
+      await loadParticipants()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update participant')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const loadPenalties = async (participantId: string) => {
+    if (!raceId) return
+    try {
+      setPenalties(await participantsApi.listPenalties(raceId, participantId))
+    } catch {
+      toast.error('Failed to load penalties')
+    }
+  }
+
+  const openPenalties = async (participant: Participant) => {
+    setPenaltyParticipant(participant)
+    setPenalties([])
+    setPenaltySeconds('')
+    setPenaltyReason('')
+    setPenaltyOpen(true)
+    await loadPenalties(participant.id)
+  }
+
+  const handleAddPenalty = async () => {
+    if (!raceId || !penaltyParticipant) return
+    const seconds = Number(penaltySeconds)
     if (!Number.isFinite(seconds) || seconds === 0) {
       toast.error('Enter a non-zero number of seconds')
       return
     }
-    const reason = window.prompt('Reason (optional)') ?? undefined
+    setPenaltyBusy(true)
     try {
-      await participantsApi.addPenalty(raceId, participantId, { seconds, reason })
+      await participantsApi.addPenalty(raceId, penaltyParticipant.id, {
+        seconds,
+        reason: penaltyReason.trim() || undefined,
+      })
       toast.success('Penalty added')
+      setPenaltySeconds('')
+      setPenaltyReason('')
+      await loadPenalties(penaltyParticipant.id)
     } catch {
       toast.error('Failed to add penalty')
+    } finally {
+      setPenaltyBusy(false)
+    }
+  }
+
+  const handleRemovePenalty = async (penaltyId: string) => {
+    if (!raceId || !penaltyParticipant) return
+    try {
+      await participantsApi.removePenalty(raceId, penaltyParticipant.id, penaltyId)
+      toast.success('Penalty removed')
+      await loadPenalties(penaltyParticipant.id)
+    } catch {
+      toast.error('Failed to remove penalty')
     }
   }
 
@@ -397,9 +495,14 @@ export function ParticipantsPage() {
                           <Printer className="mr-2 h-4 w-4" />
                           Print Bib
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => void handleAddPenalty(p.id)}>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => openEdit(p)}>
                           <Timer className="mr-2 h-4 w-4" />
-                          Add Time Penalty
+                          Edit Participant
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => void openPenalties(p)}>
+                          <Timer className="mr-2 h-4 w-4" />
+                          Manage Penalties
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive" onClick={() => void handleDelete(p.id)}>
@@ -483,6 +586,86 @@ export function ParticipantsPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
             <Button onClick={() => void handleAddParticipant()}>Add</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Participant</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>First Name</Label><Input value={editForm.firstName} onChange={(e) => setEditForm((v) => ({ ...v, firstName: e.target.value }))} /></div>
+              <div><Label>Last Name</Label><Input value={editForm.lastName} onChange={(e) => setEditForm((v) => ({ ...v, lastName: e.target.value }))} /></div>
+            </div>
+            <div><Label>Email</Label><Input type="email" value={editForm.email} onChange={(e) => setEditForm((v) => ({ ...v, email: e.target.value }))} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Phone</Label><Input value={editForm.phone} onChange={(e) => setEditForm((v) => ({ ...v, phone: e.target.value }))} /></div>
+              <div><Label>Bib Number</Label><Input value={editForm.bibNumber} onChange={(e) => setEditForm((v) => ({ ...v, bibNumber: e.target.value }))} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Category</Label>
+                <Select value={editForm.categoryId} onValueChange={(value) => setEditForm((v) => ({ ...v, categoryId: value }))}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Status</Label>
+                <Select value={editForm.status} onValueChange={(value) => setEditForm((v) => ({ ...v, status: value as ParticipantStatus }))}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {(['REGISTERED', 'CONFIRMED', 'CHECKED_IN', 'STARTED', 'DNF', 'DNS', 'DISQUALIFIED', 'FINISHED'] as ParticipantStatus[]).map((status) => (
+                      <SelectItem key={status} value={status}>{status.replace('_', ' ')}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>Cancel</Button>
+            <Button onClick={() => void handleSaveEdit()} disabled={editSaving}>{editSaving ? 'Saving…' : 'Save'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={penaltyOpen} onOpenChange={setPenaltyOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Time Penalties — {penaltyParticipant?.firstName} {penaltyParticipant?.lastName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              {penalties.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No penalties recorded.</p>
+              ) : (
+                penalties.map((penalty) => (
+                  <div key={penalty.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
+                    <span>
+                      <span className="font-medium">{penalty.seconds}s</span>
+                      {penalty.reason ? <span className="text-muted-foreground"> — {penalty.reason}</span> : null}
+                    </span>
+                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void handleRemovePenalty(penalty.id)}>
+                      Remove
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label>Seconds</Label><Input type="number" value={penaltySeconds} onChange={(e) => setPenaltySeconds(e.target.value)} /></div>
+              <div className="col-span-2"><Label>Reason</Label><Input value={penaltyReason} onChange={(e) => setPenaltyReason(e.target.value)} placeholder="Optional" /></div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPenaltyOpen(false)}>Close</Button>
+            <Button onClick={() => void handleAddPenalty()} disabled={penaltyBusy}>{penaltyBusy ? 'Adding…' : 'Add penalty'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

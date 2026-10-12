@@ -244,6 +244,8 @@ export type RecordMethod = 'RFID' | 'QR_CODE' | 'MANUAL' | 'GPS_AUTO'
 export interface CheckpointRecord {
   id: string
   participantId: string
+  participantName?: string
+  bibNumber?: string
   checkpointId: string
   raceId: string
   recordedAt: string
@@ -253,6 +255,9 @@ export interface CheckpointRecord {
   elapsedTime?: string
   isVerified: boolean
   notes?: string
+  adjustedRecordedAt?: string
+  adjustmentReason?: string
+  isCutoffMissed?: boolean
   participant?: Participant
 }
 
@@ -640,4 +645,8 @@ export interface ParticipantAnomaly {
   filteredGpsPoints: number
   missedCutoffs: number
   anomalyScore: number
+}
+
+export interface RfidReaderCreateResponse extends RfidReader {
+  apiKey: string
 }
