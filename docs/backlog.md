@@ -13,7 +13,8 @@ grace window (`racetracker.privacy.deletion-grace-days`), cancel, scheduled hard
 (`AccountDeletionServiceImpl`), and expanded coverage (credentials, GPS, notifications,
 preferences, follows, tokens, media, de-identified emergency alerts; payments/audit retained).
 Endpoints `DELETE /me`, `GET /me/deletion`, `POST /me/deletion/cancel`; web Settings dialog and
-mobile deletion screen. Email confirmation/completion notices remain a follow-up.
+mobile deletion screen. Confirmation email on request and a completion email after hard erase
+are sent (best-effort; skipped when mail is disabled).
 
 **Goal.** Give a user an option to delete their account and have **all data related to that
 user** erased — or anonymized where a legal/financial retention obligation applies — following

@@ -40,6 +40,7 @@ public class AccountDeletionServiceImpl implements AccountDeletionService {
     private final AuditEventService auditEventService;
     private final AccountPrivacyService accountPrivacyService;
     private final RaceTrackerProperties properties;
+    private final com.racetracker.service.AuthEmailService authEmailService;
 
     public AccountDeletionServiceImpl(
         UserRepository userRepository,
@@ -47,7 +48,8 @@ public class AccountDeletionServiceImpl implements AccountDeletionService {
         PasswordEncoder passwordEncoder,
         AuditEventService auditEventService,
         AccountPrivacyService accountPrivacyService,
-        RaceTrackerProperties properties
+        RaceTrackerProperties properties,
+        com.racetracker.service.AuthEmailService authEmailService
     ) {
         this.userRepository = userRepository;
         this.authTokenRepository = authTokenRepository;
@@ -55,6 +57,7 @@ public class AccountDeletionServiceImpl implements AccountDeletionService {
         this.auditEventService = auditEventService;
         this.accountPrivacyService = accountPrivacyService;
         this.properties = properties;
+        this.authEmailService = authEmailService;
     }
 
     @Override
@@ -90,6 +93,7 @@ public class AccountDeletionServiceImpl implements AccountDeletionService {
 
         auditEventService.recordInCurrentTransaction("ACCOUNT_DELETION_REQUESTED", userId, "USER", userId.toString(),
             "SUCCESS", Map.of("scheduledFor", user.getDeletionScheduledFor().toString()));
+        authEmailService.sendAccountDeletionScheduled(user, user.getDeletionScheduledFor());
         return toStatus(user);
     }
 
@@ -122,7 +126,10 @@ public class AccountDeletionServiceImpl implements AccountDeletionService {
     public int purgeExpired() {
         List<User> due = userRepository.findDueForPurge(OffsetDateTime.now());
         for (User user : due) {
+            String email = user.getEmail();
+            String firstName = user.getFirstName();
             accountPrivacyService.eraseAccount(user.getId());
+            authEmailService.sendAccountDeletionCompleted(email, firstName);
         }
         return due.size();
     }

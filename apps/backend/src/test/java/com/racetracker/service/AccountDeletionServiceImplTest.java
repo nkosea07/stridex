@@ -35,6 +35,7 @@ class AccountDeletionServiceImplTest {
     @Mock PasswordEncoder passwordEncoder;
     @Mock AuditEventService auditEventService;
     @Mock AccountPrivacyService accountPrivacyService;
+    @Mock AuthEmailService authEmailService;
 
     private AccountDeletionServiceImpl service;
     private final UUID userId = UUID.randomUUID();
@@ -44,7 +45,7 @@ class AccountDeletionServiceImplTest {
         RaceTrackerProperties properties = new RaceTrackerProperties();
         properties.getPrivacy().setDeletionGraceDays(30);
         service = new AccountDeletionServiceImpl(userRepository, authTokenRepository, passwordEncoder,
-            auditEventService, accountPrivacyService, properties);
+            auditEventService, accountPrivacyService, properties, authEmailService);
     }
 
     private User user() {
@@ -72,6 +73,7 @@ class AccountDeletionServiceImplTest {
         assertThat(user.getIsActive()).isFalse();
         verify(userRepository).save(user);
         verify(authTokenRepository).deleteByUserId(userId);
+        verify(authEmailService).sendAccountDeletionScheduled(user, user.getDeletionScheduledFor());
     }
 
     @Test
@@ -118,5 +120,6 @@ class AccountDeletionServiceImplTest {
 
         assertThat(purged).isEqualTo(1);
         verify(accountPrivacyService).eraseAccount(due.getId());
+        verify(authEmailService).sendAccountDeletionCompleted(due.getEmail(), due.getFirstName());
     }
 }

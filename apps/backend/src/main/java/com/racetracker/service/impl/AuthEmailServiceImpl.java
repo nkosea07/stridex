@@ -15,6 +15,8 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 
 @Slf4j
 @Service
@@ -61,6 +63,34 @@ public class AuthEmailServiceImpl implements AuthEmailService {
             htmlContent,
             true
         );
+    }
+
+    @Async
+    @Override
+    public void sendAccountDeletionScheduled(User user, OffsetDateTime scheduledFor) {
+        if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+            return;
+        }
+        Context context = new Context();
+        context.setVariable("firstName", user.getFirstName());
+        context.setVariable("scheduledDate", scheduledFor == null ? ""
+            : scheduledFor.format(DateTimeFormatter.ofPattern("d MMMM yyyy")));
+
+        String htmlContent = templateEngine.process("account-deletion-scheduled", context);
+        send(user.getEmail(), "Your Race Tracker account is scheduled for deletion", htmlContent, true);
+    }
+
+    @Async
+    @Override
+    public void sendAccountDeletionCompleted(String email, String firstName) {
+        if (email == null || email.isBlank()) {
+            return;
+        }
+        Context context = new Context();
+        context.setVariable("firstName", firstName);
+
+        String htmlContent = templateEngine.process("account-deletion-completed", context);
+        send(email, "Your Race Tracker account has been deleted", htmlContent, true);
     }
 
     private void send(String to, String subject, String body, boolean isHtml) {
