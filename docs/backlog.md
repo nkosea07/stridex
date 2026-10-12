@@ -2,7 +2,8 @@
 
 Product and engineering work items not yet scheduled. Each item lists the goal, the current
 state, the required scope, and acceptance criteria. Decisions that block work live in
-`open-decisions.md`.
+`open-decisions.md`. For a single consolidated status of all pending work, see
+`docs/PENDING_WORK.md`.
 
 ---
 

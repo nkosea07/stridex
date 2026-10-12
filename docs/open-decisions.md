@@ -73,7 +73,6 @@ The table is **not** range-partitioned.
 
 ## 6. Client i18n
 
-**State.** Backend `MessageSource` + `LocalizedMessages` exist (English catalog).
-
-**Steps.** Pick target locales, add `messages_<lang>.properties`, and introduce web/mobile i18n
-(e.g., i18next) driven by `Accept-Language`.
+**Decided & in progress.** Languages fixed at `en` (default), `sn`, `nd`, `af`, `zu`, `fr`,
+`pt`, `sw` (no RTL). Foundation (Phase 0) delivered; web extraction (Phase 1) in progress.
+See `docs/PENDING_WORK.md` §1 for the full phase status and remaining areas.
