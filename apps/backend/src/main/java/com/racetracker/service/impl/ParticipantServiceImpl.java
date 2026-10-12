@@ -191,7 +191,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         participant.setStatus(Participant.ParticipantStatus.CHECKED_IN);
         Participant saved = participantRepository.save(participant);
         notifyParticipant(saved, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
-            "Check-in confirmed", "You are checked in for " + raceName(saved) + ".");
+            "registration.checked_in", "Check-in confirmed", "You are checked in for " + raceName(saved) + ".");
         return participantMapper.toDto(saved);
     }
 
@@ -758,17 +758,17 @@ public class ParticipantServiceImpl implements ParticipantService {
             case CONFIRMED, CHECKED_IN -> () -> {
                 registrationEmailService.sendRegistrationApproved(participant);
                 notifyParticipant(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
-                    "Registration confirmed", "Your registration for " + raceName(participant) + " is confirmed.");
+                    "registration.confirmed", "Registration confirmed", "Your registration for " + raceName(participant) + " is confirmed.");
             };
             case WAITLISTED -> () -> {
                 registrationEmailService.sendRegistrationWaitlisted(participant);
                 notifyParticipant(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
-                    "Added to waitlist", "You are on the waitlist for " + raceName(participant) + ".");
+                    "registration.waitlisted", "Added to waitlist", "You are on the waitlist for " + raceName(participant) + ".");
             };
             case REJECTED -> () -> {
                 registrationEmailService.sendRegistrationRejected(participant);
                 notifyParticipant(participant, com.racetracker.model.Notification.NotificationType.ALERT,
-                    "Registration update", "Your registration for " + raceName(participant) + " was not approved.");
+                    "registration.rejected", "Registration update", "Your registration for " + raceName(participant) + " was not approved.");
             };
             default -> null;
         };
@@ -789,12 +789,12 @@ public class ParticipantServiceImpl implements ParticipantService {
     }
 
     private void notifyParticipant(Participant participant, com.racetracker.model.Notification.NotificationType type,
-                                   String title, String message) {
+                                   String templateCode, String title, String message) {
         if (participant.getUser() == null) {
             return;
         }
         try {
-            notificationService.notify(participant.getUser().getId(), type, title, message,
+            notificationService.notifyTemplated(participant.getUser().getId(), type, templateCode, title, message,
                 java.util.Map.of("participantId", participant.getId().toString()));
         } catch (RuntimeException ex) {
             // Notification delivery must never break registration flows.

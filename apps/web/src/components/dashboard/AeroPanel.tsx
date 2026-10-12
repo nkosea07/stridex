@@ -102,10 +102,6 @@ export function AeroPanel({ participant, onClose, className }: AeroPanelProps) {
             </div>
           </div>
         </div>
-
-        <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-[10px] tracking-[0.2em] h-10 rounded-xl shadow-lg shadow-primary/20">
-          Focus on Runner
-        </Button>
       </div>
     </div>
   );

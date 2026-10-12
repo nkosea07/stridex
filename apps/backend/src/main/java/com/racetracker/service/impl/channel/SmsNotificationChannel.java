@@ -8,8 +8,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * SMS adapter placeholder. No provider is wired yet; enabling it without a provider logs
- * and drops the message. The channel stays behind a config flag until a provider is chosen.
+ * SMS adapter placeholder. No provider is wired yet; enabling it without a provider fails the
+ * delivery (recorded as FAILED) rather than reporting a false success. The channel stays behind
+ * a config flag until a provider is chosen.
  */
 @Slf4j
 @Component
@@ -33,6 +34,6 @@ public class SmsNotificationChannel implements NotificationChannel {
 
     @Override
     public void send(NotificationMessage message) {
-        log.info("SMS notification requested for user {} but no SMS provider is configured", message.userId());
+        throw new com.racetracker.exception.ApiException("No SMS provider is configured");
     }
 }

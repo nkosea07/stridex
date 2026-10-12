@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Settings, Users, Shield, Filter } from 'lucide-react';
+import { Users, Shield } from 'lucide-react';
 
 export type TrackingMode = 'spectator' | 'organizer';
 
@@ -38,16 +38,6 @@ export function CommandBar({
             LIVE
           </Badge>
         </div>
-      </div>
-
-      {/* Center Actions / Filters Placeholder */}
-      <div className="flex items-center gap-1 border-x border-border/50 px-4">
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-          <Filter className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-          <Settings className="h-4 w-4" />
-        </Button>
       </div>
 
       {/* Mode Toggle */}

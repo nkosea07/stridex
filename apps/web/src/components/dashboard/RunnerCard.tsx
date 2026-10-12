@@ -1,4 +1,3 @@
-import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { ChevronRight, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -12,13 +11,6 @@ interface RunnerCardProps {
 }
 
 export function RunnerCard({ participant, isSelected, onClick }: RunnerCardProps) {
-  const sparklineData = useMemo(() => {
-    // Generate 10 random data points for the pace trend
-    return Array.from({ length: 10 }, () => ({
-      value: participant.speed * (0.8 + Math.random() * 0.4),
-    }));
-  }, [participant.speed]);
-
   const statusColor = useMemo(() => {
     if (participant.speed > 12) return 'bg-green-500';
     if (participant.speed >= 5) return 'bg-yellow-500';
@@ -65,19 +57,7 @@ export function RunnerCard({ participant, isSelected, onClick }: RunnerCardProps
             </span>
           </div>
 
-          <div className="h-6 w-16 opacity-70 group-hover:opacity-100 transition-opacity">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={sparklineData}>
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  stroke={participant.speed > 5 ? 'var(--color-primary)' : 'var(--color-destructive)'}
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <span className={cn('h-2 w-2 rounded-full', statusColor)} aria-hidden="true" />
         </div>
       </div>
     </button>

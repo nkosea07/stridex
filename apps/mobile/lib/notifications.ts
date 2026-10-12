@@ -1,9 +1,11 @@
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { api } from './api';
 
 export const TRACKING_NOTIFICATION_CHANNEL_ID = 'race-tracking';
 export const ALERTS_NOTIFICATION_CHANNEL_ID = 'race-alerts';
+const PUSH_TOKEN_KEY = 'push_device_token';
 
 // Foreground presentation policy: show alerts while the app is open.
 Notifications.setNotificationHandler({
@@ -57,6 +59,7 @@ export const registerForPushNotifications = async (): Promise<string | null> => 
     const token = typeof tokenResult?.data === 'string' ? tokenResult.data : null;
     if (!token) return null;
     await api.registerDevice(token, Platform.OS);
+    await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
     return token;
   } catch (error) {
     console.warn('Push notification registration unavailable:', error);
@@ -69,6 +72,19 @@ export const unregisterPushDevice = async (token: string): Promise<void> => {
     await api.unregisterDevice(token);
   } catch (error) {
     console.warn('Failed to unregister push device:', error);
+  }
+};
+
+/** Unregisters the device token captured at registration (e.g. on sign-out). */
+export const unregisterCurrentPushDevice = async (): Promise<void> => {
+  try {
+    const token = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+    if (token) {
+      await api.unregisterDevice(token);
+      await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
+    }
+  } catch (error) {
+    console.warn('Failed to unregister current push device:', error);
   }
 };
 

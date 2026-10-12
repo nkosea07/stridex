@@ -190,7 +190,7 @@ public class PaymentServiceImpl implements PaymentService {
         participantRepository.save(participant);
 
         notifyPayment(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
-            "Refund processed", "Your payment for " + raceName(participant) + " has been refunded.");
+            "payment.refunded", "Refund processed", "Your payment for " + raceName(participant) + " has been refunded.");
 
         return toDto(payment);
     }
@@ -272,13 +272,13 @@ public class PaymentServiceImpl implements PaymentService {
                 }
 
                 notifyPayment(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
-                    "Payment received", "Your payment for " + raceName(participant) + " has been received.");
+                    "payment.received", "Payment received", "Your payment for " + raceName(participant) + " has been received.");
             }
             case "FAILED" -> {
                 payment.setStatus(Payment.PaymentStatus.FAILED);
                 paymentRepository.save(payment);
                 notifyPayment(payment.getParticipant(), com.racetracker.model.Notification.NotificationType.ALERT,
-                    "Payment failed", "Your payment for " + raceName(payment.getParticipant()) + " did not complete.");
+                    "payment.failed", "Payment failed", "Your payment for " + raceName(payment.getParticipant()) + " did not complete.");
             }
             case "CANCELLED" -> {
                 payment.setStatus(Payment.PaymentStatus.CANCELLED);
@@ -310,12 +310,12 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void notifyPayment(Participant participant, com.racetracker.model.Notification.NotificationType type,
-                               String title, String message) {
+                               String templateCode, String title, String message) {
         if (participant == null || participant.getUser() == null) {
             return;
         }
         try {
-            notificationService.notify(participant.getUser().getId(), type, title, message,
+            notificationService.notifyTemplated(participant.getUser().getId(), type, templateCode, title, message,
                 java.util.Map.of("participantId", participant.getId().toString()));
         } catch (RuntimeException ex) {
             log.warn("Failed to notify participant {} about payment: {}", participant.getId(), ex.getMessage());

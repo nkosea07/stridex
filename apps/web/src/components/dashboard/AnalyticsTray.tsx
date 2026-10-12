@@ -1,7 +1,6 @@
-import { TrendingUp, Clock, AlertTriangle, CheckCircle2, Activity, Timer } from 'lucide-react';
+import { TrendingUp, Clock, CheckCircle2, Activity, Timer } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { LiveTrackingData, Checkpoint } from '@/types';
 import type { TrackingMode } from './CommandBar';
@@ -12,7 +11,7 @@ interface AnalyticsTrayProps {
   checkpoints: Checkpoint[];
 }
 
-export function AnalyticsTray({ selectedParticipant, mode, checkpoints }: AnalyticsTrayProps) {
+export function AnalyticsTray({ selectedParticipant, checkpoints }: AnalyticsTrayProps) {
   if (!selectedParticipant) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-4 relative overflow-hidden bg-background/40 backdrop-blur-md">
@@ -172,15 +171,6 @@ export function AnalyticsTray({ selectedParticipant, mode, checkpoints }: Analyt
             )}
           </div>
         </div>
-
-        {mode === 'organizer' && (
-          <div className="mt-auto pt-4 border-t border-white/5">
-            <Button variant="destructive" className="w-full gap-2 font-black uppercase text-[10px] h-10 tracking-widest rounded-sm shadow-none">
-              <AlertTriangle className="h-4 w-4" />
-              Flag Issue
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   );

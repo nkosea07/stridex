@@ -25,19 +25,22 @@ public class RfidStreamWorker {
     private final RfidReadEventProcessor rfidReadEventProcessor;
     private final RfidReadEventRepository rfidReadEventRepository;
     private final RfidEventPublisher rfidEventPublisher;
+    private final RfidIngestMetrics rfidIngestMetrics;
 
     public RfidStreamWorker(
         RedisTemplate<String, Object> redisTemplate,
         RaceTrackerProperties raceTrackerProperties,
         RfidReadEventProcessor rfidReadEventProcessor,
         RfidReadEventRepository rfidReadEventRepository,
-        RfidEventPublisher rfidEventPublisher
+        RfidEventPublisher rfidEventPublisher,
+        RfidIngestMetrics rfidIngestMetrics
     ) {
         this.redisTemplate = redisTemplate;
         this.raceTrackerProperties = raceTrackerProperties;
         this.rfidReadEventProcessor = rfidReadEventProcessor;
         this.rfidReadEventRepository = rfidReadEventRepository;
         this.rfidEventPublisher = rfidEventPublisher;
+        this.rfidIngestMetrics = rfidIngestMetrics;
     }
 
     @PostConstruct
@@ -103,6 +106,7 @@ public class RfidStreamWorker {
                 record.getId()
             );
         } catch (Exception ex) {
+            rfidIngestMetrics.incrementError();
             log.error("Failed to process RFID stream record {}: {}", record.getId(), ex.getMessage());
         }
     }

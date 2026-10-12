@@ -13,6 +13,13 @@ public interface NotificationService {
     NotificationDto markRead(UUID id);
     NotificationDto notify(UUID userId, Notification.NotificationType type, String title, String message,
                            Map<String, String> data);
+
+    /**
+     * Like {@link #notify} but resolves subject/body from an admin-managed template by code,
+     * falling back to the supplied title/message when no template exists.
+     */
+    NotificationDto notifyTemplated(UUID userId, Notification.NotificationType type, String templateCode,
+                                    String fallbackTitle, String fallbackMessage, Map<String, String> data);
     void registerDevice(String token, String platform);
     void unregisterDevice(String token);
     NotificationPreferenceDto getPreferences();

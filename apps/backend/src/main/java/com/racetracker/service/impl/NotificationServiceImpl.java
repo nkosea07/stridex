@@ -35,6 +35,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationDispatcher notificationDispatcher;
     private final ObjectMapper objectMapper;
     private final com.racetracker.service.NotificationPreferenceService preferenceService;
+    private final com.racetracker.service.NotificationTemplateService notificationTemplateService;
 
     public NotificationServiceImpl(
         NotificationRepository notificationRepository,
@@ -42,7 +43,8 @@ public class NotificationServiceImpl implements NotificationService {
         PushDeviceRepository pushDeviceRepository,
         NotificationDispatcher notificationDispatcher,
         ObjectMapper objectMapper,
-        com.racetracker.service.NotificationPreferenceService preferenceService
+        com.racetracker.service.NotificationPreferenceService preferenceService,
+        com.racetracker.service.NotificationTemplateService notificationTemplateService
     ) {
         this.notificationRepository = notificationRepository;
         this.userRepository = userRepository;
@@ -50,6 +52,7 @@ public class NotificationServiceImpl implements NotificationService {
         this.notificationDispatcher = notificationDispatcher;
         this.objectMapper = objectMapper;
         this.preferenceService = preferenceService;
+        this.notificationTemplateService = notificationTemplateService;
     }
 
     @Override
@@ -105,8 +108,25 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional
-    public void registerDevice(String token, String platform) {
-        if (token == null || token.isBlank()) {
+    public NotificationDto notifyTemplated(UUID userId, Notification.NotificationType type, String templateCode,
+                                           String fallbackTitle, String fallbackMessage, Map<String, String> data) {
+        String title = fallbackTitle;
+        String message = fallbackMessage;
+        try {
+            var resolved = notificationTemplateService.resolve(templateCode, null);
+            if (resolved.isPresent()) {
+                title = resolved.get().subject();
+                message = resolved.get().body();
+            }
+        } catch (RuntimeException ex) {
+            log.warn("Failed to resolve notification template {}: {}", templateCode, ex.getMessage());
+        }
+        return notify(userId, type, title, message, data);
+    }
+
+    @Override
+    @Transactional
+    public void registerDevice(String token, String platform) {        if (token == null || token.isBlank()) {
             throw new com.racetracker.exception.ApiException("Device token is required");
         }
         User user = resolveCurrentUser();

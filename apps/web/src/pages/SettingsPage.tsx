@@ -59,7 +59,7 @@ export function SettingsPage() {
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
     email: user?.email || '',
-    phone: ''
+    phone: user?.phone || ''
   })
   const [notifications, setNotifications] = useState<NotificationPreference>({
     emailEnabled: true,
@@ -68,11 +68,6 @@ export function SettingsPage() {
     whatsappEnabled: true,
   })
   const [notificationPrefsSaving, setNotificationPrefsSaving] = useState(false)
-  const [preferences, setPreferences] = useState({
-    timezone: 'Africa/Johannesburg',
-    dateFormat: 'DD/MM/YYYY',
-    distanceUnit: 'km'
-  })
 
   const handleSaveProfile = async () => {
     setProfileSaving(true)
@@ -412,7 +407,7 @@ export function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Regional Preferences</CardTitle>
-              <CardDescription>Theme changes apply immediately. Regional preferences are planned for a later release.</CardDescription>
+              <CardDescription>Appearance and regional display settings.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -431,64 +426,9 @@ export function SettingsPage() {
                   Active theme: {resolvedTheme}. The theme updates immediately.
                 </p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="timezone">Timezone</Label>
-                <Select 
-                  value={preferences.timezone}
-                  disabled
-                  onValueChange={(value) => setPreferences({ ...preferences, timezone: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Africa/Johannesburg">Africa/Johannesburg (SAST)</SelectItem>
-                    <SelectItem value="Africa/Harare">Africa/Harare (CAT)</SelectItem>
-                    <SelectItem value="Europe/London">Europe/London (GMT)</SelectItem>
-                    <SelectItem value="America/New_York">America/New_York (EST)</SelectItem>
-                    <SelectItem value="Asia/Tokyo">Asia/Tokyo (JST)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dateFormat">Date Format</Label>
-                <Select 
-                  value={preferences.dateFormat}
-                  disabled
-                  onValueChange={(value) => setPreferences({ ...preferences, dateFormat: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DD/MM/YYYY">DD/MM/YYYY (30/03/2024)</SelectItem>
-                    <SelectItem value="MM/DD/YYYY">MM/DD/YYYY (03/30/2024)</SelectItem>
-                    <SelectItem value="YYYY-MM-DD">YYYY-MM-DD (2024-03-30)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="distanceUnit">Distance Unit</Label>
-                <Select 
-                  value={preferences.distanceUnit}
-                  disabled
-                  onValueChange={(value) => setPreferences({ ...preferences, distanceUnit: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="km">Kilometers (km)</SelectItem>
-                    <SelectItem value="mi">Miles (mi)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="pt-4">
-                <Button disabled>
-                  <Save className="mr-2 h-4 w-4" />
-                  Coming soon
-                </Button>
-              </div>
+              <p className="text-sm text-muted-foreground">
+                Timezone, date format, and units follow your device and the race locale.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -520,13 +460,10 @@ export function SettingsPage() {
                 <CardDescription>Add an extra layer of security to your account</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">2FA Status</p>
-                    <p className="text-xs text-muted-foreground">MFA enrollment is planned for the privileged-security release.</p>
-                  </div>
-                  <Button variant="outline" disabled>Coming soon</Button>
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  Multi-factor authentication is required for privileged roles and is set up during sign-in. If your
+                  role requires it, you will be prompted to enrol when you next sign in.
+                </p>
               </CardContent>
             </Card>
 

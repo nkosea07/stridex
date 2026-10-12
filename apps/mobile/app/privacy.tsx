@@ -2,7 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { API_CONTRACT } from '@race-tracker/contracts';
 import { useTheme } from '@/contexts/theme';
 
-const sections: Array<{ title: string; body: string }> = [
+const sections: { title: string; body: string }[] = [
   {
     title: '1. Who we are',
     body: 'Race Tracker operates a race registration, timing, and live-tracking platform for organizers, athletes, and spectators. This policy explains what personal data we process, why, how long we keep it, and the choices available to you.',

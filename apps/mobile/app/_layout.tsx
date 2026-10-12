@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -18,6 +18,7 @@ import {
 } from '@expo-google-fonts/fira-code';
 import { initializeAuth } from '@/store/auth';
 import { useTrackingStore } from '@/store/tracking';
+import { addNotificationResponseListener } from '@/lib/notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 import { ThemeProvider, useTheme } from '@/contexts/theme';
@@ -76,6 +77,13 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const { colors, resolvedTheme } = useTheme();
+
+  useEffect(() => {
+    const subscription = addNotificationResponseListener(() => {
+      router.push('/notifications');
+    });
+    return () => subscription.remove();
+  }, []);
 
   return (
     <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>

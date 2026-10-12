@@ -3,10 +3,14 @@ package com.racetracker.service.impl;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
+import com.google.firebase.messaging.BatchResponse;
 import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.MulticastMessage;
 import com.google.firebase.messaging.Notification;
+import com.google.firebase.messaging.SendResponse;
 import com.racetracker.config.RaceTrackerProperties;
+import com.racetracker.repository.PushDeviceRepository;
 import com.racetracker.service.PushNotificationService;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +18,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -22,10 +27,12 @@ import java.util.Map;
 public class FcmPushNotificationService implements PushNotificationService {
 
     private final RaceTrackerProperties properties;
+    private final PushDeviceRepository pushDeviceRepository;
     private FirebaseMessaging messaging;
 
-    public FcmPushNotificationService(RaceTrackerProperties properties) {
+    public FcmPushNotificationService(RaceTrackerProperties properties, PushDeviceRepository pushDeviceRepository) {
         this.properties = properties;
+        this.pushDeviceRepository = pushDeviceRepository;
     }
 
     @PostConstruct
@@ -68,9 +75,37 @@ public class FcmPushNotificationService implements PushNotificationService {
                 .setNotification(Notification.builder().setTitle(title).setBody(body).build())
                 .putAllData(data == null ? Map.of() : data)
                 .build();
-            messaging.sendEachForMulticast(message);
+            BatchResponse response = messaging.sendEachForMulticast(message);
+            pruneStaleTokens(tokens, response);
         } catch (Exception ex) {
             log.warn("Failed to deliver push notification: {}", ex.getMessage());
+        }
+    }
+
+    private void pruneStaleTokens(List<String> tokens, BatchResponse response) {
+        if (response.getFailureCount() == 0) {
+            return;
+        }
+        List<SendResponse> responses = response.getResponses();
+        List<String> stale = new ArrayList<>();
+        int index = 0;
+        for (SendResponse sendResponse : responses) {
+            if (!sendResponse.isSuccessful() && index < tokens.size()) {
+                MessagingErrorCode code = sendResponse.getException() == null
+                    ? null : sendResponse.getException().getMessagingErrorCode();
+                if (code == MessagingErrorCode.UNREGISTERED || code == MessagingErrorCode.INVALID_ARGUMENT) {
+                    stale.add(tokens.get(index));
+                }
+            }
+            index++;
+        }
+        for (String token : stale) {
+            try {
+                pushDeviceRepository.deleteByToken(token);
+                log.info("Removed stale push device token");
+            } catch (RuntimeException ex) {
+                log.warn("Failed to prune stale push token: {}", ex.getMessage());
+            }
         }
     }
 }

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { api } from '@/lib/api';
+import { unregisterCurrentPushDevice } from '@/lib/notifications';
 import type { AuthState } from '@/types';
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -78,6 +79,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
+    await unregisterCurrentPushDevice();
     await api.logout();
     await AsyncStorage.removeItem('user');
     set({ user: null, token: null, refreshToken: null, isAuthenticated: false });

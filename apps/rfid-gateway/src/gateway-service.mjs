@@ -24,7 +24,7 @@ export class GatewayService {
     const normalized = validateBatchPayload(payload);
     const reads = normalized.reads.map((read) => ({
       ...read,
-      eventOrigin: this.config.eventOrigin,
+      eventOrigin: read.eventOrigin ?? this.config.eventOrigin,
     }));
     const chunks = chunkReads(reads, this.config.batchSize);
 

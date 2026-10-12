@@ -63,7 +63,8 @@ public class ReflectiveOctaneSdkFacade implements OctaneSdkFacade {
             Object connected = invoke(readerInstance, "isConnected");
             return connected instanceof Boolean value ? value : true;
         } catch (Exception ignored) {
-            return true;
+            // Treat a failed status probe as disconnected so the reconnect loop runs.
+            return false;
         }
     }
 
