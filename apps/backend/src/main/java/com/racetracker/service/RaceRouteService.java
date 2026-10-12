@@ -11,4 +11,6 @@ public interface RaceRouteService {
     List<RoutePointDto> getRoute(UUID raceId);
 
     List<RoutePointDto> importGpx(UUID raceId, MultipartFile file);
+
+    String exportGpx(UUID raceId);
 }

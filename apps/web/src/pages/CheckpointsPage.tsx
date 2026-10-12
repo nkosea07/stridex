@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Plus, Search, MoreHorizontal, Trash2, PlayCircle, Wifi, QrCode } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Trash2, PlayCircle, Wifi, QrCode, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { checkpointsApi } from '@/lib/api'
+import { checkpointsApi, routeApi } from '@/lib/api'
 import { toast } from 'sonner'
 import type { Checkpoint, CheckpointType } from '@/types'
 
@@ -31,6 +31,7 @@ export function CheckpointsPage() {
   const [selectedCheckpoint, setSelectedCheckpoint] = useState<Checkpoint | null>(null)
   const [recordBib, setRecordBib] = useState('')
   const [recordMethod, setRecordMethod] = useState<string>('MANUAL')
+  const [exporting, setExporting] = useState(false)
   const [newCheckpoint, setNewCheckpoint] = useState({
     name: '',
     checkpointType: 'INTERMEDIATE' as CheckpointType,
@@ -43,6 +44,29 @@ export function CheckpointsPage() {
     hasQrScanner: false,
   })
 
+  const handleExport = async (format: 'csv' | 'gpx') => {
+    if (!raceId) return
+    setExporting(true)
+    try {
+      const blob = format === 'gpx'
+        ? await routeApi.exportGpx(raceId)
+        : await checkpointsApi.exportCheckpoints(raceId, 'csv')
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = format === 'gpx' ? `route-${raceId}.gpx` : `checkpoints-${raceId}.csv`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+      toast.success(`Exported ${format.toUpperCase()}`)
+    } catch {
+      toast.error(`Failed to export ${format.toUpperCase()}`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const loadCheckpoints = async () => {
     if (!raceId) return
     try {
@@ -50,8 +74,7 @@ export function CheckpointsPage() {
       setCheckpoints(data)
     } catch {
       toast.error('Failed to load checkpoints')
-    }
-  }
+    }  }
 
   useEffect(() => {
     void loadCheckpoints()
@@ -127,10 +150,28 @@ export function CheckpointsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Checkpoints</h1>
           <p className="text-muted-foreground">Manage timing points and records</p>
         </div>
-        <Button onClick={() => setIsAddDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Checkpoint
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => void handleExport('csv')}
+            disabled={!raceId || exporting}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export CSV
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => void handleExport('gpx')}
+            disabled={!raceId || exporting}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export GPX
+          </Button>
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Checkpoint
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-4">

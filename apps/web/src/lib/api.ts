@@ -38,7 +38,11 @@ import type {
   PromoCode,
   RoutePoint,
   EmergencyAlert,
-  DeletionStatus
+  DeletionStatus,
+  NotificationPreference,
+  ConsentState,
+  RaceInsightsSummary,
+  ParticipantAnomaly
 } from '@/types'
 import { API_CONTRACT } from '@race-tracker/contracts'
 
@@ -263,6 +267,18 @@ export const authApi = {
   cancelDeletion: () =>
     fetchApi<DeletionStatus>(buildContractPath(API_CONTRACT.endpoints.myDeletionCancel, {}), {
       method: 'POST',
+    }),
+
+  exportData: () =>
+    fetchApi<Record<string, unknown>>(buildContractPath(API_CONTRACT.endpoints.myDataExport, {})),
+
+  consent: () =>
+    fetchApi<ConsentState>(buildContractPath(API_CONTRACT.endpoints.myConsent, {})),
+
+  updateConsent: (data: { dataProcessingConsent?: boolean; marketingConsent?: boolean }) =>
+    fetchApi<ConsentState>(buildContractPath(API_CONTRACT.endpoints.myConsent, {}), {
+      method: 'PUT',
+      body: JSON.stringify(data),
     }),
 
   forgotPassword: (email: string) =>
@@ -682,6 +698,15 @@ export const notificationsApi = {
     fetchApi<void>(`${API_CONTRACT.endpoints.notificationDevices}?token=${encodeURIComponent(token)}`, {
       method: 'DELETE',
     }),
+
+  preferences: () =>
+    fetchApi<NotificationPreference>(API_CONTRACT.endpoints.notificationPreferences),
+
+  updatePreferences: (preferences: NotificationPreference) =>
+    fetchApi<NotificationPreference>(API_CONTRACT.endpoints.notificationPreferences, {
+      method: 'PUT',
+      body: JSON.stringify(preferences),
+    }),
 }
 
 export const mediaApi = {
@@ -726,9 +751,20 @@ export const analyticsApi = {
     downloadExport(buildContractPath(API_CONTRACT.endpoints.raceAnalyticsExport, { raceId }, { format })),
 }
 
+export const insightsApi = {
+  summary: (raceId: string) =>
+    fetchApi<RaceInsightsSummary>(buildContractPath(API_CONTRACT.endpoints.raceInsightsSummary, { raceId })),
+
+  anomalies: (raceId: string) =>
+    fetchApi<ParticipantAnomaly[]>(buildContractPath(API_CONTRACT.endpoints.raceInsightsAnomalies, { raceId })),
+}
+
 export const routeApi = {
   get: (raceId: string) =>
     fetchApi<RoutePoint[]>(buildContractPath(API_CONTRACT.endpoints.raceRoute, { raceId })),
+
+  exportGpx: (raceId: string) =>
+    downloadExport(buildContractPath(API_CONTRACT.endpoints.raceRouteGpx, { raceId })),
 
   importGpx: async (raceId: string, file: File) => {
     const formData = new FormData()

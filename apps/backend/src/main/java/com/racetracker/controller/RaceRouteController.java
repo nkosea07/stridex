@@ -36,6 +36,15 @@ public class RaceRouteController {
         return ResponseEntity.ok(raceRouteService.getRoute(raceId));
     }
 
+    @GetMapping(value = "/v${racetracker.api.version}/races/{raceId}/route/gpx", produces = "application/gpx+xml")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    public ResponseEntity<String> exportGpx(@PathVariable UUID raceId) {
+        return ResponseEntity.ok()
+            .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"route.gpx\"")
+            .contentType(MediaType.parseMediaType("application/gpx+xml"))
+            .body(raceRouteService.exportGpx(raceId));
+    }
+
     @GetMapping("/v${racetracker.api.version}/public/races/{raceId}/route")
     public ResponseEntity<List<RoutePointDto>> publicRoute(@PathVariable UUID raceId) {
         return ResponseEntity.ok(raceRouteService.getRoute(raceId));

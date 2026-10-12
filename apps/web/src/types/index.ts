@@ -611,3 +611,33 @@ export interface DeletionStatus {
   requestedAt?: string | null
   scheduledFor?: string | null
 }
+
+export interface NotificationPreference {
+  emailEnabled: boolean
+  pushEnabled: boolean
+  smsEnabled: boolean
+  whatsappEnabled: boolean
+}
+
+export interface ConsentState {
+  dataProcessingConsentAt?: string | null
+  marketingConsent: boolean
+}
+
+export interface RaceInsightsSummary {
+  totalParticipants: number
+  liveParticipants: number
+  averagePaceSecondsPerKm: number
+  predictedLeaderFinishTime?: string | null
+  anomalyCount: number
+}
+
+export interface ParticipantAnomaly {
+  participantId: string
+  participantName?: string
+  bibNumber?: string
+  status?: string
+  filteredGpsPoints: number
+  missedCutoffs: number
+  anomalyScore: number
+}

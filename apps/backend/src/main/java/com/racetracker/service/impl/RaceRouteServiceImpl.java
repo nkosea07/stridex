@@ -77,8 +77,29 @@ public class RaceRouteServiceImpl implements RaceRouteService {
         return parsed;
     }
 
-    private List<RoutePointDto> parseGpx(MultipartFile file) {
-        try (InputStream input = file.getInputStream()) {
+    @Override
+    @Transactional(readOnly = true)
+    public String exportGpx(UUID raceId) {
+        requireRace(raceId);
+        List<RaceRoutePoint> points = routePointRepository.findByRaceIdOrderBySequenceAsc(raceId);
+        StringBuilder gpx = new StringBuilder();
+        gpx.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        gpx.append("<gpx version=\"1.1\" creator=\"race-tracker\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n");
+        gpx.append("  <trk><trkseg>\n");
+        for (RaceRoutePoint point : points) {
+            gpx.append("    <trkpt lat=\"").append(point.getLatitude())
+                .append("\" lon=\"").append(point.getLongitude()).append("\">");
+            if (point.getElevation() != null) {
+                gpx.append("<ele>").append(point.getElevation()).append("</ele>");
+            }
+            gpx.append("</trkpt>\n");
+        }
+        gpx.append("  </trkseg></trk>\n");
+        gpx.append("</gpx>\n");
+        return gpx.toString();
+    }
+
+    private List<RoutePointDto> parseGpx(MultipartFile file) {        try (InputStream input = file.getInputStream()) {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
             factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);

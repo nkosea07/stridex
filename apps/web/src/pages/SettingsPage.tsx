@@ -1,11 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { API_CONTRACT } from '@race-tracker/contracts'
 import { 
   User, 
   Shield, 
   Bell, 
-  Mail,
   Key,
   Globe,
   Save
@@ -35,8 +34,9 @@ import {
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
-import { authApi } from '@/lib/api'
+import { authApi, notificationsApi } from '@/lib/api'
 import { enableWebPush, isWebPushConfigured } from '@/lib/push'
+import type { ConsentState, DeletionStatus, NotificationPreference } from '@/types'
 
 export function SettingsPage() {
   const { user, updateUser } = useAuth()
@@ -50,18 +50,24 @@ export function SettingsPage() {
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [deleteBusy, setDeleteBusy] = useState(false)
+  const [consent, setConsent] = useState<ConsentState | null>(null)
+  const [consentSaving, setConsentSaving] = useState(false)
+  const [deletion, setDeletion] = useState<DeletionStatus | null>(null)
+  const [deletionBusy, setDeletionBusy] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [profile, setProfile] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
     email: user?.email || '',
     phone: ''
   })
-  const [notifications, setNotifications] = useState({
-    emailRaceUpdates: true,
-    emailParticipantRegistration: true,
-    emailCheckpointAlerts: false,
-    pushNotifications: true
+  const [notifications, setNotifications] = useState<NotificationPreference>({
+    emailEnabled: true,
+    pushEnabled: true,
+    smsEnabled: true,
+    whatsappEnabled: true,
   })
+  const [notificationPrefsSaving, setNotificationPrefsSaving] = useState(false)
   const [preferences, setPreferences] = useState({
     timezone: 'Africa/Johannesburg',
     dateFormat: 'DD/MM/YYYY',
@@ -132,6 +138,95 @@ export function SettingsPage() {
       toast.error(error instanceof Error ? error.message : 'Unable to delete account')
     } finally {
       setDeleteBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    let active = true
+    notificationsApi
+      .preferences()
+      .then((prefs) => {
+        if (active) setNotifications(prefs)
+      })
+      .catch(() => {
+        // Keep defaults if preferences cannot be loaded.
+      })
+    authApi
+      .consent()
+      .then((value) => {
+        if (active) setConsent(value)
+      })
+      .catch(() => {
+        // Consent is optional to display.
+      })
+    authApi
+      .deletionStatus()
+      .then((value) => {
+        if (active) setDeletion(value)
+      })
+      .catch(() => {
+        // Deletion status is optional to display.
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const handleExportData = async () => {
+    setExporting(true)
+    try {
+      const data = await authApi.exportData()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = 'race-tracker-data.json'
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+      toast.success('Your data export has been downloaded.')
+    } catch {
+      toast.error('Failed to export your data')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleConsentChange = async (patch: { dataProcessingConsent?: boolean; marketingConsent?: boolean }) => {
+    setConsentSaving(true)
+    try {
+      setConsent(await authApi.updateConsent(patch))
+      toast.success('Consent updated.')
+    } catch {
+      toast.error('Failed to update consent')
+    } finally {
+      setConsentSaving(false)
+    }
+  }
+
+  const handleCancelDeletion = async () => {
+    setDeletionBusy(true)
+    try {
+      setDeletion(await authApi.cancelDeletion())
+      toast.success('Account deletion cancelled.')
+    } catch {
+      toast.error('Failed to cancel deletion')
+    } finally {
+      setDeletionBusy(false)
+    }
+  }
+
+  const handleSaveNotificationPreferences = async () => {
+    setNotificationPrefsSaving(true)
+    try {
+      const saved = await notificationsApi.updatePreferences(notifications)
+      setNotifications(saved)
+      toast.success('Notification preferences saved.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to save preferences')
+    } finally {
+      setNotificationPrefsSaving(false)
     }
   }
 
@@ -224,54 +319,56 @@ export function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>Notification preferences are planned for a later release.</CardDescription>
-              <p className="text-xs font-medium text-amber-600">Coming soon — these controls are not saved yet.</p>
+              <CardDescription>Choose which channels we may use to reach you.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
-                <h3 className="text-sm font-medium flex items-center gap-2">
-                  <Mail className="h-4 w-4" />
-                  Email Notifications
-                </h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="emailRaceUpdates">Race Updates</Label>
-                      <p className="text-xs text-muted-foreground">Get notified about race status changes</p>
-                    </div>
-                    <Switch
-                      id="emailRaceUpdates"
-                      checked={notifications.emailRaceUpdates}
-                      disabled
-                      onCheckedChange={(checked) => setNotifications({ ...notifications, emailRaceUpdates: checked })}
-                    />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="prefEmail">Email</Label>
+                    <p className="text-xs text-muted-foreground">Transactional and race emails</p>
                   </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="emailParticipantRegistration">New Registrations</Label>
-                      <p className="text-xs text-muted-foreground">Notify when participants register</p>
-                    </div>
-                    <Switch
-                      id="emailParticipantRegistration"
-                      checked={notifications.emailParticipantRegistration}
-                      disabled
-                      onCheckedChange={(checked) => setNotifications({ ...notifications, emailParticipantRegistration: checked })}
-                    />
+                  <Switch
+                    id="prefEmail"
+                    checked={notifications.emailEnabled}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, emailEnabled: checked })}
+                  />
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="prefPush">Push</Label>
+                    <p className="text-xs text-muted-foreground">App and browser push notifications</p>
                   </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="emailCheckpointAlerts">Checkpoint Alerts</Label>
-                      <p className="text-xs text-muted-foreground">Receive alerts for checkpoint issues</p>
-                    </div>
-                    <Switch
-                      id="emailCheckpointAlerts"
-                      checked={notifications.emailCheckpointAlerts}
-                      disabled
-                      onCheckedChange={(checked) => setNotifications({ ...notifications, emailCheckpointAlerts: checked })}
-                    />
+                  <Switch
+                    id="prefPush"
+                    checked={notifications.pushEnabled}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, pushEnabled: checked })}
+                  />
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="prefSms">SMS</Label>
+                    <p className="text-xs text-muted-foreground">Text-message alerts (when configured)</p>
                   </div>
+                  <Switch
+                    id="prefSms"
+                    checked={notifications.smsEnabled}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, smsEnabled: checked })}
+                  />
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="prefWhatsapp">WhatsApp</Label>
+                    <p className="text-xs text-muted-foreground">WhatsApp alerts (when configured)</p>
+                  </div>
+                  <Switch
+                    id="prefWhatsapp"
+                    checked={notifications.whatsappEnabled}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, whatsappEnabled: checked })}
+                  />
                 </div>
               </div>
 
@@ -280,11 +377,11 @@ export function SettingsPage() {
               <div className="space-y-4">
                 <h3 className="text-sm font-medium flex items-center gap-2">
                   <Bell className="h-4 w-4" />
-                  Push Notifications
+                  Browser Push
                 </h3>
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label>Browser Push Notifications</Label>
+                    <Label>Enable this browser</Label>
                     <p className="text-xs text-muted-foreground">
                       {isWebPushConfigured()
                         ? 'Receive real-time race and checkpoint alerts in this browser.'
@@ -301,9 +398,9 @@ export function SettingsPage() {
               </div>
 
               <div className="pt-4">
-                <Button disabled>
+                <Button onClick={() => void handleSaveNotificationPreferences()} disabled={notificationPrefsSaving}>
                   <Save className="mr-2 h-4 w-4" />
-                  Coming soon
+                  {notificationPrefsSaving ? 'Saving…' : 'Save Preferences'}
                 </Button>
               </div>
             </CardContent>
@@ -438,16 +535,75 @@ export function SettingsPage() {
                 <CardTitle>Privacy</CardTitle>
                 <CardDescription>How we handle your personal data</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-5">
                 <p className="text-sm text-muted-foreground">
                   Review what we collect, how it is used, and your rights, including data export and account deletion.
                 </p>
-                <Button asChild variant="outline">
-                  <Link to={API_CONTRACT.legal?.privacyPolicyPath ?? '/privacy'} target="_blank" rel="noreferrer">
-                    <Shield className="mr-2 h-4 w-4" />
-                    Read the Privacy Policy
-                  </Link>
-                </Button>
+
+                {deletion?.deletionRequested && (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4">
+                    <p className="text-sm font-medium text-destructive">Account deletion scheduled</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Your account is deactivated
+                      {deletion.scheduledFor ? ` and scheduled for erasure on ${new Date(deletion.scheduledFor).toLocaleDateString()}` : ''}.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => void handleCancelDeletion()}
+                      disabled={deletionBusy}
+                    >
+                      {deletionBusy ? 'Cancelling…' : 'Cancel deletion'}
+                    </Button>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button asChild variant="outline">
+                    <Link to={API_CONTRACT.legal?.privacyPolicyPath ?? '/privacy'} target="_blank" rel="noreferrer">
+                      <Shield className="mr-2 h-4 w-4" />
+                      Read the Privacy Policy
+                    </Link>
+                  </Button>
+                  <Button variant="outline" onClick={() => void handleExportData()} disabled={exporting}>
+                    <Globe className="mr-2 h-4 w-4" />
+                    {exporting ? 'Preparing…' : 'Download my data'}
+                  </Button>
+                </div>
+
+                <div className="space-y-4 rounded-lg border border-border p-4">
+                  <p className="text-sm font-medium">Consent</p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="consentProcessing">Data processing</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Required to use the platform{consent?.dataProcessingConsentAt
+                          ? ` (granted ${new Date(consent.dataProcessingConsentAt).toLocaleDateString()})`
+                          : ''}.
+                      </p>
+                    </div>
+                    <Switch
+                      id="consentProcessing"
+                      checked={consent?.dataProcessingConsentAt != null}
+                      disabled={consentSaving || !consent}
+                      onCheckedChange={(checked) => void handleConsentChange({ dataProcessingConsent: checked })}
+                    />
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="consentMarketing">Marketing emails</Label>
+                      <p className="text-xs text-muted-foreground">Optional product and race updates.</p>
+                    </div>
+                    <Switch
+                      id="consentMarketing"
+                      checked={consent?.marketingConsent ?? false}
+                      disabled={consentSaving || !consent}
+                      onCheckedChange={(checked) => void handleConsentChange({ marketingConsent: checked })}
+                    />
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -465,7 +621,13 @@ export function SettingsPage() {
                       You can cancel during the grace period by signing back in.
                     </p>
                   </div>
-                  <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>Delete Account</Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setDeleteDialogOpen(true)}
+                    disabled={Boolean(deletion?.deletionRequested)}
+                  >
+                    {deletion?.deletionRequested ? 'Deletion scheduled' : 'Delete Account'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>

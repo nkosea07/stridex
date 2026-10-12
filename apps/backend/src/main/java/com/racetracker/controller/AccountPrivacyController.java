@@ -40,6 +40,12 @@ public class AccountPrivacyController {
         return ResponseEntity.ok(accountPrivacyService.exportData(currentUserId(authentication)));
     }
 
+    @GetMapping("/consent")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ConsentDto> getConsent(Authentication authentication) {
+        return ResponseEntity.ok(accountPrivacyService.getConsent(currentUserId(authentication)));
+    }
+
     @PutMapping("/consent")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ConsentDto> updateConsent(@RequestBody ConsentUpdateRequest request,

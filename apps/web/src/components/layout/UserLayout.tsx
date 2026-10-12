@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { BarChart3, Home, LogOut } from 'lucide-react'
+import { BarChart3, Bell, Home, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
@@ -11,6 +11,7 @@ import { ThemeSelect } from '@/components/theme/ThemeSelect'
 const navItems = [
   { to: '/app', label: 'Dashboard', icon: Home, end: true },
   { to: '/app/stats', label: 'Stats', icon: BarChart3 },
+  { to: '/notifications', label: 'Notifications', icon: Bell },
 ]
 
 export function UserLayout() {

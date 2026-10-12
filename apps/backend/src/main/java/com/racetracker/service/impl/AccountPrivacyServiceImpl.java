@@ -115,9 +115,18 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
     }
 
     @Override
-    @Transactional
-    public ConsentDto updateConsent(UUID userId, ConsentUpdateRequest request) {
+    @Transactional(readOnly = true)
+    public ConsentDto getConsent(UUID userId) {
         User user = requireUser(userId);
+        ConsentDto dto = new ConsentDto();
+        dto.setDataProcessingConsentAt(user.getDataProcessingConsentAt());
+        dto.setMarketingConsent(Boolean.TRUE.equals(user.getMarketingConsent()));
+        return dto;
+    }
+
+    @Override
+    @Transactional
+    public ConsentDto updateConsent(UUID userId, ConsentUpdateRequest request) {        User user = requireUser(userId);
         if (Boolean.TRUE.equals(request.getDataProcessingConsent())) {
             if (user.getDataProcessingConsentAt() == null) {
                 user.setDataProcessingConsentAt(OffsetDateTime.now());

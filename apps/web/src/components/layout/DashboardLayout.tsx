@@ -9,6 +9,11 @@ import {
   Timer, 
   Trophy,
   ClipboardList,
+  BarChart3,
+  Image as ImageIcon,
+  Tag,
+  Bell,
+  Sparkles,
   Settings,
   LogOut,
   Menu,
@@ -37,10 +42,15 @@ const mainNavItems = [
 
 const raceNavItems = [
   { to: 'participants', icon: Users, label: 'Participants' },
+  { to: 'registration', icon: ClipboardList, label: 'Registration' },
   { to: 'live', icon: MapPin, label: 'Live Tracking' },
   { to: 'checkpoints', icon: Timer, label: 'Checkpoints' },
   { to: 'rfid', icon: Wifi, label: 'RFID' },
   { to: 'results', icon: Trophy, label: 'Results' },
+  { to: 'analytics', icon: BarChart3, label: 'Analytics' },
+  { to: 'insights', icon: Sparkles, label: 'Insights' },
+  { to: 'media', icon: ImageIcon, label: 'Media' },
+  { to: 'promos', icon: Tag, label: 'Promo codes' },
 ]
 
 export function DashboardLayout() {
@@ -175,6 +185,10 @@ export function DashboardLayout() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => navigate('/notifications')}>
+                <Bell className="mr-2 h-4 w-4" />
+                Notifications
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate('/admin/settings')}>
                 <Settings className="mr-2 h-4 w-4" />
                 Settings

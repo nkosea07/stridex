@@ -136,6 +136,7 @@ class ControllerAuthorizationMatrixTest {
     @Test
     void accountPrivacyControllerGuards() {
         assertGuard(AccountPrivacyController.class, "exportData", "isAuthenticated()");
+        assertGuard(AccountPrivacyController.class, "getConsent", "isAuthenticated()");
         assertGuard(AccountPrivacyController.class, "updateConsent", "isAuthenticated()");
         assertGuard(AccountPrivacyController.class, "requestDeletion", "isAuthenticated()");
         assertGuard(AccountPrivacyController.class, "cancelDeletion", "isAuthenticated()");
