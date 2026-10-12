@@ -1,5 +1,6 @@
 import js from '@eslint/js'
 import globals from 'globals'
+import i18next from 'eslint-plugin-i18next'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
@@ -23,6 +24,22 @@ export default tseslint.config(
       'react-hooks/exhaustive-deps': 'off',
       '@typescript-eslint/no-empty-object-type': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+    },
+  },
+  {
+    // i18n-migrated files: no hardcoded JSX text. Grow this list as areas are localized
+    // (see AGENTS.md "Internationalization").
+    files: [
+      'src/pages/LoginPage.tsx',
+      'src/pages/RegisterPage.tsx',
+      'src/components/layout/DashboardLayout.tsx',
+      'src/components/layout/UserLayout.tsx',
+    ],
+    plugins: {
+      i18next,
+    },
+    rules: {
+      'i18next/no-literal-string': ['error', { mode: 'jsx-text-only', 'should-validate-template': false }],
     },
   },
 )

@@ -119,7 +119,14 @@ for (const rootEntry of roots) {
   if (!fs.existsSync(enDir)) continue;
   for (const key of readCatalog(enDir).keys()) {
     const leaf = key.includes('.') ? key.slice(key.lastIndexOf('.') + 1) : key;
-    if (!sourceText.includes(`'${key}'`) && !sourceText.includes(`"${key}"`) && !sourceText.includes(`'${leaf}'`) && !sourceText.includes(`"${leaf}"`) && !sourceText.includes(`.${leaf}`)) {
+    const dotIndex = key.indexOf('.');
+    const colonKey = dotIndex === -1 ? key : `${key.slice(0, dotIndex)}:${key.slice(dotIndex + 1)}`;
+    const referenced =
+      sourceText.includes(`'${key}'`) || sourceText.includes(`"${key}"`) ||
+      sourceText.includes(`'${colonKey}'`) || sourceText.includes(`"${colonKey}"`) ||
+      sourceText.includes(`'${leaf}'`) || sourceText.includes(`"${leaf}"`) ||
+      sourceText.includes(`.${leaf}`);
+    if (!referenced) {
       unusedCount += 1;
       if (reportMode) warnings.push(`[${rootEntry.name}] key "${key}" appears unused in client source.`);
     }

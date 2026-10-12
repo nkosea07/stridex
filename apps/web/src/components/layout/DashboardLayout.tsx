@@ -36,28 +36,30 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTranslation } from 'react-i18next'
 
 const mainNavItems = [
-  { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
-  { to: '/admin/races', icon: Flag, label: 'Races' },
+  { to: '/admin', icon: LayoutDashboard, labelKey: 'nav.dashboard', end: true },
+  { to: '/admin/races', icon: Flag, labelKey: 'nav.races' },
 ]
 
 const raceNavItems = [
-  { to: 'participants', icon: Users, label: 'Participants' },
-  { to: 'registration', icon: ClipboardList, label: 'Registration' },
-  { to: 'categories', icon: Layers, label: 'Categories' },
-  { to: 'teams', icon: UsersRound, label: 'Teams' },
-  { to: 'live', icon: MapPin, label: 'Live Tracking' },
-  { to: 'checkpoints', icon: Timer, label: 'Checkpoints' },
-  { to: 'rfid', icon: Wifi, label: 'RFID' },
-  { to: 'results', icon: Trophy, label: 'Results' },
-  { to: 'analytics', icon: BarChart3, label: 'Analytics' },
-  { to: 'insights', icon: Sparkles, label: 'Insights' },
-  { to: 'media', icon: ImageIcon, label: 'Media' },
-  { to: 'promos', icon: Tag, label: 'Promo codes' },
+  { to: 'participants', icon: Users, labelKey: 'nav.participants' },
+  { to: 'registration', icon: ClipboardList, labelKey: 'nav.registration' },
+  { to: 'categories', icon: Layers, labelKey: 'nav.categories' },
+  { to: 'teams', icon: UsersRound, labelKey: 'nav.teams' },
+  { to: 'live', icon: MapPin, labelKey: 'nav.liveTracking' },
+  { to: 'checkpoints', icon: Timer, labelKey: 'nav.checkpoints' },
+  { to: 'rfid', icon: Wifi, labelKey: 'nav.rfid' },
+  { to: 'results', icon: Trophy, labelKey: 'nav.results' },
+  { to: 'analytics', icon: BarChart3, labelKey: 'nav.analytics' },
+  { to: 'insights', icon: Sparkles, labelKey: 'nav.insights' },
+  { to: 'media', icon: ImageIcon, labelKey: 'nav.media' },
+  { to: 'promos', icon: Tag, labelKey: 'nav.promoCodes' },
 ]
 
 export function DashboardLayout() {
+  const { t } = useTranslation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -68,7 +70,7 @@ export function DashboardLayout() {
   const raceId = raceMatch?.[1]
   const isInRaceContext = raceId && raceId !== 'new'
   const visibleMainNavItems = user?.role === 'SUPER_ADMIN'
-    ? [...mainNavItems, { to: '/admin/organizer-applications', icon: ClipboardList, label: 'Organizer applications' }]
+    ? [...mainNavItems, { to: '/admin/organizer-applications', icon: ClipboardList, labelKey: 'nav.organizerApplications' }]
     : mainNavItems
 
   const handleLogout = () => {
@@ -97,7 +99,7 @@ export function DashboardLayout() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <Flag className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="font-semibold text-sidebar-foreground">Race Tracker</span>
+            <span className="font-semibold text-sidebar-foreground">{t('common:appName')}</span>
           </NavLink>
           <Button 
             variant="ghost" 
@@ -125,7 +127,7 @@ export function DashboardLayout() {
                 )}
               >
                 <item.icon className="h-4 w-4" />
-                {item.label}
+                {t(item.labelKey)}
               </NavLink>
             ))}
           </nav>
@@ -135,7 +137,7 @@ export function DashboardLayout() {
             <>
               <Separator className="my-4" />
               <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Current Race
+                {t('nav:currentRace')}
               </div>
               <nav className="space-y-1">
                 <NavLink
@@ -149,7 +151,7 @@ export function DashboardLayout() {
                   )}
                 >
                   <Flag className="h-4 w-4" />
-                  Overview
+                  {t('nav:overview')}
                 </NavLink>
                 {raceNavItems.map((item) => (
                   <NavLink
@@ -163,7 +165,7 @@ export function DashboardLayout() {
                     )}
                   >
                     <item.icon className="h-4 w-4" />
-                    {item.label}
+                    {t(item.labelKey)}
                   </NavLink>
                 ))}
               </nav>
@@ -191,16 +193,16 @@ export function DashboardLayout() {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem onClick={() => navigate('/notifications')}>
                 <Bell className="mr-2 h-4 w-4" />
-                Notifications
+                {t('nav:notifications')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate('/admin/settings')}>
                 <Settings className="mr-2 h-4 w-4" />
-                Settings
+                {t('nav:settings')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
-                Logout
+                {t('nav:logout')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -231,7 +233,7 @@ export function DashboardLayout() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-live opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-live" />
               </span>
-              <span className="text-muted-foreground">Live Tracking Active</span>
+              <span className="text-muted-foreground">{t('nav:liveTrackingActive')}</span>
             </div>
           )}
         </header>

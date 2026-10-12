@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { BarChart3, Bell, Home, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -9,12 +10,13 @@ import { toast } from 'sonner'
 import { ThemeSelect } from '@/components/theme/ThemeSelect'
 
 const navItems = [
-  { to: '/app', label: 'Dashboard', icon: Home, end: true },
-  { to: '/app/stats', label: 'Stats', icon: BarChart3 },
-  { to: '/notifications', label: 'Notifications', icon: Bell },
+  { to: '/app', labelKey: 'nav.dashboard', icon: Home, end: true },
+  { to: '/app/stats', labelKey: 'nav.stats', icon: BarChart3 },
+  { to: '/notifications', labelKey: 'nav.notifications', icon: Bell },
 ]
 
 export function UserLayout() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
 
@@ -36,14 +38,14 @@ export function UserLayout() {
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <div>
-            <p className="text-sm text-muted-foreground">Signed in as</p>
+            <p className="text-sm text-muted-foreground">{t('nav:signedInAs')}</p>
             <p className="font-medium">{user?.firstName} {user?.lastName}</p>
           </div>
           <div className="flex items-center gap-2">
             <ThemeSelect className="h-8 w-[140px]" />
             <Button variant="outline" size="sm" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
-              Logout
+              {t('nav:logout')}
             </Button>
           </div>
         </div>
@@ -64,7 +66,7 @@ export function UserLayout() {
               }
             >
               <item.icon className="h-4 w-4" />
-              {item.label}
+              {t(item.labelKey)}
             </NavLink>
           ))}
         </aside>

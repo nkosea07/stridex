@@ -98,7 +98,7 @@ smallest complete change that follows existing patterns.
 - **Internationalization (required for all new work):** locales are defined once in
   `contract.json` (`i18n.supportedLocales`) and shared strings live in `packages/i18n`.
   Never hardcode user-facing text or dates/numbers/currency in web or mobile — use
-  `t('<namespace>.<key>')` and the shared format helpers (`formatDate`, `formatDateTime`,
+  `t('<namespace>:<key>')` and the shared format helpers (`formatDate`, `formatDateTime`,
   `formatNumber`, `formatCurrency`, `formatDuration`, `formatPace`). Add every new key to the
   `en` catalog (and seed other locales as translations land); run `pnpm i18n:check` (CI-gated).
   Backend user-facing text (emails/notifications) is localized via `MessageSource`; API errors

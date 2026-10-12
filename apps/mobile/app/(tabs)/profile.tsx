@@ -167,7 +167,7 @@ export default function ProfileScreen() {
           <View style={styles.menuItemLeft}>
             <Ionicons name="language-outline" size={22} color="#6B7280" />
             <View>
-              <Text style={styles.menuItemText}>{t('common.language')}</Text>
+              <Text style={styles.menuItemText}>{t('common:language')}</Text>
               <Text style={styles.menuSubText}>{LOCALE_LABELS[currentLocale] ?? currentLocale}</Text>
             </View>
           </View>

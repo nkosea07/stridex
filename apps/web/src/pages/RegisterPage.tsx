@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Flag, Loader2 } from 'lucide-react'
 import { API_CONTRACT } from '@race-tracker/contracts'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,7 @@ function getSafePublicReturnPath(value: unknown) {
 }
 
 export function RegisterPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -50,12 +52,12 @@ export function RegisterPage() {
     e.preventDefault()
 
     if (form.password !== form.confirmPassword) {
-      toast.error('Passwords do not match.')
+      toast.error(t('register:errorPasswords'))
       return
     }
 
     if (!acceptedPrivacy) {
-      toast.error('Please accept the Privacy Policy to continue.')
+      toast.error(t('register:errorPrivacy'))
       return
     }
 
@@ -76,12 +78,10 @@ export function RegisterPage() {
         await authApi.register(commonData)
       }
       authApi.logout()
-      toast.success(organizerIntent
-        ? 'Application submitted. Please verify your email; organizer access remains pending review.'
-        : 'Account created. Please sign in.')
+      toast.success(organizerIntent ? t('register:successOrganizer') : t('register:successAthlete'))
       navigate('/login', { replace: true, state: returnTo ? { from: returnTo } : undefined })
     } catch {
-      toast.error('Registration failed. Check your details and try again.')
+      toast.error(t('register:errorFailed'))
     } finally {
       setIsLoading(false)
     }
@@ -94,26 +94,24 @@ export function RegisterPage() {
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
             <Flag className="h-6 w-6 text-primary-foreground" />
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-foreground">Race Tracker</h1>
+          <h1 className="mt-4 text-2xl font-bold text-foreground">{t('common:appName')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {organizerIntent ? 'Start your organizer account request' : 'Create your account'}
+            {organizerIntent ? t('register:organizerSubtitle') : t('register:subtitle')}
           </p>
         </div>
 
         <Card className="border-border bg-card">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-xl">Register</CardTitle>
+            <CardTitle className="text-xl">{t('register:title')}</CardTitle>
             <CardDescription>
-              {organizerIntent
-                ? 'Your account is verified first. Organizer access is reviewed before race controls are enabled.'
-                : 'New users are created with athlete access. Admin role assignment is managed separately.'}
+              {organizerIntent ? t('register:organizerDescription') : t('register:description')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
+                  <Label htmlFor="firstName">{t('register:firstName')}</Label>
                   <Input
                     id="firstName"
                     value={form.firstName}
@@ -123,7 +121,7 @@ export function RegisterPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name</Label>
+                  <Label htmlFor="lastName">{t('register:lastName')}</Label>
                   <Input
                     id="lastName"
                     value={form.lastName}
@@ -135,7 +133,7 @@ export function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t('register:email')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -147,7 +145,7 @@ export function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone (Optional)</Label>
+                <Label htmlFor="phone">{t('register:phoneOptional')}</Label>
                 <Input
                   id="phone"
                   value={form.phone}
@@ -158,7 +156,7 @@ export function RegisterPage() {
 
               {organizerIntent && (
                 <div className="space-y-2">
-                  <Label htmlFor="organizationName">Organization / race brand</Label>
+                  <Label htmlFor="organizationName">{t('register:organization')}</Label>
                   <Input
                     id="organizationName"
                     value={form.organizationName}
@@ -171,7 +169,7 @@ export function RegisterPage() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">{t('register:password')}</Label>
                 <Input
                   id="password"
                   type="password"
@@ -184,7 +182,7 @@ export function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Label htmlFor="confirmPassword">{t('register:confirmPassword')}</Label>
                 <Input
                   id="confirmPassword"
                   type="password"
@@ -205,9 +203,9 @@ export function RegisterPage() {
                   required
                 />
                 <span>
-                  I have read and accept the{' '}
+                  {t('register:privacyPrefix')}{' '}
                   <Link to={privacyPolicyPath} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
-                    Privacy Policy
+                    {t('register:privacyLink')}
                   </Link>
                   .
                 </span>
@@ -217,22 +215,22 @@ export function RegisterPage() {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating account...
+                    {t('register:creatingAccount')}
                   </>
                 ) : (
-                  organizerIntent ? 'Create organizer account' : 'Create account'
+                  organizerIntent ? t('register:createOrganizerAccount') : t('register:createAccount')
                 )}
               </Button>
             </form>
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
-              Already have an account?{' '}
+              {t('register:alreadyHaveAccount')}{' '}
               <Link
                 to="/login"
                 state={returnTo ? { from: returnTo } : undefined}
                 className="text-primary underline-offset-4 hover:underline"
               >
-                Sign in
+                {t('register:signIn')}
               </Link>
             </p>
           </CardContent>

@@ -35,6 +35,7 @@ export async function initI18n(): Promise<I18nInstance> {
       fallbackNS: 'common',
       ns: [...SHARED_NAMESPACES],
       interpolation: { escapeValue: false },
+      initImmediate: false,
     })
   } else {
     await i18n.changeLanguage(initial)

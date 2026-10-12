@@ -7,15 +7,16 @@ import {
   SUPPORTED_LOCALES,
   sharedResources,
 } from '@race-tracker/i18n'
+import { appNamespaceNames, appNamespaces } from './resources'
 
-export const i18nNamespaces = [...SHARED_NAMESPACES]
+export const i18nNamespaces = [...SHARED_NAMESPACES, ...appNamespaceNames]
 
 void i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
     resources: {
-      en: { ...sharedResources.en },
+      en: { ...sharedResources.en, ...appNamespaces },
     },
     supportedLngs: SUPPORTED_LOCALES,
     fallbackLng: FALLBACK_LOCALE,
@@ -23,6 +24,7 @@ void i18n
     fallbackNS: 'common',
     ns: i18nNamespaces,
     interpolation: { escapeValue: false },
+    initImmediate: false,
     detection: {
       order: ['localStorage', 'navigator'],
       lookupLocalStorage: 'race_tracker_language',

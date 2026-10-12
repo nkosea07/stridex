@@ -430,7 +430,7 @@ export function SettingsPage() {
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="language">{t('common.language')}</Label>
+                <Label htmlFor="language">{t('common:language')}</Label>
                 <Select value={i18n.resolvedLanguage ?? 'en'} onValueChange={(value) => void i18n.changeLanguage(value)}>
                   <SelectTrigger id="language">
                     <SelectValue />
