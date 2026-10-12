@@ -63,6 +63,28 @@ assert(
   'contract.legal.privacyPolicyPath must be "/privacy".',
 );
 
+assert(
+  contract.i18n && typeof contract.i18n.defaultLocale === 'string' && contract.i18n.defaultLocale.length > 0,
+  'contract.i18n.defaultLocale must be a non-empty string.',
+);
+const supportedLocales = Array.isArray(contract.i18n?.supportedLocales) ? contract.i18n.supportedLocales : [];
+assert(
+  supportedLocales.length > 0,
+  'contract.i18n.supportedLocales must be a non-empty array.',
+);
+assert(
+  supportedLocales.includes(contract.i18n?.defaultLocale),
+  'contract.i18n.defaultLocale must be included in supportedLocales.',
+);
+assert(
+  supportedLocales.includes(contract.i18n?.fallbackLocale),
+  'contract.i18n.fallbackLocale must be included in supportedLocales.',
+);
+assert(
+  Array.isArray(contract.i18n?.rtlLocales) && contract.i18n.rtlLocales.every((locale) => supportedLocales.includes(locale)),
+  'contract.i18n.rtlLocales must be a subset of supportedLocales.',
+);
+
 const backendConfig = read(backendConfigPath);
 const backendVersionMatch = backendConfig.match(/racetracker:\s*[\s\S]*?api:\s*[\s\S]*?version:\s*([0-9]+)/);
 if (!backendVersionMatch) {
@@ -180,6 +202,12 @@ assert(
   contractPackage.includes(`privacyPolicyVersion: '${contract.legal.privacyPolicyVersion}'`)
     && contractPackage.includes(`privacyPolicyPath: '${contract.legal.privacyPolicyPath}'`),
   'packages/contracts/index.js legal block is out of sync with contract.json.',
+);
+assert(
+  contractPackage.includes(`defaultLocale: '${contract.i18n.defaultLocale}'`)
+    && contractPackage.includes(`fallbackLocale: '${contract.i18n.fallbackLocale}'`)
+    && supportedLocales.every((locale) => contractPackage.includes(`'${locale}'`)),
+  'packages/contracts/index.js i18n block is out of sync with contract.json.',
 );
 assert(
   /requestMatchers\s*\(\s*HttpMethod\.GET\s*,\s*apiPrefix \+ "\/public\/races\/\*\*"\s*\)/.test(backendSecurity),

@@ -95,6 +95,15 @@ smallest complete change that follows existing patterns.
 - **API/contract:** the contract is the source of truth — change `contract.json` + version and
   both clients together, then run `pnpm contracts:validate`. Public spectator endpoints stay
   PII-free.
+- **Internationalization (required for all new work):** locales are defined once in
+  `contract.json` (`i18n.supportedLocales`) and shared strings live in `packages/i18n`.
+  Never hardcode user-facing text or dates/numbers/currency in web or mobile — use
+  `t('<namespace>.<key>')` and the shared format helpers (`formatDate`, `formatDateTime`,
+  `formatNumber`, `formatCurrency`, `formatDuration`, `formatPace`). Add every new key to the
+  `en` catalog (and seed other locales as translations land); run `pnpm i18n:check` (CI-gated).
+  Backend user-facing text (emails/notifications) is localized via `MessageSource`; API errors
+  expose stable codes. Adding a language = one catalog + the contract list; do not branch code
+  on locale.
 
 ## Agent workflow
 

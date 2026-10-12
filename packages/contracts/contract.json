@@ -12,6 +12,12 @@
     "privacyPolicyVersion": "2026-10-11",
     "privacyPolicyPath": "/privacy"
   },
+  "i18n": {
+    "defaultLocale": "en",
+    "fallbackLocale": "en",
+    "supportedLocales": ["en", "sn", "nd", "af", "zu", "fr", "pt", "sw"],
+    "rtlLocales": []
+  },
   "endpoints": {
     "authLogin": "/auth/login",
     "authRegister": "/auth/register",

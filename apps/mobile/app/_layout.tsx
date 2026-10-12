@@ -19,6 +19,8 @@ import {
 import { initializeAuth } from '@/store/auth';
 import { useTrackingStore } from '@/store/tracking';
 import { addNotificationResponseListener } from '@/lib/notifications';
+import { I18nextProvider } from 'react-i18next';
+import i18n, { initI18n } from '@/lib/i18n';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 import { ThemeProvider, useTheme } from '@/contexts/theme';
@@ -46,6 +48,7 @@ export default function RootLayout() {
 
     const init = async () => {
       try {
+        await initI18n();
         await initializeAuth();
         await useTrackingStore.getState().recoverActiveTrackingSession();
       } catch (error) {
@@ -69,9 +72,11 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider>
-      <RootNavigator />
-    </ThemeProvider>
+    <I18nextProvider i18n={i18n}>
+      <ThemeProvider>
+        <RootNavigator />
+      </ThemeProvider>
+    </I18nextProvider>
   );
 }
 

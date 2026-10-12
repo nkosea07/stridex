@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react'
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, type LinksFunction } from 'react-router'
+import { I18nextProvider } from 'react-i18next'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { Toaster } from '@/components/ui/sonner'
+import i18n from '@/i18n'
 import appStylesHref from '../src/index.css?url'
 import mapboxStylesHref from 'mapbox-gl/dist/mapbox-gl.css?url'
 import { PRODUCT } from '@/config/product'
@@ -43,11 +45,13 @@ export function Layout({ children }: { children: ReactNode }) {
 
 export default function Root() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <Outlet />
-        <Toaster />
-      </AuthProvider>
-    </ThemeProvider>
+    <I18nextProvider i18n={i18n}>
+      <ThemeProvider>
+        <AuthProvider>
+          <Outlet />
+          <Toaster />
+        </AuthProvider>
+      </ThemeProvider>
+    </I18nextProvider>
   )
 }

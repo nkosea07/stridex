@@ -1,0 +1,30 @@
+{
+  "appName": "Race Tracker",
+  "language": "Language",
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "close": "Close",
+    "refresh": "Refresh",
+    "add": "Add",
+    "edit": "Edit",
+    "remove": "Remove",
+    "back": "Back",
+    "confirm": "Confirm",
+    "search": "Search"
+  },
+  "labels": {
+    "status": "Status",
+    "bibNumber": "Bib number",
+    "name": "Name",
+    "email": "Email",
+    "phone": "Phone",
+    "date": "Date",
+    "distance": "Distance",
+    "pace": "Pace",
+    "elapsedTime": "Elapsed time"
+  },
+  "yes": "Yes",
+  "no": "No"
+}

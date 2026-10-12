@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "contracts:validate": "node scripts/validate-contracts.mjs",
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "i18n:report": "node scripts/i18n-check.mjs --report",
     "dev": "pnpm --filter web dev",
     "dev:stack": "bash scripts/dev-stack.sh",
     "dev:down": "bash scripts/dev-stack.sh down",

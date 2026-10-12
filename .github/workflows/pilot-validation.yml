@@ -22,6 +22,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm contracts:validate
+      - run: pnpm i18n:check
       - run: pnpm --filter web lint
       - run: pnpm --filter web typecheck
       - run: pnpm --filter web test
@@ -155,6 +156,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm contracts:validate
+      - run: pnpm i18n:check
       - run: pnpm --filter web build
       - name: Cypress run
         uses: cypress-io/github-action@v6

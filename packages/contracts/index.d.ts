@@ -91,6 +91,12 @@ export interface ApiContract {
     privacyPolicyVersion: string;
     privacyPolicyPath: string;
   };
+  i18n: {
+    defaultLocale: string;
+    fallbackLocale: string;
+    supportedLocales: string[];
+    rtlLocales: string[];
+  };
   endpoints: Record<EndpointKey, string>;
 }
 

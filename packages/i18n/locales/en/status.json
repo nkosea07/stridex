@@ -1,0 +1,13 @@
+{
+  "REGISTERED": "Registered",
+  "CONFIRMED": "Confirmed",
+  "CHECKED_IN": "Checked in",
+  "STARTED": "Started",
+  "DNF": "Did not finish",
+  "DNS": "Did not start",
+  "DISQUALIFIED": "Disqualified",
+  "FINISHED": "Finished",
+  "PENDING_REVIEW": "Pending review",
+  "WAITLISTED": "Waitlisted",
+  "REJECTED": "Rejected"
+}

@@ -4,11 +4,22 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth';
 import { useTheme } from '@/contexts/theme';
+import { useTranslation } from 'react-i18next';
+import { LOCALE_LABELS, SUPPORTED_LOCALES } from '@race-tracker/i18n';
+import { setAppLanguage } from '@/lib/i18n';
 import type { ThemePreference } from '@/types';
 
 export default function ProfileScreen() {
   const { user, logout, isAuthenticated, updateProfile } = useAuthStore();
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const { t, i18n } = useTranslation();
+  const currentLocale = i18n.resolvedLanguage ?? 'en';
+
+  const cycleLanguage = async () => {
+    const index = SUPPORTED_LOCALES.indexOf(currentLocale);
+    const next = SUPPORTED_LOCALES[(index + 1) % SUPPORTED_LOCALES.length];
+    await setAppLanguage(next);
+  };
   const [profileEditorVisible, setProfileEditorVisible] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [draftProfile, setDraftProfile] = useState({ firstName: '', lastName: '', phone: '' });
@@ -148,6 +159,16 @@ export default function ProfileScreen() {
                   ? `System (${resolvedTheme})`
                   : theme.charAt(0).toUpperCase() + theme.slice(1)}
               </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.menuItem} onPress={() => void cycleLanguage()}>
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="language-outline" size={22} color="#6B7280" />
+            <View>
+              <Text style={styles.menuItemText}>{t('common.language')}</Text>
+              <Text style={styles.menuSubText}>{LOCALE_LABELS[currentLocale] ?? currentLocale}</Text>
             </View>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { API_CONTRACT } from '@race-tracker/contracts'
+import { LOCALE_LABELS, SUPPORTED_LOCALES } from '@race-tracker/i18n'
 import { 
   User, 
   Shield, 
@@ -40,6 +42,7 @@ import type { ConsentState, DeletionStatus, NotificationPreference } from '@/typ
 
 export function SettingsPage() {
   const { user, updateUser } = useAuth()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { theme, resolvedTheme, setTheme } = useTheme()
   const [profileSaving, setProfileSaving] = useState(false)
@@ -425,6 +428,21 @@ export function SettingsPage() {
                 <p className="text-xs text-muted-foreground">
                   Active theme: {resolvedTheme}. The theme updates immediately.
                 </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="language">{t('common.language')}</Label>
+                <Select value={i18n.resolvedLanguage ?? 'en'} onValueChange={(value) => void i18n.changeLanguage(value)}>
+                  <SelectTrigger id="language">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUPPORTED_LOCALES.map((locale) => (
+                      <SelectItem key={locale} value={locale}>
+                        {LOCALE_LABELS[locale] ?? locale}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <p className="text-sm text-muted-foreground">
                 Timezone, date format, and units follow your device and the race locale.
