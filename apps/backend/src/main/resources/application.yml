@@ -199,6 +199,14 @@ racetracker:
   seed:
     default-admin:
       enabled: false
+    local-users:
+      enabled: ${LOCAL_TEST_USERS_ENABLED:false}
+      race-admin-email: ${LOCAL_RACE_ADMIN_EMAIL:}
+      race-admin-password: ${LOCAL_RACE_ADMIN_PASSWORD:}
+      official-email: ${LOCAL_OFFICIAL_EMAIL:}
+      official-password: ${LOCAL_OFFICIAL_PASSWORD:}
+      volunteer-email: ${LOCAL_VOLUNTEER_EMAIL:}
+      volunteer-password: ${LOCAL_VOLUNTEER_PASSWORD:}
 
 ---
 # Development Profile
@@ -223,6 +231,8 @@ racetracker:
   seed:
     default-admin:
       enabled: true
+    local-users:
+      enabled: ${LOCAL_TEST_USERS_ENABLED:false}
 
 ---
 # Production Profile
@@ -266,3 +276,8 @@ racetracker:
     browser-cookie-secure: true
   rfid:
     simulation-enabled: false
+  seed:
+    default-admin:
+      enabled: false
+    local-users:
+      enabled: false

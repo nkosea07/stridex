@@ -24,6 +24,8 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
     private final boolean rfidSimulationEnabled;
     private final boolean pushEnabled;
     private final String pushServiceAccountJson;
+    private final boolean defaultAdminSeedEnabled;
+    private final boolean localUsersSeedEnabled;
 
     public ProductionConfigurationValidator(
         @Value("${jwt.secret:}") String jwtSecret,
@@ -34,7 +36,9 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
         @Value("${spring.datasource.password:}") String databasePassword,
         @Value("${racetracker.rfid.simulation-enabled:true}") boolean rfidSimulationEnabled,
         @Value("${racetracker.push.enabled:false}") boolean pushEnabled,
-        @Value("${racetracker.push.service-account-json:}") String pushServiceAccountJson
+        @Value("${racetracker.push.service-account-json:}") String pushServiceAccountJson,
+        @Value("${racetracker.seed.default-admin.enabled:false}") boolean defaultAdminSeedEnabled,
+        @Value("${racetracker.seed.local-users.enabled:false}") boolean localUsersSeedEnabled
     ) {
         this.jwtSecret = jwtSecret;
         this.mfaEncryptionKey = mfaEncryptionKey;
@@ -45,6 +49,8 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
         this.rfidSimulationEnabled = rfidSimulationEnabled;
         this.pushEnabled = pushEnabled;
         this.pushServiceAccountJson = pushServiceAccountJson;
+        this.defaultAdminSeedEnabled = defaultAdminSeedEnabled;
+        this.localUsersSeedEnabled = localUsersSeedEnabled;
     }
 
     @PostConstruct
@@ -58,6 +64,10 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
     }
 
     public void validateConfiguration() {
+        if (defaultAdminSeedEnabled || localUsersSeedEnabled) {
+            throw new IllegalStateException("Production must disable all development seed users");
+        }
+
         if (jwtSecret.isBlank() || jwtSecret.length() < MINIMUM_JWT_SECRET_LENGTH || isPlaceholder(jwtSecret)
             || jwtSecret.contains("local-development")) {
             throw new IllegalStateException("Production requires a JWT_SECRET with at least 32 non-default characters");

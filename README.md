@@ -270,6 +270,26 @@ The backend exposes RESTful APIs:
 - `GET /api/v1/races/:id/results` - Race results
 - `GET /api/v1/results/my` - User's results
 
+## Local Test Credentials
+
+The following accounts are for local development and browser smoke testing only.
+They are provisioned in the current local database and must never be reused in
+staging or production:
+
+| Persona | Email | Password | Role |
+| --- | --- | --- | --- |
+| Admin | `admin.local@racetracker.test` | `AdminTest123!` | `SUPER_ADMIN` |
+| Race Admin | `raceadmin.local@racetracker.test` | `RaceAdminTest123!` | `RACE_ADMIN` |
+| Official | `official.local@racetracker.test` | `OfficialTest123!` | `OFFICIAL` |
+| Volunteer | `volunteer.local@racetracker.test` | `VolunteerTest123!` | `VOLUNTEER` |
+| Racer | `racer.local@racetracker.test` | `RacerTest123!` | `ATHLETE` |
+| Viewer | `viewer.local@racetracker.test` | `ViewerTest123!` | `SPECTATOR` |
+
+The three operations accounts are seeded only when the Spring `dev` profile is
+active and `LOCAL_TEST_USERS_ENABLED=true`; their values come from the ignored
+`apps/backend/.env` file. They are not created by Flyway migrations, so they
+will not exist after the local database volume is recreated.
+
 ## Development
 
 ### Backend Development

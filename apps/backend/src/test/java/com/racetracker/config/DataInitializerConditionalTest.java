@@ -30,6 +30,33 @@ class DataInitializerConditionalTest {
             .run(context -> assertThat(context).doesNotHaveBean("seedDefaultAdmin"));
     }
 
+    @Test
+    void localSeedRunner_isCreatedOnlyWhenEnabledInDevProfile() {
+        contextRunner
+            .withPropertyValues(
+                "spring.profiles.active=dev",
+                "racetracker.seed.local-users.enabled=true"
+            )
+            .run(context -> assertThat(context).hasBean("seedLocalUsers"));
+    }
+
+    @Test
+    void localSeedRunner_isNotCreatedWhenDisabled() {
+        contextRunner
+            .withPropertyValues(
+                "spring.profiles.active=dev",
+                "racetracker.seed.local-users.enabled=false"
+            )
+            .run(context -> assertThat(context).doesNotHaveBean("seedLocalUsers"));
+    }
+
+    @Test
+    void localSeedRunner_isNotCreatedOutsideDevProfile() {
+        contextRunner
+            .withPropertyValues("racetracker.seed.local-users.enabled=true")
+            .run(context -> assertThat(context).doesNotHaveBean("seedLocalUsers"));
+    }
+
     @Configuration
     static class TestBeans {
         @Bean

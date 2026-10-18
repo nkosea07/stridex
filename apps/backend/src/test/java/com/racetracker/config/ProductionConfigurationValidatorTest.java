@@ -24,7 +24,9 @@ class ProductionConfigurationValidatorTest {
             "unique-production-database-password",
             false,
             false,
-            ""
+            "",
+            false,
+            false
         );
 
         assertThatCode(() -> validator.run(new DefaultApplicationArguments())).doesNotThrowAnyException();
@@ -44,7 +46,9 @@ class ProductionConfigurationValidatorTest {
             "unique-production-database-password",
             false,
             false,
-            ""
+            "",
+            false,
+            false
         );
 
         assertThatThrownBy(() -> validator.run(new DefaultApplicationArguments()))
@@ -66,7 +70,9 @@ class ProductionConfigurationValidatorTest {
             "unique-production-database-password",
             false,
             false,
-            ""
+            "",
+            false,
+            false
         );
 
         assertThatThrownBy(() -> validator.run(new DefaultApplicationArguments()))
@@ -88,11 +94,40 @@ class ProductionConfigurationValidatorTest {
             "CHANGE_ME_DATABASE_PASSWORD",
             false,
             false,
-            ""
+            "",
+            false,
+            false
         );
 
         assertThatThrownBy(() -> validator.run(new DefaultApplicationArguments()))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("DB_PASSWORD");
+    }
+
+    @Test
+    void run_rejectsDevelopmentSeedUsersInProduction() {
+        ProductionConfigurationValidator validator = new ProductionConfigurationValidator(
+            "a-strong-production-jwt-secret-with-more-than-thirty-two-characters",
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            true,
+            validCorsProperties(),
+            "jdbc:postgresql://db.internal:5432/race_tracker",
+            "unique-production-database-password",
+            false,
+            false,
+            "",
+            false,
+            true
+        );
+
+        assertThatThrownBy(() -> validator.run(new DefaultApplicationArguments()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("disable all development seed users");
+    }
+
+    private CorsProperties validCorsProperties() {
+        CorsProperties corsProperties = new CorsProperties();
+        corsProperties.setAllowedOrigins(List.of("https://app.racetracker.example"));
+        return corsProperties;
     }
 }
