@@ -58,8 +58,8 @@ spring:
   # File Upload
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      max-file-size: 15MB
+      max-request-size: 15MB
 
 # Server Configuration
 server:
@@ -121,7 +121,16 @@ cors:
     - PATCH
     - OPTIONS
   allowed-headers:
-    - "*"
+    - Authorization
+    - Content-Type
+    - Accept
+    - X-Requested-With
+    - Origin
+    - Access-Control-Request-Method
+    - Access-Control-Request-Headers
+    - X-CSRF-Token
+    - X-RFID-Reader-Key
+    - Idempotency-Key
   allow-credentials: true
 
 # WebSocket Configuration
@@ -141,10 +150,33 @@ logging:
 
 # Race Tracker Custom Configuration
 racetracker:
+  # Object storage objects remain private. The current media API intentionally loads bytes
+  # through the backend; signed URL delivery requires a future API contract change.
+  storage:
+    provider: ${STORAGE_PROVIDER:local}
+    upload-dir: ${STORAGE_UPLOAD_DIR:uploads}
+    aws:
+      enabled: ${AWS_S3_ENABLED:false}
+      bucket: ${AWS_S3_BUCKET:}
+      region: ${AWS_S3_REGION:us-east-1}
+      endpoint: ${AWS_S3_ENDPOINT:}
+      access-key: ${AWS_S3_ACCESS_KEY:}
+      secret-key: ${AWS_S3_SECRET_KEY:}
+      path-style-access: ${AWS_S3_PATH_STYLE_ACCESS:false}
+    minio:
+      enabled: ${MINIO_ENABLED:false}
+      bucket: ${MINIO_BUCKET:}
+      region: ${MINIO_REGION:us-east-1}
+      endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${MINIO_ACCESS_KEY:}
+      secret-key: ${MINIO_SECRET_KEY:}
+      path-style-access: ${MINIO_PATH_STYLE_ACCESS:true}
   security:
     trusted-proxies: ${TRUSTED_PROXIES:}
   auth:
     browser-cookie-secure: ${BROWSER_COOKIE_SECURE:false}
+  oauth:
+    enabled: true
   mfa:
     encryption-key: ${MFA_ENCRYPTION_KEY:}
   bib:
@@ -224,8 +256,16 @@ logging:
     com.racetracker: DEBUG
 
 racetracker:
+  storage:
+    provider: ${STORAGE_PROVIDER:local}
+    aws:
+      enabled: ${AWS_S3_ENABLED:false}
+    minio:
+      enabled: ${MINIO_ENABLED:false}
   auth:
     browser-cookie-secure: true
+  oauth:
+    enabled: true
   rfid:
     simulation-enabled: true
   seed:
@@ -274,6 +314,8 @@ logging:
 racetracker:
   auth:
     browser-cookie-secure: true
+  oauth:
+    enabled: false
   rfid:
     simulation-enabled: false
   seed:

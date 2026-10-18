@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 
-import java.util.Base64;
+import java.net.URI;
 
 @Component
 @Profile("prod")
@@ -16,7 +16,6 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
     private static final int MINIMUM_JWT_SECRET_LENGTH = 32;
 
     private final String jwtSecret;
-    private final String mfaEncryptionKey;
     private final boolean browserCookieSecure;
     private final CorsProperties corsProperties;
     private final String databaseUrl;
@@ -26,10 +25,10 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
     private final String pushServiceAccountJson;
     private final boolean defaultAdminSeedEnabled;
     private final boolean localUsersSeedEnabled;
+    private final RaceTrackerProperties raceTrackerProperties;
 
     public ProductionConfigurationValidator(
         @Value("${jwt.secret:}") String jwtSecret,
-        @Value("${racetracker.mfa.encryption-key:}") String mfaEncryptionKey,
         @Value("${racetracker.auth.browser-cookie-secure:false}") boolean browserCookieSecure,
         CorsProperties corsProperties,
         @Value("${spring.datasource.url:}") String databaseUrl,
@@ -38,10 +37,10 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
         @Value("${racetracker.push.enabled:false}") boolean pushEnabled,
         @Value("${racetracker.push.service-account-json:}") String pushServiceAccountJson,
         @Value("${racetracker.seed.default-admin.enabled:false}") boolean defaultAdminSeedEnabled,
-        @Value("${racetracker.seed.local-users.enabled:false}") boolean localUsersSeedEnabled
+        @Value("${racetracker.seed.local-users.enabled:false}") boolean localUsersSeedEnabled,
+        RaceTrackerProperties raceTrackerProperties
     ) {
         this.jwtSecret = jwtSecret;
-        this.mfaEncryptionKey = mfaEncryptionKey;
         this.browserCookieSecure = browserCookieSecure;
         this.corsProperties = corsProperties;
         this.databaseUrl = databaseUrl;
@@ -51,6 +50,7 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
         this.pushServiceAccountJson = pushServiceAccountJson;
         this.defaultAdminSeedEnabled = defaultAdminSeedEnabled;
         this.localUsersSeedEnabled = localUsersSeedEnabled;
+        this.raceTrackerProperties = raceTrackerProperties;
     }
 
     @PostConstruct
@@ -73,14 +73,6 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
             throw new IllegalStateException("Production requires a JWT_SECRET with at least 32 non-default characters");
         }
 
-        try {
-            if (Base64.getDecoder().decode(mfaEncryptionKey).length != 32) {
-                throw new IllegalStateException("Production requires MFA_ENCRYPTION_KEY as base64-encoded 32-byte key material");
-            }
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalStateException("Production requires MFA_ENCRYPTION_KEY as base64-encoded 32-byte key material");
-        }
-
         if (!browserCookieSecure) {
             throw new IllegalStateException("Production browser refresh cookies must set Secure=true");
         }
@@ -97,6 +89,9 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
         if (rfidSimulationEnabled) {
             throw new IllegalStateException("Production must disable global RFID simulation; enable simulation only for authorized test races");
         }
+        if (raceTrackerProperties.getOauth() != null && raceTrackerProperties.getOauth().isEnabled()) {
+            throw new IllegalStateException("Production must disable OAuth sign-in; use password authentication");
+        }
 
         if (pushEnabled && (pushServiceAccountJson == null || pushServiceAccountJson.isBlank())) {
             throw new IllegalStateException("Production push notifications require FCM_SERVICE_ACCOUNT_JSON");
@@ -104,6 +99,68 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
 
         if (corsProperties.getAllowedOrigins().isEmpty() || corsProperties.getAllowedOrigins().stream().anyMatch(this::isUnsafeOrigin)) {
             throw new IllegalStateException("Production CORS must use explicit HTTPS origins and must not include localhost or wildcard origins");
+        }
+        if (corsProperties.getAllowedHeaders().stream().anyMatch("*"::equals)) {
+            throw new IllegalStateException("Production CORS must explicitly allow request headers; wildcard headers are not permitted");
+        }
+
+        validateStorageConfiguration();
+    }
+
+    private void validateStorageConfiguration() {
+        RaceTrackerProperties.Storage storage = raceTrackerProperties.getStorage();
+        String provider = storage == null || storage.getProvider() == null
+            ? "" : storage.getProvider().trim().toLowerCase(java.util.Locale.ROOT);
+
+        switch (provider) {
+            case "aws-s3" -> {
+                RaceTrackerProperties.Aws aws = storage.getAws();
+                if (aws == null || !aws.isEnabled()) {
+                    throw new IllegalStateException("Production selected media storage provider must be enabled: aws-s3");
+                }
+                if (aws.getBucket() == null || aws.getBucket().isBlank()) {
+                    throw new IllegalStateException("Production AWS S3 media storage requires a bucket");
+                }
+                validateOptionalStorageEndpoint(aws.getEndpoint(), "AWS S3");
+            }
+            case "minio" -> {
+                RaceTrackerProperties.Minio minio = storage.getMinio();
+                if (minio == null || !minio.isEnabled()) {
+                    throw new IllegalStateException("Production selected media storage provider must be enabled: minio");
+                }
+                if (minio.getBucket() == null || minio.getBucket().isBlank()
+                    || minio.getEndpoint() == null || minio.getEndpoint().isBlank()
+                    || minio.getAccessKey() == null || minio.getAccessKey().isBlank()
+                    || minio.getSecretKey() == null || minio.getSecretKey().isBlank()) {
+                    throw new IllegalStateException("Production MinIO media storage requires endpoint, bucket, access key, and secret key");
+                }
+                validateStorageEndpoint(minio.getEndpoint(), "MinIO");
+            }
+            case "", "local" -> throw new IllegalStateException(
+                "Production requires a configured private AWS S3 or MinIO media storage provider"
+            );
+            default -> throw new IllegalStateException("Unsupported production media storage provider: " + provider);
+        }
+    }
+
+    private void validateOptionalStorageEndpoint(String endpoint, String provider) {
+        if (endpoint != null && !endpoint.isBlank()) {
+            validateStorageEndpoint(endpoint, provider);
+        }
+    }
+
+    private void validateStorageEndpoint(String endpoint, String provider) {
+        try {
+            URI uri = URI.create(endpoint.trim());
+            String host = uri.getHost();
+            if (host == null || !"https".equalsIgnoreCase(uri.getScheme())) {
+                throw new IllegalStateException("Production " + provider + " storage endpoint must use HTTPS");
+            }
+            if (host.equalsIgnoreCase("localhost") || host.equals("127.0.0.1") || host.equals("::1")) {
+                throw new IllegalStateException("Production " + provider + " storage endpoint must not point to localhost");
+            }
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException("Production " + provider + " storage endpoint must use HTTPS");
         }
     }
 

@@ -34,6 +34,32 @@ public class RaceTrackerProperties {
     public static class Storage {
         private String uploadDir = "uploads";
         private String provider = "local";
+        private Aws aws = new Aws();
+        private Minio minio = new Minio();
+    }
+
+    @Getter
+    @Setter
+    public static class Aws {
+        private boolean enabled = false;
+        private String bucket;
+        private String region = "us-east-1";
+        private String endpoint;
+        private String accessKey;
+        private String secretKey;
+        private boolean pathStyleAccess = false;
+    }
+
+    @Getter
+    @Setter
+    public static class Minio {
+        private boolean enabled = false;
+        private String bucket;
+        private String region = "us-east-1";
+        private String endpoint;
+        private String accessKey;
+        private String secretKey;
+        private boolean pathStyleAccess = true;
     }
 
     @Getter
@@ -114,6 +140,7 @@ public class RaceTrackerProperties {
     @Getter
     @Setter
     public static class OAuth {
+        private boolean enabled = true;
         private String googleClientId;
     }
 
