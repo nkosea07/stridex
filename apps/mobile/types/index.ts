@@ -18,16 +18,10 @@ export interface AuthResponse {
   token?: string | null;
   refreshToken?: string | null;
   requiresEmailVerification?: boolean;
-  mfaRequired?: boolean;
-  mfaEnrollmentRequired?: boolean;
-  mfaChallengeToken?: string | null;
-  recoveryCodes?: string[];
   user: User;
 }
 
-export type MobileLoginResult =
-  | { kind: 'authenticated'; user: User }
-  | { kind: 'mfa'; challengeToken: string; enrollmentRequired: boolean; user: User };
+export type MobileLoginResult = { kind: 'authenticated'; user: User };
 
 export interface RegisterRequest {
   firstName: string;
@@ -263,7 +257,6 @@ export interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<MobileLoginResult>;
-  completeMfa: (challengeToken: string, code: string, enrollment: boolean) => Promise<AuthResponse>;
   register: (userData: RegisterRequest) => Promise<AuthResponse>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<void>;

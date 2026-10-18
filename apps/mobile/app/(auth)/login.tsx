@@ -3,18 +3,13 @@ import { Link, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/auth';
-import { api } from '@/lib/api';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [challenge, setChallenge] = useState<{ token: string; enrollmentRequired: boolean } | null>(null);
-  const [setup, setSetup] = useState<{ secret: string; provisioningUri: string } | null>(null);
-  const [mfaCode, setMfaCode] = useState('');
-  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
-  const { login, completeMfa } = useAuthStore();
+  const { login } = useAuthStore();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -25,12 +20,7 @@ export default function LoginScreen() {
     setIsLoading(true);
     try {
       const result = await login(email.trim(), password);
-      if (result.kind === 'mfa') {
-        setChallenge({ token: result.challengeToken, enrollmentRequired: result.enrollmentRequired });
-        if (result.enrollmentRequired) setSetup(await api.beginTotpEnrollment(result.challengeToken));
-      } else {
-        router.replace('/(tabs)');
-      }
+      if (result.kind === 'authenticated') router.replace('/(tabs)');
     } catch (error: any) {
       const errorMessage = error?.message || 'Invalid email or password';
       Alert.alert('Login Failed', errorMessage === 'Email verification required'
@@ -39,25 +29,6 @@ export default function LoginScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleMfa = async () => {
-    if (!challenge || !mfaCode.trim()) return;
-    setIsLoading(true);
-    try {
-      const response = await completeMfa(challenge.token, mfaCode.trim(), challenge.enrollmentRequired);
-      if (response.recoveryCodes?.length) setRecoveryCodes(response.recoveryCodes);
-      else router.replace('/(tabs)');
-    } catch (error: any) {
-      Alert.alert('Verification failed', error?.message || 'The code was rejected or the challenge expired.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const continueAfterRecoveryCodes = () => {
-    setRecoveryCodes([]);
-    router.replace('/(tabs)');
   };
 
   return (
@@ -75,40 +46,6 @@ export default function LoginScreen() {
         </View>
 
         {/* Form */}
-        {recoveryCodes.length > 0 ? (
-          <View style={styles.form}>
-            <Text style={styles.subtitle}>Store these one-use recovery codes somewhere safe:</Text>
-            <Text selectable style={styles.recoveryCodes}>{recoveryCodes.join('\n')}</Text>
-            <TouchableOpacity style={styles.signInButton} onPress={continueAfterRecoveryCodes}>
-              <Text style={styles.signInButtonText}>Continue</Text>
-            </TouchableOpacity>
-          </View>
-        ) : challenge ? (
-          <View style={styles.form}>
-            {setup && (
-              <View style={styles.setupBox}>
-                <Text style={styles.setupText}>Add Race Tracker to your authenticator with this setup key:</Text>
-                <Text selectable style={styles.secret}>{setup.secret}</Text>
-                <Text selectable style={styles.setupUri}>{setup.provisioningUri}</Text>
-              </View>
-            )}
-            <TextInput
-              style={styles.mfaInput}
-              placeholder="Authenticator or recovery code"
-              value={mfaCode}
-              onChangeText={setMfaCode}
-              autoCapitalize="characters"
-              autoComplete="one-time-code"
-              maxLength={64}
-            />
-            <TouchableOpacity style={[styles.signInButton, isLoading && styles.signInButtonDisabled]} onPress={handleMfa} disabled={isLoading}>
-              <Text style={styles.signInButtonText}>{isLoading ? 'Verifying...' : challenge.enrollmentRequired ? 'Enable MFA and continue' : 'Verify and continue'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setChallenge(null); setSetup(null); setMfaCode(''); }} disabled={isLoading}>
-              <Text style={styles.forgotPasswordText}>Back to sign in</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
         <View style={styles.form}>
           <View style={styles.inputContainer}>
             <Ionicons name="mail-outline" size={20} color="#6B7280" style={styles.inputIcon} />
@@ -162,7 +99,6 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
         </View>
-        )}
 
         {/* Sign Up Link */}
         <View style={styles.signUpContainer}>

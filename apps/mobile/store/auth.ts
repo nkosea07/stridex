@@ -21,28 +21,12 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ user: response.user, token: response.token, refreshToken: response.refreshToken, isAuthenticated: true, isLoading: false });
         return { kind: 'authenticated' as const, user: response.user };
       }
-      if (response.mfaRequired && response.mfaChallengeToken) {
-        set({ isLoading: false });
-        return {
-          kind: 'mfa' as const,
-          challengeToken: response.mfaChallengeToken,
-          enrollmentRequired: Boolean(response.mfaEnrollmentRequired),
-          user: response.user,
-        };
-      }
       if (response.requiresEmailVerification) throw new Error('Email verification required');
       throw new Error('Login did not return a valid session');
     } catch (error) {
       set({ isLoading: false });
       throw error;
     }
-  },
-
-  completeMfa: async (challengeToken, code, enrollment) => {
-    const response = await api.completeMfa(challengeToken, code, enrollment);
-    await AsyncStorage.setItem('user', JSON.stringify(response.user));
-    set({ user: response.user, token: response.token!, refreshToken: response.refreshToken!, isAuthenticated: true, isLoading: false });
-    return response;
   },
 
   register: async (userData) => {

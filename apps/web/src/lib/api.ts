@@ -64,10 +64,6 @@ export interface BrowserAuthResponse {
   token?: string | null
   refreshToken?: string | null
   requiresEmailVerification?: boolean
-  mfaRequired?: boolean
-  mfaEnrollmentRequired?: boolean
-  mfaChallengeToken?: string | null
-  recoveryCodes?: string[]
   user: User
 }
 
@@ -205,24 +201,6 @@ export const authApi = {
     fetchApi<BrowserAuthResponse>(buildContractPath(API_CONTRACT.endpoints.authOAuthGoogle, {}), {
       method: 'POST',
       body: JSON.stringify({ idToken, provider: 'google' }),
-    }),
-
-  beginMfaEnrollment: (challengeToken: string) =>
-    fetchApi<{ secret: string; provisioningUri: string }>('/auth/browser/mfa/totp/enroll', {
-      method: 'POST',
-      body: JSON.stringify({ challengeToken }),
-    }),
-
-  confirmMfaEnrollment: (challengeToken: string, code: string) =>
-    fetchApi<BrowserAuthResponse>('/auth/browser/mfa/totp/confirm', {
-      method: 'POST',
-      body: JSON.stringify({ challengeToken, code }),
-    }),
-
-  verifyMfaLogin: (challengeToken: string, code: string) =>
-    fetchApi<BrowserAuthResponse>('/auth/browser/mfa/verify-login', {
-      method: 'POST',
-      body: JSON.stringify({ challengeToken, code }),
     }),
 
   restoreBrowserSession: refreshBrowserSession,

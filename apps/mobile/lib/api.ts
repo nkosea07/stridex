@@ -131,38 +131,12 @@ class ApiClient {
       await SecureStore.setItemAsync('refresh_token', response.refreshToken);
       return response;
     }
-    if (response.mfaRequired && response.mfaChallengeToken) {
-      return response;
-    }
     if (response.requiresEmailVerification) {
       return response;
     }
     if (!response.token || !response.refreshToken) {
       throw new Error('Login did not return a valid session');
     }
-    return response;
-  }
-
-  async beginTotpEnrollment(challengeToken: string): Promise<{ secret: string; provisioningUri: string }> {
-    return this.request('/auth/mfa/totp/enroll', {
-      method: 'POST',
-      body: JSON.stringify({ challengeToken }),
-    });
-  }
-
-  async completeMfa(challengeToken: string, code: string, enrollment: boolean): Promise<AuthResponse> {
-    const response = await this.request<AuthResponse>(
-      enrollment ? '/auth/mfa/totp/confirm' : '/auth/mfa/verify-login',
-      {
-        method: 'POST',
-        body: JSON.stringify({ challengeToken, code }),
-      },
-    );
-    if (!response.token || !response.refreshToken) {
-      throw new Error('MFA verification did not return a valid session');
-    }
-    await SecureStore.setItemAsync('auth_token', response.token);
-    await SecureStore.setItemAsync('refresh_token', response.refreshToken);
     return response;
   }
 
