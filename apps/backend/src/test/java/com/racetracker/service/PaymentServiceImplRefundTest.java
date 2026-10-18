@@ -8,6 +8,7 @@ import com.racetracker.model.Participant;
 import com.racetracker.model.Payment;
 import com.racetracker.model.PaymentRefund;
 import com.racetracker.model.Race;
+import com.racetracker.model.User;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.PaymentRefundRepository;
 import com.racetracker.repository.PaymentRepository;
@@ -32,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -147,5 +149,52 @@ class PaymentServiceImplRefundTest {
         assertThatThrownBy(() -> service.refund(raceId, participantId, null, null, "admin@example.com"))
             .isInstanceOf(ApiException.class)
             .hasMessageContaining("No completed payment");
+    }
+
+    @Test
+    void athleteCanStartCheckoutOnlyForOwnParticipant() {
+        Participant participant = participant();
+        User athlete = new User();
+        athlete.setEmail("athlete@example.com");
+        participant.setUser(athlete);
+        participant.getRace().setRegistrationFee(BigDecimal.valueOf(100));
+        participant.getRace().setCurrency("USD");
+
+        when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pesepayClient.initiate(any(Double.class), eq("USD"), any(), any(), any(), any()))
+            .thenReturn(new PesepayClient.InitiateResult("PROV-1", "https://pay.example/checkout", null));
+        RaceTrackerProperties.Payments payments = new RaceTrackerProperties.Payments();
+        payments.setResultUrl("https://app.example/payment/result");
+        payments.setReturnUrl("https://app.example/payment/return");
+        service = new PaymentServiceImpl(paymentRepository, participantRepository, pesepayClient,
+            propertiesWithPayments(payments), new ObjectMapper(), promoCodeService, notificationService,
+            List.of(paymentProvider), paymentRefundRepository, userRepository);
+
+        PaymentDto result = service.startCheckout(raceId, participantId, null, "athlete@example.com", true);
+
+        assertThat(result.getCheckoutUrl()).isEqualTo("https://pay.example/checkout");
+        verify(pesepayClient).initiate(any(Double.class), eq("USD"), any(), any(), any(), any());
+    }
+
+    @Test
+    void athleteCannotStartCheckoutForAnotherUsersParticipant() {
+        Participant participant = participant();
+        User owner = new User();
+        owner.setEmail("owner@example.com");
+        participant.setUser(owner);
+        when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
+
+        assertThatThrownBy(() -> service.startCheckout(raceId, participantId, null, "other@example.com", true))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(paymentRepository, never()).save(any(Payment.class));
+        verifyNoInteractions(pesepayClient);
+    }
+
+    private RaceTrackerProperties propertiesWithPayments(RaceTrackerProperties.Payments payments) {
+        RaceTrackerProperties configured = new RaceTrackerProperties();
+        configured.setPayments(payments);
+        return configured;
     }
 }

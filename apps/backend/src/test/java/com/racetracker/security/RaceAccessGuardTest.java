@@ -16,6 +16,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -48,7 +49,7 @@ class RaceAccessGuardTest {
 
     @Test
     void raceAdminCannotManageAnotherOrganizersRace() {
-        when(raceRepository.findById(raceId)).thenReturn(Optional.of(ownedRace("owner@example.com")));
+        when(raceRepository.findByIdForAuthorization(raceId)).thenReturn(Optional.of(ownedRace("owner@example.com")));
         authenticate("other@example.com", "ROLE_RACE_ADMIN");
 
         RaceAccessGuard guard = new RaceAccessGuard(raceRepository);
@@ -58,7 +59,7 @@ class RaceAccessGuardTest {
 
     @Test
     void ownerWithRaceAdminRoleIsAllowed() {
-        when(raceRepository.findById(raceId)).thenReturn(Optional.of(ownedRace("owner@example.com")));
+        when(raceRepository.findByIdForAuthorization(raceId)).thenReturn(Optional.of(ownedRace("owner@example.com")));
         authenticate("owner@example.com", "ROLE_RACE_ADMIN");
 
         RaceAccessGuard guard = new RaceAccessGuard(raceRepository);
@@ -66,8 +67,19 @@ class RaceAccessGuardTest {
     }
 
     @Test
+    void assignedRaceAdminIsAllowed() {
+        Race race = ownedRace("owner@example.com");
+        race.setAdmins(Set.of(User.builder().id(UUID.randomUUID()).email("assigned@example.com").build()));
+        when(raceRepository.findByIdForAuthorization(raceId)).thenReturn(Optional.of(race));
+        authenticate("assigned@example.com", "ROLE_RACE_ADMIN");
+
+        RaceAccessGuard guard = new RaceAccessGuard(raceRepository);
+        assertThatCode(() -> guard.assertCanManage(raceId)).doesNotThrowAnyException();
+    }
+
+    @Test
     void superAdminBypassesOwnership() {
-        when(raceRepository.findById(raceId)).thenReturn(Optional.of(ownedRace("owner@example.com")));
+        when(raceRepository.findByIdForAuthorization(raceId)).thenReturn(Optional.of(ownedRace("owner@example.com")));
         authenticate("admin@example.com", "ROLE_SUPER_ADMIN");
 
         RaceAccessGuard guard = new RaceAccessGuard(raceRepository);
@@ -75,11 +87,57 @@ class RaceAccessGuardTest {
     }
 
     @Test
-    void legacyUnownedRaceIsManageable() {
+    void raceAdminCannotManageLegacyUnownedRace() {
         Race race = new Race();
         race.setId(raceId);
-        when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+        when(raceRepository.findByIdForAuthorization(raceId)).thenReturn(Optional.of(race));
         authenticate("anyone@example.com", "ROLE_RACE_ADMIN");
+
+        RaceAccessGuard guard = new RaceAccessGuard(raceRepository);
+        assertThatThrownBy(() -> guard.assertCanManage(raceId))
+            .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void superAdminCanManageLegacyUnownedRace() {
+        Race race = new Race();
+        race.setId(raceId);
+        when(raceRepository.findByIdForAuthorization(raceId)).thenReturn(Optional.of(race));
+        authenticate("admin@example.com", "ROLE_SUPER_ADMIN");
+
+        RaceAccessGuard guard = new RaceAccessGuard(raceRepository);
+        assertThatCode(() -> guard.assertCanManage(raceId)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void unownedRaceWithAssignedAdminsDeniesUnassignedRaceAdmin() {
+        Race race = new Race();
+        race.setId(raceId);
+        race.setAdmins(Set.of(User.builder().id(UUID.randomUUID()).email("assigned@example.com").build()));
+        when(raceRepository.findByIdForAuthorization(raceId)).thenReturn(Optional.of(race));
+        authenticate("other@example.com", "ROLE_RACE_ADMIN");
+
+        RaceAccessGuard guard = new RaceAccessGuard(raceRepository);
+        assertThatThrownBy(() -> guard.assertCanManage(raceId))
+            .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void unownedRaceWithAssignedAdminsAllowsAssignedRaceAdmin() {
+        Race race = new Race();
+        race.setId(raceId);
+        race.setAdmins(Set.of(User.builder().id(UUID.randomUUID()).email("assigned@example.com").build()));
+        when(raceRepository.findByIdForAuthorization(raceId)).thenReturn(Optional.of(race));
+        authenticate("assigned@example.com", "ROLE_RACE_ADMIN");
+
+        RaceAccessGuard guard = new RaceAccessGuard(raceRepository);
+        assertThatCode(() -> guard.assertCanManage(raceId)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void nonRaceAdminRoleIsNotRestrictedByRaceOwnership() {
+        when(raceRepository.findByIdForAuthorization(raceId)).thenReturn(Optional.of(ownedRace("owner@example.com")));
+        authenticate("athlete@example.com", "ROLE_ATHLETE");
 
         RaceAccessGuard guard = new RaceAccessGuard(raceRepository);
         assertThatCode(() -> guard.assertCanManage(raceId)).doesNotThrowAnyException();
@@ -87,10 +145,21 @@ class RaceAccessGuardTest {
 
     @Test
     void missingRaceRaisesNotFound() {
-        when(raceRepository.findById(raceId)).thenReturn(Optional.empty());
+        when(raceRepository.findByIdForAuthorization(raceId)).thenReturn(Optional.empty());
         RaceAccessGuard guard = new RaceAccessGuard(raceRepository);
 
         assertThatThrownBy(() -> guard.assertCanManage(raceId))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void unauthenticatedCallerCannotManageRace() {
+        when(raceRepository.findByIdForAuthorization(raceId))
+            .thenReturn(Optional.of(ownedRace("owner@example.com")));
+
+        RaceAccessGuard guard = new RaceAccessGuard(raceRepository);
+
+        assertThatThrownBy(() -> guard.assertCanManage(raceId))
+            .isInstanceOf(AccessDeniedException.class);
     }
 }

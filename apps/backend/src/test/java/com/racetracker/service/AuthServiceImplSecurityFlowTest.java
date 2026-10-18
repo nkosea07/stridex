@@ -117,7 +117,7 @@ class AuthServiceImplSecurityFlowTest {
     }
 
     @Test
-    void loginForPrivilegedUserReturnsRestrictedMfaChallengeWithoutSessionTokens() {
+    void loginForPrivilegedUserReturnsSessionWithoutMfaChallenge() {
         LoginRequest request = new LoginRequest();
         request.setEmail("admin@example.com");
         request.setPassword("password123");
@@ -126,18 +126,19 @@ class AuthServiceImplSecurityFlowTest {
         user.setEmail("admin@example.com");
         when(userRepository.findByEmailIgnoreCase("admin@example.com")).thenReturn(Optional.of(user));
         when(userMapper.toDto(user)).thenReturn(new com.racetracker.dto.auth.UserDto());
-        when(mfaAuthenticationService.isPrivileged(User.UserRole.SUPER_ADMIN)).thenReturn(true);
-        when(mfaAuthenticationService.createChallenge(user))
-            .thenReturn(new MfaAuthenticationServiceImpl.Challenge("restricted-challenge", true));
+        when(authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(user.getId(), AuthToken.TokenType.REFRESH))
+            .thenReturn(List.of());
+        when(jwtService.generateAccessToken(user)).thenReturn("access-token");
+        when(jwtService.generateRefreshToken(user)).thenReturn("refresh-token");
+        when(jwtService.extractExpiration("refresh-token")).thenReturn(OffsetDateTime.now().plusDays(7));
 
         AuthResponse response = authService.login(request);
 
-        assertNull(response.getToken());
-        assertNull(response.getRefreshToken());
-        assertTrue(Boolean.TRUE.equals(response.getMfaRequired()));
-        assertTrue(Boolean.TRUE.equals(response.getMfaEnrollmentRequired()));
-        assertThat(response.getMfaChallengeToken()).isEqualTo("restricted-challenge");
-        verifyNoInteractions(jwtService);
+        assertThat(response.getToken()).isEqualTo("access-token");
+        assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
+        assertThat(response.getMfaRequired()).isNull();
+        assertThat(response.getMfaChallengeToken()).isNull();
+        verifyNoInteractions(mfaAuthenticationService);
     }
 
     @Test

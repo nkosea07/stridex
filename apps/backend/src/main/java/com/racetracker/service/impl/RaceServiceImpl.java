@@ -7,6 +7,7 @@ import com.racetracker.dto.race.RaceCategoryRequest;
 import com.racetracker.dto.race.RaceDto;
 import com.racetracker.dto.race.RaceUpdateRequest;
 import com.racetracker.exception.ApiException;
+import com.racetracker.exception.ConflictException;
 import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.mapper.RaceMapper;
 import com.racetracker.model.Checkpoint;
@@ -17,11 +18,12 @@ import com.racetracker.model.User;
 import com.racetracker.repository.RaceRegistrationFieldRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.RaceService;
 import com.racetracker.service.RaceCompletionService;
+import com.racetracker.service.AuditEventService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.HashSet;
 import java.util.UUID;
 
 @Service
@@ -41,19 +44,25 @@ public class RaceServiceImpl implements RaceService {
     private final RaceRegistrationFieldRepository registrationFieldRepository;
     private final UserRepository userRepository;
     private final RaceCompletionService raceCompletionService;
+    private final RaceAccessGuard raceAccessGuard;
+    private final AuditEventService auditEventService;
 
     public RaceServiceImpl(
         RaceRepository raceRepository,
         RaceMapper raceMapper,
         RaceRegistrationFieldRepository registrationFieldRepository,
         UserRepository userRepository,
-        RaceCompletionService raceCompletionService
+        RaceCompletionService raceCompletionService,
+        RaceAccessGuard raceAccessGuard,
+        AuditEventService auditEventService
     ) {
         this.raceRepository = raceRepository;
         this.raceMapper = raceMapper;
         this.registrationFieldRepository = registrationFieldRepository;
         this.userRepository = userRepository;
         this.raceCompletionService = raceCompletionService;
+        this.raceAccessGuard = raceAccessGuard;
+        this.auditEventService = auditEventService;
     }
 
     @Override
@@ -62,9 +71,40 @@ public class RaceServiceImpl implements RaceService {
         boolean onlyUpcoming = Boolean.TRUE.equals(upcoming);
         Race.RaceStatus parsedStatus = parseRaceStatusNullable(status);
         UUID ownerScope = resolveOwnerScope();
-        Page<Race> races = raceRepository.search(ownerScope, parsedStatus, onlyUpcoming, includeArchived,
-            LocalDate.now(), pageable);
+        Page<Race> races = ownerScope == null
+            ? searchGlobally(parsedStatus, onlyUpcoming, includeArchived, pageable)
+            : parsedStatus == null
+                ? raceRepository.searchForOwner(ownerScope, onlyUpcoming, includeArchived, LocalDate.now(), pageable)
+                : raceRepository.searchForOwnerByStatus(ownerScope, parsedStatus, onlyUpcoming, includeArchived,
+                    LocalDate.now(), pageable);
         return races.map(raceMapper::toDto);
+    }
+
+    private Page<Race> searchGlobally(
+        Race.RaceStatus status,
+        boolean onlyUpcoming,
+        boolean includeArchived,
+        Pageable pageable
+    ) {
+        LocalDate today = LocalDate.now();
+        if (includeArchived) {
+            if (status != null) {
+                return onlyUpcoming
+                    ? raceRepository.findByStatusAndRaceDateGreaterThanEqual(status, today, pageable)
+                    : raceRepository.findByStatus(status, pageable);
+            }
+            return onlyUpcoming
+                ? raceRepository.findByRaceDateGreaterThanEqual(today, pageable)
+                : raceRepository.findAll(pageable);
+        }
+        if (status != null) {
+            return onlyUpcoming
+                ? raceRepository.findByStatusAndRaceDateGreaterThanEqualAndArchivedAtIsNull(status, today, pageable)
+                : raceRepository.findByStatusAndArchivedAtIsNull(status, pageable);
+        }
+        return onlyUpcoming
+            ? raceRepository.findByRaceDateGreaterThanEqualAndArchivedAtIsNull(today, pageable)
+            : raceRepository.findAllByArchivedAtIsNull(pageable);
     }
 
     private UUID resolveOwnerScope() {
@@ -108,33 +148,6 @@ public class RaceServiceImpl implements RaceService {
         return dto;
     }
 
-    /**
-     * Enforces per-race ownership for race administrators: a RACE_ADMIN may only manage a
-     * race they created or were assigned to. SUPER_ADMIN bypasses the check; unowned legacy
-     * races (no creator and no assigned admins) remain manageable to avoid lockouts.
-     */
-    private void assertCanManage(Race race) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return;
-        }
-        if (hasRole(authentication, "ROLE_SUPER_ADMIN") || !hasRole(authentication, "ROLE_RACE_ADMIN")) {
-            return;
-        }
-        User owner = race.getCreatedBy();
-        boolean legacyUnowned = owner == null && (race.getAdmins() == null || race.getAdmins().isEmpty());
-        if (legacyUnowned) {
-            return;
-        }
-        String username = authentication.getName();
-        boolean owns = owner != null && username.equalsIgnoreCase(owner.getEmail());
-        boolean assigned = race.getAdmins() != null && race.getAdmins().stream()
-            .anyMatch(admin -> username.equalsIgnoreCase(admin.getEmail()));
-        if (!owns && !assigned) {
-            throw new AccessDeniedException("You do not have access to this race");
-        }
-    }
-
     private boolean hasRole(Authentication authentication, String role) {
         return authentication.getAuthorities().stream()
             .anyMatch(authority -> role.equals(authority.getAuthority()));
@@ -169,7 +182,7 @@ public class RaceServiceImpl implements RaceService {
     public RaceDto update(UUID id, RaceUpdateRequest request) {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
-        assertCanManage(race);
+        raceAccessGuard.assertCanManage(race);
 
         applyCommonFields(request, race);
 
@@ -187,7 +200,7 @@ public class RaceServiceImpl implements RaceService {
     public void delete(UUID id) {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
-        assertCanManage(race);
+        raceAccessGuard.assertCanManage(race);
         raceRepository.delete(race);
     }
 
@@ -196,7 +209,7 @@ public class RaceServiceImpl implements RaceService {
     public RaceDto updateStatus(UUID id, String status) {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
-        assertCanManage(race);
+        raceAccessGuard.assertCanManage(race);
 
         Race.RaceStatus target = parseRaceStatus(status);
         if (race.getStatus() == target) {
@@ -211,6 +224,33 @@ public class RaceServiceImpl implements RaceService {
         race.setStatus(target);
         Race saved = raceRepository.save(race);
         return raceMapper.toDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public void assignAdmin(UUID raceId, UUID userId, String actorEmail) {
+        Race race = raceRepository.findByIdForUpdate(raceId)
+            .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (race.getAdmins() == null) {
+            race.setAdmins(new HashSet<>());
+        }
+
+        if (user.getRole() != User.UserRole.RACE_ADMIN) {
+            throw new ApiException("Target user must have the RACE_ADMIN role");
+        }
+        if (race.getAdmins().stream()
+            .anyMatch(admin -> userId.equals(admin.getId()))) {
+            throw new ConflictException("User is already assigned to this race");
+        }
+
+        race.getAdmins().add(user);
+        auditEventService.recordForActor(
+            "RACE_ADMIN_ASSIGNED", actorEmail, "RACE", raceId.toString(), "SUCCESS",
+            java.util.Map.of("assignedUserId", userId.toString())
+        );
     }
 
     private void assertTransitionAllowed(Race.RaceStatus from, Race.RaceStatus to) {
@@ -235,7 +275,7 @@ public class RaceServiceImpl implements RaceService {
     public RaceDto clone(UUID id, RaceCloneRequest request) {
         Race source = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
-        assertCanManage(source);
+        raceAccessGuard.assertCanManage(source);
 
         Race copy = new Race();
         copy.setCreatedBy(currentUserOrNull());
@@ -292,7 +332,7 @@ public class RaceServiceImpl implements RaceService {
     public RaceDto archive(UUID id) {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
-        assertCanManage(race);
+        raceAccessGuard.assertCanManage(race);
         race.setArchivedAt(OffsetDateTime.now());
         return raceMapper.toDto(raceRepository.save(race));
     }
@@ -302,7 +342,7 @@ public class RaceServiceImpl implements RaceService {
     public RaceDto restore(UUID id) {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
-        assertCanManage(race);
+        raceAccessGuard.assertCanManage(race);
         race.setArchivedAt(null);
         return raceMapper.toDto(raceRepository.save(race));
     }

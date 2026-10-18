@@ -1,6 +1,7 @@
 package com.racetracker.controller;
 
 import com.racetracker.dto.media.MediaDto;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.AuditEventService;
 import com.racetracker.service.MediaService;
 import org.springframework.http.MediaType;
@@ -19,10 +20,12 @@ public class MediaController {
 
     private final MediaService mediaService;
     private final AuditEventService auditEventService;
+    private final RaceAccessGuard raceAccessGuard;
 
-    public MediaController(MediaService mediaService, AuditEventService auditEventService) {
+    public MediaController(MediaService mediaService, AuditEventService auditEventService, RaceAccessGuard raceAccessGuard) {
         this.mediaService = mediaService;
         this.auditEventService = auditEventService;
+        this.raceAccessGuard = raceAccessGuard;
     }
 
     @PostMapping(value = "/v${racetracker.api.version}/races/{raceId}/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -34,6 +37,7 @@ public class MediaController {
         @RequestParam(required = false) String caption,
         Authentication authentication
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         MediaDto media = mediaService.upload(raceId, file, participantId, caption, authentication.getName());
         auditEventService.recordForActor("MEDIA_UPLOADED", authentication.getName(), "RACE_MEDIA", media.getId().toString(),
             "SUCCESS", Map.of("raceId", raceId.toString()));
@@ -43,12 +47,14 @@ public class MediaController {
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/media")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<MediaDto>> list(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(mediaService.listForRace(raceId));
     }
 
     @PostMapping("/v${racetracker.api.version}/races/{raceId}/media/{mediaId}/approve")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<MediaDto> approve(@PathVariable UUID raceId, @PathVariable UUID mediaId, Authentication authentication) {
+        raceAccessGuard.assertCanManage(raceId);
         MediaDto media = mediaService.moderate(raceId, mediaId, true, authentication.getName());
         auditEventService.recordForActor("MEDIA_APPROVED", authentication.getName(), "RACE_MEDIA", mediaId.toString(),
             "SUCCESS", Map.of());
@@ -58,6 +64,7 @@ public class MediaController {
     @PostMapping("/v${racetracker.api.version}/races/{raceId}/media/{mediaId}/reject")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<MediaDto> reject(@PathVariable UUID raceId, @PathVariable UUID mediaId, Authentication authentication) {
+        raceAccessGuard.assertCanManage(raceId);
         MediaDto media = mediaService.moderate(raceId, mediaId, false, authentication.getName());
         auditEventService.recordForActor("MEDIA_REJECTED", authentication.getName(), "RACE_MEDIA", mediaId.toString(),
             "SUCCESS", Map.of());
@@ -67,6 +74,7 @@ public class MediaController {
     @DeleteMapping("/v${racetracker.api.version}/races/{raceId}/media/{mediaId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable UUID raceId, @PathVariable UUID mediaId, Authentication authentication) {
+        raceAccessGuard.assertCanManage(raceId);
         mediaService.delete(raceId, mediaId);
         auditEventService.recordForActor("MEDIA_DELETED", authentication.getName(), "RACE_MEDIA", mediaId.toString(),
             "SUCCESS", Map.of());
@@ -76,12 +84,14 @@ public class MediaController {
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/media/{mediaId}/content")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<byte[]> staffContent(@PathVariable UUID raceId, @PathVariable UUID mediaId) {
+        raceAccessGuard.assertCanManage(raceId);
         return contentResponse(mediaService.content(raceId, mediaId, false));
     }
 
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/media/{mediaId}/thumbnail")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<byte[]> staffThumbnail(@PathVariable UUID raceId, @PathVariable UUID mediaId) {
+        raceAccessGuard.assertCanManage(raceId);
         return contentResponse(mediaService.thumbnail(raceId, mediaId, false));
     }
 

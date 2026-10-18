@@ -129,7 +129,8 @@ public class RaceParticipantController {
     @GetMapping("/import-jobs/{jobId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<ImportJobDto> getImportJob(@PathVariable UUID raceId, @PathVariable UUID jobId) {
-        return ResponseEntity.ok(participantService.getImportJob(jobId));
+        raceAccessGuard.assertCanManage(raceId);
+        return ResponseEntity.ok(participantService.getImportJob(raceId, jobId));
     }
 
     @GetMapping(value = "/export", produces = "text/csv")

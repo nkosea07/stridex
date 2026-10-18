@@ -73,6 +73,19 @@ public class RequestRateLimiter {
         ));
     }
 
+    public void checkOAuth(String ipAddress) {
+        check("oauth", List.of(bucket("oauth:ip", hash(ipAddress), 10, 900)));
+    }
+
+    public void checkRfid(String readerKey, String ipAddress) {
+        List<Bucket> buckets = new ArrayList<>();
+        buckets.add(bucket("rfid:ip", hash(ipAddress), 120, 60));
+        if (readerKey != null && !readerKey.isBlank()) {
+            buckets.add(bucket("rfid:reader", hash(readerKey), 600, 60));
+        }
+        check("rfid", buckets);
+    }
+
     public void checkPublicTracking(String raceId, String ipAddress) {
         check("public_tracking", List.of(
             bucket("public-tracking", hash(raceId + ":" + ipAddress), 120, 60)

@@ -7,7 +7,7 @@ import java.util.UUID;
 
 public interface PaymentService {
 
-    PaymentDto startCheckout(UUID raceId, UUID participantId, String promoCode);
+    PaymentDto startCheckout(UUID raceId, UUID participantId, String promoCode, String actorEmail, boolean athleteSelfService);
 
     void handlePesepayCallback(String authorizationHeader, String rawBody);
 

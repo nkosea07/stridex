@@ -10,7 +10,9 @@ import com.racetracker.dto.rfid.RfidRaceOverviewDto;
 import com.racetracker.service.RfidIngestService;
 import com.racetracker.service.RfidReaderService;
 import com.racetracker.service.AuditEventService;
+import com.racetracker.security.ClientAddressResolver;
 import com.racetracker.security.RaceAccessGuard;
+import com.racetracker.security.RequestRateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -30,13 +32,18 @@ public class RfidController {
     private final RfidIngestService rfidIngestService;
     private final AuditEventService auditEventService;
     private final RaceAccessGuard raceAccessGuard;
+    private final RequestRateLimiter requestRateLimiter;
+    private final ClientAddressResolver clientAddressResolver;
 
     public RfidController(RfidReaderService rfidReaderService, RfidIngestService rfidIngestService,
-                          AuditEventService auditEventService, RaceAccessGuard raceAccessGuard) {
+                          AuditEventService auditEventService, RaceAccessGuard raceAccessGuard,
+                          RequestRateLimiter requestRateLimiter, ClientAddressResolver clientAddressResolver) {
         this.rfidReaderService = rfidReaderService;
         this.rfidIngestService = rfidIngestService;
         this.auditEventService = auditEventService;
         this.raceAccessGuard = raceAccessGuard;
+        this.requestRateLimiter = requestRateLimiter;
+        this.clientAddressResolver = clientAddressResolver;
     }
 
     @PostMapping("/v${racetracker.api.version}/races/{raceId}/rfid/readers")
@@ -83,7 +90,9 @@ public class RfidController {
         @Valid @RequestBody RfidReadEventBatchRequest request,
         HttpServletRequest servletRequest
     ) {
-        return ResponseEntity.ok(rfidIngestService.ingest(apiKey, request, resolveSourceIp(servletRequest)));
+        String clientAddress = clientAddressResolver.resolve(servletRequest);
+        requestRateLimiter.checkRfid(apiKey, clientAddress);
+        return ResponseEntity.ok(rfidIngestService.ingest(apiKey, request, clientAddress));
     }
 
     @PostMapping("/v${racetracker.api.version}/rfid/readers/heartbeat")
@@ -92,14 +101,7 @@ public class RfidController {
         @Valid @RequestBody RfidReaderHeartbeatRequest request,
         HttpServletRequest servletRequest
     ) {
-        return ResponseEntity.ok(rfidReaderService.heartbeat(apiKey, request, resolveSourceIp(servletRequest)));
-    }
-
-    private String resolveSourceIp(HttpServletRequest request) {
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            return forwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
+        String clientAddress = clientAddressResolver.resolve(servletRequest);
+        return ResponseEntity.ok(rfidReaderService.heartbeat(apiKey, request, clientAddress));
     }
 }

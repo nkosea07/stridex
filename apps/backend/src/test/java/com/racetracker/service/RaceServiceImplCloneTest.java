@@ -9,7 +9,9 @@ import com.racetracker.model.RaceCategory;
 import com.racetracker.repository.RaceRegistrationFieldRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.impl.RaceServiceImpl;
+import com.racetracker.service.AuditEventService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,13 +38,16 @@ class RaceServiceImplCloneTest {
     @Mock RaceRegistrationFieldRepository registrationFieldRepository;
     @Mock UserRepository userRepository;
     @Mock RaceCompletionService raceCompletionService;
+    @Mock RaceAccessGuard raceAccessGuard;
+    @Mock AuditEventService auditEventService;
 
     private RaceServiceImpl service;
     private final UUID sourceId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        service = new RaceServiceImpl(raceRepository, raceMapper, registrationFieldRepository, userRepository, raceCompletionService);
+        service = new RaceServiceImpl(raceRepository, raceMapper, registrationFieldRepository, userRepository,
+            raceCompletionService, raceAccessGuard, auditEventService);
         lenient().when(raceMapper.toDto(any(Race.class))).thenReturn(new RaceDto());
         lenient().when(raceRepository.save(any(Race.class))).thenAnswer(inv -> inv.getArgument(0));
     }

@@ -17,7 +17,7 @@ public interface ParticipantService {
     ParticipantDto checkIn(UUID raceId, UUID participantId);
 
     ImportJobDto importCsv(UUID raceId, MultipartFile file);
-    ImportJobDto getImportJob(UUID jobId);
+    ImportJobDto getImportJob(UUID raceId, UUID jobId);
     List<ImportJobDto> listImportJobs(UUID raceId);
 
     String exportCsv(UUID raceId);

@@ -72,8 +72,8 @@ public class PromoCodeServiceImpl implements PromoCodeService {
 
     @Override
     @Transactional
-    public PromoCodeDto setActive(UUID id, boolean active) {
-        PromoCode promo = promoCodeRepository.findById(id)
+    public PromoCodeDto setActive(UUID raceId, UUID id, boolean active) {
+        PromoCode promo = promoCodeRepository.findByRaceIdAndId(raceId, id)
             .orElseThrow(() -> new ResourceNotFoundException("Promo code not found"));
         promo.setActive(active);
         return toDto(promoCodeRepository.save(promo));
@@ -81,11 +81,10 @@ public class PromoCodeServiceImpl implements PromoCodeService {
 
     @Override
     @Transactional
-    public void delete(UUID id) {
-        if (!promoCodeRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Promo code not found");
-        }
-        promoCodeRepository.deleteById(id);
+    public void delete(UUID raceId, UUID id) {
+        PromoCode promo = promoCodeRepository.findByRaceIdAndId(raceId, id)
+            .orElseThrow(() -> new ResourceNotFoundException("Promo code not found"));
+        promoCodeRepository.delete(promo);
     }
 
     @Override

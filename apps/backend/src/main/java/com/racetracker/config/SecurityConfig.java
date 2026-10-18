@@ -1,6 +1,7 @@
 package com.racetracker.config;
 
 import com.racetracker.security.JwtAuthenticationFilter;
+import com.racetracker.security.ApiSecurityExceptionHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -29,15 +30,18 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CorsProperties corsProperties;
     private final RaceTrackerProperties raceTrackerProperties;
+    private final ApiSecurityExceptionHandler apiSecurityExceptionHandler;
 
     public SecurityConfig(
         JwtAuthenticationFilter jwtAuthenticationFilter,
         CorsProperties corsProperties,
-        RaceTrackerProperties raceTrackerProperties
+        RaceTrackerProperties raceTrackerProperties,
+        ApiSecurityExceptionHandler apiSecurityExceptionHandler
     ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.corsProperties = corsProperties;
         this.raceTrackerProperties = raceTrackerProperties;
+        this.apiSecurityExceptionHandler = apiSecurityExceptionHandler;
     }
 
     @Bean
@@ -48,6 +52,9 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(exceptionHandling -> exceptionHandling
+                .authenticationEntryPoint(apiSecurityExceptionHandler)
+                .accessDeniedHandler(apiSecurityExceptionHandler))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
@@ -76,7 +83,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, apiPrefix + "/rfid/readers/heartbeat").permitAll()
                 .requestMatchers(HttpMethod.POST, apiPrefix + "/payments/callback/**").permitAll()
                 .requestMatchers(HttpMethod.GET, apiPrefix + "/public/races/**").permitAll()
-                .requestMatchers("/ws/**").permitAll()
+                .requestMatchers("/ws-tracking", "/ws-tracking/**").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/error").permitAll()
                 .anyRequest().authenticated()

@@ -14,6 +14,8 @@ import java.util.UUID;
 public interface ImportJobRepository extends JpaRepository<ImportJob, UUID> {
     List<ImportJob> findByRaceIdOrderByCreatedAtDesc(UUID raceId);
 
+    Optional<ImportJob> findByRaceIdAndId(UUID raceId, UUID id);
+
     List<ImportJob> findByStatusIn(Collection<ImportJob.JobStatus> statuses);
 
     @EntityGraph(attributePaths = {"race", "createdBy"})

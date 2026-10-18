@@ -3,6 +3,7 @@ package com.racetracker.controller;
 import com.racetracker.dto.auth.ApiMessageResponse;
 import com.racetracker.dto.participant.RaceRegistrationFieldDto;
 import com.racetracker.dto.participant.RegistrationFieldRequest;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.ParticipantService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -17,14 +18,17 @@ import java.util.UUID;
 public class RaceRegistrationFieldController {
 
     private final ParticipantService participantService;
+    private final RaceAccessGuard raceAccessGuard;
 
-    public RaceRegistrationFieldController(ParticipantService participantService) {
+    public RaceRegistrationFieldController(ParticipantService participantService, RaceAccessGuard raceAccessGuard) {
         this.participantService = participantService;
+        this.raceAccessGuard = raceAccessGuard;
     }
 
     @GetMapping("")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<List<RaceRegistrationFieldDto>> list(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(participantService.listRegistrationFields(raceId, false));
     }
 
@@ -34,6 +38,7 @@ public class RaceRegistrationFieldController {
         @PathVariable UUID raceId,
         @Valid @RequestBody RegistrationFieldRequest request
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(participantService.createRegistrationField(raceId, request));
     }
 
@@ -44,12 +49,14 @@ public class RaceRegistrationFieldController {
         @PathVariable UUID fieldId,
         @Valid @RequestBody RegistrationFieldRequest request
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(participantService.updateRegistrationField(raceId, fieldId, request));
     }
 
     @DeleteMapping("/{fieldId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<ApiMessageResponse> delete(@PathVariable UUID raceId, @PathVariable UUID fieldId) {
+        raceAccessGuard.assertCanManage(raceId);
         participantService.deleteRegistrationField(raceId, fieldId);
         return ResponseEntity.ok(new ApiMessageResponse("Registration field deleted"));
     }

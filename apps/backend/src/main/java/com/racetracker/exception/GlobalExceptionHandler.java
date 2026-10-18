@@ -22,6 +22,14 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final String API_ERROR_MESSAGE = "The request could not be completed.";
+    private static final String SERVICE_UNAVAILABLE_MESSAGE =
+        "The service is temporarily unavailable. Please try again shortly.";
+    private static final String UNAUTHORIZED_MESSAGE = "Authentication failed.";
+    private static final String CONFLICT_MESSAGE = "The request conflicts with existing data.";
+    private static final String NOT_FOUND_MESSAGE = "The requested resource was not found.";
+    private static final String RATE_LIMIT_MESSAGE = "Too many requests. Please try again later.";
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         List<String> errors = ex.getBindingResult().getFieldErrors().stream()
@@ -34,6 +42,8 @@ public class GlobalExceptionHandler {
                 .statusCode(HttpStatus.BAD_REQUEST.value())
                 .error("Validation Error")
                 .message("Input validation failed")
+                .code("VALIDATION_ERROR")
+                .requestId(requestId())
                 .path(request.getRequestURI())
                 .details(errors)
                 .build();
@@ -48,6 +58,8 @@ public class GlobalExceptionHandler {
                 .statusCode(HttpStatus.FORBIDDEN.value())
                 .error("Forbidden")
                 .message("You do not have permission to perform this action")
+                .code("FORBIDDEN")
+                .requestId(requestId())
                 .path(request.getRequestURI())
                 .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
@@ -55,12 +67,17 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({BadCredentialsException.class, UnauthorizedException.class})
     public ResponseEntity<ErrorResponse> handleUnauthorized(Exception ex, HttpServletRequest request) {
+        String code = ex instanceof UnauthorizedException unauthorized
+            ? unauthorized.getCode()
+            : "UNAUTHORIZED";
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.UNAUTHORIZED)
                 .statusCode(HttpStatus.UNAUTHORIZED.value())
                 .error("Unauthorized")
-                .message(ex.getMessage())
+                .message(UNAUTHORIZED_MESSAGE)
+                .code(code)
+                .requestId(requestId())
                 .path(request.getRequestURI())
                 .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
@@ -73,7 +90,9 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.CONFLICT)
                 .statusCode(HttpStatus.CONFLICT.value())
                 .error("Conflict")
-                .message(ex.getMessage())
+                .message(CONFLICT_MESSAGE)
+                .code("CONFLICT")
+                .requestId(requestId())
                 .path(request.getRequestURI())
                 .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
@@ -86,7 +105,9 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.NOT_FOUND)
                 .statusCode(HttpStatus.NOT_FOUND.value())
                 .error("Not Found")
-                .message(ex.getMessage())
+                .message(NOT_FOUND_MESSAGE)
+                .code("NOT_FOUND")
+                .requestId(requestId())
                 .path(request.getRequestURI())
                 .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
@@ -94,12 +115,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ErrorResponse> handleApiException(ApiException ex, HttpServletRequest request) {
+        String requestId = requestId();
+        log.warn("API exception for {} (requestId={})", request.getRequestURI(), requestId, ex);
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.BAD_REQUEST)
                 .statusCode(HttpStatus.BAD_REQUEST.value())
                 .error("API Error")
-                .message(ex.getMessage())
+                .message(API_ERROR_MESSAGE)
+                .code("API_ERROR")
+                .requestId(requestId)
                 .path(request.getRequestURI())
                 .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
@@ -112,7 +137,9 @@ public class GlobalExceptionHandler {
             .status(HttpStatus.TOO_MANY_REQUESTS)
             .statusCode(HttpStatus.TOO_MANY_REQUESTS.value())
             .error("Too Many Requests")
-            .message(ex.getMessage())
+            .message(RATE_LIMIT_MESSAGE)
+            .code("TOO_MANY_REQUESTS")
+            .requestId(requestId())
             .path(request.getRequestURI())
             .build();
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
@@ -122,12 +149,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ServiceUnavailableException.class)
     public ResponseEntity<ErrorResponse> handleServiceUnavailable(ServiceUnavailableException ex, HttpServletRequest request) {
+        String requestId = requestId();
+        log.error("Service unavailable for {} (requestId={})", request.getRequestURI(), requestId, ex);
         ErrorResponse errorResponse = ErrorResponse.builder()
             .timestamp(LocalDateTime.now())
             .status(HttpStatus.SERVICE_UNAVAILABLE)
             .statusCode(HttpStatus.SERVICE_UNAVAILABLE.value())
             .error("Service Unavailable")
-            .message(ex.getMessage())
+            .message(SERVICE_UNAVAILABLE_MESSAGE)
+            .code("SERVICE_UNAVAILABLE")
+            .requestId(requestId)
             .path(request.getRequestURI())
             .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.SERVICE_UNAVAILABLE);
@@ -142,6 +173,8 @@ public class GlobalExceptionHandler {
                 .statusCode(HttpStatus.BAD_REQUEST.value())
                 .error("Missing Parameter")
                 .message(error)
+                .code("MISSING_PARAMETER")
+                .requestId(requestId())
                 .path(request.getRequestURI())
                 .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
@@ -160,8 +193,14 @@ public class GlobalExceptionHandler {
                 .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
                 .error("Internal Server Error")
                 .message(message)
+                .code("INTERNAL_ERROR")
+                .requestId(requestId)
                 .path(request.getRequestURI())
                 .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    private String requestId() {
+        return MDC.get("requestId");
     }
 }

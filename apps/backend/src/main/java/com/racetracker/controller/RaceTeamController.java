@@ -2,6 +2,7 @@ package com.racetracker.controller;
 
 import com.racetracker.dto.participant.TeamCreateRequest;
 import com.racetracker.dto.participant.TeamDto;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.ParticipantService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -16,20 +17,24 @@ import java.util.UUID;
 public class RaceTeamController {
 
     private final ParticipantService participantService;
+    private final RaceAccessGuard raceAccessGuard;
 
-    public RaceTeamController(ParticipantService participantService) {
+    public RaceTeamController(ParticipantService participantService, RaceAccessGuard raceAccessGuard) {
         this.participantService = participantService;
+        this.raceAccessGuard = raceAccessGuard;
     }
 
     @GetMapping("")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<TeamDto>> list(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(participantService.listTeams(raceId));
     }
 
     @PostMapping("")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<TeamDto> create(@PathVariable UUID raceId, @Valid @RequestBody TeamCreateRequest request) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(participantService.createTeam(raceId, request));
     }
 }

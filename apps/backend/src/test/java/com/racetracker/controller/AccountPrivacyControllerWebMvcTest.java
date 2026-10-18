@@ -7,6 +7,7 @@ import com.racetracker.model.User;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.security.CustomUserDetailsService;
 import com.racetracker.security.JwtService;
+import com.racetracker.security.ApiSecurityExceptionHandler;
 import com.racetracker.service.AccountDeletionService;
 import com.racetracker.service.AccountPrivacyService;
 import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
@@ -31,7 +32,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = AccountPrivacyController.class)
-@Import(SecurityConfig.class)
+@Import({SecurityConfig.class, ApiSecurityExceptionHandler.class})
 @EnableConfigurationProperties({RaceTrackerProperties.class, CorsProperties.class})
 @TestPropertySource(properties = {
     "server.servlet.context-path=",
@@ -63,8 +64,8 @@ class AccountPrivacyControllerWebMvcTest {
 
     @Test
     void anonymousAccessIsDenied() throws Exception {
-        mockMvc.perform(get("/v1/me/data")).andExpect(status().isForbidden());
-        mockMvc.perform(delete("/v1/me")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/v1/me/data")).andExpect(status().isUnauthorized());
+        mockMvc.perform(delete("/v1/me")).andExpect(status().isUnauthorized());
     }
 
     @Test

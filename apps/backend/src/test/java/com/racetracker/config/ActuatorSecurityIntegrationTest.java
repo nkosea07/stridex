@@ -1,6 +1,7 @@
 package com.racetracker.config;
 
 import com.racetracker.security.CustomUserDetailsService;
+import com.racetracker.security.ApiSecurityExceptionHandler;
 import com.racetracker.security.JwtAuthenticationFilter;
 import com.racetracker.security.JwtService;
 import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
@@ -114,7 +115,7 @@ class ActuatorSecurityIntegrationTest {
         MailSenderAutoConfiguration.class
     })
     @EnableConfigurationProperties({CorsProperties.class, RaceTrackerProperties.class})
-    @Import({SecurityConfig.class, JwtAuthenticationFilter.class})
+    @Import({SecurityConfig.class, JwtAuthenticationFilter.class, ApiSecurityExceptionHandler.class})
     static class TestApplication {
 
         @Bean

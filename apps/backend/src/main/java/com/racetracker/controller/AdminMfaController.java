@@ -26,6 +26,6 @@ public class AdminMfaController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiMessageResponse> resetMfa(@PathVariable UUID userId, Authentication authentication) {
         mfaAuthenticationService.resetBySuperAdmin(userId, authentication.getName());
-        return ResponseEntity.ok(new ApiMessageResponse("MFA reset; user must enroll again before privileged access"));
+        return ResponseEntity.ok(new ApiMessageResponse("Legacy MFA credentials reset"));
     }
 }

@@ -1,6 +1,7 @@
 package com.racetracker.service;
 
 import com.racetracker.exception.ApiException;
+import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.model.PromoCode;
 import com.racetracker.repository.PromoCodeRepository;
 import com.racetracker.repository.RaceRepository;
@@ -17,6 +18,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,6 +42,30 @@ class PromoCodeServiceImplTest {
             .usedCount(0)
             .active(true)
             .build();
+    }
+
+    @Test
+    void setActiveRejectsPromoFromAnotherRace() {
+        UUID raceId = UUID.randomUUID();
+        UUID promoId = UUID.randomUUID();
+        when(promoCodeRepository.findByRaceIdAndId(raceId, promoId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service().setActive(raceId, promoId, false))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(promoCodeRepository, never()).save(any(PromoCode.class));
+    }
+
+    @Test
+    void deleteRejectsGlobalOrAnotherRacesPromo() {
+        UUID raceId = UUID.randomUUID();
+        UUID promoId = UUID.randomUUID();
+        when(promoCodeRepository.findByRaceIdAndId(raceId, promoId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service().delete(raceId, promoId))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(promoCodeRepository, never()).delete(any(PromoCode.class));
     }
 
     @Test

@@ -6,14 +6,19 @@ import com.racetracker.config.SecurityConfig;
 import com.racetracker.dto.rfid.RfidReadEventBatchResponse;
 import com.racetracker.dto.rfid.RfidReaderDto;
 import com.racetracker.dto.rfid.RfidRaceOverviewDto;
+import com.racetracker.exception.TooManyRequestsException;
 import com.racetracker.exception.UnauthorizedException;
+import com.racetracker.security.ClientAddressResolver;
 import com.racetracker.security.CustomUserDetailsService;
 import com.racetracker.security.JwtService;
+import com.racetracker.security.ApiSecurityExceptionHandler;
 import com.racetracker.security.RaceAccessGuard;
+import com.racetracker.security.RequestRateLimiter;
 import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import com.racetracker.service.RfidIngestService;
 import com.racetracker.service.RfidReaderService;
 import com.racetracker.service.AuditEventService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -27,6 +32,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -34,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = RfidController.class)
-@Import(SecurityConfig.class)
+@Import({SecurityConfig.class, ApiSecurityExceptionHandler.class})
 @EnableConfigurationProperties({RaceTrackerProperties.class, CorsProperties.class})
 @TestPropertySource(properties = {
     "server.servlet.context-path=",
@@ -67,10 +75,21 @@ class RfidControllerWebMvcTest {
     @MockBean
     private RaceAccessGuard raceAccessGuard;
 
+    @MockBean
+    private RequestRateLimiter requestRateLimiter;
+
+    @MockBean
+    private ClientAddressResolver clientAddressResolver;
+
+    @BeforeEach
+    void setUp() {
+        when(clientAddressResolver.resolve(any())).thenReturn("127.0.0.1");
+    }
+
     @Test
     void readerAdminRoutesRejectAnonymousAccess() throws Exception {
         mockMvc.perform(get("/v1/races/{raceId}/rfid/readers", UUID.randomUUID()))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -82,7 +101,7 @@ class RfidControllerWebMvcTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(validBatchJson()))
             .andExpect(status().isUnauthorized())
-            .andExpect(jsonPath("$.message").value("RFID reader API key is required"));
+            .andExpect(jsonPath("$.message").value("Authentication failed."));
     }
 
     @Test
@@ -95,7 +114,7 @@ class RfidControllerWebMvcTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(validBatchJson()))
             .andExpect(status().isUnauthorized())
-            .andExpect(jsonPath("$.message").value("Invalid RFID reader API key"));
+            .andExpect(jsonPath("$.message").value("Authentication failed."));
     }
 
     @Test
@@ -103,6 +122,7 @@ class RfidControllerWebMvcTest {
         RfidReadEventBatchResponse response = new RfidReadEventBatchResponse();
         response.setAccepted(1);
         when(rfidIngestService.ingest(eq("valid-key"), any(), anyString())).thenReturn(response);
+        when(clientAddressResolver.resolve(any())).thenReturn("203.0.113.20");
 
         mockMvc.perform(post("/v1/rfid/read-events")
                 .header("X-RFID-Reader-Key", "valid-key")
@@ -110,6 +130,24 @@ class RfidControllerWebMvcTest {
                 .content(validBatchJson()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.accepted").value(1));
+
+        verify(requestRateLimiter).checkRfid("valid-key", "203.0.113.20");
+    }
+
+    @Test
+    void ingestStopsBeforeServiceWhenRateLimited() throws Exception {
+        when(clientAddressResolver.resolve(any())).thenReturn("203.0.113.20");
+        doThrow(new TooManyRequestsException("Too many requests", 42))
+            .when(requestRateLimiter).checkRfid("valid-key", "203.0.113.20");
+
+        mockMvc.perform(post("/v1/rfid/read-events")
+                .header("X-RFID-Reader-Key", "valid-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validBatchJson()))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(jsonPath("$.message").value("Too many requests. Please try again later."));
+
+        verifyNoInteractions(rfidIngestService);
     }
 
     @Test
@@ -129,6 +167,8 @@ class RfidControllerWebMvcTest {
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.gatewayStatus").value("ONLINE"));
+
+        verifyNoInteractions(requestRateLimiter);
     }
 
     @Test

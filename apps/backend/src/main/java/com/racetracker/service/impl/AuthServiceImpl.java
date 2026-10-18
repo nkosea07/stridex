@@ -116,7 +116,7 @@ public class AuthServiceImpl implements AuthService {
         } catch (Exception ex) {
             if (user != null) {
                 recordFailedLogin(user);
-                if (mfaAuthenticationService.isPrivileged(user.getRole())) {
+                if (user.getRole() == User.UserRole.SUPER_ADMIN || user.getRole() == User.UserRole.RACE_ADMIN) {
                     auditEventService.record("PRIVILEGED_LOGIN", user.getId(), "USER", user.getId().toString(),
                         "DENIED", java.util.Map.of("method", "password"));
                 }
@@ -130,16 +130,8 @@ public class AuthServiceImpl implements AuthService {
         }
 
         resetFailedLoginState(user);
-        if (mfaAuthenticationService.isPrivileged(user.getRole())) {
-            MfaAuthenticationServiceImpl.Challenge challenge = mfaAuthenticationService.createChallenge(user);
-            return AuthResponse.builder()
-                .requiresEmailVerification(false)
-                .mfaRequired(true)
-                .mfaEnrollmentRequired(challenge.enrollmentRequired())
-                .mfaChallengeToken(challenge.token())
-                .user(userMapper.toDto(user))
-                .build();
-        }
+        auditEventService.record("LOGIN", user.getId(), "USER", user.getId().toString(),
+            "SUCCESS", java.util.Map.of("method", "password"));
         return buildAuthenticatedResponse(user, false);
     }
 
@@ -164,11 +156,6 @@ public class AuthServiceImpl implements AuthService {
 
         User user = storedToken.getUser();
         ensureUserCanReceiveSession(user);
-        boolean mfaVerified = mfaAuthenticationService.isPrivileged(user.getRole());
-        if (mfaVerified && (!jwtService.isMfaVerified(refreshToken) || !mfaAuthenticationService.isMfaEnabled(user.getId()))) {
-            throw new UnauthorizedException("MFA verification is required");
-        }
-
         org.springframework.security.core.userdetails.UserDetails userDetails = new org.springframework.security.core.userdetails.User(
             user.getEmail(),
             user.getPasswordHash(),
@@ -185,7 +172,7 @@ public class AuthServiceImpl implements AuthService {
 
         storedToken.setConsumedAt(OffsetDateTime.now());
         authTokenRepository.save(storedToken);
-        return buildAuthenticatedResponse(user, mfaVerified);
+        return buildAuthenticatedResponse(user, false);
     }
 
     @Override
@@ -337,7 +324,7 @@ public class AuthServiceImpl implements AuthService {
 
     private void ensureEmailVerified(User user) {
         if (!Boolean.TRUE.equals(user.getEmailVerified())) {
-            throw new UnauthorizedException("Email verification required");
+            throw new UnauthorizedException("Email verification required", "EMAIL_VERIFICATION_REQUIRED");
         }
     }
 

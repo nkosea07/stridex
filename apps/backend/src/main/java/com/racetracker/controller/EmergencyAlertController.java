@@ -2,6 +2,7 @@ package com.racetracker.controller;
 
 import com.racetracker.dto.emergency.EmergencyAlertDto;
 import com.racetracker.dto.emergency.EmergencyAlertRequest;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.AuditEventService;
 import com.racetracker.service.EmergencyAlertService;
 import jakarta.validation.Valid;
@@ -19,10 +20,13 @@ public class EmergencyAlertController {
 
     private final EmergencyAlertService emergencyAlertService;
     private final AuditEventService auditEventService;
+    private final RaceAccessGuard raceAccessGuard;
 
-    public EmergencyAlertController(EmergencyAlertService emergencyAlertService, AuditEventService auditEventService) {
+    public EmergencyAlertController(EmergencyAlertService emergencyAlertService, AuditEventService auditEventService,
+                                    RaceAccessGuard raceAccessGuard) {
         this.emergencyAlertService = emergencyAlertService;
         this.auditEventService = auditEventService;
+        this.raceAccessGuard = raceAccessGuard;
     }
 
     @PostMapping("/v${racetracker.api.version}/races/{raceId}/emergency")
@@ -32,6 +36,7 @@ public class EmergencyAlertController {
         @Valid @RequestBody EmergencyAlertRequest request,
         Authentication authentication
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         EmergencyAlertDto alert = emergencyAlertService.raise(raceId, request, authentication.getName());
         auditEventService.recordForActor("EMERGENCY_ALERT_RAISED", authentication.getName(), "RACE", raceId.toString(),
             "SUCCESS", Map.of("alertId", alert.getId().toString()));
@@ -41,6 +46,7 @@ public class EmergencyAlertController {
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/emergency")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
     public ResponseEntity<List<EmergencyAlertDto>> list(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(emergencyAlertService.list(raceId));
     }
 }

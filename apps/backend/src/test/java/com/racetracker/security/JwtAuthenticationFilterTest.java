@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -26,9 +25,6 @@ class JwtAuthenticationFilterTest {
     @Mock
     private CustomUserDetailsService userDetailsService;
 
-    @Mock
-    private MfaAuthenticationServiceImpl mfaAuthenticationService;
-
     @AfterEach
     void cleanup() {
         SecurityContextHolder.clearContext();
@@ -36,7 +32,7 @@ class JwtAuthenticationFilterTest {
 
     @Test
     void refreshToken_doesNotAuthenticateRequest() throws Exception {
-        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtService, userDetailsService, mfaAuthenticationService);
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtService, userDetailsService);
         String refreshToken = "refresh-token";
         when(jwtService.hasTokenType(refreshToken, JwtService.TOKEN_TYPE_ACCESS)).thenReturn(false);
 
@@ -54,12 +50,17 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
-    void legacyPrivilegedAccessTokenIsNotAcceptedWithoutVerifiedMfaState() throws Exception {
-        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtService, userDetailsService, mfaAuthenticationService);
+    void privilegedAccessTokenAuthenticatesWithoutMfaState() throws Exception {
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtService, userDetailsService);
         String accessToken = "legacy-access-token";
         when(jwtService.hasTokenType(accessToken, JwtService.TOKEN_TYPE_ACCESS)).thenReturn(true);
         when(jwtService.extractUsername(accessToken)).thenReturn("admin@example.com");
-        when(mfaAuthenticationService.isPrivilegedSessionVerified("admin@example.com", accessToken)).thenReturn(false);
+        var userDetails = org.springframework.security.core.userdetails.User.withUsername("admin@example.com")
+            .password("hashed")
+            .roles("SUPER_ADMIN")
+            .build();
+        when(userDetailsService.loadUserByUsername("admin@example.com")).thenReturn(userDetails);
+        when(jwtService.isTokenValid(accessToken, userDetails)).thenReturn(true);
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer " + accessToken);
@@ -69,7 +70,6 @@ class JwtAuthenticationFilterTest {
         filter.doFilter(request, response, (req, res) -> chainCalled.set(true));
 
         assertThat(chainCalled).isTrue();
-        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-        verifyNoInteractions(userDetailsService);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
     }
 }

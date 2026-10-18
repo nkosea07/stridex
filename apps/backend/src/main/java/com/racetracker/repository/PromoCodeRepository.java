@@ -14,6 +14,8 @@ public interface PromoCodeRepository extends JpaRepository<PromoCode, UUID> {
 
     Optional<PromoCode> findByCodeIgnoreCase(String code);
 
+    Optional<PromoCode> findByRaceIdAndId(UUID raceId, UUID id);
+
     @Query("select p from PromoCode p where p.race is null or p.race.id = :raceId order by p.createdAt desc")
     List<PromoCode> findApplicableToRace(@Param("raceId") UUID raceId);
 

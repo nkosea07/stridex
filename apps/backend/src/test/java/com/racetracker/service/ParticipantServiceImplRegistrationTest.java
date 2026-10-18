@@ -37,6 +37,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -138,6 +139,17 @@ class ParticipantServiceImplRegistrationTest {
         assertThatThrownBy(() -> service.registerForRace(raceId, request()))
             .isInstanceOf(ApiException.class)
             .hasMessageContaining("closed");
+    }
+
+    @Test
+    void importJobLookupIsScopedToRace() {
+        UUID jobId = UUID.randomUUID();
+        when(importJobRepository.findByRaceIdAndId(raceId, jobId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getImportJob(raceId, jobId))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verifyNoInteractions(importJobMapper);
     }
 
     @Test

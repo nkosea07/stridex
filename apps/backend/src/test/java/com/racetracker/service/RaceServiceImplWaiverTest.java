@@ -9,12 +9,15 @@ import com.racetracker.model.Race;
 import com.racetracker.repository.RaceRegistrationFieldRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.impl.RaceServiceImpl;
+import com.racetracker.service.AuditEventService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -24,7 +27,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,13 +41,16 @@ class RaceServiceImplWaiverTest {
     @Mock RaceRegistrationFieldRepository registrationFieldRepository;
     @Mock UserRepository userRepository;
     @Mock RaceCompletionService raceCompletionService;
+    @Mock RaceAccessGuard raceAccessGuard;
+    @Mock AuditEventService auditEventService;
 
     private RaceServiceImpl service;
     private final UUID raceId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        service = new RaceServiceImpl(raceRepository, raceMapper, registrationFieldRepository, userRepository, raceCompletionService);
+        service = new RaceServiceImpl(raceRepository, raceMapper, registrationFieldRepository, userRepository,
+            raceCompletionService, raceAccessGuard, auditEventService);
     }
 
     private RaceCreateRequest createRequest(boolean requireWaiver, String waiverText) {
@@ -74,6 +83,24 @@ class RaceServiceImplWaiverTest {
         assertThatThrownBy(() -> service.update(raceId, request))
             .isInstanceOf(ApiException.class)
             .hasMessageContaining("Waiver text is required");
+    }
+
+    @Test
+    void updateUsesRaceAccessGuardForLegacyUnownedRace() {
+        Race race = new Race();
+        race.setId(raceId);
+        when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+        doThrow(new AccessDeniedException("denied"))
+            .when(raceAccessGuard).assertCanManage(race);
+
+        RaceUpdateRequest request = new RaceUpdateRequest();
+        request.setName("Renamed Race");
+
+        assertThatThrownBy(() -> service.update(raceId, request))
+            .isInstanceOf(AccessDeniedException.class);
+
+        verify(raceAccessGuard).assertCanManage(race);
+        verify(raceRepository, never()).save(any(Race.class));
     }
 
     @Test

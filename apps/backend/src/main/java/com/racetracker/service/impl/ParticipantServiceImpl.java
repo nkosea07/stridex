@@ -231,8 +231,8 @@ public class ParticipantServiceImpl implements ParticipantService {
 
     @Override
     @Transactional(readOnly = true)
-    public ImportJobDto getImportJob(UUID jobId) {
-        ImportJob job = importJobRepository.findById(jobId)
+    public ImportJobDto getImportJob(UUID raceId, UUID jobId) {
+        ImportJob job = importJobRepository.findByRaceIdAndId(raceId, jobId)
             .orElseThrow(() -> new ResourceNotFoundException("Import job not found"));
         return importJobMapper.toDto(job);
     }

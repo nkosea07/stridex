@@ -194,6 +194,9 @@ public class RfidReaderServiceImpl implements RfidReaderService {
         }
         RfidReader reader = rfidReaderRepository.findByApiKeyHash(rfidApiKeyService.hashKey(apiKey.trim()))
             .orElseThrow(() -> new UnauthorizedException("Invalid RFID reader API key"));
+        if (reader.getStatus() != RfidReader.RfidReaderStatus.ACTIVE) {
+            throw new UnauthorizedException("RFID reader is not active");
+        }
 
         OffsetDateTime observedAt = request.getObservedAt() != null ? request.getObservedAt() : OffsetDateTime.now();
         reader.setLastSeenAt(observedAt);

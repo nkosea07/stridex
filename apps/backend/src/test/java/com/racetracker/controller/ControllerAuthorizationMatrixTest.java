@@ -101,7 +101,7 @@ class ControllerAuthorizationMatrixTest {
         assertGuard(TrackingController.class, "sendLocation", trackOpsGuard);
         assertGuard(TrackingController.class, "sendLocationsBatch", trackOpsGuard);
         assertGuard(TrackingController.class, "recordCheckpoint", trackOpsGuard);
-        String liveGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL', 'ATHLETE', 'SPECTATOR')";
+        String liveGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')";
         assertGuard(TrackingController.class, "getLiveData", liveGuard);
         assertGuard(TrackingController.class, "getParticipantTrack", liveGuard);
     }

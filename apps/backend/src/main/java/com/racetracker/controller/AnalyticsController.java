@@ -3,6 +3,7 @@ package com.racetracker.controller;
 import com.racetracker.dto.analytics.DemographicsDto;
 import com.racetracker.dto.analytics.RaceAnalyticsSummaryDto;
 import com.racetracker.dto.analytics.RegistrationPointDto;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.AnalyticsExportService;
 import com.racetracker.service.AnalyticsService;
 import com.racetracker.service.ExportedFile;
@@ -21,10 +22,13 @@ public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
     private final AnalyticsExportService analyticsExportService;
+    private final RaceAccessGuard raceAccessGuard;
 
-    public AnalyticsController(AnalyticsService analyticsService, AnalyticsExportService analyticsExportService) {
+    public AnalyticsController(AnalyticsService analyticsService, AnalyticsExportService analyticsExportService,
+                               RaceAccessGuard raceAccessGuard) {
         this.analyticsService = analyticsService;
         this.analyticsExportService = analyticsExportService;
+        this.raceAccessGuard = raceAccessGuard;
     }
 
     @GetMapping("/export")
@@ -33,6 +37,7 @@ public class AnalyticsController {
         @PathVariable UUID raceId,
         @RequestParam(defaultValue = "csv") String format
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         ExportedFile file = analyticsExportService.export(raceId, format);
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.filename() + "\"")
@@ -43,12 +48,14 @@ public class AnalyticsController {
     @GetMapping("/summary")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<RaceAnalyticsSummaryDto> summary(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(analyticsService.summary(raceId));
     }
 
     @GetMapping("/demographics")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<DemographicsDto> demographics(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(analyticsService.demographics(raceId));
     }
 
@@ -58,6 +65,7 @@ public class AnalyticsController {
         @PathVariable UUID raceId,
         @RequestParam(defaultValue = "30") int days
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(analyticsService.registrationSeries(raceId, days));
     }
 }

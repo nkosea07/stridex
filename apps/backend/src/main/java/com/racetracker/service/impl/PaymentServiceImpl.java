@@ -16,6 +16,7 @@ import com.racetracker.repository.UserRepository;
 import com.racetracker.service.PaymentProvider;
 import com.racetracker.service.PaymentService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,14 +67,20 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional
-    public PaymentDto startCheckout(UUID raceId, UUID participantId, String promoCode) {
+    public PaymentDto startCheckout(UUID raceId, UUID participantId, String promoCode,
+                                    String actorEmail, boolean athleteSelfService) {
+        Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
+            .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
+        if (athleteSelfService && (participant.getUser() == null
+            || participant.getUser().getEmail() == null
+            || actorEmail == null
+            || !participant.getUser().getEmail().equalsIgnoreCase(actorEmail))) {
+            throw new AccessDeniedException("You can only start checkout for your own participant record");
+        }
         RaceTrackerProperties.Payments payments = properties.getPayments();
         if (isBlank(payments.getResultUrl()) || isBlank(payments.getReturnUrl())) {
             throw new ApiException("Payment result/return URLs are not configured");
         }
-
-        Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
-            .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
         Race race = participant.getRace();
 
         BigDecimal baseAmount = participant.getCategory() != null && participant.getCategory().getRegistrationFee() != null

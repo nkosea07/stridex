@@ -2,6 +2,7 @@ package com.racetracker.controller;
 
 import com.racetracker.dto.participant.PromoCodeDto;
 import com.racetracker.dto.participant.PromoCodeRequest;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.PromoCodeService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -17,20 +18,24 @@ import java.util.UUID;
 public class PromoCodeController {
 
     private final PromoCodeService promoCodeService;
+    private final RaceAccessGuard raceAccessGuard;
 
-    public PromoCodeController(PromoCodeService promoCodeService) {
+    public PromoCodeController(PromoCodeService promoCodeService, RaceAccessGuard raceAccessGuard) {
         this.promoCodeService = promoCodeService;
+        this.raceAccessGuard = raceAccessGuard;
     }
 
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<PromoCodeDto>> list(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(promoCodeService.list(raceId));
     }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<PromoCodeDto> create(@PathVariable UUID raceId, @Valid @RequestBody PromoCodeRequest request) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(promoCodeService.create(raceId, request));
     }
 
@@ -38,13 +43,15 @@ public class PromoCodeController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<PromoCodeDto> setActive(@PathVariable UUID raceId, @PathVariable UUID promoId,
                                                   @RequestBody Map<String, Boolean> body) {
-        return ResponseEntity.ok(promoCodeService.setActive(promoId, Boolean.TRUE.equals(body.get("active"))));
+        raceAccessGuard.assertCanManage(raceId);
+        return ResponseEntity.ok(promoCodeService.setActive(raceId, promoId, Boolean.TRUE.equals(body.get("active"))));
     }
 
     @DeleteMapping("/{promoId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable UUID raceId, @PathVariable UUID promoId) {
-        promoCodeService.delete(promoId);
+        raceAccessGuard.assertCanManage(raceId);
+        promoCodeService.delete(raceId, promoId);
         return ResponseEntity.noContent().build();
     }
 }

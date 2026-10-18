@@ -2,6 +2,7 @@ package com.racetracker.controller;
 
 import com.racetracker.dto.tracking.LiveTrackingResponse;
 import com.racetracker.security.JwtAuthenticationFilter;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.TrackingService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,9 @@ class TrackingControllerWebMvcTest {
 
     @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @MockBean
+    private RaceAccessGuard raceAccessGuard;
 
     @Test
     void getLiveData_returnsCurrentPositions() throws Exception {

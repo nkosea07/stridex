@@ -1,6 +1,8 @@
 package com.racetracker.config;
 
 import com.racetracker.security.JwtService;
+import com.racetracker.security.RaceAccessGuard;
+import com.racetracker.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
@@ -14,13 +16,16 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Configuration
@@ -31,6 +36,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final WebSocketProperties webSocketProperties;
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
+    private final UserRepository userRepository;
+    private final RaceAccessGuard raceAccessGuard;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
@@ -50,51 +57,104 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(new ChannelInterceptor() {
+        registration.interceptors(webSocketSecurityInterceptor());
+    }
+
+    ChannelInterceptor webSocketSecurityInterceptor() {
+        return new ChannelInterceptor() {
             @Override
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
                 StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
                 if (accessor == null || accessor.getCommand() == null) {
                     return message;
                 }
-                StompCommand command = accessor.getCommand();
 
-                if (StompCommand.CONNECT.equals(command)) {
-                    List<String> authorization = accessor.getNativeHeader("Authorization");
-                    if (authorization != null && !authorization.isEmpty()) {
-                        String bearerToken = authorization.get(0);
-                        if (bearerToken.startsWith("Bearer ")) {
-                            String jwt = bearerToken.substring(7);
-                            try {
-                                String username = jwtService.extractUsername(jwt);
-                                if (username != null) {
-                                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                                    if (jwtService.isTokenValid(jwt, userDetails)) {
-                                        UsernamePasswordAuthenticationToken authentication =
-                                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                                        accessor.setUser(authentication);
-                                    }
-                                }
-                            } catch (Exception e) {
-                                log.debug("WebSocket JWT validation failed: {}", e.getMessage());
-                            }
-                        }
-                    }
-                    if (accessor.getUser() == null) {
-                        throw new AccessDeniedException("WebSocket connection requires authentication");
-                    }
-                } else if (StompCommand.SUBSCRIBE.equals(command)) {
-                    if (accessor.getUser() == null) {
-                        throw new AccessDeniedException("WebSocket subscription requires authentication");
-                    }
-                    String destination = accessor.getDestination();
-                    if (destination == null
-                        || !(destination.startsWith("/topic/") || destination.startsWith("/queue/"))) {
-                        throw new AccessDeniedException("Subscription to destination is not allowed");
-                    }
+                if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+                    authenticateConnect(accessor);
+                } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+                    authorizeSubscription(accessor);
                 }
                 return message;
             }
-        });
+        };
+    }
+
+    private void authenticateConnect(StompHeaderAccessor accessor) {
+        accessor.setUser(null);
+        List<String> authorization = accessor.getNativeHeader("Authorization");
+        if (authorization != null && !authorization.isEmpty()) {
+            String bearerToken = authorization.get(0);
+            if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+                String jwt = bearerToken.substring(7).trim();
+                if (StringUtils.hasText(jwt)) {
+                    try {
+                        if (!jwtService.hasTokenType(jwt, JwtService.TOKEN_TYPE_ACCESS)) {
+                            throw new AccessDeniedException("WebSocket connection requires an access token");
+                        }
+                        String username = jwtService.extractUsername(jwt);
+                        if (StringUtils.hasText(username)) {
+                            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                            if (jwtService.isTokenValid(jwt, userDetails)) {
+                                accessor.setUser(new UsernamePasswordAuthenticationToken(
+                                    userDetails, null, userDetails.getAuthorities()));
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.debug("WebSocket JWT validation failed");
+                    }
+                }
+            }
+        }
+        if (!(accessor.getUser() instanceof Authentication authentication) || !authentication.isAuthenticated()) {
+            throw new AccessDeniedException("WebSocket connection requires authentication");
+        }
+    }
+
+    private void authorizeSubscription(StompHeaderAccessor accessor) {
+        if (!(accessor.getUser() instanceof Authentication authentication) || !authentication.isAuthenticated()) {
+            throw new AccessDeniedException("WebSocket subscription requires authentication");
+        }
+
+        String destination = accessor.getDestination();
+        if (!StringUtils.hasText(destination)) {
+            throw new AccessDeniedException("Subscription to destination is not allowed");
+        }
+
+        if (destination.startsWith("/topic/user.")) {
+            authorizeUserSubscription(destination, authentication);
+            return;
+        }
+        if (destination.startsWith("/topic/race.")) {
+            authorizeRaceSubscription(destination, authentication);
+            return;
+        }
+        throw new AccessDeniedException("Subscription to destination is not allowed");
+    }
+
+    private void authorizeUserSubscription(String destination, Authentication authentication) {
+        UUID targetUserId = parseExactDestinationId(destination, "/topic/user.");
+        UUID authenticatedUserId = userRepository.findByEmailIgnoreCase(authentication.getName())
+            .map(user -> user.getId())
+            .orElseThrow(() -> new AccessDeniedException("Subscription to destination is not allowed"));
+        if (!targetUserId.equals(authenticatedUserId)) {
+            throw new AccessDeniedException("Subscription to destination is not allowed");
+        }
+    }
+
+    private void authorizeRaceSubscription(String destination, Authentication authentication) {
+        UUID raceId = parseExactDestinationId(destination, "/topic/race.");
+        raceAccessGuard.assertCanSubscribeToRace(raceId, authentication);
+    }
+
+    private UUID parseExactDestinationId(String destination, String prefix) {
+        if (!destination.startsWith(prefix) || destination.length() <= prefix.length()) {
+            throw new AccessDeniedException("Subscription to destination is not allowed");
+        }
+        String id = destination.substring(prefix.length());
+        try {
+            return UUID.fromString(id);
+        } catch (IllegalArgumentException ex) {
+            throw new AccessDeniedException("Subscription to destination is not allowed");
+        }
     }
 }

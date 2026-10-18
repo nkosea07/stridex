@@ -8,6 +8,7 @@ import com.racetracker.dto.result.PublicRaceResultPageDto;
 import com.racetracker.dto.result.RankingEntryDto;
 import com.racetracker.security.CertificateTokenService;
 import com.racetracker.service.CertificateService;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.RankingService;
 import com.racetracker.service.ExportedFile;
 import com.racetracker.service.ResultExportService;
@@ -37,6 +38,7 @@ public class ResultController {
     private final CertificateService certificateService;
     private final CertificateTokenService certificateTokenService;
     private final RankingService rankingService;
+    private final RaceAccessGuard raceAccessGuard;
 
     public ResultController(
         ResultService resultService,
@@ -46,7 +48,8 @@ public class ResultController {
         ResultExportService resultExportService,
         CertificateService certificateService,
         CertificateTokenService certificateTokenService,
-        RankingService rankingService
+        RankingService rankingService,
+        RaceAccessGuard raceAccessGuard
     ) {
         this.resultService = resultService;
         this.auditEventService = auditEventService;
@@ -56,11 +59,13 @@ public class ResultController {
         this.certificateService = certificateService;
         this.certificateTokenService = certificateTokenService;
         this.rankingService = rankingService;
+        this.raceAccessGuard = raceAccessGuard;
     }
 
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/results")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<RaceResultDto>> listByRace(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(resultService.listByRace(raceId));
     }
 
@@ -72,6 +77,7 @@ public class ResultController {
         @RequestParam(defaultValue = "50") int size,
         @RequestParam(required = false) Long revision
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(resultService.listByRacePage(raceId, page, size, revision));
     }
 
@@ -81,6 +87,7 @@ public class ResultController {
         @PathVariable UUID raceId,
         @RequestParam(defaultValue = "csv") String format
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         ExportedFile file = resultExportService.export(raceId, format);
         return fileResponse(file);    }
 
@@ -90,18 +97,21 @@ public class ResultController {
         @PathVariable UUID raceId,
         @PathVariable UUID participantId
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         return pdfResponse(certificateService.generate(raceId, participantId), "certificate.pdf");
     }
 
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/rankings/teams")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<RankingEntryDto>> teamRankings(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(rankingService.teamRankings(raceId));
     }
 
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/rankings/countries")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<RankingEntryDto>> countryRankings(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(rankingService.countryRankings(raceId));
     }
 
@@ -143,6 +153,7 @@ public class ResultController {
         @PathVariable UUID raceId,
         @PathVariable UUID participantId
     ) {
+        raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(resultService.getByRaceAndParticipant(raceId, participantId));
     }
 
@@ -164,6 +175,7 @@ public class ResultController {
     @PostMapping("/v${racetracker.api.version}/races/{raceId}/results/publish")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<ApiMessageResponse> publish(@PathVariable UUID raceId, Authentication authentication) {
+        raceAccessGuard.assertCanManage(raceId);
         resultService.publish(raceId);
         auditEventService.recordForActor("RESULTS_PUBLISHED", authentication.getName(), "RACE", raceId.toString(),
             "SUCCESS", java.util.Map.of());

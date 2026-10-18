@@ -60,8 +60,8 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
             throw new UnauthorizedException("Account is disabled");
         }
         if (isPrivileged(user.getRole())) {
-            // Privileged accounts must complete MFA; OAuth cannot satisfy that challenge.
-            throw new UnauthorizedException("Privileged accounts must sign in with password and MFA");
+            // Production keeps OAuth disabled; privileged accounts use password authentication.
+            throw new UnauthorizedException("Privileged accounts must sign in with password");
         }
         if (!Boolean.TRUE.equals(user.getEmailVerified())) {
             user.setEmailVerified(true);

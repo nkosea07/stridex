@@ -19,6 +19,8 @@ public class ErrorResponse {
     private int statusCode;
     private String error;
     private String message;
+    private String code;
+    private String requestId;
     private String path;
     private List<String> details; // For validation errors, etc.
 }

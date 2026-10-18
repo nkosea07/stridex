@@ -29,6 +29,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class RfidReaderServiceTest {
@@ -148,6 +150,19 @@ class RfidReaderServiceTest {
         when(rfidReaderRepository.findByApiKeyHash("hashed")).thenReturn(Optional.empty());
 
         assertThrows(UnauthorizedException.class, () -> service.heartbeat("api-key", new RfidReaderHeartbeatRequest(), "127.0.0.1"));
+    }
+
+    @Test
+    void heartbeatRejectsRevokedReaderBeforeUpdatingIt() {
+        RfidReader reader = new RfidReader();
+        reader.setStatus(RfidReader.RfidReaderStatus.REVOKED);
+        when(rfidApiKeyService.hashKey("api-key")).thenReturn("hashed");
+        when(rfidReaderRepository.findByApiKeyHash("hashed")).thenReturn(Optional.of(reader));
+
+        assertThrows(UnauthorizedException.class,
+            () -> service.heartbeat("api-key", new RfidReaderHeartbeatRequest(), "127.0.0.1"));
+
+        verify(rfidReaderRepository, never()).save(any(RfidReader.class));
     }
 
     @Test

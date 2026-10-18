@@ -13,9 +13,9 @@ public interface PromoCodeService {
 
     PromoCodeDto create(UUID raceId, PromoCodeRequest request);
 
-    PromoCodeDto setActive(UUID id, boolean active);
+    PromoCodeDto setActive(UUID raceId, UUID id, boolean active);
 
-    void delete(UUID id);
+    void delete(UUID raceId, UUID id);
 
     /**
      * Validates a promo code for a race amount and returns the discount to apply.

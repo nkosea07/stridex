@@ -57,6 +57,53 @@ class RequestRateLimiterTest {
     }
 
     @Test
+    void oauthUsesOneHashedIpBucket() {
+        doReturn(0L).when(redisTemplate).execute(any(RedisScript.class), anyList(), any(Object[].class));
+
+        limiter.checkOAuth("203.0.113.20");
+
+        org.mockito.ArgumentCaptor<List<String>> keys = org.mockito.ArgumentCaptor.forClass(List.class);
+        org.mockito.ArgumentCaptor<Object[]> arguments = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        org.mockito.Mockito.verify(redisTemplate).execute(any(RedisScript.class), keys.capture(), arguments.capture());
+        assertEquals(1, keys.getValue().size());
+        assertTrue(keys.getValue().get(0).startsWith("rt:limit:oauth:ip:"));
+        assertTrue(keys.getValue().stream().noneMatch(key -> key.contains("203.0.113.20")));
+        List<String> values = List.of(arguments.getValue()).stream().map(String::valueOf).toList();
+        assertEquals("10", values.get(0));
+        assertTrue(Integer.parseInt(values.get(1)) > 0 && Integer.parseInt(values.get(1)) <= 900);
+    }
+
+    @Test
+    void rfidUsesIpAndHashedReaderBuckets() {
+        doReturn(0L).when(redisTemplate).execute(any(RedisScript.class), anyList(), any(Object[].class));
+
+        limiter.checkRfid("reader-secret", "203.0.113.20");
+
+        org.mockito.ArgumentCaptor<List<String>> keys = org.mockito.ArgumentCaptor.forClass(List.class);
+        org.mockito.ArgumentCaptor<Object[]> arguments = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        org.mockito.Mockito.verify(redisTemplate).execute(any(RedisScript.class), keys.capture(), arguments.capture());
+        assertEquals(2, keys.getValue().size());
+        assertTrue(keys.getValue().get(0).startsWith("rt:limit:rfid:ip:"));
+        assertTrue(keys.getValue().get(1).startsWith("rt:limit:rfid:reader:"));
+        assertTrue(keys.getValue().stream().noneMatch(key -> key.contains("reader-secret") || key.contains("203.0.113.20")));
+        List<String> values = List.of(arguments.getValue()).stream().map(String::valueOf).toList();
+        assertEquals("120", values.get(0));
+        assertEquals("600", values.get(2));
+    }
+
+    @Test
+    void rfidWithoutReaderKeyUsesOnlyIpBucket() {
+        doReturn(0L).when(redisTemplate).execute(any(RedisScript.class), anyList(), any(Object[].class));
+
+        limiter.checkRfid(null, "203.0.113.20");
+
+        org.mockito.ArgumentCaptor<List<String>> keys = org.mockito.ArgumentCaptor.forClass(List.class);
+        org.mockito.Mockito.verify(redisTemplate).execute(any(RedisScript.class), keys.capture(), any(Object[].class));
+        assertEquals(1, keys.getValue().size());
+        assertTrue(keys.getValue().get(0).startsWith("rt:limit:rfid:ip:"));
+    }
+
+    @Test
     void rejectedRequestIncludesRetryWindowAndIncrementsMetric() {
         doReturn(37L).when(redisTemplate).execute(any(RedisScript.class), anyList(), any(Object[].class));
 

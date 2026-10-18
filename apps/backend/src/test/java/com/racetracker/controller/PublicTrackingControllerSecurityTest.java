@@ -7,6 +7,7 @@ import com.racetracker.dto.publictracking.PublicRaceHubResponse;
 import com.racetracker.security.CustomUserDetailsService;
 import com.racetracker.security.JwtService;
 import com.racetracker.security.ClientAddressResolver;
+import com.racetracker.security.ApiSecurityExceptionHandler;
 import com.racetracker.security.RequestRateLimiter;
 import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import com.racetracker.service.ParticipantService;
@@ -27,7 +28,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = PublicTrackingController.class)
-@Import(SecurityConfig.class)
+@Import({SecurityConfig.class, ApiSecurityExceptionHandler.class})
 @EnableConfigurationProperties({RaceTrackerProperties.class, CorsProperties.class})
 @TestPropertySource(properties = {
     "server.servlet.context-path=",
@@ -78,6 +79,6 @@ class PublicTrackingControllerSecurityTest {
     @Test
     void liveTrackingRoute_stillRejectsAnonymousAccessWhenFiltersAreEnabled() throws Exception {
         mockMvc.perform(get("/v1/races/{raceId}/tracking/live", UUID.randomUUID()))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isUnauthorized());
     }
 }
