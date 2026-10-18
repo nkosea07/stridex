@@ -24,6 +24,36 @@ type PageResponse<T> = {
   content: T[];
 };
 
+function buildContractPath(
+  template: string,
+  params: Record<string, string | number>,
+  query?: Record<string, string | number | null | undefined>,
+) {
+  const placeholders = [...template.matchAll(/:([A-Za-z][A-Za-z0-9_]*)/g)].map(([, key]) => key);
+  const providedKeys = Object.keys(params);
+  if (placeholders.length !== providedKeys.length || placeholders.some((key) => !providedKeys.includes(key))) {
+    throw new Error(`Contract path parameters do not match template: ${template}`);
+  }
+
+  const path = placeholders.reduce(
+    (value, key) => value.replace(`:${key}`, encodeURIComponent(String(params[key]))),
+    template,
+  );
+  if (/:[A-Za-z][A-Za-z0-9_]*/.test(path)) {
+    throw new Error(`Contract path contains an unresolved parameter: ${template}`);
+  }
+
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(query ?? {})) {
+    if (value !== null && value !== undefined) {
+      searchParams.set(key, String(value));
+    }
+  }
+
+  const search = searchParams.toString();
+  return search ? `${path}?${search}` : path;
+}
+
 class ApiClient {
   private refreshPromise: Promise<boolean> | null = null;
 
@@ -92,7 +122,7 @@ class ApiClient {
       }
       if (!refreshToken) return false;
 
-      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      const response = await fetch(`${API_BASE_URL}${API_CONTRACT.endpoints.authRefresh}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
@@ -122,7 +152,7 @@ class ApiClient {
 
   // Auth endpoints
   async login(email: string, password: string): Promise<AuthResponse> {
-    const response = await this.request<AuthResponse>('/auth/login', {
+    const response = await this.request<AuthResponse>(API_CONTRACT.endpoints.authLogin, {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
@@ -149,7 +179,7 @@ class ApiClient {
       phone: userData.phone?.trim() || undefined,
     };
 
-    const response = await this.request<AuthResponse>('/auth/register', {
+    const response = await this.request<AuthResponse>(API_CONTRACT.endpoints.authRegister, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -169,11 +199,11 @@ class ApiClient {
   }
 
   async getCurrentUser(): Promise<User> {
-    return this.request<User>('/auth/me');
+    return this.request<User>(API_CONTRACT.endpoints.authMe);
   }
 
   async updateProfile(data: Partial<User>): Promise<User> {
-    return this.request<User>('/auth/profile', {
+    return this.request<User>(API_CONTRACT.endpoints.authProfile, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
@@ -185,60 +215,64 @@ class ApiClient {
     if (params?.status) searchParams.append('status', params.status);
     if (params?.upcoming) searchParams.append('upcoming', 'true');
     const query = searchParams.toString();
-    const page = await this.request<PageResponse<Race>>(`/races${query ? `?${query}` : ''}`);
+    const page = await this.request<PageResponse<Race>>(buildContractPath(
+      API_CONTRACT.endpoints.racesList,
+      {},
+      query ? Object.fromEntries(new URLSearchParams(query).entries()) : undefined,
+    ));
     return page.content ?? [];
   }
 
   async getRace(id: string): Promise<Race> {
-    return this.request<Race>(`/races/${id}`);
+    return this.request<Race>(buildContractPath(API_CONTRACT.endpoints.raceById, { id }));
   }
 
   async getRaceCheckpoints(raceId: string): Promise<BackendCheckpointDto[]> {
-    return this.request<BackendCheckpointDto[]>(`/races/${raceId}/checkpoints`);
+    return this.request<BackendCheckpointDto[]>(buildContractPath(API_CONTRACT.endpoints.raceCheckpoints, { raceId }));
   }
 
   async getMyRaces(): Promise<Registration[]> {
-    return this.request<Registration[]>('/participants/my-registrations');
+    return this.request<Registration[]>(API_CONTRACT.endpoints.myRegistrations);
   }
 
   // Registration endpoints
   async getRegistrationFields(raceId: string): Promise<RegistrationField[]> {
-    return this.request<RegistrationField[]>(`/public/races/${raceId}/registration-fields`);
+    return this.request<RegistrationField[]>(buildContractPath(API_CONTRACT.endpoints.publicRaceRegistrationFields, { raceId }));
   }
 
   async registerForRace(
     raceId: string,
     data: RaceRegistrationRequest,
   ): Promise<Registration> {
-    return this.request<Registration>(`/races/${raceId}/participants/register`, {
+    return this.request<Registration>(buildContractPath(API_CONTRACT.endpoints.raceRegister, { id: raceId }), {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async cancelRegistration(registrationId: string): Promise<void> {
-    return this.request<void>(`/registrations/${registrationId}`, {
+    return this.request<void>(buildContractPath(API_CONTRACT.endpoints.registrationDelete, { registrationId }), {
       method: 'DELETE',
     });
   }
 
   // Tracking endpoints
   async sendLocation(raceId: string, location: GpsLocation): Promise<void> {
-    return this.request<void>(`/tracking/${raceId}/location`, {
+    return this.request<void>(buildContractPath(API_CONTRACT.endpoints.trackingLocation, { raceId }), {
       method: 'POST',
       body: JSON.stringify(location),
     });
   }
 
   async sendLocationsBatch(raceId: string, locations: GpsLocation[]): Promise<void> {
-    return this.request<void>(`/tracking/${raceId}/locations`, {
+    return this.request<void>(buildContractPath(API_CONTRACT.endpoints.trackingLocations, { raceId }), {
       method: 'POST',
       body: JSON.stringify({ locations }),
     });
   }
 
   async recordCheckpoint(raceId: string, checkpointId: string, method: 'qr_code' | 'gps'): Promise<void> {
-    return this.request<void>(`/tracking/${raceId}/checkpoint`, {
+    return this.request<void>(buildContractPath(API_CONTRACT.endpoints.trackingCheckpoint, { raceId }), {
       method: 'POST',
       body: JSON.stringify({ checkpointId, method, timestamp: new Date().toISOString() }),
     });
@@ -246,7 +280,7 @@ class ApiClient {
 
   // Results endpoints
   async getRaceResults(raceId: string): Promise<RaceResult[]> {
-    return this.request<RaceResult[]>(`/races/${raceId}/results`);
+    return this.request<RaceResult[]>(buildContractPath(API_CONTRACT.endpoints.raceResults, { raceId }));
   }
 
   async getMyResults(): Promise<RaceResult[]> {
@@ -255,33 +289,33 @@ class ApiClient {
   }
 
   async getMyResultsPage(page = 0, size = 50): Promise<RaceResultPage> {
-    return this.request<RaceResultPage>(`${API_CONTRACT.endpoints.myResultsPage}?page=${page}&size=${size}`);
+    return this.request<RaceResultPage>(buildContractPath(API_CONTRACT.endpoints.myResultsPage, {}, { page, size }));
   }
 
   async getResult(raceId: string, participantId: string): Promise<RaceResult> {
-    return this.request<RaceResult>(`/races/${raceId}/results/${participantId}`);
+    return this.request<RaceResult>(buildContractPath(API_CONTRACT.endpoints.raceResultByParticipant, { raceId, participantId }));
   }
 
   // Notifications
   async getNotifications(): Promise<Notification[]> {
-    return this.request<Notification[]>('/notifications');
+    return this.request<Notification[]>(API_CONTRACT.endpoints.notifications);
   }
 
   async markNotificationRead(id: string): Promise<void> {
-    return this.request<void>(`/notifications/${id}/read`, {
+    return this.request<void>(buildContractPath(API_CONTRACT.endpoints.notificationRead, { id }), {
       method: 'PUT',
     });
   }
 
   async registerDevice(token: string, platform?: string): Promise<void> {
-    return this.request<void>('/notifications/devices', {
+    return this.request<void>(API_CONTRACT.endpoints.notificationDevices, {
       method: 'POST',
       body: JSON.stringify({ token, platform }),
     });
   }
 
   async unregisterDevice(token: string): Promise<void> {
-    return this.request<void>(`/notifications/devices?token=${encodeURIComponent(token)}`, {
+    return this.request<void>(buildContractPath(API_CONTRACT.endpoints.notificationDevices, {}, { token }), {
       method: 'DELETE',
     });
   }
@@ -290,22 +324,22 @@ class ApiClient {
     raceId: string,
     payload: { latitude: number; longitude: number; message?: string },
   ): Promise<void> {
-    return this.request<void>(`/races/${raceId}/emergency`, {
+    return this.request<void>(buildContractPath(API_CONTRACT.endpoints.raceEmergency, { raceId }), {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   }
 
   async deletionStatus(): Promise<DeletionStatus> {
-    return this.request<DeletionStatus>('/me/deletion');
+    return this.request<DeletionStatus>(API_CONTRACT.endpoints.myDeletionStatus);
   }
 
   async cancelDeletion(): Promise<DeletionStatus> {
-    return this.request<DeletionStatus>('/me/deletion/cancel', { method: 'POST' });
+    return this.request<DeletionStatus>(API_CONTRACT.endpoints.myDeletionCancel, { method: 'POST' });
   }
 
   async deleteAccount(password: string, confirmation: string): Promise<DeletionStatus> {
-    return this.request<DeletionStatus>('/me', {
+    return this.request<DeletionStatus>(API_CONTRACT.endpoints.myAccount, {
       method: 'DELETE',
       body: JSON.stringify({ password, confirmation }),
     });

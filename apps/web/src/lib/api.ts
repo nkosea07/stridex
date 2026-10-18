@@ -89,7 +89,7 @@ async function refreshBrowserSession() {
   browserRefreshPromise = (async () => {
     const csrfToken = getCookie('rt_browser_csrf')
     if (!csrfToken) return false
-    const response = await fetch(`${API_BASE}/auth/browser/refresh`, {
+    const response = await fetch(`${API_BASE}${API_CONTRACT.endpoints.authBrowserRefresh}`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'X-CSRF-Token': decodeURIComponent(csrfToken) },
@@ -140,14 +140,23 @@ function buildContractPath(
   params: Record<string, string | number>,
   query?: Record<string, string | number | null | undefined>,
 ) {
-  const path = Object.entries(params).reduce(
-    (value, [key, replacement]) => value.replace(`:${key}`, encodeURIComponent(String(replacement))),
+  const placeholders = [...template.matchAll(/:([A-Za-z][A-Za-z0-9_]*)/g)].map(([, key]) => key)
+  const providedKeys = Object.keys(params)
+  if (placeholders.length !== providedKeys.length || placeholders.some((key) => !providedKeys.includes(key))) {
+    throw new Error(`Contract path parameters do not match template: ${template}`)
+  }
+
+  const path = placeholders.reduce(
+    (value, key) => value.replace(`:${key}`, encodeURIComponent(String(params[key]))),
     template,
   )
+  if (/:[A-Za-z][A-Za-z0-9_]*/.test(path)) {
+    throw new Error(`Contract path contains an unresolved parameter: ${template}`)
+  }
 
   const searchParams = new URLSearchParams()
   for (const [key, value] of Object.entries(query ?? {})) {
-    if (value !== null && value !== undefined && String(value).length > 0) {
+    if (value !== null && value !== undefined) {
       searchParams.set(key, String(value))
     }
   }
@@ -192,7 +201,7 @@ async function downloadExport(path: string): Promise<Blob> {
 // Auth API
 export const authApi = {
   login: (email: string, password: string) =>
-    fetchApi<BrowserAuthResponse>('/auth/browser/login', {
+    fetchApi<BrowserAuthResponse>(API_CONTRACT.endpoints.authBrowserLogin, {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
@@ -215,7 +224,7 @@ export const authApi = {
     privacyPolicyAccepted?: boolean
     privacyPolicyVersion?: string
   }) =>
-    fetchApi<BrowserAuthResponse>('/auth/register', {
+    fetchApi<BrowserAuthResponse>(API_CONTRACT.endpoints.authRegister, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -226,10 +235,10 @@ export const authApi = {
       body: JSON.stringify(data),
     }),
   
-  me: () => fetchApi<User>('/auth/me'),
+  me: () => fetchApi<User>(API_CONTRACT.endpoints.authMe),
 
   updateProfile: (data: { firstName: string; lastName: string; phone?: string }) =>
-    fetchApi<User>('/auth/profile', {
+    fetchApi<User>(API_CONTRACT.endpoints.authProfile, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
@@ -261,7 +270,7 @@ export const authApi = {
     }),
 
   forgotPassword: (email: string) =>
-    fetchApi<{ message: string }>('/auth/forgot-password', {
+    fetchApi<{ message: string }>(API_CONTRACT.endpoints.authForgotPassword, {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),
@@ -269,7 +278,7 @@ export const authApi = {
   logout: async () => {
     const csrfToken = getCookie('rt_browser_csrf')
     try {
-      await fetch(`${API_BASE}/auth/browser/logout`, {
+      await fetch(`${API_BASE}${API_CONTRACT.endpoints.authBrowserLogout}`, {
         method: 'POST',
         credentials: 'include',
         headers: csrfToken ? { 'X-CSRF-Token': decodeURIComponent(csrfToken) } : {},
@@ -284,10 +293,13 @@ export const organizerApplicationsApi = {
   list: (status?: string, page = 0, size = 20) => {
     const query = new URLSearchParams({ page: String(page), size: String(size) })
     if (status) query.set('status', status)
-    return fetchApi<OrganizerApplicationPage>(`/admin/organizer-applications?${query.toString()}`)
+    return fetchApi<OrganizerApplicationPage>(`${API_CONTRACT.endpoints.organizerApplications}?${query.toString()}`)
   },
   decide: (applicationId: string, decision: 'APPROVE' | 'REJECT', reviewNotes?: string) =>
-    fetchApi<OrganizerApplicationReview>(`/admin/organizer-applications/${applicationId}/decision`, {
+    fetchApi<OrganizerApplicationReview>(buildContractPath(
+      API_CONTRACT.endpoints.organizerApplicationDecision,
+      { applicationId },
+    ), {
       method: 'POST',
       body: JSON.stringify({ decision, reviewNotes }),
     }),
@@ -296,41 +308,45 @@ export const organizerApplicationsApi = {
 // Races API
 export const racesApi = {
   list: async (includeArchived = false) => {
-    const data = await fetchApi<PageResponse<Race>>(`/races${includeArchived ? '?includeArchived=true' : ''}`)
+    const data = await fetchApi<PageResponse<Race>>(buildContractPath(
+      API_CONTRACT.endpoints.racesList,
+      {},
+      { includeArchived: includeArchived ? 'true' : undefined },
+    ))
     return data.content ?? []
   },
   
-  get: (id: string) => fetchApi<Race>(`/races/${id}`),
+  get: (id: string) => fetchApi<Race>(buildContractPath(API_CONTRACT.endpoints.raceById, { id })),
   
   create: (data: Partial<Race>) =>
-    fetchApi<Race>('/races', {
+    fetchApi<Race>(API_CONTRACT.endpoints.racesList, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   
   update: (id: string, data: Partial<Race>) =>
-    fetchApi<Race>(`/races/${id}`, {
+    fetchApi<Race>(buildContractPath(API_CONTRACT.endpoints.raceById, { id }), {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
   
   delete: (id: string) =>
-    fetchApi<void>(`/races/${id}`, { method: 'DELETE' }),
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceById, { id }), { method: 'DELETE' }),
   
   clone: (id: string, data: { name: string; raceDate?: string; startTime?: string; copyCategories?: boolean; copyCheckpoints?: boolean; copyRegistrationFields?: boolean }) =>
-    fetchApi<Race>(`/races/${id}/clone`, {
+    fetchApi<Race>(buildContractPath(API_CONTRACT.endpoints.raceClone, { id }), {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   
   archive: (id: string) =>
-    fetchApi<Race>(`/races/${id}/archive`, { method: 'POST' }),
+    fetchApi<Race>(buildContractPath(API_CONTRACT.endpoints.raceArchive, { id }), { method: 'POST' }),
   
   restore: (id: string) =>
-    fetchApi<Race>(`/races/${id}/restore`, { method: 'POST' }),
+    fetchApi<Race>(buildContractPath(API_CONTRACT.endpoints.raceRestore, { id }), { method: 'POST' }),
   
   updateStatus: (id: string, status: Race['status']) =>
-    fetchApi<Race>(`/races/${id}/status`, {
+    fetchApi<Race>(buildContractPath(API_CONTRACT.endpoints.raceStatus, { id }), {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
@@ -339,50 +355,61 @@ export const racesApi = {
 // Participants API
 export const participantsApi = {
   list: (raceId: string, status?: string) =>
-    fetchApi<Participant[]>(`/races/${raceId}/participants${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+    fetchApi<Participant[]>(buildContractPath(
+      API_CONTRACT.endpoints.raceParticipants,
+      { raceId },
+      { status },
+    )),
   
-  get: (raceId: string, id: string) => fetchApi<Participant>(`/races/${raceId}/participants/${id}`),
+  get: (raceId: string, id: string) => fetchApi<Participant>(buildContractPath(
+    API_CONTRACT.endpoints.raceParticipantById,
+    { raceId, id },
+  )),
   
   create: (raceId: string, data: Partial<Participant>) =>
-    fetchApi<Participant>(`/races/${raceId}/participants`, {
+    fetchApi<Participant>(buildContractPath(API_CONTRACT.endpoints.raceParticipants, { raceId }), {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   
   update: (raceId: string, id: string, data: Partial<Participant>) =>
-    fetchApi<Participant>(`/races/${raceId}/participants/${id}`, {
+    fetchApi<Participant>(buildContractPath(API_CONTRACT.endpoints.raceParticipantById, { raceId, id }), {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
   
   delete: (raceId: string, id: string) =>
-    fetchApi<void>(`/races/${raceId}/participants/${id}`, { method: 'DELETE' }),
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceParticipantById, { raceId, id }), { method: 'DELETE' }),
   
   checkIn: (raceId: string, id: string) =>
-    fetchApi<Participant>(`/races/${raceId}/participants/${id}/check-in`, { method: 'POST' }),
+    fetchApi<Participant>(buildContractPath(API_CONTRACT.endpoints.raceParticipantCheckIn, { raceId, id }), { method: 'POST' }),
   
   listPenalties: (raceId: string, id: string) =>
-    fetchApi<Penalty[]>(`/races/${raceId}/participants/${id}/penalties`),
+    fetchApi<Penalty[]>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPenalties, { raceId, id })),
   
   addPenalty: (raceId: string, id: string, data: { seconds: number; reason?: string }) =>
-    fetchApi<Penalty>(`/races/${raceId}/participants/${id}/penalties`, {
+    fetchApi<Penalty>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPenalties, { raceId, id }), {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   
   removePenalty: (raceId: string, id: string, penaltyId: string) =>
-    fetchApi<void>(`/races/${raceId}/participants/${id}/penalties/${penaltyId}`, { method: 'DELETE' }),
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPenaltyDelete, { raceId, id, penaltyId }), { method: 'DELETE' }),
   
   startCheckout: (raceId: string, id: string, promoCode?: string) =>
-    fetchApi<Payment>(`/races/${raceId}/participants/${id}/payment/checkout${promoCode ? `?promoCode=${encodeURIComponent(promoCode)}` : ''}`, { method: 'POST' }),
+    fetchApi<Payment>(buildContractPath(
+      API_CONTRACT.endpoints.raceParticipantPaymentCheckout,
+      { raceId, id },
+      { promoCode },
+    ), { method: 'POST' }),
   
   refundPayment: (raceId: string, id: string) =>
-    fetchApi<Payment>(`/races/${raceId}/participants/${id}/payment/refund`, { method: 'POST' }),
+    fetchApi<Payment>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPaymentRefund, { raceId, id }), { method: 'POST' }),
   
   importCsv: (raceId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    return fetch(`${API_BASE}/races/${raceId}/participants/import`, {
+    return fetch(`${API_BASE}${buildContractPath(API_CONTRACT.endpoints.raceParticipantImport, { raceId })}`, {
       method: 'POST',
       headers: {
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
@@ -393,19 +420,22 @@ export const participantsApi = {
   },
   
   exportCsv: (raceId: string) =>
-    fetch(`${API_BASE}/races/${raceId}/participants/export`, {
+    fetch(`${API_BASE}${buildContractPath(API_CONTRACT.endpoints.raceParticipantExport, { raceId })}`, {
       credentials: 'include',
       headers: {
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
     }).then(res => res.blob()),
 
-  listImportJobs: (raceId: string) => fetchApi<ImportJob[]>(`/races/${raceId}/participants/import-jobs`),
+  listImportJobs: (raceId: string) => fetchApi<ImportJob[]>(buildContractPath(API_CONTRACT.endpoints.raceParticipantImportJobs, { raceId })),
   
-  getImportJob: (raceId: string, jobId: string) => fetchApi<ImportJob>(`/races/${raceId}/participants/import-jobs/${jobId}`),
+  getImportJob: (raceId: string, jobId: string) => fetchApi<ImportJob>(buildContractPath(
+    API_CONTRACT.endpoints.raceParticipantImportJobById,
+    { raceId, jobId },
+  )),
 
   downloadBib: (raceId: string, participantId: string) =>
-    fetch(`${API_BASE}/races/${raceId}/bibs/${participantId}`, {
+    fetch(`${API_BASE}${buildContractPath(API_CONTRACT.endpoints.raceBib, { raceId, participantId })}`, {
       credentials: 'include',
       headers: {
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
@@ -413,7 +443,7 @@ export const participantsApi = {
     }).then(res => res.blob()),
 
   downloadBatchBibs: (raceId: string, participantIds: string[]) =>
-    fetch(`${API_BASE}/races/${raceId}/bibs/batch`, {
+    fetch(`${API_BASE}${buildContractPath(API_CONTRACT.endpoints.raceBibBatch, { raceId })}`, {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -424,43 +454,43 @@ export const participantsApi = {
     }).then(res => res.blob()),
 
   review: (raceId: string, id: string, decision: RegistrationDecision, reason?: string) =>
-    fetchApi<Participant>(`/races/${raceId}/participants/${id}/review`, {
+    fetchApi<Participant>(buildContractPath(API_CONTRACT.endpoints.raceParticipantReview, { raceId, id }), {
       method: 'POST',
       body: JSON.stringify({ decision, reason }),
     }),
 
   verifyPayment: (raceId: string, id: string, data: { status: PaymentStatus; reference?: string; amount?: number }) =>
-    fetchApi<Participant>(`/races/${raceId}/participants/${id}/payment`, {
+    fetchApi<Participant>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPayment, { raceId, id }), {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  myRegistrations: () => fetchApi<Registration[]>('/participants/my-registrations'),
+  myRegistrations: () => fetchApi<Registration[]>(API_CONTRACT.endpoints.myRegistrations),
 }
 
 // Registration fields / teams API
 export const registrationApi = {
-  listFields: (raceId: string) => fetchApi<RegistrationField[]>(`/races/${raceId}/registration-fields`),
+  listFields: (raceId: string) => fetchApi<RegistrationField[]>(buildContractPath(API_CONTRACT.endpoints.raceRegistrationFields, { id: raceId })),
 
   createField: (raceId: string, data: Partial<RegistrationField>) =>
-    fetchApi<RegistrationField>(`/races/${raceId}/registration-fields`, {
+    fetchApi<RegistrationField>(buildContractPath(API_CONTRACT.endpoints.raceRegistrationFields, { id: raceId }), {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   updateField: (raceId: string, id: string, data: Partial<RegistrationField>) =>
-    fetchApi<RegistrationField>(`/races/${raceId}/registration-fields/${id}`, {
+    fetchApi<RegistrationField>(buildContractPath(API_CONTRACT.endpoints.raceRegistrationFieldById, { raceId, fieldId: id }), {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
 
   deleteField: (raceId: string, id: string) =>
-    fetchApi<void>(`/races/${raceId}/registration-fields/${id}`, { method: 'DELETE' }),
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceRegistrationFieldById, { raceId, fieldId: id }), { method: 'DELETE' }),
 
-  listTeams: (raceId: string) => fetchApi<Team[]>(`/races/${raceId}/teams`),
+  listTeams: (raceId: string) => fetchApi<Team[]>(buildContractPath(API_CONTRACT.endpoints.raceTeams, { id: raceId })),
 
   createTeam: (raceId: string, data: { name: string; clubName?: string }) =>
-    fetchApi<Team>(`/races/${raceId}/teams`, {
+    fetchApi<Team>(buildContractPath(API_CONTRACT.endpoints.raceTeams, { id: raceId }), {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -478,10 +508,10 @@ export interface PublicRegistrationPayload {
 }
 
 export const publicRegistrationApi = {
-  listFields: (raceId: string) => fetchApi<RegistrationField[]>(`/public/races/${raceId}/registration-fields`),
+  listFields: (raceId: string) => fetchApi<RegistrationField[]>(buildContractPath(API_CONTRACT.endpoints.publicRaceRegistrationFields, { raceId })),
 
   register: (raceId: string, payload: PublicRegistrationPayload) =>
-    fetchApi<Registration>(`/races/${raceId}/participants/register`, {
+    fetchApi<Registration>(buildContractPath(API_CONTRACT.endpoints.raceRegister, { id: raceId }), {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
@@ -489,31 +519,31 @@ export const publicRegistrationApi = {
 
 // Checkpoints API
 export const checkpointsApi = {
-  list: (raceId: string) => fetchApi<Checkpoint[]>(`/races/${raceId}/checkpoints`),
+  list: (raceId: string) => fetchApi<Checkpoint[]>(buildContractPath(API_CONTRACT.endpoints.raceCheckpoints, { raceId })),
   
   create: (raceId: string, data: Partial<Checkpoint>) =>
-    fetchApi<Checkpoint>(`/races/${raceId}/checkpoints`, {
+    fetchApi<Checkpoint>(buildContractPath(API_CONTRACT.endpoints.raceCheckpoints, { raceId }), {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   
   update: (raceId: string, id: string, data: Partial<Checkpoint>) =>
-    fetchApi<Checkpoint>(`/races/${raceId}/checkpoints/${id}`, {
+    fetchApi<Checkpoint>(buildContractPath(API_CONTRACT.endpoints.raceCheckpointById, { raceId, checkpointId: id }), {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
   
   delete: (raceId: string, id: string) =>
-    fetchApi<void>(`/races/${raceId}/checkpoints/${id}`, { method: 'DELETE' }),
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceCheckpointById, { raceId, checkpointId: id }), { method: 'DELETE' }),
   
   recordTime: (raceId: string, checkpointId: string, data: { participantId: string; method: string }) =>
-    fetchApi<CheckpointRecord>(`/races/${raceId}/checkpoints/${checkpointId}/record`, {
+    fetchApi<CheckpointRecord>(buildContractPath(API_CONTRACT.endpoints.checkpointRecord, { raceId, checkpointId }), {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   correctRecord: (raceId: string, checkpointId: string, recordId: string, data: { adjustedRecordedAt?: string; reason?: string; verified?: boolean }) =>
-    fetchApi<CheckpointRecord>(`/races/${raceId}/checkpoints/${checkpointId}/records/${recordId}`, {
+    fetchApi<CheckpointRecord>(buildContractPath(API_CONTRACT.endpoints.checkpointRecordCorrect, { raceId, checkpointId, recordId }), {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
@@ -526,42 +556,42 @@ export const checkpointsApi = {
 }
 
 export const rfidApi = {
-  listReaders: (raceId: string) => fetchApi<RfidReader[]>(`/races/${raceId}/rfid/readers`),
-  getOverview: (raceId: string) => fetchApi<RfidRaceOverview>(`/races/${raceId}/rfid/overview`),
+  listReaders: (raceId: string) => fetchApi<RfidReader[]>(buildContractPath(API_CONTRACT.endpoints.raceRfidReaders, { raceId })),
+  getOverview: (raceId: string) => fetchApi<RfidRaceOverview>(buildContractPath(API_CONTRACT.endpoints.raceRfidOverview, { raceId })),
   createReader: (raceId: string, data: { checkpointId: string; name: string; externalId: string }) =>
-    fetchApi<RfidReaderCreateResponse>(`/races/${raceId}/rfid/readers`, {
+    fetchApi<RfidReaderCreateResponse>(buildContractPath(API_CONTRACT.endpoints.raceRfidReaders, { raceId }), {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   revokeReader: (raceId: string, readerId: string) =>
-    fetchApi<RfidReader>(`/races/${raceId}/rfid/readers/${readerId}/revoke`, {
+    fetchApi<RfidReader>(buildContractPath(API_CONTRACT.endpoints.raceRfidReaderRevoke, { raceId, readerId }), {
       method: 'PATCH',
     }),
 }
 
 // Categories API
 export const categoriesApi = {
-  list: (raceId: string) => fetchApi<RaceCategory[]>(`/races/${raceId}/categories`),
+  list: (raceId: string) => fetchApi<RaceCategory[]>(buildContractPath(API_CONTRACT.endpoints.raceCategories, { raceId })),
   
   create: (raceId: string, data: Partial<RaceCategory>) =>
-    fetchApi<RaceCategory>(`/races/${raceId}/categories`, {
+    fetchApi<RaceCategory>(buildContractPath(API_CONTRACT.endpoints.raceCategories, { raceId }), {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   
   update: (raceId: string, id: string, data: Partial<RaceCategory>) =>
-    fetchApi<RaceCategory>(`/races/${raceId}/categories/${id}`, {
+    fetchApi<RaceCategory>(buildContractPath(API_CONTRACT.endpoints.raceCategoryById, { raceId, categoryId: id }), {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
   
   delete: (raceId: string, id: string) =>
-    fetchApi<void>(`/races/${raceId}/categories/${id}`, { method: 'DELETE' }),
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceCategoryById, { raceId, categoryId: id }), { method: 'DELETE' }),
 }
 
 // Results API
 export const resultsApi = {
-  list: (raceId: string) => fetchApi<RaceResult[]>(`/races/${raceId}/results`),
+  list: (raceId: string) => fetchApi<RaceResult[]>(buildContractPath(API_CONTRACT.endpoints.raceResults, { raceId })),
 
   page: (raceId: string, page = 0, size = 50, revision?: number) => {
     return fetchApi<RaceResultPage>(buildContractPath(
@@ -579,16 +609,16 @@ export const resultsApi = {
     ))
   },
 
-  my: () => fetchApi<RaceResult[]>('/results/my'),
+  my: () => fetchApi<RaceResult[]>(API_CONTRACT.endpoints.myResults),
   
   publish: (raceId: string) =>
-    fetchApi<void>(`/races/${raceId}/results/publish`, { method: 'POST' }),
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceResultsPublish, { raceId }), { method: 'POST' }),
 
   teamRankings: (raceId: string) =>
-    fetchApi<RankingEntry[]>(`/races/${raceId}/rankings/teams`),
+    fetchApi<RankingEntry[]>(buildContractPath(API_CONTRACT.endpoints.raceTeamRankings, { raceId })),
 
   countryRankings: (raceId: string) =>
-    fetchApi<RankingEntry[]>(`/races/${raceId}/rankings/countries`),
+    fetchApi<RankingEntry[]>(buildContractPath(API_CONTRACT.endpoints.raceCountryRankings, { raceId })),
 
   exportResults: (raceId: string, format: 'csv' | 'pdf' | 'xlsx') =>
     downloadExport(buildContractPath(API_CONTRACT.endpoints.raceResultsExport, { raceId }, { format })),
@@ -599,17 +629,17 @@ export const resultsApi = {
 
 // Tracking API
 export const trackingApi = {
-  getLiveData: (raceId: string) => fetchApi<LiveTrackingData[]>(`/races/${raceId}/tracking/live`),
+  getLiveData: (raceId: string) => fetchApi<LiveTrackingData[]>(buildContractPath(API_CONTRACT.endpoints.raceTrackingLive, { raceId })),
   
   getParticipantTrack: (raceId: string, participantId: string) =>
     fetchApi<{ locations: Array<{ lat: number; lng: number; time: string }> }>(
-      `/races/${raceId}/tracking/${participantId}`
+      buildContractPath(API_CONTRACT.endpoints.raceParticipantTracking, { raceId, participantId })
     ),
 }
 
 // Dashboard API
 export const dashboardApi = {
-  getStats: () => fetchApi<DashboardStats>('/dashboard/stats'),
+  getStats: () => fetchApi<DashboardStats>(API_CONTRACT.endpoints.dashboardStats),
 }
 
 export const publicTrackingApi = {
@@ -657,23 +687,23 @@ export const publicTrackingApi = {
 }
 
 export const favoritesApi = {
-  list: () => fetchApi<FavoriteAthlete[]>('/favorites'),
+  list: () => fetchApi<FavoriteAthlete[]>(API_CONTRACT.endpoints.favorites),
 
   follow: (raceId: string, participantId: string) =>
-    fetchApi<FavoriteAthlete>('/favorites', {
+    fetchApi<FavoriteAthlete>(API_CONTRACT.endpoints.favorites, {
       method: 'POST',
       body: JSON.stringify({ raceId, participantId }),
     }),
 
   unfollow: (raceId: string, participantId: string) =>
-    fetchApi<void>(`/favorites/${participantId}?raceId=${encodeURIComponent(raceId)}`, { method: 'DELETE' }),
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.favoriteDelete, { participantId }, { raceId }), { method: 'DELETE' }),
 }
 
 export const notificationsApi = {
   list: () => fetchApi<AppNotification[]>(API_CONTRACT.endpoints.notifications),
 
   markRead: (id: string) =>
-    fetchApi<AppNotification>(`${API_CONTRACT.endpoints.notifications}/${id}/read`, { method: 'PUT' }),
+    fetchApi<AppNotification>(buildContractPath(API_CONTRACT.endpoints.notificationRead, { id }), { method: 'PUT' }),
 
   registerDevice: (token: string, platform = 'web') =>
     fetchApi<{ status: string }>(API_CONTRACT.endpoints.notificationDevices, {
@@ -697,16 +727,16 @@ export const notificationsApi = {
 }
 
 export const mediaApi = {
-  list: (raceId: string) => fetchApi<MediaItem[]>(`/races/${raceId}/media`),
+  list: (raceId: string) => fetchApi<MediaItem[]>(buildContractPath(API_CONTRACT.endpoints.raceMedia, { raceId })),
 
-  publicList: (raceId: string) => fetchPublicApi<MediaItem[]>(`/public/races/${raceId}/media`),
+  publicList: (raceId: string) => fetchPublicApi<MediaItem[]>(buildContractPath(API_CONTRACT.endpoints.publicRaceMedia, { raceId })),
 
   upload: async (raceId: string, file: File, caption?: string, participantId?: string) => {
     const formData = new FormData()
     formData.append('file', file)
     if (caption) formData.append('caption', caption)
     if (participantId) formData.append('participantId', participantId)
-    const response = await fetch(`${API_BASE}/races/${raceId}/media`, {
+    const response = await fetch(`${API_BASE}${buildContractPath(API_CONTRACT.endpoints.raceMedia, { raceId })}`, {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -719,20 +749,20 @@ export const mediaApi = {
   },
 
   approve: (raceId: string, id: string) =>
-    fetchApi<MediaItem>(`/races/${raceId}/media/${id}/approve`, { method: 'POST' }),
+    fetchApi<MediaItem>(buildContractPath(API_CONTRACT.endpoints.raceMediaApprove, { raceId, mediaId: id }), { method: 'POST' }),
 
   reject: (raceId: string, id: string) =>
-    fetchApi<MediaItem>(`/races/${raceId}/media/${id}/reject`, { method: 'POST' }),
+    fetchApi<MediaItem>(buildContractPath(API_CONTRACT.endpoints.raceMediaReject, { raceId, mediaId: id }), { method: 'POST' }),
 
   remove: (raceId: string, id: string) =>
-    fetchApi<void>(`/races/${raceId}/media/${id}`, { method: 'DELETE' }),
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceMediaDelete, { raceId, mediaId: id }), { method: 'DELETE' }),
 }
 
 export const analyticsApi = {
-  summary: (raceId: string) => fetchApi<RaceAnalyticsSummary>(`/races/${raceId}/analytics/summary`),
-  demographics: (raceId: string) => fetchApi<Demographics>(`/races/${raceId}/analytics/demographics`),
+  summary: (raceId: string) => fetchApi<RaceAnalyticsSummary>(buildContractPath(API_CONTRACT.endpoints.raceAnalyticsSummary, { raceId })),
+  demographics: (raceId: string) => fetchApi<Demographics>(buildContractPath(API_CONTRACT.endpoints.raceAnalyticsDemographics, { raceId })),
   registrations: (raceId: string, days = 30) =>
-    fetchApi<RegistrationPoint[]>(`/races/${raceId}/analytics/registrations?days=${days}`),
+    fetchApi<RegistrationPoint[]>(buildContractPath(API_CONTRACT.endpoints.raceAnalyticsRegistrations, { raceId }, { days })),
 
   exportAnalytics: (raceId: string, format: 'csv' | 'xlsx') =>
     downloadExport(buildContractPath(API_CONTRACT.endpoints.raceAnalyticsExport, { raceId }, { format })),
@@ -778,19 +808,19 @@ export const emergencyApi = {
 }
 
 export const promoApi = {
-  list: (raceId: string) => fetchApi<PromoCode[]>(`/races/${raceId}/promo-codes`),
+  list: (raceId: string) => fetchApi<PromoCode[]>(buildContractPath(API_CONTRACT.endpoints.racePromoCodes, { raceId })),
 
   create: (raceId: string, data: { code: string; discountType: 'PERCENT' | 'FIXED'; discountValue: number; maxUses?: number; expiresAt?: string }) =>
-    fetchApi<PromoCode>(`/races/${raceId}/promo-codes`, { method: 'POST', body: JSON.stringify(data) }),
+    fetchApi<PromoCode>(buildContractPath(API_CONTRACT.endpoints.racePromoCodes, { raceId }), { method: 'POST', body: JSON.stringify(data) }),
 
   setActive: (raceId: string, id: string, active: boolean) =>
-    fetchApi<PromoCode>(`/races/${raceId}/promo-codes/${id}/active`, {
+    fetchApi<PromoCode>(buildContractPath(API_CONTRACT.endpoints.racePromoCodeActive, { raceId, promoId: id }), {
       method: 'PATCH',
       body: JSON.stringify({ active }),
     }),
 
   remove: (raceId: string, id: string) =>
-    fetchApi<void>(`/races/${raceId}/promo-codes/${id}`, { method: 'DELETE' }),
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.racePromoCodeDelete, { raceId, promoId: id }), { method: 'DELETE' }),
 }
 
 import { Client } from '@stomp/stompjs'
@@ -811,16 +841,12 @@ export function connectLiveTracking(raceId: string, onMessage: (data: LiveTracki
     connectHeaders: {
       Authorization: `Bearer ${token}`,
     },
-    debug: (str) => {
-      console.log('STOMP Debug:', str)
-    },
     reconnectDelay: 5000,
     heartbeatIncoming: 4000,
     heartbeatOutgoing: 4000,
   })
 
   stompClient.onConnect = () => {
-    console.log('STOMP Connected to race:', raceId)
     stompClient?.subscribe(`/topic/race.${raceId}`, (message) => {
       if (message.body) {
         onMessage(JSON.parse(message.body))
