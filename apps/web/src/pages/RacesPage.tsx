@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Plus,
   Search,
@@ -14,6 +15,8 @@ import {
   Copy,
   Archive,
   ArchiveRestore,
+  RefreshCcw,
+  AlertCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,7 +48,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { racesApi } from '@/lib/api'
 import type { Race, RaceType, RaceStatus } from '@/types'
+import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { getRaceNavigationForRole } from '@/config/adminNavigation'
 
 const statusColors: Record<RaceStatus, string> = {
   DRAFT: 'bg-muted text-muted-foreground',
@@ -70,6 +76,9 @@ const raceTypeLabels: Record<RaceType, string> = {
 
 export function RacesPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
+  const { user } = useAuth()
+  const canManageRaces = isAdminRole(user?.role)
   const [races, setRaces] = useState<Race[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -80,6 +89,7 @@ export function RacesPage() {
   const [cloneDate, setCloneDate] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [hasLoadError, setHasLoadError] = useState(false)
   const [newRace, setNewRace] = useState({
     name: '',
     description: '',
@@ -93,10 +103,12 @@ export function RacesPage() {
 
   const loadRaces = async () => {
     setIsLoading(true)
+    setHasLoadError(false)
     try {
       const data = await racesApi.list(showArchived)
       setRaces(data)
     } catch {
+      setHasLoadError(true)
       toast.error('Failed to load races')
     } finally {
       setIsLoading(false)
@@ -119,6 +131,9 @@ export function RacesPage() {
       }),
     [races, search, statusFilter],
   )
+  const visibleCapabilities = getRaceNavigationForRole(user?.role)
+  const hasActiveFilters = Boolean(search.trim()) || statusFilter !== 'all' || showArchived
+  const showEmptyCapabilityState = !isLoading && !hasLoadError && races.length === 0 && !hasActiveFilters
 
   const handleCreateRace = async () => {
     try {
@@ -207,14 +222,32 @@ export function RacesPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Races</h1>
-          <p className="text-muted-foreground">Manage your race events</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t(canManageRaces ? 'nav:races' : 'nav:operations')}</h1>
+          <p className="text-muted-foreground">
+            {t(canManageRaces ? 'nav:manageRacesDescription' : 'nav:operateRacesDescription')}
+          </p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Race
-        </Button>
+        {canManageRaces && (
+          <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Race
+          </Button>
+        )}
       </div>
+
+      {hasLoadError && (
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>{t('nav:racesLoadErrorTitle')}</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center gap-3">
+            <span>{t('nav:racesLoadErrorDescription')}</span>
+            <Button variant="outline" size="sm" onClick={() => void loadRaces()}>
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              {t('nav:retry')}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="relative flex-1 max-w-sm">
@@ -250,8 +283,15 @@ export function RacesPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredRaces.map((race) => (
+      {hasLoadError ? null : isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label={t('nav:loadingRaces')}>
+          {[0, 1, 2].map((item) => (
+            <div key={item} className="h-44 animate-pulse rounded-xl border bg-muted/40" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredRaces.map((race) => (
           <Card
             key={race.id}
             className="group cursor-pointer transition-all hover:border-primary/50"
@@ -270,39 +310,41 @@ export function RacesPage() {
                     </CardDescription>
                   </div>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/admin/races/${race.id}`) }}>
-                      <Eye className="mr-2 h-4 w-4" />
-                      View Details
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openCloneDialog(race) }}>
-                      <Copy className="mr-2 h-4 w-4" />
-                      Clone
-                    </DropdownMenuItem>
-                    {race.archivedAt ? (
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void handleRestore(race.id) }}>
-                        <ArchiveRestore className="mr-2 h-4 w-4" />
-                        Restore
+                {canManageRaces && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/admin/races/${race.id}`) }}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        View Details
                       </DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void handleArchive(race.id) }}>
-                        <Archive className="mr-2 h-4 w-4" />
-                        Archive
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openCloneDialog(race) }}>
+                        <Copy className="mr-2 h-4 w-4" />
+                        Clone
                       </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void handleDelete(race.id) }} className="text-destructive">
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      {race.archivedAt ? (
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void handleRestore(race.id) }}>
+                          <ArchiveRestore className="mr-2 h-4 w-4" />
+                          Restore
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void handleArchive(race.id) }}>
+                          <Archive className="mr-2 h-4 w-4" />
+                          Archive
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void handleDelete(race.id) }} className="text-destructive">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -327,14 +369,53 @@ export function RacesPage() {
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
-
-      {!isLoading && filteredRaces.length === 0 && (
-        <p className="text-sm text-muted-foreground">No races found.</p>
+          ))}
+        </div>
       )}
 
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+      {showEmptyCapabilityState && (
+        <Card className="border-dashed">
+          <CardHeader>
+            <CardTitle>{t('nav:noRacesTitle')}</CardTitle>
+            <CardDescription>
+              {canManageRaces ? t('nav:noRacesAdminDescription') : t('nav:noRacesOperationsDescription')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-sm font-medium">{t('nav:availableOperations')}</p>
+              <p className="text-sm text-muted-foreground">{t('nav:availableOperationsDescription')}</p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleCapabilities.map((item) => (
+                <div key={item.to} className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-sm">
+                  <item.icon className="h-4 w-4 text-primary" />
+                  <span>{t(item.labelKey)}</span>
+                </div>
+              ))}
+            </div>
+            {canManageRaces ? (
+              <Button onClick={() => setIsCreateDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                {t('nav:createFirstRace')}
+              </Button>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t('nav:operationsAssignmentHint')}</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {!isLoading && !hasLoadError && filteredRaces.length === 0 && !showEmptyCapabilityState && (
+        <Card className="border-dashed">
+          <CardContent className="py-10 text-center">
+            <p className="font-medium">{t('nav:noMatchingRacesTitle')}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t('nav:noMatchingRacesDescription')}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {canManageRaces && <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Race</DialogTitle>
@@ -392,9 +473,9 @@ export function RacesPage() {
             <Button onClick={() => void handleCreateRace()}>Create</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
-      <Dialog open={isCloneDialogOpen} onOpenChange={setIsCloneDialogOpen}>
+      {canManageRaces && <Dialog open={isCloneDialogOpen} onOpenChange={setIsCloneDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Clone Race</DialogTitle>
@@ -417,7 +498,7 @@ export function RacesPage() {
             <Button onClick={() => void handleCloneRace()} disabled={!cloneName.trim()}>Clone</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   )
 }

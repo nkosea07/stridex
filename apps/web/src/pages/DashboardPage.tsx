@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Flag, Users, MapPin, Calendar, ArrowRight, Plus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Flag, Users, MapPin, Calendar, ArrowRight, Plus, AlertCircle, RefreshCcw } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { dashboardApi, racesApi } from '@/lib/api'
 import type { DashboardStats, Race } from '@/types'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 const statusColors: Record<string, string> = {
   DRAFT: 'bg-muted text-muted-foreground',
@@ -18,42 +20,49 @@ const statusColors: Record<string, string> = {
 
 export function DashboardPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentRaces, setRecentRaces] = useState<Race[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [statsError, setStatsError] = useState(false)
+  const [racesError, setRacesError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let mounted = true
     const load = async () => {
       setIsLoading(true)
-      setError(null)
-      try {
-        const [statsData, races] = await Promise.all([
-          dashboardApi.getStats(),
-          racesApi.list(),
-        ])
-        if (!mounted) return
-        setStats(statsData)
-        setRecentRaces(races.slice(0, 5))
-      } catch {
-        if (!mounted) return
-        setError('Failed to load dashboard data')
-      } finally {
-        if (mounted) setIsLoading(false)
-      }
+      setStatsError(false)
+      setRacesError(false)
+      const [statsResult, racesResult] = await Promise.allSettled([
+        dashboardApi.getStats(),
+        racesApi.list(),
+      ])
+      if (!mounted) return
+      if (statsResult.status === 'fulfilled') setStats(statsResult.value)
+      else setStatsError(true)
+      if (racesResult.status === 'fulfilled') setRecentRaces(racesResult.value.slice(0, 5))
+      else setRacesError(true)
+      setIsLoading(false)
     }
     load()
     return () => {
       mounted = false
     }
-  }, [])
+  }, [reloadKey])
+
+  const hasLoadError = statsError || racesError
+  const metricValue = (value: number | undefined) => {
+    if (isLoading) return '--'
+    if (statsError) return '—'
+    return value ?? 0
+  }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('nav:dashboard')}</h1>
           <p className="text-muted-foreground">Race operations overview</p>
         </div>
         <Button onClick={() => navigate('/admin/races')}>
@@ -62,7 +71,19 @@ export function DashboardPage() {
         </Button>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {hasLoadError && (
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>{t('nav:dashboardLoadErrorTitle')}</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center gap-3">
+            <span>{t('nav:dashboardLoadErrorDescription')}</span>
+            <Button variant="outline" size="sm" onClick={() => setReloadKey((value) => value + 1)}>
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              {t('nav:retry')}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -71,8 +92,10 @@ export function DashboardPage() {
             <Flag className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? '--' : stats?.totalRaces ?? 0}</div>
-            <p className="text-xs text-muted-foreground">{stats?.activeRaces ?? 0} active</p>
+            <div className="text-2xl font-bold">{metricValue(stats?.totalRaces)}</div>
+            <p className="text-xs text-muted-foreground">
+              {statsError ? t('nav:dashboardStatsUnavailable') : `${stats?.activeRaces ?? 0} active`}
+            </p>
           </CardContent>
         </Card>
 
@@ -82,8 +105,12 @@ export function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? '--' : (stats?.totalParticipants ?? 0).toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">across all races</p>
+            <div className="text-2xl font-bold">
+              {statsError ? '—' : isLoading ? '--' : (stats?.totalParticipants ?? 0).toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {statsError ? t('nav:dashboardStatsUnavailable') : 'across all races'}
+            </p>
           </CardContent>
         </Card>
 
@@ -93,8 +120,10 @@ export function DashboardPage() {
             <MapPin className="h-4 w-4 text-live" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? '--' : stats?.liveTracking ?? 0}</div>
-            <p className="text-xs text-muted-foreground">athletes active in last 10 min</p>
+            <div className="text-2xl font-bold">{metricValue(stats?.liveTracking)}</div>
+            <p className="text-xs text-muted-foreground">
+              {statsError ? t('nav:dashboardStatsUnavailable') : 'athletes active in last 10 min'}
+            </p>
           </CardContent>
         </Card>
 
@@ -104,8 +133,10 @@ export function DashboardPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? '--' : stats?.upcomingRaces ?? 0}</div>
-            <p className="text-xs text-muted-foreground">completed today: {stats?.completedToday ?? 0}</p>
+            <div className="text-2xl font-bold">{metricValue(stats?.upcomingRaces)}</div>
+            <p className="text-xs text-muted-foreground">
+              {statsError ? t('nav:dashboardStatsUnavailable') : `completed today: ${stats?.completedToday ?? 0}`}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -140,8 +171,15 @@ export function DashboardPage() {
                 </Badge>
               </div>
             ))}
-            {!isLoading && recentRaces.length === 0 && (
-              <p className="text-sm text-muted-foreground">No races found.</p>
+            {!isLoading && !racesError && recentRaces.length === 0 && (
+              <div className="rounded-lg border border-dashed p-6 text-center">
+                <p className="font-medium">{t('nav:noDashboardRacesTitle')}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t('nav:noDashboardRacesDescription')}</p>
+                <Button className="mt-4" variant="outline" onClick={() => navigate('/admin/races')}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t('nav:createFirstRace')}
+                </Button>
+              </div>
             )}
           </div>
         </CardContent>

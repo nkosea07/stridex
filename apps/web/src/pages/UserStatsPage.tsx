@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MapPin, UserMinus } from 'lucide-react'
+import { AlertCircle, MapPin, RefreshCcw, UserMinus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { favoritesApi, participantsApi, resultsApi } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import type { FavoriteAthlete, RaceResult } from '@/types'
+import { useAuth } from '@/contexts/AuthContext'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 type MyRegistration = {
   raceId: string
@@ -14,19 +17,25 @@ type MyRegistration = {
 }
 
 export function UserStatsPage() {
+  const { user } = useAuth()
+  const { t } = useTranslation()
+  const isSpectator = user?.role === 'SPECTATOR'
   const [registrations, setRegistrations] = useState<MyRegistration[]>([])
   const [results, setResults] = useState<RaceResult[]>([])
   const [favorites, setFavorites] = useState<FavoriteAthlete[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [hasLoadError, setHasLoadError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let mounted = true
     const load = async () => {
       setIsLoading(true)
+      setHasLoadError(false)
       try {
         const [myRegistrations, myResults, myFavorites] = await Promise.all([
-          participantsApi.myRegistrations(),
-          resultsApi.my(),
+          isSpectator ? Promise.resolve<MyRegistration[]>([]) : participantsApi.myRegistrations(),
+          isSpectator ? Promise.resolve<RaceResult[]>([]) : resultsApi.my(),
           favoritesApi.list(),
         ])
         if (!mounted) return
@@ -35,9 +44,7 @@ export function UserStatsPage() {
         setFavorites(myFavorites)
       } catch {
         if (!mounted) return
-        setRegistrations([])
-        setResults([])
-        setFavorites([])
+        setHasLoadError(true)
       } finally {
         if (mounted) setIsLoading(false)
       }
@@ -46,7 +53,7 @@ export function UserStatsPage() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [isSpectator, reloadKey])
 
   const finishedCount = useMemo(
     () => results.filter((result) => result.status === 'finished').length,
@@ -73,44 +80,71 @@ export function UserStatsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">My Stats</h1>
-        <p className="text-muted-foreground">Personal race and result statistics.</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t(isSpectator ? 'nav:following' : 'nav:myPerformance')}</h1>
+        <p className="text-muted-foreground">
+          {t(isSpectator ? 'nav:followingDescription' : 'nav:myPerformanceDescription')}
+        </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+      {hasLoadError && (
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>{t('nav:personalDataUnavailable')}</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center gap-3">
+            <span>{t('nav:personalDataUnavailableDescription')}</span>
+            <Button variant="outline" size="sm" onClick={() => setReloadKey((value) => value + 1)}>
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              {t('nav:retry')}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className={`grid gap-4 ${isSpectator ? 'md:grid-cols-1' : 'md:grid-cols-4'}`}>
+        {!isSpectator && <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">Registrations</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{isLoading ? '--' : registrations.length}</CardContent>
-        </Card>
-        <Card>
+        </Card>}
+        {!isSpectator && <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">Results</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{isLoading ? '--' : results.length}</CardContent>
-        </Card>
-        <Card>
+        </Card>}
+        {!isSpectator && <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">Finished Races</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{isLoading ? '--' : finishedCount}</CardContent>
-        </Card>
-        <Card>
+        </Card>}
+        {!isSpectator && <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">Best Overall Position</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{isLoading ? '--' : bestOverall ?? '-'}</CardContent>
-        </Card>
+        </Card>}
+        {isSpectator && <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">{t('nav:followedAthletes')}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-semibold">{isLoading ? '--' : favorites.length}</CardContent>
+        </Card>}
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Favorite Athletes</CardTitle>
+          <CardTitle className="text-base">{t('nav:followedAthletes')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {favorites.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No favorites yet. Follow athletes from a live race page.</p>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{t('nav:noFollowedAthletes')}</p>
+              <Button asChild variant="outline">
+                <Link to="/race/demo">{t('nav:openPublicTracking')}</Link>
+              </Button>
+            </div>
           ) : (
             favorites.map((favorite) => (
               <div

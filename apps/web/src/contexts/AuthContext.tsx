@@ -2,9 +2,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import type { User, UserRole } from '@/types'
 import { authApi, type BrowserAuthResponse } from '@/lib/api'
 
-export type LoginResult =
-  | { kind: 'authenticated'; user: User }
-  | { kind: 'mfa'; challengeToken: string; enrollmentRequired: boolean; user: User }
+export type LoginResult = { kind: 'authenticated'; user: User }
 
 interface AuthContextType {
   user: User | null
@@ -18,9 +16,19 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export const ADMIN_ROLES: UserRole[] = ['SUPER_ADMIN', 'RACE_ADMIN']
+export const OPERATIONS_ROLES: UserRole[] = [...ADMIN_ROLES, 'OFFICIAL', 'VOLUNTEER']
+export const PERSONAL_ROLES: UserRole[] = ['ATHLETE', 'SPECTATOR']
 
 export function isAdminRole(role?: UserRole) {
   return !!role && ADMIN_ROLES.includes(role)
+}
+
+export function isOperationsRole(role?: UserRole) {
+  return !!role && OPERATIONS_ROLES.includes(role)
+}
+
+export function isPersonalRole(role?: UserRole) {
+  return !!role && PERSONAL_ROLES.includes(role)
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -43,14 +51,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await authApi.login(email, password)
     if (response.token) {
       return { kind: 'authenticated' as const, user: completeSession(response) }
-    }
-    if (response.mfaRequired && response.mfaChallengeToken) {
-      return {
-        kind: 'mfa' as const,
-        challengeToken: response.mfaChallengeToken,
-        enrollmentRequired: Boolean(response.mfaEnrollmentRequired),
-        user: response.user,
-      }
     }
     throw new Error(response.requiresEmailVerification ? 'Email verification required' : 'Login did not return a session')
   }

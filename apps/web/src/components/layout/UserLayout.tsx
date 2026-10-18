@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { BarChart3, Bell, Home, LogOut } from 'lucide-react'
+import { BarChart3, Bell, Home, LogOut, Settings, Heart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
@@ -9,16 +9,17 @@ import { connectUserAlerts } from '@/lib/api'
 import { toast } from 'sonner'
 import { ThemeSelect } from '@/components/theme/ThemeSelect'
 
-const navItems = [
-  { to: '/app', labelKey: 'nav.dashboard', icon: Home, end: true },
-  { to: '/app/stats', labelKey: 'nav.stats', icon: BarChart3 },
-  { to: '/notifications', labelKey: 'nav.notifications', icon: Bell },
-]
-
 export function UserLayout() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const isSpectator = user?.role === 'SPECTATOR'
+  const navItems = [
+    { to: '/app', labelKey: isSpectator ? 'nav:spectatorDashboard' : 'nav:myDashboard', icon: Home, end: true },
+    { to: '/app/stats', labelKey: isSpectator ? 'nav:following' : 'nav:myPerformance', icon: isSpectator ? Heart : BarChart3 },
+    { to: '/notifications', labelKey: 'nav:notifications', icon: Bell },
+    { to: '/app/settings', labelKey: 'nav:accountSettings', icon: Settings },
+  ]
 
   useEffect(() => {
     if (!user?.id) return

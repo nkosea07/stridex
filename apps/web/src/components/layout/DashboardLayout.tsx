@@ -3,19 +3,8 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { 
   LayoutDashboard, 
   Flag, 
-  Users, 
-  MapPin, 
-  Wifi,
-  Timer, 
-  Trophy,
   ClipboardList,
-  BarChart3,
-  Layers,
-  UsersRound,
-  Image as ImageIcon,
-  Tag,
   Bell,
-  Sparkles,
   Settings,
   LogOut,
   Menu,
@@ -35,27 +24,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useAuth } from '@/contexts/AuthContext'
+import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { useTranslation } from 'react-i18next'
+import { getRaceNavigationForRole } from '@/config/adminNavigation'
 
 const mainNavItems = [
-  { to: '/admin', icon: LayoutDashboard, labelKey: 'nav.dashboard', end: true },
-  { to: '/admin/races', icon: Flag, labelKey: 'nav.races' },
-]
-
-const raceNavItems = [
-  { to: 'participants', icon: Users, labelKey: 'nav.participants' },
-  { to: 'registration', icon: ClipboardList, labelKey: 'nav.registration' },
-  { to: 'categories', icon: Layers, labelKey: 'nav.categories' },
-  { to: 'teams', icon: UsersRound, labelKey: 'nav.teams' },
-  { to: 'live', icon: MapPin, labelKey: 'nav.liveTracking' },
-  { to: 'checkpoints', icon: Timer, labelKey: 'nav.checkpoints' },
-  { to: 'rfid', icon: Wifi, labelKey: 'nav.rfid' },
-  { to: 'results', icon: Trophy, labelKey: 'nav.results' },
-  { to: 'analytics', icon: BarChart3, labelKey: 'nav.analytics' },
-  { to: 'insights', icon: Sparkles, labelKey: 'nav.insights' },
-  { to: 'media', icon: ImageIcon, labelKey: 'nav.media' },
-  { to: 'promos', icon: Tag, labelKey: 'nav.promoCodes' },
+  { to: '/admin', icon: LayoutDashboard, labelKey: 'nav:dashboard', end: true },
+  { to: '/admin/races', icon: Flag, labelKey: 'nav:races' },
 ]
 
 export function DashboardLayout() {
@@ -69,9 +44,15 @@ export function DashboardLayout() {
   const raceMatch = location.pathname.match(/\/admin\/races\/([^/]+)/)
   const raceId = raceMatch?.[1]
   const isInRaceContext = raceId && raceId !== 'new'
-  const visibleMainNavItems = user?.role === 'SUPER_ADMIN'
-    ? [...mainNavItems, { to: '/admin/organizer-applications', icon: ClipboardList, labelKey: 'nav.organizerApplications' }]
-    : mainNavItems
+  const visibleMainNavItems = [
+    ...(isAdminRole(user?.role)
+      ? mainNavItems
+      : [{ to: '/admin/races', icon: Flag, labelKey: 'nav:operations' }]),
+    ...(user?.role === 'SUPER_ADMIN'
+      ? [{ to: '/admin/organizer-applications', icon: ClipboardList, labelKey: 'nav:organizerApplications' }]
+      : []),
+  ]
+  const visibleRaceNavItems = getRaceNavigationForRole(user?.role)
 
   const handleLogout = () => {
     logout()
@@ -153,7 +134,7 @@ export function DashboardLayout() {
                   <Flag className="h-4 w-4" />
                   {t('nav:overview')}
                 </NavLink>
-                {raceNavItems.map((item) => (
+                {visibleRaceNavItems.map((item) => (
                   <NavLink
                     key={item.to}
                     to={`/admin/races/${raceId}/${item.to}`}

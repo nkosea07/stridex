@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom'
-import { isAdminRole, useAuth } from '@/contexts/AuthContext'
+import { isOperationsRole, isPersonalRole, useAuth } from '@/contexts/AuthContext'
 import { LandingPage } from '@/pages/LandingPage'
 
 export default function HomeRoute() {
@@ -13,5 +13,7 @@ export default function HomeRoute() {
     return <LandingPage />
   }
 
-  return <Navigate to={isAdminRole(user.role) ? '/admin' : '/app'} replace />
+  if (isOperationsRole(user.role)) return <Navigate to="/admin" replace />
+  if (isPersonalRole(user.role)) return <Navigate to="/app" replace />
+  return <Navigate to="/unauthorized" replace />
 }

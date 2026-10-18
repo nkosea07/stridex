@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ShieldAlert } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -7,6 +8,7 @@ import { authApi } from '@/lib/api'
 
 export function UnauthorizedPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   useEffect(() => {
     authApi.logout()
@@ -24,14 +26,14 @@ export function UnauthorizedPage() {
           <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
             <ShieldAlert className="h-5 w-5 text-destructive" />
           </div>
-          <CardTitle>Unauthorized</CardTitle>
+          <CardTitle>{t('auth:accessDeniedTitle')}</CardTitle>
           <CardDescription>
-            Your account does not have access to the admin dashboard. Redirecting to login.
+            {t('auth:accessDeniedDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Button onClick={() => navigate('/login', { replace: true, state: { reason: 'unauthorized' } })}>
-            Go To Login
+            {t('auth:goToLogin')}
           </Button>
         </CardContent>
       </Card>

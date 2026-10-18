@@ -31,6 +31,7 @@ export default [
   route('app', 'routes/app-layout.tsx', [
     index('routes/app-dashboard.tsx'),
     route('stats', 'routes/app-stats.tsx'),
+    route('settings', 'routes/app-settings.tsx'),
   ]),
   route('*', 'routes/fallback.tsx'),
 ] satisfies RouteConfig
