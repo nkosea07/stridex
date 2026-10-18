@@ -21,14 +21,44 @@ services:
       BROWSER_COOKIE_SECURE: "true"
       RFID_SIMULATION_ENABLED: "false"
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.29.42.10}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:?Set STORAGE_PROVIDER to aws-s3 or minio}
+      AWS_S3_ENABLED: ${AWS_S3_ENABLED:-false}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      AWS_S3_REGION: ${AWS_S3_REGION:-us-east-1}
+      AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT:-}
+      AWS_S3_ACCESS_KEY: ${AWS_S3_ACCESS_KEY:-}
+      AWS_S3_SECRET_KEY: ${AWS_S3_SECRET_KEY:-}
+      AWS_S3_PATH_STYLE_ACCESS: ${AWS_S3_PATH_STYLE_ACCESS:-false}
+      MINIO_ENABLED: ${MINIO_ENABLED:-false}
+      MINIO_BUCKET: ${MINIO_BUCKET:-}
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-}
+      MINIO_PATH_STYLE_ACCESS: ${MINIO_PATH_STYLE_ACCESS:-true}
       MAIL_ENABLED: ${MAIL_ENABLED:-false}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      PUSH_ENABLED: ${PUSH_ENABLED:-false}
+      FCM_SERVICE_ACCOUNT_JSON: ${FCM_SERVICE_ACCOUNT_JSON:-}
+      FCM_PROJECT_ID: ${FCM_PROJECT_ID:-}
+      PAYMENTS_ENABLED: ${PAYMENTS_ENABLED:-false}
+      PESEPAY_BASE_URL: ${PESEPAY_BASE_URL:-https://api.test.sandbox.pesepay.com/payments-engine/v1}
+      PESEPAY_INTEGRATION_KEY: ${PESEPAY_INTEGRATION_KEY:-}
+      PESEPAY_ENCRYPTION_KEY: ${PESEPAY_ENCRYPTION_KEY:-}
+      PAYMENTS_RESULT_URL: ${PAYMENTS_RESULT_URL:-}
+      PAYMENTS_RETURN_URL: ${PAYMENTS_RETURN_URL:-}
     depends_on:
       redis:
         condition: service_healthy
     expose:
       - "8081"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/api/actuator/health/readiness >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
     networks:
       pilot:
         ipv4_address: 172.29.42.20
@@ -40,7 +70,7 @@ services:
     restart: unless-stopped
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "${WEB_HOST_PORT:-8080}:8080"
     healthcheck:

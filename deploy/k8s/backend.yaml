@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/nkosea07/race-tracker-backend:latest
+          image: ghcr.io/nkosea07/race-tracker-backend:REPLACE_WITH_COMMIT_SHA
           ports:
             - containerPort: 8081
           envFrom:

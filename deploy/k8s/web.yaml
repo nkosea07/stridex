@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: ghcr.io/nkosea07/race-tracker-web:latest
+          image: ghcr.io/nkosea07/race-tracker-web:REPLACE_WITH_COMMIT_SHA
           ports:
             - containerPort: 80
           readinessProbe:

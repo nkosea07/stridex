@@ -11,19 +11,27 @@ data:
   REDIS_HOST: "redis"
   REDIS_PORT: "6379"
   FRONTEND_URL: "https://racetracker.example.com"
-  MAIL_ENABLED: "true"
-  PUSH_ENABLED: "true"
-  PAYMENTS_ENABLED: "true"
+  # The pilot enables optional providers only after their secrets and delivery
+  # evidence are present. Keep these disabled in the baseline manifest.
+  MAIL_ENABLED: "false"
+  PUSH_ENABLED: "false"
+  PAYMENTS_ENABLED: "false"
   RFID_SIMULATION_ENABLED: "false"
----
-# Populate with `kubectl create secret generic race-tracker-secrets --from-env-file=.env.pilot -n race-tracker`
-# Required keys: DB_USERNAME, DB_PASSWORD, JWT_SECRET, MFA_ENCRYPTION_KEY,
-# MAIL_USERNAME, MAIL_PASSWORD, FCM_SERVICE_ACCOUNT_JSON, FCM_PROJECT_ID,
-# PESEPAY_INTEGRATION_KEY, PESEPAY_ENCRYPTION_KEY, PAYMENTS_RESULT_URL, PAYMENTS_RETURN_URL.
-apiVersion: v1
-kind: Secret
-metadata:
-  name: race-tracker-secrets
-  namespace: race-tracker
-type: Opaque
-stringData: {}
+  STORAGE_PROVIDER: "aws-s3"
+  AWS_S3_ENABLED: "true"
+  AWS_S3_BUCKET: ""
+  AWS_S3_REGION: "us-east-1"
+  AWS_S3_ENDPOINT: ""
+  AWS_S3_PATH_STYLE_ACCESS: "false"
+  MINIO_ENABLED: "false"
+  MINIO_BUCKET: ""
+  MINIO_REGION: "us-east-1"
+  MINIO_ENDPOINT: ""
+  MINIO_PATH_STYLE_ACCESS: "true"
+# Create this secret out-of-band; never apply an empty placeholder Secret:
+# kubectl -n race-tracker create secret generic race-tracker-secrets \
+#   --from-env-file=.env.pilot --dry-run=client -o yaml | kubectl apply -f -
+# Required keys: DB_USERNAME, DB_PASSWORD, JWT_SECRET.
+# For the pilot also provide AWS_S3_ACCESS_KEY and AWS_S3_SECRET_KEY.
+# For MinIO provide MINIO_ACCESS_KEY and MINIO_SECRET_KEY instead.
+# FCM_* and PESEPAY_* are required only when their ConfigMap feature is enabled.
