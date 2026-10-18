@@ -22,6 +22,7 @@
         <java.version>17</java.version>
         <lombok.version>1.18.32</lombok.version>
         <jjwt.version>0.12.3</jjwt.version>
+        <aws.sdk.version>2.25.55</aws.sdk.version>
     </properties>
     
     <dependencies>
@@ -84,6 +85,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
+
+        <!-- AWS S3 and S3-compatible object storage (including MinIO) -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>${aws.sdk.version}</version>
         </dependency>
 
         <dependency>

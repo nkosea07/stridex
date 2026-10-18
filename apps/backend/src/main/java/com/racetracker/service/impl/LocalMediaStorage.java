@@ -4,7 +4,6 @@ import com.racetracker.config.RaceTrackerProperties;
 import com.racetracker.exception.ApiException;
 import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.service.MediaStorage;
-import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -19,7 +18,6 @@ import java.util.UUID;
  * Local-disk media storage. Keys are relative paths under the configured upload directory;
  * all keys are normalized and confined to that directory.
  */
-@Component
 public class LocalMediaStorage implements MediaStorage {
 
     private static final long MAX_BYTES = 15L * 1024 * 1024;
@@ -98,14 +96,24 @@ public class LocalMediaStorage implements MediaStorage {
         Path target = resolve(key);
         try {
             Files.deleteIfExists(target);
-        } catch (IOException ignored) {
-            // best-effort cleanup
+        } catch (IOException ex) {
+            throw new ApiException("Failed to delete file");
         }
     }
 
     private Path resolve(String key) {
         Path target = root.resolve(key).normalize();
         if (!target.startsWith(root)) {
+            throw new ApiException("Invalid storage path");
+        }
+        try {
+            Path realRoot = root.toRealPath();
+            Path existingPath = Files.exists(target) ? target : target.getParent();
+            if (existingPath != null && Files.exists(existingPath)
+                && !existingPath.toRealPath().startsWith(realRoot)) {
+                throw new ApiException("Invalid storage path");
+            }
+        } catch (IOException ex) {
             throw new ApiException("Invalid storage path");
         }
         return target;
