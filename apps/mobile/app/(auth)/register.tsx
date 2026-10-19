@@ -2,8 +2,40 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Keyboa
 import { Link, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { API_CONTRACT } from '@race-tracker/contracts';
 import { useAuthStore } from '@/store/auth';
+import type { UserCapability } from '@/types';
+
+const experienceOptions: {
+  key: 'athlete' | 'spectator' | 'both';
+  capabilities: UserCapability[];
+  icon: keyof typeof Ionicons.glyphMap;
+  titleKey: string;
+  descriptionKey: string;
+}[] = [
+  {
+    key: 'athlete',
+    capabilities: ['ATHLETE'],
+    icon: 'walk-outline',
+    titleKey: 'mobile:register.joinRace',
+    descriptionKey: 'mobile:register.joinRaceDescription',
+  },
+  {
+    key: 'spectator',
+    capabilities: ['SPECTATOR'],
+    icon: 'eye-outline',
+    titleKey: 'mobile:register.followRaces',
+    descriptionKey: 'mobile:register.followRacesDescription',
+  },
+  {
+    key: 'both',
+    capabilities: ['ATHLETE', 'SPECTATOR'],
+    icon: 'people-outline',
+    titleKey: 'mobile:register.both',
+    descriptionKey: 'mobile:register.bothDescription',
+  },
+];
 
 export default function RegisterScreen() {
   const [firstName, setFirstName] = useState('');
@@ -15,7 +47,13 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
+  const [experiences, setExperiences] = useState<UserCapability[]>(['ATHLETE']);
   const { register } = useAuthStore();
+  const { t } = useTranslation();
+
+  const selectExperience = (capabilities: UserCapability[]) => {
+    setExperiences(capabilities);
+  };
 
   const handleRegister = async () => {
     console.log('[Register] Attempting registration for:', email);
@@ -54,6 +92,7 @@ export default function RegisterScreen() {
         password,
         privacyPolicyAccepted: true,
         privacyPolicyVersion: API_CONTRACT.legal?.privacyPolicyVersion,
+        experiences,
       });
 
       if (response.requiresEmailVerification || !response.token) {
@@ -101,6 +140,39 @@ export default function RegisterScreen() {
 
         {/* Form */}
         <View style={styles.form}>
+          <View style={styles.onboardingSection}>
+            <Text style={styles.onboardingTitle}>{t('mobile:register.onboardingTitle')}</Text>
+            <Text style={styles.onboardingSubtitle}>{t('mobile:register.onboardingSubtitle')}</Text>
+            <View style={styles.experienceCards}>
+              {experienceOptions.map((option) => {
+                const selected = option.capabilities.length === experiences.length
+                  && option.capabilities.every((capability) => experiences.includes(capability));
+                return (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[styles.experienceCard, selected && styles.experienceCardSelected]}
+                    onPress={() => selectExperience(option.capabilities)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                  >
+                    <View style={[styles.experienceIcon, selected && styles.experienceIconSelected]}>
+                      <Ionicons name={option.icon} size={22} color={selected ? '#FFFFFF' : '#0F766E'} />
+                    </View>
+                    <View style={styles.experienceCopy}>
+                      <Text style={styles.experienceTitle}>{t(option.titleKey)}</Text>
+                      <Text style={styles.experienceDescription}>{t(option.descriptionKey)}</Text>
+                    </View>
+                    <Ionicons
+                      name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={24}
+                      color={selected ? '#0F766E' : '#9CA3AF'}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
           <View style={styles.row}>
             <View style={[styles.inputContainer, styles.halfInput]}>
               <Ionicons name="person-outline" size={20} color="#6B7280" style={styles.inputIcon} />
@@ -266,6 +338,63 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: 16,
+  },
+  onboardingSection: {
+    gap: 8,
+    marginBottom: 4,
+  },
+  onboardingTitle: {
+    color: '#1F2937',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  onboardingSubtitle: {
+    color: '#6B7280',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  experienceCards: {
+    gap: 10,
+    marginTop: 4,
+  },
+  experienceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+  },
+  experienceCardSelected: {
+    borderColor: '#0F766E',
+    backgroundColor: '#F0FDFA',
+  },
+  experienceIcon: {
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 21,
+    backgroundColor: '#CCFBF1',
+  },
+  experienceIconSelected: {
+    backgroundColor: '#0F766E',
+  },
+  experienceCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  experienceTitle: {
+    color: '#1F2937',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  experienceDescription: {
+    color: '#6B7280',
+    fontSize: 13,
+    lineHeight: 18,
   },
   row: {
     flexDirection: 'row',

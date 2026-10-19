@@ -146,6 +146,12 @@ public class AuthController {
         return ResponseEntity.ok(authService.updateProfile(request));
     }
 
+    @PutMapping("/profile/capabilities")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<UserDto> updateCapabilities(@Valid @RequestBody UpdateCapabilitiesRequest request) {
+        return ResponseEntity.ok(authService.updateCapabilities(request));
+    }
+
     private void rateLimitMfa(String challengeToken, HttpServletRequest request) {
         String account = mfaAuthenticationService.getChallengeAccountIdentifier(challengeToken);
         requestRateLimiter.checkMfa(account, clientAddressResolver.resolve(request));

@@ -1,11 +1,11 @@
-import { RequireRoleRoute } from '@/components/auth/RequireRoleRoute'
+import { RequireCapabilityRoute } from '@/components/auth/RequireCapabilityRoute'
 import { UserLayout } from '@/components/layout/UserLayout'
-import { PERSONAL_ROLES } from '@/contexts/AuthContext'
+import { PERSONAL_CAPABILITIES } from '@/contexts/AuthContext'
 
 export default function AppLayoutRoute() {
   return (
-    <RequireRoleRoute allowedRoles={PERSONAL_ROLES}>
+    <RequireCapabilityRoute capability={PERSONAL_CAPABILITIES}>
       <UserLayout />
-    </RequireRoleRoute>
+    </RequireCapabilityRoute>
   )
 }

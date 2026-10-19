@@ -8,9 +8,10 @@ import { useTranslation } from 'react-i18next';
 import { LOCALE_LABELS, SUPPORTED_LOCALES } from '@race-tracker/i18n';
 import { setAppLanguage } from '@/lib/i18n';
 import type { ThemePreference } from '@/types';
+import { getPreferredCapability, getUserCapabilities, hasCapability, isOperationsRole } from '@/lib/capabilities';
 
 export default function ProfileScreen() {
-  const { user, logout, isAuthenticated, updateProfile } = useAuthStore();
+  const { user, logout, isAuthenticated, updateProfile, updateCapabilities } = useAuthStore();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const { t, i18n } = useTranslation();
   const currentLocale = i18n.resolvedLanguage ?? 'en';
@@ -22,7 +23,10 @@ export default function ProfileScreen() {
   };
   const [profileEditorVisible, setProfileEditorVisible] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [savingCapability, setSavingCapability] = useState(false);
   const [draftProfile, setDraftProfile] = useState({ firstName: '', lastName: '', phone: '' });
+  const capabilities = getUserCapabilities(user);
+  const preferredCapability = getPreferredCapability(user);
 
   const cycleTheme = async () => {
     const order: ThemePreference[] = ['light', 'dark', 'system'];
@@ -41,8 +45,7 @@ export default function ProfileScreen() {
           text: 'Sign Out', 
           style: 'destructive',
           onPress: () => {
-            logout();
-            router.replace('/(auth)/login');
+            void logout().finally(() => router.replace('/(auth)/login'));
           }
         },
       ]
@@ -77,6 +80,23 @@ export default function ProfileScreen() {
       Alert.alert('Unable to update profile', error instanceof Error ? error.message : 'Please try again.');
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  const selectPreferredCapability = async (capability: 'ATHLETE' | 'SPECTATOR') => {
+    if (!user || !hasCapability(user, capability) || preferredCapability === capability) return;
+
+    setSavingCapability(true);
+    try {
+      await updateCapabilities({ capabilities, preferredCapability: capability });
+      Alert.alert(t('mobile:capabilities.updated'));
+    } catch (error) {
+      Alert.alert(
+        t('mobile:capabilities.updateFailed'),
+        error instanceof Error ? error.message : t('mobile:capabilities.updateFailed'),
+      );
+    } finally {
+      setSavingCapability(false);
     }
   };
 
@@ -146,6 +166,51 @@ export default function ProfileScreen() {
           <Text style={styles.statLabel}>Badges</Text>
         </View>
       </View>
+
+      {!isOperationsRole(user?.role) && capabilities.length > 0 ? (
+        <View style={styles.capabilityContainer}>
+          <Text style={styles.capabilityTitle}>{t('mobile:capabilities.title')}</Text>
+          <Text style={styles.capabilityDescription}>{t('mobile:capabilities.description')}</Text>
+          <View style={styles.capabilityCards}>
+            {(['ATHLETE', 'SPECTATOR'] as const)
+              .filter((capability) => capabilities.includes(capability))
+              .map((capability) => {
+                const isAthleteCapability = capability === 'ATHLETE';
+                const isSelected = preferredCapability === capability;
+                return (
+                  <TouchableOpacity
+                    key={capability}
+                    style={[styles.capabilityCard, isSelected && styles.capabilityCardSelected]}
+                    onPress={() => void selectPreferredCapability(capability)}
+                    disabled={savingCapability}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: isSelected, disabled: savingCapability }}
+                  >
+                    <Ionicons
+                      name={isAthleteCapability ? 'walk-outline' : 'eye-outline'}
+                      size={22}
+                      color={isSelected ? '#0F766E' : '#6B7280'}
+                    />
+                    <View style={styles.capabilityCopy}>
+                      <Text style={styles.capabilityCardTitle}>
+                        {t(isAthleteCapability ? 'mobile:capabilities.athlete' : 'mobile:capabilities.spectator')}
+                      </Text>
+                      <Text style={styles.capabilityCardDescription}>
+                        {t(isAthleteCapability ? 'mobile:capabilities.athleteDescription' : 'mobile:capabilities.spectatorDescription')}
+                      </Text>
+                    </View>
+                    {isSelected && <Text style={styles.capabilityActive}>{t('mobile:capabilities.active')}</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+          </View>
+        </View>
+      ) : isOperationsRole(user?.role) ? (
+        <View style={styles.operationsNotice}>
+          <Text style={styles.operationsNoticeTitle}>{t('mobile:home.operationsTitle')}</Text>
+          <Text style={styles.operationsNoticeText}>{t('mobile:home.operationsDescription')}</Text>
+        </View>
+      ) : null}
 
       {/* Menu Items */}
       <View style={styles.menuContainer}>
@@ -331,6 +396,80 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
+  },
+  capabilityContainer: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 16,
+  },
+  capabilityTitle: {
+    color: '#1F2937',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  capabilityDescription: {
+    color: '#6B7280',
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 6,
+  },
+  capabilityCards: {
+    gap: 10,
+    marginTop: 14,
+  },
+  capabilityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+  },
+  capabilityCardSelected: {
+    borderColor: '#0F766E',
+    backgroundColor: '#F0FDFA',
+  },
+  capabilityCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  capabilityCardTitle: {
+    color: '#1F2937',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  capabilityCardDescription: {
+    color: '#6B7280',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  capabilityActive: {
+    color: '#0F766E',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  operationsNotice: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  operationsNoticeTitle: {
+    color: '#92400E',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  operationsNoticeText: {
+    color: '#92400E',
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 6,
   },
   statItem: {
     flex: 1,

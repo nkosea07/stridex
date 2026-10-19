@@ -204,6 +204,8 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     boolean existsByRaceIdAndUserId(UUID raceId, UUID userId);
 
+    boolean existsByUserIdAndStatusIn(UUID userId, Collection<Participant.ParticipantStatus> statuses);
+
     long countByRaceId(UUID raceId);
 
     long countByRaceIdAndStatusIn(UUID raceId, Collection<Participant.ParticipantStatus> statuses);

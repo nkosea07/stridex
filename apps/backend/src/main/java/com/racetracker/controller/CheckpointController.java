@@ -34,7 +34,7 @@ public class CheckpointController {
     @GetMapping("/{raceId}/checkpoints")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL', 'ATHLETE', 'SPECTATOR')")
     public ResponseEntity<List<CheckpointDto>> list(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanRead(raceId);
         return ResponseEntity.ok(checkpointService.listByRace(raceId));
     }
 
@@ -44,7 +44,7 @@ public class CheckpointController {
         @PathVariable UUID raceId,
         @RequestParam(defaultValue = "csv") String format
     ) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         ExportedFile file = checkpointExportService.export(raceId, format);
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.filename() + "\"")
@@ -53,14 +53,14 @@ public class CheckpointController {
     }
 
     @PostMapping("/{raceId}/checkpoints")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<CheckpointDto> create(@PathVariable UUID raceId, @Valid @RequestBody CheckpointCreateRequest request) {
         raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(checkpointService.create(raceId, request));
     }
 
     @PutMapping("/{raceId}/checkpoints/{checkpointId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<CheckpointDto> update(
         @PathVariable UUID raceId,
         @PathVariable UUID checkpointId,
@@ -71,7 +71,7 @@ public class CheckpointController {
     }
 
     @DeleteMapping("/{raceId}/checkpoints/{checkpointId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<ApiMessageResponse> delete(@PathVariable UUID raceId, @PathVariable UUID checkpointId) {
         raceAccessGuard.assertCanManage(raceId);
         checkpointService.delete(raceId, checkpointId);
@@ -85,7 +85,7 @@ public class CheckpointController {
         @PathVariable UUID checkpointId,
         @RequestBody CheckpointRecordRequest request
     ) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanAccessCheckpoint(raceId, checkpointId);
         return ResponseEntity.ok(checkpointService.record(raceId, checkpointId, request));
     }
 
@@ -107,7 +107,7 @@ public class CheckpointController {
         @PathVariable UUID raceId,
         @PathVariable UUID checkpointId
     ) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanAccessCheckpoint(raceId, checkpointId);
         return ResponseEntity.ok(checkpointService.listRecords(raceId, checkpointId));
     }
 }

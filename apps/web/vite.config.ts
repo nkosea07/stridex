@@ -11,6 +11,9 @@ export default defineConfig({
       '@': srcDir,
     },
   },
+  optimizeDeps: {
+    include: ['cookie'],
+  },
   server: {
     port: 5173,
     proxy: {

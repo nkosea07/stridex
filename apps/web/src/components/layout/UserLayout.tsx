@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { BarChart3, Bell, Home, LogOut, Settings, Heart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { useAuth } from '@/contexts/AuthContext'
+import { CapabilityModeSwitcher } from '@/components/auth/CapabilityModeSwitcher'
+import { getPreferredCapability, useAuth } from '@/contexts/AuthContext'
 import { connectUserAlerts } from '@/lib/api'
 import { toast } from 'sonner'
 import { ThemeSelect } from '@/components/theme/ThemeSelect'
@@ -13,7 +14,8 @@ export function UserLayout() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const isSpectator = user?.role === 'SPECTATOR'
+  const activeCapability = getPreferredCapability(user)
+  const isSpectator = activeCapability === 'SPECTATOR'
   const navItems = [
     { to: '/app', labelKey: isSpectator ? 'nav:spectatorDashboard' : 'nav:myDashboard', icon: Home, end: true },
     { to: '/app/stats', labelKey: isSpectator ? 'nav:following' : 'nav:myPerformance', icon: isSpectator ? Heart : BarChart3 },
@@ -43,6 +45,7 @@ export function UserLayout() {
             <p className="font-medium">{user?.firstName} {user?.lastName}</p>
           </div>
           <div className="flex items-center gap-2">
+            <CapabilityModeSwitcher compact />
             <ThemeSelect className="h-8 w-[140px]" />
             <Button variant="outline" size="sm" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />

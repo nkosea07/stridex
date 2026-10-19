@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { categoriesApi } from '@/lib/api'
 import type { RaceCategory } from '@/types'
+import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
 const emptyForm = {
@@ -30,6 +32,9 @@ const emptyForm = {
 
 export function CategoriesPage() {
   const { raceId } = useParams()
+  const { t } = useTranslation()
+  const { user } = useAuth()
+  const canManageCategories = isAdminRole(user?.role)
   const [categories, setCategories] = useState<RaceCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -43,7 +48,7 @@ export function CategoriesPage() {
     try {
       setCategories(await categoriesApi.list(raceId))
     } catch {
-      toast.error('Failed to load categories')
+      toast.error(t('nav:categoriesLoadFailed'))
     } finally {
       setLoading(false)
     }
@@ -77,7 +82,7 @@ export function CategoriesPage() {
   const handleSave = async () => {
     if (!raceId) return
     if (!form.name.trim()) {
-      toast.error('Category name is required')
+      toast.error(t('nav:categoryNameRequired'))
       return
     }
     const payload = {
@@ -94,15 +99,15 @@ export function CategoriesPage() {
     try {
       if (editingId) {
         await categoriesApi.update(raceId, editingId, payload)
-        toast.success('Category updated')
+        toast.success(t('nav:categoryUpdated'))
       } else {
         await categoriesApi.create(raceId, payload)
-        toast.success('Category created')
+        toast.success(t('nav:categoryCreated'))
       }
       setDialogOpen(false)
       await load()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save category')
+      toast.error(error instanceof Error ? error.message : t('nav:categorySaveFailed'))
     } finally {
       setSaving(false)
     }
@@ -110,13 +115,13 @@ export function CategoriesPage() {
 
   const handleDelete = async (category: RaceCategory) => {
     if (!raceId) return
-    if (!window.confirm(`Delete category "${category.name}"?`)) return
+    if (!window.confirm(t('nav:deleteCategoryConfirmation', { name: category.name }))) return
     try {
       await categoriesApi.delete(raceId, category.id)
-      toast.success('Category deleted')
+      toast.success(t('nav:categoryDeleted'))
       await load()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to delete category')
+      toast.error(error instanceof Error ? error.message : t('nav:categoryDeleteFailed'))
     }
   }
 
@@ -124,31 +129,33 @@ export function CategoriesPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Categories</h1>
-          <p className="text-muted-foreground">Race entry categories and fees</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t('nav:categoriesPageTitle')}</h1>
+          <p className="text-muted-foreground">{t('nav:categoriesPageDescription')}</p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          New category
-        </Button>
+        {canManageCategories && (
+          <Button onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t('nav:newCategory')}
+          </Button>
+        )}
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Configured categories</CardTitle>
-          <CardDescription>Categories drive registration options and bib prefixes.</CardDescription>
+          <CardTitle className="text-base">{t('nav:configuredCategories')}</CardTitle>
+          <CardDescription>{t('nav:categoriesConfigurationDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Gender</TableHead>
-                <TableHead>Age</TableHead>
-                <TableHead>Bib prefix</TableHead>
-                <TableHead>Fee</TableHead>
-                <TableHead>Participants</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t('common:labels.name')}</TableHead>
+                <TableHead>{t('nav:gender')}</TableHead>
+                <TableHead>{t('nav:age')}</TableHead>
+                <TableHead>{t('nav:bibPrefix')}</TableHead>
+                <TableHead>{t('nav:fee')}</TableHead>
+                <TableHead>{t('nav:participants')}</TableHead>
+                <TableHead className="text-right">{t('nav:actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -158,7 +165,7 @@ export function CategoriesPage() {
                     <div>{category.name}</div>
                     {category.description && <div className="text-xs text-muted-foreground">{category.description}</div>}
                   </TableCell>
-                  <TableCell>{category.gender ?? 'ANY'}</TableCell>
+                  <TableCell>{category.gender ?? t('nav:any')}</TableCell>
                   <TableCell>
                     {category.minAge ?? '-'}–{category.maxAge ?? '-'}
                   </TableCell>
@@ -166,19 +173,23 @@ export function CategoriesPage() {
                   <TableCell>{category.registrationFee != null ? category.registrationFee : '-'}</TableCell>
                   <TableCell>{category.participantCount ?? 0}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(category)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => void handleDelete(category)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {canManageCategories && (
+                      <>
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(category)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => void handleDelete(category)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
               {!loading && categories.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-sm text-muted-foreground">
-                    No categories configured.
+                    {t('nav:noCategoriesConfigured')}
                   </TableCell>
                 </TableRow>
               )}
@@ -187,29 +198,29 @@ export function CategoriesPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {canManageCategories && <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editingId ? 'Edit category' : 'New category'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingId ? t('nav:editCategory') : t('nav:newCategory')}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
-            <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
-            <div><Label>Description</Label><Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></div>
+            <div><Label>{t('common:labels.name')}</Label><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
+            <div><Label>{t('nav:description')}</Label><Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>Min age</Label><Input type="number" value={form.minAge} onChange={(e) => setForm((f) => ({ ...f, minAge: e.target.value }))} /></div>
-              <div><Label>Max age</Label><Input type="number" value={form.maxAge} onChange={(e) => setForm((f) => ({ ...f, maxAge: e.target.value }))} /></div>
-              <div><Label>Gender</Label><Input value={form.gender} onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value.toUpperCase() }))} placeholder="ANY" /></div>
+              <div><Label>{t('nav:minAge')}</Label><Input type="number" value={form.minAge} onChange={(e) => setForm((f) => ({ ...f, minAge: e.target.value }))} /></div>
+              <div><Label>{t('nav:maxAge')}</Label><Input type="number" value={form.maxAge} onChange={(e) => setForm((f) => ({ ...f, maxAge: e.target.value }))} /></div>
+              <div><Label>{t('nav:gender')}</Label><Input value={form.gender} onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value.toUpperCase() }))} placeholder={t('nav:any')} /></div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>Bib prefix</Label><Input value={form.bibPrefix} onChange={(e) => setForm((f) => ({ ...f, bibPrefix: e.target.value }))} /></div>
-              <div><Label>Max participants</Label><Input type="number" value={form.maxParticipants} onChange={(e) => setForm((f) => ({ ...f, maxParticipants: e.target.value }))} /></div>
-              <div><Label>Fee</Label><Input type="number" step="0.01" value={form.registrationFee} onChange={(e) => setForm((f) => ({ ...f, registrationFee: e.target.value }))} /></div>
+              <div><Label>{t('nav:bibPrefix')}</Label><Input value={form.bibPrefix} onChange={(e) => setForm((f) => ({ ...f, bibPrefix: e.target.value }))} /></div>
+              <div><Label>{t('nav:maxParticipants')}</Label><Input type="number" value={form.maxParticipants} onChange={(e) => setForm((f) => ({ ...f, maxParticipants: e.target.value }))} /></div>
+              <div><Label>{t('nav:fee')}</Label><Input type="number" step="0.01" value={form.registrationFee} onChange={(e) => setForm((f) => ({ ...f, registrationFee: e.target.value }))} /></div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
-            <Button onClick={() => void handleSave()} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>{t('common:actions.cancel')}</Button>
+            <Button onClick={() => void handleSave()} disabled={saving}>{saving ? t('nav:saving') : t('common:actions.save')}</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   )
 }

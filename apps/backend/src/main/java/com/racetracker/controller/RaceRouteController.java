@@ -37,14 +37,14 @@ public class RaceRouteController {
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/route")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL', 'ATHLETE')")
     public ResponseEntity<List<RoutePointDto>> route(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanRead(raceId);
         return ResponseEntity.ok(raceRouteService.getRoute(raceId));
     }
 
     @GetMapping(value = "/v${racetracker.api.version}/races/{raceId}/route/gpx", produces = "application/gpx+xml")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<String> exportGpx(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok()
             .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"route.gpx\"")
             .contentType(MediaType.parseMediaType("application/gpx+xml"))

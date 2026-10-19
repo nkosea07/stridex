@@ -16,25 +16,27 @@ class ControllerAuthorizationMatrixTest {
     void authControllerGuards() {
         assertGuard(AuthController.class, "me", "isAuthenticated()");
         assertGuard(AuthController.class, "updateProfile", "isAuthenticated()");
+        assertGuard(AuthController.class, "updateCapabilities", "isAuthenticated()");
     }
 
     @Test
     void participantControllerGuards() {
-        assertGuard(ParticipantController.class, "myRegistrations", "isAuthenticated()");
+        assertGuard(ParticipantController.class, "myRegistrations", "hasAuthority('CAP_ATHLETE')");
     }
 
     @Test
     void raceParticipantControllerGuards() {
         String opsGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')";
+        String adminGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')";
         assertGuard(RaceParticipantController.class, "list", opsGuard);
         assertGuard(RaceParticipantController.class, "get", opsGuard);
-        assertGuard(RaceParticipantController.class, "create", opsGuard);
-        assertGuard(RaceParticipantController.class, "update", opsGuard);
-        assertGuard(RaceParticipantController.class, "delete", opsGuard);
+        assertGuard(RaceParticipantController.class, "create", adminGuard);
+        assertGuard(RaceParticipantController.class, "update", adminGuard);
+        assertGuard(RaceParticipantController.class, "delete", adminGuard);
         assertGuard(RaceParticipantController.class, "checkIn", opsGuard);
-        assertGuard(RaceParticipantController.class, "importCsv", opsGuard);
-        assertGuard(RaceParticipantController.class, "exportCsv", opsGuard);
-        assertGuard(RaceParticipantController.class, "registerForRace", "isAuthenticated()");
+        assertGuard(RaceParticipantController.class, "importCsv", adminGuard);
+        assertGuard(RaceParticipantController.class, "exportCsv", adminGuard);
+        assertGuard(RaceParticipantController.class, "registerForRace", "hasAuthority('CAP_ATHLETE')");
         assertGuard(RaceParticipantController.class, "review", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')");
         assertGuard(RaceParticipantController.class, "verifyPayment", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')");
     }
@@ -56,18 +58,19 @@ class ControllerAuthorizationMatrixTest {
 
     @Test
     void favoriteControllerGuards() {
-        assertGuard(FavoriteController.class, "list", "isAuthenticated()");
-        assertGuard(FavoriteController.class, "follow", "isAuthenticated()");
-        assertGuard(FavoriteController.class, "unfollow", "isAuthenticated()");
+        assertGuard(FavoriteController.class, "list", "hasAuthority('CAP_SPECTATOR')");
+        assertGuard(FavoriteController.class, "follow", "hasAuthority('CAP_SPECTATOR')");
+        assertGuard(FavoriteController.class, "unfollow", "hasAuthority('CAP_SPECTATOR')");
     }
 
     @Test
     void checkpointControllerGuards() {
         assertGuard(CheckpointController.class, "list", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL', 'ATHLETE', 'SPECTATOR')");
         String opsGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')";
-        assertGuard(CheckpointController.class, "create", opsGuard);
-        assertGuard(CheckpointController.class, "update", opsGuard);
-        assertGuard(CheckpointController.class, "delete", opsGuard);
+        String adminGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')";
+        assertGuard(CheckpointController.class, "create", adminGuard);
+        assertGuard(CheckpointController.class, "update", adminGuard);
+        assertGuard(CheckpointController.class, "delete", adminGuard);
         assertGuard(CheckpointController.class, "record", opsGuard);
         assertGuard(CheckpointController.class, "export", opsGuard);
         assertGuard(CheckpointController.class, "listRecords", opsGuard);
@@ -85,10 +88,11 @@ class ControllerAuthorizationMatrixTest {
     @Test
     void rfidControllerGuards() {
         String opsGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')";
-        assertGuard(RfidController.class, "createReader", opsGuard);
+        String adminGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')";
+        assertGuard(RfidController.class, "createReader", adminGuard);
         assertGuard(RfidController.class, "listReaders", opsGuard);
         assertGuard(RfidController.class, "overview", opsGuard);
-        assertGuard(RfidController.class, "revokeReader", opsGuard);
+        assertGuard(RfidController.class, "revokeReader", adminGuard);
         assertThat(Arrays.stream(RfidController.class.getDeclaredMethods())
             .filter(method -> method.getName().equals("ingestReads"))
             .noneMatch(method -> method.isAnnotationPresent(PreAuthorize.class)))
@@ -97,7 +101,7 @@ class ControllerAuthorizationMatrixTest {
 
     @Test
     void trackingControllerGuards() {
-        String trackOpsGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL', 'ATHLETE')";
+        String trackOpsGuard = "hasAuthority('CAP_ATHLETE')";
         assertGuard(TrackingController.class, "sendLocation", trackOpsGuard);
         assertGuard(TrackingController.class, "sendLocationsBatch", trackOpsGuard);
         assertGuard(TrackingController.class, "recordCheckpoint", trackOpsGuard);
@@ -111,9 +115,9 @@ class ControllerAuthorizationMatrixTest {
         String readGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')";
         assertGuard(ResultController.class, "listByRace", readGuard);
         assertGuard(ResultController.class, "getByParticipant", readGuard);
-        assertGuard(ResultController.class, "myResults", "isAuthenticated()");
-        assertGuard(ResultController.class, "myResultsPage", "isAuthenticated()");
-        assertGuard(ResultController.class, "publish", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')");
+        assertGuard(ResultController.class, "myResults", "hasAuthority('CAP_ATHLETE')");
+        assertGuard(ResultController.class, "myResultsPage", "hasAuthority('CAP_ATHLETE')");
+        assertGuard(ResultController.class, "publish", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')");
         assertThat(Arrays.stream(ResultController.class.getDeclaredMethods())
             .filter(method -> method.getName().equals("listPublishedPublicResults"))
             .noneMatch(method -> method.isAnnotationPresent(PreAuthorize.class)))
@@ -169,7 +173,7 @@ class ControllerAuthorizationMatrixTest {
 
     @Test
     void emergencyAlertControllerGuards() {
-        assertGuard(EmergencyAlertController.class, "raise", "isAuthenticated()");
+        assertGuard(EmergencyAlertController.class, "raise", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')");
         assertGuard(EmergencyAlertController.class, "list", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')");
     }
 
@@ -192,7 +196,15 @@ class ControllerAuthorizationMatrixTest {
 
     @Test
     void registrationControllerGuards() {
-        assertGuard(RegistrationController.class, "cancelRegistration", "isAuthenticated()");
+        assertGuard(RegistrationController.class, "cancelRegistration", "hasAuthority('CAP_ATHLETE')");
+    }
+
+    @Test
+    void raceStaffAssignmentControllerGuards() {
+        assertGuard(RaceStaffAssignmentController.class, "promote", "hasRole('SUPER_ADMIN')");
+        String raceAdminGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')";
+        assertGuard(RaceStaffAssignmentController.class, "assign", raceAdminGuard);
+        assertGuard(RaceStaffAssignmentController.class, "revoke", raceAdminGuard);
     }
 
     private void assertGuard(Class<?> controllerClass, String methodName, String expected) {

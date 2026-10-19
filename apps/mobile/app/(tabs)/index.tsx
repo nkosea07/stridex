@@ -4,6 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState, useCallback, useEffect } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
+import { getPreferredCapability, hasAnyCapability, hasCapability, isOperationsRole } from '@/lib/capabilities';
+import { UnsupportedMobileState } from '@/components/CapabilityGate';
+import { useTranslation } from 'react-i18next';
+import { formatDate, formatDistanceKm, formatNumber } from '@/lib/format';
 
 type UpcomingRace = {
   id: string;
@@ -29,7 +33,7 @@ function toDateLabel(value?: string) {
   if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString();
+  return formatDate(date);
 }
 
 function toDaysUntil(value?: string) {
@@ -47,12 +51,23 @@ const DEFAULT_BANNER = 'https://images.unsplash.com/photo-1513593771513-7b58b6c4
 
 export default function HomeScreen() {
   const { user, isAuthenticated } = useAuthStore();
+  const { t } = useTranslation();
+  const isAthlete = hasCapability(user, 'ATHLETE');
+  const isSpectator = hasCapability(user, 'SPECTATOR');
+  const isOperationsUser = isOperationsRole(user?.role);
+  const activeCapability = getPreferredCapability(user);
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [upcomingRace, setUpcomingRace] = useState<UpcomingRace | null>(null);
   const [recentRaces, setRecentRaces] = useState<RecentRaceResult[]>([]);
 
   const loadHomeData = useCallback(async () => {
+    if (!isAthlete || activeCapability !== 'ATHLETE') {
+      setUpcomingRace(null);
+      setRecentRaces([]);
+      return;
+    }
+
     const [registrations, races, myResults] = await Promise.all([
       api.getMyRaces(),
       api.getRaces(),
@@ -111,7 +126,7 @@ export default function HomeScreen() {
       .map(({ raceDateTs, ...rest }) => rest);
 
     setRecentRaces(mappedResults);
-  }, []);
+  }, [activeCapability, isAthlete]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -119,14 +134,14 @@ export default function HomeScreen() {
   }, [loadHomeData]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || isOperationsUser || !hasAnyCapability(user, ['ATHLETE', 'SPECTATOR'])) {
       setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
     loadHomeData().finally(() => setIsLoading(false));
-  }, [isAuthenticated, loadHomeData]);
+  }, [isAuthenticated, isOperationsUser, loadHomeData, user]);
 
   if (!isAuthenticated) {
     return (
@@ -148,10 +163,38 @@ export default function HomeScreen() {
     );
   }
 
+  if (isOperationsUser) {
+    return <UnsupportedMobileState />;
+  }
+
+  if (!hasAnyCapability(user, ['ATHLETE', 'SPECTATOR'])) {
+    return <UnsupportedMobileState />;
+  }
+
   if (isLoading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#0F766E" />
+      </View>
+    );
+  }
+
+  if (isSpectator && activeCapability === 'SPECTATOR') {
+    return (
+      <View style={styles.authContainer}>
+        <Ionicons name="eye-outline" size={80} color="#0F766E" />
+        <Text style={styles.authTitle}>{t('mobile:home.spectatorTitle')}</Text>
+        <Text style={styles.authSubtitle}>{t('mobile:home.spectatorDescription')}</Text>
+        <Link href="/(tabs)/races" asChild>
+          <TouchableOpacity style={styles.primaryButton}>
+            <Text style={styles.primaryButtonText}>{t('mobile:home.browseRaces')}</Text>
+          </TouchableOpacity>
+        </Link>
+        <Link href="/(tabs)/followed" asChild>
+          <TouchableOpacity style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>{t('mobile:home.viewFollowed')}</Text>
+          </TouchableOpacity>
+        </Link>
       </View>
     );
   }
@@ -179,7 +222,7 @@ export default function HomeScreen() {
               />
               <View style={styles.raceOverlay}>
                 <View style={styles.daysCountdown}>
-                  <Text style={styles.daysNumber}>{upcomingRace.daysUntil}</Text>
+                  <Text style={styles.daysNumber}>{formatNumber(upcomingRace.daysUntil)}</Text>
                   <Text style={styles.daysLabel}>days to go</Text>
                 </View>
               </View>
@@ -196,7 +239,7 @@ export default function HomeScreen() {
                   </View>
                   <View style={styles.detailRow}>
                     <Ionicons name="walk-outline" size={16} color="#6B7280" />
-                    <Text style={styles.detailText}>{upcomingRace.distance}km - {upcomingRace.category}</Text>
+                    <Text style={styles.detailText}>{formatDistanceKm(upcomingRace.distance)} - {upcomingRace.category}</Text>
                   </View>
                 </View>
                 <View style={styles.bibContainer}>

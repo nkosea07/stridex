@@ -37,7 +37,7 @@ WhatsApp Cloud API.
 ## 3. Apple OAuth
 
 **State.** Google OAuth is implemented via tokeninfo (`GoogleOAuthIdentityVerifier`); privileged
-accounts are rejected from OAuth sessions (must use password + MFA).
+accounts are rejected from OAuth sessions (must use verified-email password authentication).
 
 **Decision.** Apple Services ID / team / key credentials.
 
@@ -65,11 +65,15 @@ The table is **not** range-partitioned.
 
 ## 5. Public-endpoint rate limiting
 
-**State.** `/auth/oauth/google` and `/rfid/read-events` are public and currently unthrottled
-(flagged in `docs/security-review.md`).
+**State. Done in code.** Google OAuth is limited to 10 requests per client IP per 15 minutes.
+RFID read ingest is limited to 120 requests per client IP per minute and 600 requests per
+supplied reader key per minute. Heartbeat remains unthrottled. Production Redis enforcement
+and metrics still require deployment/runtime verification.
 
-**Steps.** Extend `RequestRateLimiter` with an OAuth and a reader-key bucket; call it in
-`OAuthController.google` and `RfidController.ingestReads`; add tests.
+**Evidence.** `RequestRateLimiterTest`, `OAuthControllerWebMvcTest`, and
+`RfidControllerWebMvcTest` cover the policies and service short-circuit behavior. The current
+implementation uses the trusted-proxy-aware client address resolver and hashes identities
+before creating Redis keys.
 
 ## 6. Client i18n
 

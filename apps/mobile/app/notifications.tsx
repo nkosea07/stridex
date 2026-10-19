@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/lib/api';
 import { registerForPushNotifications } from '@/lib/notifications';
 import { useTheme } from '@/contexts/theme';
-import { useAuthStore } from '@/store/auth';
+import { AuthenticatedGate } from '@/components/CapabilityGate';
 import type { Notification } from '@/types';
 
 const typeIcon: Record<Notification['type'], keyof typeof Ionicons.glyphMap> = {
@@ -25,15 +25,21 @@ const typeIcon: Record<Notification['type'], keyof typeof Ionicons.glyphMap> = {
 };
 
 export default function NotificationsScreen() {
+  return (
+    <AuthenticatedGate>
+      <NotificationsScreenContent />
+    </AuthenticatedGate>
+  );
+}
+
+function NotificationsScreenContent() {
   const { colors } = useTheme();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [enablingPush, setEnablingPush] = useState(false);
 
   const load = useCallback(async () => {
-    if (!isAuthenticated) return;
     setLoading(true);
     try {
       const items = await api.getNotifications();
@@ -43,7 +49,7 @@ export default function NotificationsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -81,14 +87,6 @@ export default function NotificationsScreen() {
       // Keep the local state unchanged; the next refresh reconciles.
     }
   };
-
-  if (!isAuthenticated) {
-    return (
-      <View style={[styles.empty, { backgroundColor: colors.background }]}>
-        <Text style={[styles.emptyText, { color: colors.subText }]}>Sign in to view notifications.</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

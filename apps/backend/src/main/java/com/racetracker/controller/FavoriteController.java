@@ -23,19 +23,19 @@ public class FavoriteController {
     }
 
     @GetMapping("")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('CAP_SPECTATOR')")
     public ResponseEntity<List<FavoriteAthleteDto>> list() {
         return ResponseEntity.ok(athleteFollowService.listFavorites());
     }
 
     @PostMapping("")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('CAP_SPECTATOR')")
     public ResponseEntity<FavoriteAthleteDto> follow(@Valid @RequestBody FavoriteCreateRequest request) {
         return ResponseEntity.ok(athleteFollowService.follow(request));
     }
 
     @DeleteMapping("/{participantId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('CAP_SPECTATOR')")
     public ResponseEntity<ApiMessageResponse> unfollow(@PathVariable UUID participantId, @RequestParam UUID raceId) {
         athleteFollowService.unfollow(raceId, participantId);
         return ResponseEntity.ok(new ApiMessageResponse("Athlete removed from favorites"));

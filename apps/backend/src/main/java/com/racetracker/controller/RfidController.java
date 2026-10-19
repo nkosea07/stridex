@@ -47,7 +47,7 @@ public class RfidController {
     }
 
     @PostMapping("/v${racetracker.api.version}/races/{raceId}/rfid/readers")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<RfidReaderCreateResponse> createReader(
         @PathVariable UUID raceId,
         @Valid @RequestBody RfidReaderCreateRequest request,
@@ -63,19 +63,19 @@ public class RfidController {
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/rfid/readers")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
     public ResponseEntity<List<RfidReaderDto>> listReaders(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(rfidReaderService.list(raceId));
     }
 
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/rfid/overview")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
     public ResponseEntity<RfidRaceOverviewDto> overview(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(rfidReaderService.overview(raceId));
     }
 
     @PatchMapping("/v${racetracker.api.version}/races/{raceId}/rfid/readers/{readerId}/revoke")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<RfidReaderDto> revokeReader(@PathVariable UUID raceId, @PathVariable UUID readerId, Authentication authentication) {
         raceAccessGuard.assertCanManage(raceId);
         RfidReaderDto revoked = rfidReaderService.revoke(raceId, readerId);

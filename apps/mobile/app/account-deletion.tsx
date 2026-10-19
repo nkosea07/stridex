@@ -14,9 +14,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useTheme } from '@/contexts/theme';
+import { AuthenticatedGate } from '@/components/CapabilityGate';
 import type { DeletionStatus } from '@/types';
 
 export default function AccountDeletionScreen() {
+  return (
+    <AuthenticatedGate>
+      <AccountDeletionScreenContent />
+    </AuthenticatedGate>
+  );
+}
+
+function AccountDeletionScreenContent() {
   const { colors } = useTheme();
   const logout = useAuthStore((state) => state.logout);
   const [status, setStatus] = useState<DeletionStatus | null>(null);
@@ -47,10 +56,15 @@ export default function AccountDeletionScreen() {
     setBusy(true);
     try {
       await api.deleteAccount(password, confirmation.trim());
+      try {
+        await logout();
+      } catch (error) {
+        console.warn('Account deletion completed but local logout cleanup reported an error:', error);
+      }
       Alert.alert(
         'Account scheduled for deletion',
         'Your account is deactivated and your data will be erased after the grace period. You will now be signed out.',
-        [{ text: 'OK', onPress: () => { logout(); router.replace('/(auth)/login'); } }],
+        [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }],
       );
     } catch (error) {
       Alert.alert('Unable to delete account', error instanceof Error ? error.message : 'Please try again.');

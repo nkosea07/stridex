@@ -9,10 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { promoApi } from '@/lib/api'
 import type { PromoCode } from '@/types'
+import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
 export function PromoCodesPage() {
   const { raceId } = useParams()
+  const { user } = useAuth()
+  const canManagePromos = isAdminRole(user?.role)
   const [codes, setCodes] = useState<PromoCode[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [form, setForm] = useState({ code: '', discountType: 'PERCENT' as 'PERCENT' | 'FIXED', discountValue: '', maxUses: '' })
@@ -78,7 +81,7 @@ export function PromoCodesPage() {
         <p className="text-muted-foreground">Discount codes for race registration</p>
       </div>
 
-      <Card>
+      {canManagePromos && <Card>
         <CardHeader><CardTitle>Create Promo Code</CardTitle></CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-4">
           <Input placeholder="CODE" value={form.code} onChange={(e) => setForm((v) => ({ ...v, code: e.target.value.toUpperCase() }))} />
@@ -97,7 +100,7 @@ export function PromoCodesPage() {
             </Button>
           </div>
         </CardContent>
-      </Card>
+      </Card>}
 
       <Card>
         <CardHeader><CardTitle>Codes</CardTitle></CardHeader>
@@ -129,12 +132,16 @@ export function PromoCodesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="flex gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => void handleToggle(promo)}>
-                        <Power className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handleDelete(promo.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      {canManagePromos && (
+                        <>
+                          <Button size="sm" variant="ghost" onClick={() => void handleToggle(promo)}>
+                            <Power className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handleDelete(promo.id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

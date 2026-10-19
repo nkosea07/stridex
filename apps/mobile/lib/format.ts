@@ -29,6 +29,41 @@ export function formatNumber(value: number, options?: Intl.NumberFormatOptions):
   return new Intl.NumberFormat(activeLocale(), options).format(value)
 }
 
+export function formatDistanceKm(value: number): string {
+  return `${formatNumber(value, { maximumFractionDigits: 1 })} km`
+}
+
+export function normalizeStatus(value?: string): string {
+  return String(value ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_')
+}
+
+const statusTranslationKeys: Record<string, string> = {
+  DRAFT: 'mobile:status.upcoming',
+  UPCOMING: 'mobile:status.upcoming',
+  REGISTRATION_OPEN: 'mobile:status.registrationOpen',
+  REGISTRATION_CLOSED: 'mobile:status.registrationClosed',
+  IN_PROGRESS: 'mobile:status.inProgress',
+  COMPLETED: 'mobile:status.completed',
+  CANCELLED: 'mobile:status.cancelled',
+  FINISHED: 'mobile:status.finished',
+  DNF: 'mobile:status.dnf',
+  DNS: 'mobile:status.dns',
+  DISQUALIFIED: 'mobile:status.disqualified',
+  DQ: 'mobile:status.disqualified',
+  REGISTERED: 'mobile:status.registered',
+  PENDING: 'mobile:status.pending',
+  PENDING_REVIEW: 'mobile:status.pendingReview',
+  WAITLISTED: 'mobile:status.waitlisted',
+  REJECTED: 'mobile:status.rejected',
+  CONFIRMED: 'mobile:status.confirmed',
+  CHECKED_IN: 'mobile:status.checkedIn',
+  STARTED: 'mobile:status.started',
+}
+
+export function statusTranslationKey(value?: string): string {
+  return statusTranslationKeys[normalizeStatus(value)] ?? 'mobile:status.unknown'
+}
+
 export function formatCurrency(value: number, currency = 'USD'): string {
   return new Intl.NumberFormat(activeLocale(), { style: 'currency', currency }).format(value)
 }

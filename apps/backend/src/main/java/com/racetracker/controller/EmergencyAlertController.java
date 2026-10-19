@@ -30,7 +30,7 @@ public class EmergencyAlertController {
     }
 
     @PostMapping("/v${racetracker.api.version}/races/{raceId}/emergency")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<EmergencyAlertDto> raise(
         @PathVariable UUID raceId,
         @Valid @RequestBody EmergencyAlertRequest request,
@@ -46,7 +46,7 @@ public class EmergencyAlertController {
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/emergency")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
     public ResponseEntity<List<EmergencyAlertDto>> list(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(emergencyAlertService.list(raceId));
     }
 }

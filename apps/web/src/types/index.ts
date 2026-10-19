@@ -1,4 +1,6 @@
 export type UserRole = 'SUPER_ADMIN' | 'RACE_ADMIN' | 'OFFICIAL' | 'VOLUNTEER' | 'ATHLETE' | 'SPECTATOR'
+export type UserCapability = 'ATHLETE' | 'SPECTATOR'
+export type RegistrationExperience = UserCapability
 
 export interface User {
   id: string
@@ -6,6 +8,8 @@ export interface User {
   firstName: string
   lastName: string
   role: UserRole
+  capabilities: UserCapability[]
+  preferredCapability: UserCapability | null
   phone?: string
   isActive: boolean
   emailVerified: boolean

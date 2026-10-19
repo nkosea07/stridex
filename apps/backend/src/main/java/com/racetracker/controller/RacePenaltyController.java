@@ -33,7 +33,7 @@ public class RacePenaltyController {
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<PenaltyDto>> list(@PathVariable UUID raceId, @PathVariable UUID participantId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(penaltyService.list(raceId, participantId));
     }
 

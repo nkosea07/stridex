@@ -32,8 +32,17 @@ export default tseslint.config(
     files: [
       'src/pages/LoginPage.tsx',
       'src/pages/RegisterPage.tsx',
+      'src/pages/SettingsPage.tsx',
+      'src/pages/RegistrationFieldsPage.tsx',
+      'src/pages/CategoriesPage.tsx',
       'src/components/layout/DashboardLayout.tsx',
       'src/components/layout/UserLayout.tsx',
+      'src/components/auth/RequireAuthenticatedRoute.tsx',
+      'src/components/auth/RequireAdminRoute.tsx',
+      'src/components/auth/RequireOperationsRoute.tsx',
+      'src/components/auth/RequireRoleRoute.tsx',
+      'src/components/auth/RequireCapabilityRoute.tsx',
+      'app/routes/home.tsx',
     ],
     plugins: {
       i18next,

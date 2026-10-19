@@ -22,6 +22,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -62,6 +63,9 @@ class OrganizerApplicationServiceTest {
         when(userRepository.findByEmailIgnoreCase("organizer@example.com")).thenReturn(Optional.of(applicant));
 
         assertThat(service.register(request)).isSameAs(response);
+
+        verify(authService).register(argThat(userRequest ->
+            !userRequest.isCreateNormalCapabilities() && userRequest.getExperiences() == null));
 
         ArgumentCaptor<OrganizerApplication> captor = ArgumentCaptor.forClass(OrganizerApplication.class);
         verify(applicationRepository).save(captor.capture());

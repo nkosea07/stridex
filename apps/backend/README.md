@@ -31,6 +31,11 @@ Main config file:
 Required environment variables:
 - `JWT_SECRET`
 
+Identity configuration:
+- Development and test enable the existing Google OAuth implementation through `racetracker.oauth.enabled`.
+- The `prod` profile sets `racetracker.oauth.enabled=false` and the production validator rejects OAuth if it is enabled, so production uses password authentication without an MFA prompt in the current release.
+- The legacy MFA API and stored credentials remain available for compatibility, but normal web and mobile login no longer creates or requires an MFA challenge.
+
 Common database variables:
 - `DB_HOST` (default `localhost`)
 - `DB_PORT` (default `5432`)
@@ -71,7 +76,10 @@ The public tracking and tracking ingest hot paths are instrumented with Micromet
 - `tracking.live.aggregate`
 - `tracking.live.participant_track`
 
-This phase does not configure an external OpenTelemetry collector/exporter. The geospatial schema foundation and backend RFID bridge ingest foundation are present; telemetry partitioning, RFID operator UI, vendor SDK adapters, and CSV timing imports remain later modernization phases.
+This phase does not configure an external OpenTelemetry collector/exporter. The geospatial
+schema foundation, backend RFID bridge ingest, and reader administration API are present;
+telemetry partitioning, vendor SDK adapters, and CSV timing imports remain deferred work.
+For the current cross-surface status, use `docs/PENDING_WORK.md`.
 
 ## API Surface (Implemented)
 

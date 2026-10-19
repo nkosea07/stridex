@@ -70,14 +70,58 @@ public class RaceServiceImpl implements RaceService {
     public Page<RaceDto> list(String status, Boolean upcoming, boolean includeArchived, Pageable pageable) {
         boolean onlyUpcoming = Boolean.TRUE.equals(upcoming);
         Race.RaceStatus parsedStatus = parseRaceStatusNullable(status);
-        UUID ownerScope = resolveOwnerScope();
-        Page<Race> races = ownerScope == null
-            ? searchGlobally(parsedStatus, onlyUpcoming, includeArchived, pageable)
-            : parsedStatus == null
-                ? raceRepository.searchForOwner(ownerScope, onlyUpcoming, includeArchived, LocalDate.now(), pageable)
-                : raceRepository.searchForOwnerByStatus(ownerScope, parsedStatus, onlyUpcoming, includeArchived,
-                    LocalDate.now(), pageable);
+        Page<Race> races = searchForCurrentUser(parsedStatus, onlyUpcoming, includeArchived, pageable);
         return races.map(raceMapper::toDto);
+    }
+
+    private Page<Race> searchForCurrentUser(
+        Race.RaceStatus status,
+        boolean onlyUpcoming,
+        boolean includeArchived,
+        Pageable pageable
+    ) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return searchGlobally(status, onlyUpcoming, includeArchived, pageable);
+        }
+
+        if (hasRole(authentication, "ROLE_SUPER_ADMIN")) {
+            return searchGlobally(status, onlyUpcoming, includeArchived, pageable);
+        }
+
+        if (isPersonalRole(authentication)) {
+            LocalDate today = LocalDate.now();
+            return status == null
+                ? raceRepository.searchForPublic(Race.RaceStatus.DRAFT, onlyUpcoming, today, pageable)
+                : raceRepository.searchForPublicByStatus(Race.RaceStatus.DRAFT, status, onlyUpcoming, today, pageable);
+        }
+
+        UUID userId = userRepository.findByEmailIgnoreCase(authentication.getName())
+            .map(User::getId)
+            .orElse(null);
+        if (userId == null) {
+            if (hasRole(authentication, "ROLE_OFFICIAL") || hasRole(authentication, "ROLE_VOLUNTEER")) {
+                return Page.empty(pageable);
+            }
+            return searchGlobally(status, onlyUpcoming, includeArchived, pageable);
+        }
+
+        User.UserRole staffRole = staffRole(authentication);
+        if (staffRole != null) {
+            LocalDate today = LocalDate.now();
+            return status == null
+                ? raceRepository.searchForStaff(userId, staffRole, onlyUpcoming, includeArchived, today, pageable)
+                : raceRepository.searchForStaffByStatus(userId, staffRole, status, onlyUpcoming, includeArchived,
+                    today, pageable);
+        }
+
+        if (hasRole(authentication, "ROLE_RACE_ADMIN")) {
+            return status == null
+                ? raceRepository.searchForOwner(userId, onlyUpcoming, includeArchived, LocalDate.now(), pageable)
+                : raceRepository.searchForOwnerByStatus(userId, status, onlyUpcoming, includeArchived,
+                    LocalDate.now(), pageable);
+        }
+        return searchGlobally(status, onlyUpcoming, includeArchived, pageable);
     }
 
     private Page<Race> searchGlobally(
@@ -107,17 +151,14 @@ public class RaceServiceImpl implements RaceService {
             : raceRepository.findAllByArchivedAtIsNull(pageable);
     }
 
-    private UUID resolveOwnerScope() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return null;
+    private User.UserRole staffRole(Authentication authentication) {
+        if (hasRole(authentication, "ROLE_OFFICIAL")) {
+            return User.UserRole.OFFICIAL;
         }
-        boolean superAdmin = hasRole(authentication, "ROLE_SUPER_ADMIN");
-        boolean raceAdmin = hasRole(authentication, "ROLE_RACE_ADMIN");
-        if (superAdmin || !raceAdmin) {
-            return null;
+        if (hasRole(authentication, "ROLE_VOLUNTEER")) {
+            return User.UserRole.VOLUNTEER;
         }
-        return userRepository.findByEmailIgnoreCase(authentication.getName()).map(User::getId).orElse(null);
+        return null;
     }
 
     @Override
@@ -125,6 +166,7 @@ public class RaceServiceImpl implements RaceService {
     public RaceDto getById(UUID id) {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        assertVisibleToPersonalRole(race);
         RaceDto dto = raceMapper.toDto(race);
         dto.setRegistrationFields(registrationFieldRepository.findByRaceIdOrderByDisplayOrderAsc(id)
             .stream()
@@ -151,6 +193,25 @@ public class RaceServiceImpl implements RaceService {
     private boolean hasRole(Authentication authentication, String role) {
         return authentication.getAuthorities().stream()
             .anyMatch(authority -> role.equals(authority.getAuthority()));
+    }
+
+    private boolean isPersonalRole(Authentication authentication) {
+        return hasRole(authentication, "ROLE_ATHLETE") || hasRole(authentication, "ROLE_SPECTATOR");
+    }
+
+    private void assertVisibleToPersonalRole(Race race) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated() && isPersonalRole(authentication)
+            && !isPublicRace(race)) {
+            throw new ResourceNotFoundException("Race not found");
+        }
+    }
+
+    private boolean isPublicRace(Race race) {
+        return Boolean.TRUE.equals(race.getIsPublicRegistration())
+            && race.getStatus() != null
+            && race.getStatus() != Race.RaceStatus.DRAFT
+            && race.getArchivedAt() == null;
     }
 
     private User currentUserOrNull() {

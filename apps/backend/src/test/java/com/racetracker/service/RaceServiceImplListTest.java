@@ -1,5 +1,6 @@
 package com.racetracker.service;
 
+import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.mapper.RaceMapper;
 import com.racetracker.model.Race;
 import com.racetracker.model.User;
@@ -28,7 +29,9 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @ExtendWith(MockitoExtension.class)
 class RaceServiceImplListTest {
@@ -104,6 +107,82 @@ class RaceServiceImplListTest {
 
         verify(raceRepository).searchForOwnerByStatus(
             eq(ownerId), eq(Race.RaceStatus.DRAFT), eq(true), eq(true), any(), any());
+    }
+
+    @Test
+    void officialListingUsesOnlyActiveOfficialAssignments() {
+        UUID userId = UUID.randomUUID();
+        User official = User.builder().id(userId).email("official@example.com").build();
+        authenticate("official@example.com", "ROLE_OFFICIAL");
+        when(userRepository.findByEmailIgnoreCase("official@example.com")).thenReturn(Optional.of(official));
+        when(raceRepository.searchForStaff(eq(userId), eq(User.UserRole.OFFICIAL), eq(false), eq(false), any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        service.list(null, false, false, PageRequest.of(0, 20));
+
+        verify(raceRepository).searchForStaff(
+            eq(userId), eq(User.UserRole.OFFICIAL), eq(false), eq(false), any(), any());
+        verify(raceRepository, never()).findAllByArchivedAtIsNull(any());
+    }
+
+    @Test
+    void volunteerListingUsesOnlyActiveRaceAssignments() {
+        UUID userId = UUID.randomUUID();
+        User volunteer = User.builder().id(userId).email("volunteer@example.com").build();
+        authenticate("volunteer@example.com", "ROLE_VOLUNTEER");
+        when(userRepository.findByEmailIgnoreCase("volunteer@example.com")).thenReturn(Optional.of(volunteer));
+        when(raceRepository.searchForStaffByStatus(
+            eq(userId), eq(User.UserRole.VOLUNTEER), eq(Race.RaceStatus.IN_PROGRESS), eq(true), eq(false), any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        service.list("IN_PROGRESS", true, false, PageRequest.of(0, 20));
+
+        verify(raceRepository).searchForStaffByStatus(
+            eq(userId), eq(User.UserRole.VOLUNTEER), eq(Race.RaceStatus.IN_PROGRESS), eq(true), eq(false), any(), any());
+        verify(raceRepository, never()).findByStatusAndArchivedAtIsNull(any(), any());
+    }
+
+    @Test
+    void athleteListingUsesPublicNonDraftNonArchivedQueryEvenWhenIncludeArchivedIsRequested() {
+        authenticate("athlete@example.com", "ROLE_ATHLETE");
+        when(raceRepository.searchForPublic(eq(Race.RaceStatus.DRAFT), eq(false), any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        service.list(null, false, true, PageRequest.of(0, 20));
+
+        verify(raceRepository).searchForPublic(eq(Race.RaceStatus.DRAFT), eq(false), any(), any());
+        verify(raceRepository, never()).findAll(any(org.springframework.data.domain.Pageable.class));
+        verify(raceRepository, never()).findAllByArchivedAtIsNull(any());
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void spectatorStatusListingUsesPublicQueryAndCannotRequestDraftsOrArchives() {
+        authenticate("spectator@example.com", "ROLE_SPECTATOR");
+        when(raceRepository.searchForPublicByStatus(
+            eq(Race.RaceStatus.DRAFT), eq(Race.RaceStatus.REGISTRATION_OPEN), eq(false), any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        service.list("REGISTRATION_OPEN", false, true, PageRequest.of(0, 20));
+
+        verify(raceRepository).searchForPublicByStatus(
+            eq(Race.RaceStatus.DRAFT), eq(Race.RaceStatus.REGISTRATION_OPEN), eq(false), any(), any());
+        verify(raceRepository, never()).findByStatus(any(), any());
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void personalRoleCannotGetDraftRaceDetail() {
+        UUID raceId = UUID.randomUUID();
+        Race race = new Race();
+        race.setId(raceId);
+        race.setStatus(Race.RaceStatus.DRAFT);
+        authenticate("athlete@example.com", "ROLE_ATHLETE");
+        when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+
+        assertThatThrownBy(() -> service.getById(raceId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(raceMapper, registrationFieldRepository);
     }
 
     private void authenticate(String name, String authority) {

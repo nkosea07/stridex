@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { API_CONTRACT } from '@race-tracker/contracts'
@@ -34,14 +34,32 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { useAuth } from '@/contexts/AuthContext'
+import { CapabilityModeSwitcher } from '@/components/auth/CapabilityModeSwitcher'
+import { getUserCapabilities, useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { authApi, notificationsApi } from '@/lib/api'
 import { enableWebPush, isWebPushConfigured } from '@/lib/push'
+import { formatDate } from '@/lib/format'
 import type { ConsentState, DeletionStatus, NotificationPreference } from '@/types'
 
+type SessionSnapshot = {
+  userId: string | null
+  generation: number
+}
+
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreference = {
+  emailEnabled: true,
+  pushEnabled: true,
+  smsEnabled: true,
+  whatsappEnabled: true,
+}
+
 export function SettingsPage() {
-  const { user, updateUser } = useAuth()
+  const { user, logout, updateUser, getSessionGeneration } = useAuth()
+  const userId = user?.id ?? null
+  const sessionGeneration = getSessionGeneration()
+  const sessionRef = useRef<SessionSnapshot>({ userId, generation: sessionGeneration })
+  sessionRef.current = { userId, generation: sessionGeneration }
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { theme, resolvedTheme, setTheme } = useTheme()
@@ -64,15 +82,15 @@ export function SettingsPage() {
     email: user?.email || '',
     phone: user?.phone || ''
   })
-  const [notifications, setNotifications] = useState<NotificationPreference>({
-    emailEnabled: true,
-    pushEnabled: true,
-    smsEnabled: true,
-    whatsappEnabled: true,
-  })
+  const [notifications, setNotifications] = useState<NotificationPreference>(DEFAULT_NOTIFICATION_PREFERENCES)
   const [notificationPrefsSaving, setNotificationPrefsSaving] = useState(false)
 
   const handleSaveProfile = async () => {
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => {
+      const currentSession = sessionRef.current
+      return currentSession.userId === requestSession.userId && getSessionGeneration() === requestSession.generation
+    }
     setProfileSaving(true)
     try {
       const updatedUser = await authApi.updateProfile({
@@ -80,71 +98,122 @@ export function SettingsPage() {
         lastName: profile.lastName.trim(),
         phone: profile.phone.trim() || undefined,
       })
+      if (!isCurrentSession()) return
       updateUser(updatedUser)
       setProfile((current) => ({ ...current, email: updatedUser.email, phone: updatedUser.phone || '' }))
-      toast.success('Profile updated successfully!')
+      toast.success(t('nav:profileUpdated'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to update your profile')
+      if (isCurrentSession()) {
+        toast.error(error instanceof Error ? error.message : t('nav:unableUpdateProfile'))
+      }
     } finally {
-      setProfileSaving(false)
+      if (isCurrentSession()) setProfileSaving(false)
     }
   }
 
   const handleEnablePush = async () => {
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => {
+      const currentSession = sessionRef.current
+      return currentSession.userId === requestSession.userId && getSessionGeneration() === requestSession.generation
+    }
     setPushBusy(true)
     try {
       const enabled = await enableWebPush()
+      if (!isCurrentSession()) return
       if (enabled) {
         setPushRegistered(true)
-        toast.success('Browser push notifications enabled')
+        toast.success(t('nav:browserPushEnabled'))
       } else {
-        toast.error('Push notifications are not available in this browser')
+        toast.error(t('nav:pushUnavailable'))
       }
     } catch {
-      toast.error('Failed to enable push notifications')
+      if (isCurrentSession()) toast.error(t('nav:pushEnableFailed'))
     } finally {
-      setPushBusy(false)
+      if (isCurrentSession()) setPushBusy(false)
     }
   }
 
   const handleChangePassword = async () => {
     if (!user?.email) return
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => {
+      const currentSession = sessionRef.current
+      return currentSession.userId === requestSession.userId && getSessionGeneration() === requestSession.generation
+    }
+    const email = user.email
     setPasswordResetSending(true)
     try {
-      await authApi.forgotPassword(user.email)
-      toast.success('If the email exists, password reset instructions have been sent.')
+      await authApi.forgotPassword(email)
+      if (isCurrentSession()) toast.success(t('nav:passwordResetSent'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to start password reset')
+      if (isCurrentSession()) {
+        toast.error(error instanceof Error ? error.message : t('nav:unableStartPasswordReset'))
+      }
     } finally {
-      setPasswordResetSending(false)
+      if (isCurrentSession()) setPasswordResetSending(false)
     }
   }
 
   const handleDeleteAccount = async () => {
     if (deleteConfirmation.trim().toUpperCase() !== 'DELETE') {
-      toast.error('Type DELETE to confirm.')
+      toast.error(t('nav:typeDeleteToConfirm', { token: 'DELETE' }))
       return
+    }
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => {
+      const currentSession = sessionRef.current
+      return currentSession.userId === requestSession.userId && getSessionGeneration() === requestSession.generation
     }
     setDeleteBusy(true)
     try {
       await authApi.deleteAccount(deletePassword, deleteConfirmation.trim())
+      if (!isCurrentSession()) return
       setDeleteDialogOpen(false)
-      toast.success('Your account is scheduled for deletion and you have been signed out.')
-      authApi.logout()
+      toast.success(t('nav:accountDeletionScheduledSuccess'))
+      logout()
       navigate('/login', { replace: true })
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to delete account')
+      if (isCurrentSession()) {
+        toast.error(error instanceof Error ? error.message : t('nav:unableDeleteAccount'))
+      }
     } finally {
-      setDeleteBusy(false)
+      if (isCurrentSession()) setDeleteBusy(false)
     }
   }
 
   useEffect(() => {
     let active = true
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => {
+      const currentSession = sessionRef.current
+      return currentSession.userId === requestSession.userId && getSessionGeneration() === requestSession.generation
+    }
+    setNotifications(DEFAULT_NOTIFICATION_PREFERENCES)
+    setConsent(null)
+    setDeletion(null)
+    setPushRegistered(false)
+    setPushBusy(false)
+    setPasswordResetSending(false)
+    setDeleteDialogOpen(false)
+    setDeletePassword('')
+    setDeleteConfirmation('')
+    setDeleteBusy(false)
+    setExporting(false)
+    setConsentSaving(false)
+    setDeletionBusy(false)
+    setNotificationPrefsSaving(false)
+
+    if (!requestSession.userId) {
+      return () => {
+        active = false
+      }
+    }
+
     notificationsApi
       .preferences()
       .then((prefs) => {
-        if (active) setNotifications(prefs)
+        if (active && isCurrentSession()) setNotifications(prefs)
       })
       .catch(() => {
         // Keep defaults if preferences cannot be loaded.
@@ -152,7 +221,7 @@ export function SettingsPage() {
     authApi
       .consent()
       .then((value) => {
-        if (active) setConsent(value)
+        if (active && isCurrentSession()) setConsent(value)
       })
       .catch(() => {
         // Consent is optional to display.
@@ -160,7 +229,7 @@ export function SettingsPage() {
     authApi
       .deletionStatus()
       .then((value) => {
-        if (active) setDeletion(value)
+        if (active && isCurrentSession()) setDeletion(value)
       })
       .catch(() => {
         // Deletion status is optional to display.
@@ -168,12 +237,28 @@ export function SettingsPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [userId, sessionGeneration])
+
+  useEffect(() => {
+    setProfile({
+      firstName: user?.firstName || '',
+      lastName: user?.lastName || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+    })
+    setProfileSaving(false)
+  }, [userId, sessionGeneration])
 
   const handleExportData = async () => {
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => {
+      const currentSession = sessionRef.current
+      return currentSession.userId === requestSession.userId && getSessionGeneration() === requestSession.generation
+    }
     setExporting(true)
     try {
       const data = await authApi.exportData()
+      if (!isCurrentSession()) return
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
@@ -183,48 +268,70 @@ export function SettingsPage() {
       anchor.click()
       anchor.remove()
       URL.revokeObjectURL(url)
-      toast.success('Your data export has been downloaded.')
+      toast.success(t('nav:dataExportDownloaded'))
     } catch {
-      toast.error('Failed to export your data')
+      if (isCurrentSession()) toast.error(t('nav:dataExportFailed'))
     } finally {
-      setExporting(false)
+      if (isCurrentSession()) setExporting(false)
     }
   }
 
   const handleConsentChange = async (patch: { dataProcessingConsent?: boolean; marketingConsent?: boolean }) => {
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => {
+      const currentSession = sessionRef.current
+      return currentSession.userId === requestSession.userId && getSessionGeneration() === requestSession.generation
+    }
     setConsentSaving(true)
     try {
-      setConsent(await authApi.updateConsent(patch))
-      toast.success('Consent updated.')
+      const updatedConsent = await authApi.updateConsent(patch)
+      if (!isCurrentSession()) return
+      setConsent(updatedConsent)
+      toast.success(t('nav:consentUpdated'))
     } catch {
-      toast.error('Failed to update consent')
+      if (isCurrentSession()) toast.error(t('nav:consentUpdateFailed'))
     } finally {
-      setConsentSaving(false)
+      if (isCurrentSession()) setConsentSaving(false)
     }
   }
 
   const handleCancelDeletion = async () => {
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => {
+      const currentSession = sessionRef.current
+      return currentSession.userId === requestSession.userId && getSessionGeneration() === requestSession.generation
+    }
     setDeletionBusy(true)
     try {
-      setDeletion(await authApi.cancelDeletion())
-      toast.success('Account deletion cancelled.')
+      const updatedDeletion = await authApi.cancelDeletion()
+      if (!isCurrentSession()) return
+      setDeletion(updatedDeletion)
+      toast.success(t('nav:accountDeletionCancelled'))
     } catch {
-      toast.error('Failed to cancel deletion')
+      if (isCurrentSession()) toast.error(t('nav:accountDeletionCancelFailed'))
     } finally {
-      setDeletionBusy(false)
+      if (isCurrentSession()) setDeletionBusy(false)
     }
   }
 
   const handleSaveNotificationPreferences = async () => {
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => {
+      const currentSession = sessionRef.current
+      return currentSession.userId === requestSession.userId && getSessionGeneration() === requestSession.generation
+    }
     setNotificationPrefsSaving(true)
     try {
       const saved = await notificationsApi.updatePreferences(notifications)
+      if (!isCurrentSession()) return
       setNotifications(saved)
-      toast.success('Notification preferences saved.')
+      toast.success(t('nav:notificationPreferencesSaved'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to save preferences')
+      if (isCurrentSession()) {
+        toast.error(error instanceof Error ? error.message : t('nav:unableSavePreferences'))
+      }
     } finally {
-      setNotificationPrefsSaving(false)
+      if (isCurrentSession()) setNotificationPrefsSaving(false)
     }
   }
 
@@ -232,27 +339,27 @@ export function SettingsPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">Manage your account and preferences</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t('nav:settingsTitle')}</h1>
+        <p className="text-muted-foreground">{t('nav:settingsDescription')}</p>
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
         <TabsList>
           <TabsTrigger value="profile" className="gap-2">
             <User className="h-4 w-4" />
-            Profile
+            {t('nav:profileTab')}
           </TabsTrigger>
           <TabsTrigger value="notifications" className="gap-2">
             <Bell className="h-4 w-4" />
-            Notifications
+            {t('nav:notificationsTab')}
           </TabsTrigger>
           <TabsTrigger value="preferences" className="gap-2">
             <Globe className="h-4 w-4" />
-            Preferences
+            {t('nav:preferencesTab')}
           </TabsTrigger>
           <TabsTrigger value="security" className="gap-2">
             <Shield className="h-4 w-4" />
-            Security
+            {t('nav:securityTab')}
           </TabsTrigger>
         </TabsList>
 
@@ -260,13 +367,13 @@ export function SettingsPage() {
         <TabsContent value="profile">
           <Card>
             <CardHeader>
-              <CardTitle>Profile Information</CardTitle>
-              <CardDescription>Update your personal details</CardDescription>
+              <CardTitle>{t('nav:profileInformation')}</CardTitle>
+              <CardDescription>{t('nav:updatePersonalDetails')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
+                  <Label htmlFor="firstName">{t('nav:firstName')}</Label>
                   <Input
                     id="firstName"
                     value={profile.firstName}
@@ -274,7 +381,7 @@ export function SettingsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name</Label>
+                  <Label htmlFor="lastName">{t('nav:lastName')}</Label>
                   <Input
                     id="lastName"
                     value={profile.lastName}
@@ -283,7 +390,7 @@ export function SettingsPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t('common:labels.email')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -291,40 +398,52 @@ export function SettingsPage() {
                   readOnly
                   disabled
                 />
-                <p className="text-xs text-muted-foreground">Email changes require account support.</p>
+                <p className="text-xs text-muted-foreground">{t('nav:emailChangesSupport')}</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone">{t('common:labels.phone')}</Label>
                 <Input
                   id="phone"
                   value={profile.phone}
                   onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                  placeholder="+27 82 123 4567"
+                  placeholder={t('nav:phonePlaceholder')}
                 />
               </div>
               <div className="pt-4">
                 <Button onClick={handleSaveProfile} disabled={profileSaving}>
                   <Save className="mr-2 h-4 w-4" />
-                  {profileSaving ? 'Saving…' : 'Save Changes'}
+                  {profileSaving ? t('nav:saving') : t('nav:saveChanges')}
                 </Button>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
+        {getUserCapabilities(user).length > 1 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('nav:capabilityMode')}</CardTitle>
+              <CardDescription>{t('register:experienceDescription')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CapabilityModeSwitcher />
+            </CardContent>
+          </Card>
+        )}
+
         {/* Notifications Tab */}
         <TabsContent value="notifications">
           <Card>
             <CardHeader>
-              <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>Choose which channels we may use to reach you.</CardDescription>
+              <CardTitle>{t('nav:notificationPreferences')}</CardTitle>
+              <CardDescription>{t('nav:notificationChannels')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label htmlFor="prefEmail">Email</Label>
-                    <p className="text-xs text-muted-foreground">Transactional and race emails</p>
+                    <Label htmlFor="prefEmail">{t('common:labels.email')}</Label>
+                    <p className="text-xs text-muted-foreground">{t('nav:transactionalRaceEmails')}</p>
                   </div>
                   <Switch
                     id="prefEmail"
@@ -335,8 +454,8 @@ export function SettingsPage() {
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label htmlFor="prefPush">Push</Label>
-                    <p className="text-xs text-muted-foreground">App and browser push notifications</p>
+                    <Label htmlFor="prefPush">{t('nav:pushChannel')}</Label>
+                    <p className="text-xs text-muted-foreground">{t('nav:appBrowserPush')}</p>
                   </div>
                   <Switch
                     id="prefPush"
@@ -347,8 +466,8 @@ export function SettingsPage() {
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label htmlFor="prefSms">SMS</Label>
-                    <p className="text-xs text-muted-foreground">Text-message alerts (when configured)</p>
+                    <Label htmlFor="prefSms">{t('nav:smsChannel')}</Label>
+                    <p className="text-xs text-muted-foreground">{t('nav:textMessageAlerts')}</p>
                   </div>
                   <Switch
                     id="prefSms"
@@ -359,8 +478,8 @@ export function SettingsPage() {
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label htmlFor="prefWhatsapp">WhatsApp</Label>
-                    <p className="text-xs text-muted-foreground">WhatsApp alerts (when configured)</p>
+                    <Label htmlFor="prefWhatsapp">{t('nav:whatsappChannel')}</Label>
+                    <p className="text-xs text-muted-foreground">{t('nav:whatsappAlerts')}</p>
                   </div>
                   <Switch
                     id="prefWhatsapp"
@@ -375,22 +494,22 @@ export function SettingsPage() {
               <div className="space-y-4">
                 <h3 className="text-sm font-medium flex items-center gap-2">
                   <Bell className="h-4 w-4" />
-                  Browser Push
+                  {t('nav:browserPush')}
                 </h3>
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label>Enable this browser</Label>
+                    <Label>{t('nav:enableThisBrowser')}</Label>
                     <p className="text-xs text-muted-foreground">
                       {isWebPushConfigured()
-                        ? 'Receive real-time race and checkpoint alerts in this browser.'
-                        : 'Push is not configured for this deployment.'}
+                        ? t('nav:realTimeAlerts')
+                        : t('nav:pushNotConfigured')}
                     </p>
                   </div>
                   <Button
                     onClick={() => void handleEnablePush()}
                     disabled={pushBusy || pushRegistered || !isWebPushConfigured()}
                   >
-                    {pushRegistered ? 'Enabled' : pushBusy ? 'Enabling…' : 'Enable'}
+                    {pushRegistered ? t('nav:enabled') : pushBusy ? t('nav:enabling') : t('nav:enable')}
                   </Button>
                 </div>
               </div>
@@ -398,7 +517,7 @@ export function SettingsPage() {
               <div className="pt-4">
                 <Button onClick={() => void handleSaveNotificationPreferences()} disabled={notificationPrefsSaving}>
                   <Save className="mr-2 h-4 w-4" />
-                  {notificationPrefsSaving ? 'Saving…' : 'Save Preferences'}
+                  {notificationPrefsSaving ? t('nav:saving') : t('nav:savePreferences')}
                 </Button>
               </div>
             </CardContent>
@@ -409,24 +528,24 @@ export function SettingsPage() {
         <TabsContent value="preferences">
           <Card>
             <CardHeader>
-              <CardTitle>Regional Preferences</CardTitle>
-              <CardDescription>Appearance and regional display settings.</CardDescription>
+              <CardTitle>{t('nav:regionalPreferences')}</CardTitle>
+              <CardDescription>{t('nav:appearanceRegional')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="theme">Theme</Label>
+                <Label htmlFor="theme">{t('nav:theme')}</Label>
                 <Select value={theme} onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}>
                   <SelectTrigger id="theme">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="light">Light</SelectItem>
-                    <SelectItem value="dark">Dark</SelectItem>
-                    <SelectItem value="system">System</SelectItem>
+                    <SelectItem value="light">{t('nav:light')}</SelectItem>
+                    <SelectItem value="dark">{t('nav:dark')}</SelectItem>
+                    <SelectItem value="system">{t('nav:system')}</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Active theme: {resolvedTheme}. The theme updates immediately.
+                  {t('nav:activeTheme', { theme: resolvedTheme })}
                 </p>
               </div>
               <div className="space-y-2">
@@ -445,7 +564,7 @@ export function SettingsPage() {
                 </Select>
               </div>
               <p className="text-sm text-muted-foreground">
-                Timezone, date format, and units follow your device and the race locale.
+                {t('nav:timezoneDeviceLocale')}
               </p>
             </CardContent>
           </Card>
@@ -456,17 +575,17 @@ export function SettingsPage() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Change Password</CardTitle>
-                <CardDescription>Update your account password</CardDescription>
+                <CardTitle>{t('nav:changePassword')}</CardTitle>
+                <CardDescription>{t('nav:updateAccountPassword')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Password changes use a secure email reset flow. We never expose or store your current password in this form.
+                  {t('nav:passwordResetDescription')}
                 </p>
                 <div className="pt-4">
                   <Button onClick={handleChangePassword} disabled={passwordResetSending || !user?.email}>
                     <Key className="mr-2 h-4 w-4" />
-                    {passwordResetSending ? 'Sending…' : 'Send Password Reset Email'}
+                    {passwordResetSending ? t('nav:sending') : t('nav:sendPasswordResetEmail')}
                   </Button>
                 </div>
               </CardContent>
@@ -474,33 +593,35 @@ export function SettingsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Two-Factor Authentication</CardTitle>
-                <CardDescription>Add an extra layer of security to your account</CardDescription>
+                <CardTitle>{t('nav:signInSecurity')}</CardTitle>
+                <CardDescription>{t('nav:passwordAuthenticationRelease')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Multi-factor authentication is required for privileged roles and is set up during sign-in. If your
-                  role requires it, you will be prompted to enrol when you next sign in.
+                  {t('nav:verifiedEmailPassword')}
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Privacy</CardTitle>
-                <CardDescription>How we handle your personal data</CardDescription>
+                <CardTitle>{t('nav:privacy')}</CardTitle>
+                <CardDescription>{t('nav:personalDataHandling')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
                 <p className="text-sm text-muted-foreground">
-                  Review what we collect, how it is used, and your rights, including data export and account deletion.
+                  {t('nav:privacyDescription')}
                 </p>
 
                 {deletion?.deletionRequested && (
                   <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4">
-                    <p className="text-sm font-medium text-destructive">Account deletion scheduled</p>
+                    <p className="text-sm font-medium text-destructive">{t('nav:accountDeletionScheduled')}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Your account is deactivated
-                      {deletion.scheduledFor ? ` and scheduled for erasure on ${new Date(deletion.scheduledFor).toLocaleDateString()}` : ''}.
+                      {t('nav:accountDeactivated', {
+                        scheduledFor: deletion.scheduledFor
+                          ? t('nav:scheduledForErasure', { date: formatDate(deletion.scheduledFor) })
+                          : '',
+                      })}
                     </p>
                     <Button
                       variant="outline"
@@ -509,7 +630,7 @@ export function SettingsPage() {
                       onClick={() => void handleCancelDeletion()}
                       disabled={deletionBusy}
                     >
-                      {deletionBusy ? 'Cancelling…' : 'Cancel deletion'}
+                      {deletionBusy ? t('nav:cancelling') : t('nav:cancelDeletion')}
                     </Button>
                   </div>
                 )}
@@ -518,24 +639,26 @@ export function SettingsPage() {
                   <Button asChild variant="outline">
                     <Link to={API_CONTRACT.legal?.privacyPolicyPath ?? '/privacy'} target="_blank" rel="noreferrer">
                       <Shield className="mr-2 h-4 w-4" />
-                      Read the Privacy Policy
+                      {t('nav:readPrivacyPolicy')}
                     </Link>
                   </Button>
                   <Button variant="outline" onClick={() => void handleExportData()} disabled={exporting}>
                     <Globe className="mr-2 h-4 w-4" />
-                    {exporting ? 'Preparing…' : 'Download my data'}
+                    {exporting ? t('nav:preparing') : t('nav:downloadMyData')}
                   </Button>
                 </div>
 
                 <div className="space-y-4 rounded-lg border border-border p-4">
-                  <p className="text-sm font-medium">Consent</p>
+                  <p className="text-sm font-medium">{t('nav:consent')}</p>
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="consentProcessing">Data processing</Label>
+                      <Label htmlFor="consentProcessing">{t('nav:dataProcessing')}</Label>
                       <p className="text-xs text-muted-foreground">
-                        Required to use the platform{consent?.dataProcessingConsentAt
-                          ? ` (granted ${new Date(consent.dataProcessingConsentAt).toLocaleDateString()})`
-                          : ''}.
+                        {t('nav:requiredPlatform', {
+                          grantedAt: consent?.dataProcessingConsentAt
+                            ? t('nav:grantedOn', { date: formatDate(consent.dataProcessingConsentAt) })
+                            : '',
+                        })}
                       </p>
                     </div>
                     <Switch
@@ -548,8 +671,8 @@ export function SettingsPage() {
                   <Separator />
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="consentMarketing">Marketing emails</Label>
-                      <p className="text-xs text-muted-foreground">Optional product and race updates.</p>
+                      <Label htmlFor="consentMarketing">{t('nav:marketingEmails')}</Label>
+                      <p className="text-xs text-muted-foreground">{t('nav:optionalProductRaceUpdates')}</p>
                     </div>
                     <Switch
                       id="consentMarketing"
@@ -564,16 +687,15 @@ export function SettingsPage() {
 
             <Card className="border-destructive/50">
               <CardHeader>
-                <CardTitle className="text-destructive">Danger Zone</CardTitle>
-                <CardDescription>Irreversible actions</CardDescription>
+                <CardTitle className="text-destructive">{t('nav:dangerZone')}</CardTitle>
+                <CardDescription>{t('nav:irreversibleActions')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">Delete Account</p>
+                    <p className="text-sm font-medium">{t('nav:deleteAccount')}</p>
                     <p className="text-xs text-muted-foreground">
-                      Deactivates your account immediately and erases your personal data after a grace period.
-                      You can cancel during the grace period by signing back in.
+                      {t('nav:deleteAccountDescription')}
                     </p>
                   </div>
                   <Button
@@ -581,7 +703,7 @@ export function SettingsPage() {
                     onClick={() => setDeleteDialogOpen(true)}
                     disabled={Boolean(deletion?.deletionRequested)}
                   >
-                    {deletion?.deletionRequested ? 'Deletion scheduled' : 'Delete Account'}
+                    {deletion?.deletionRequested ? t('nav:deletionScheduled') : t('nav:deleteAccount')}
                   </Button>
                 </div>
               </CardContent>
@@ -593,15 +715,12 @@ export function SettingsPage() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete your account</DialogTitle>
-            <DialogDescription>
-              This deactivates your account and schedules your personal data for erasure after a grace period.
-              Export any data you need first.
-            </DialogDescription>
+            <DialogTitle>{t('nav:deleteYourAccount')}</DialogTitle>
+            <DialogDescription>{t('nav:deleteAccountDialogDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="delete-password">Confirm your password</Label>
+              <Label htmlFor="delete-password">{t('nav:confirmYourPassword')}</Label>
               <Input
                 id="delete-password"
                 type="password"
@@ -611,21 +730,21 @@ export function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="delete-confirmation">Type DELETE to confirm</Label>
+              <Label htmlFor="delete-confirmation">{t('nav:typeDeleteConfirmation', { token: 'DELETE' })}</Label>
               <Input
                 id="delete-confirmation"
                 value={deleteConfirmation}
                 onChange={(e) => setDeleteConfirmation(e.target.value)}
-                placeholder="DELETE"
+                placeholder={t('nav:deleteToken')}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleteBusy}>
-              Cancel
+              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleteBusy}>
+              {t('common:actions.cancel')}
             </Button>
             <Button variant="destructive" onClick={() => void handleDeleteAccount()} disabled={deleteBusy}>
-              {deleteBusy ? 'Scheduling…' : 'Delete my account'}
+              {deleteBusy ? t('nav:scheduling') : t('nav:deleteMyAccount')}
             </Button>
           </DialogFooter>
         </DialogContent>

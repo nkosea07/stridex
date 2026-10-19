@@ -3,6 +3,8 @@ import { Link, router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
+import { CapabilityGate } from '@/components/CapabilityGate'
+import { formatDate, formatDistanceKm } from '@/lib/format'
 
 type MyRace = {
   id: string
@@ -21,6 +23,14 @@ type MyRace = {
 const tabs = ['Upcoming', 'Completed', 'All']
 
 export default function MyRacesScreen() {
+  return (
+    <CapabilityGate capability="ATHLETE">
+      <MyRacesScreenContent />
+    </CapabilityGate>
+  )
+}
+
+function MyRacesScreenContent() {
   const [activeTab, setActiveTab] = useState('Upcoming')
   const [refreshing, setRefreshing] = useState(false)
   const [races, setRaces] = useState<MyRace[]>([])
@@ -35,7 +45,7 @@ export default function MyRacesScreen() {
         id: String(reg.id),
         raceId: String(reg.raceId),
         name: race?.name || 'Race',
-        date: race?.raceDate ? new Date(race.raceDate).toLocaleDateString() : '-',
+        date: race?.raceDate && !Number.isNaN(new Date(race.raceDate).getTime()) ? formatDate(race.raceDate) : '-',
         location: [race?.city, race?.country].filter(Boolean).join(', '),
         distance: Number(race?.distanceKm || 0),
         status: String(reg.status || 'pending').toLowerCase(),
@@ -78,7 +88,7 @@ export default function MyRacesScreen() {
         <View style={styles.raceInfo}>
           <View style={styles.infoRow}><Ionicons name="calendar-outline" size={16} color="#6B7280" /><Text style={styles.infoText}>{item.date}</Text></View>
           <View style={styles.infoRow}><Ionicons name="location-outline" size={16} color="#6B7280" /><Text style={styles.infoText}>{item.location}</Text></View>
-          <View style={styles.infoRow}><Ionicons name="walk-outline" size={16} color="#6B7280" /><Text style={styles.infoText}>{item.distance}km - {item.category}</Text></View>
+          <View style={styles.infoRow}><Ionicons name="walk-outline" size={16} color="#6B7280" /><Text style={styles.infoText}>{formatDistanceKm(item.distance)} - {item.category}</Text></View>
         </View>
 
         <View style={styles.bibSection}>

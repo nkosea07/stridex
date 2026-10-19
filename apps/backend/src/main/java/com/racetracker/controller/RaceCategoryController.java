@@ -27,7 +27,7 @@ public class RaceCategoryController {
     @GetMapping("")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<RaceCategoryDto>> list(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(raceCategoryService.list(raceId));
     }
 

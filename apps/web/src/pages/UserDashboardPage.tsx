@@ -4,12 +4,12 @@ import { Heart, Radio, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { useAuth } from '@/contexts/AuthContext'
+import { getPreferredCapability, useAuth } from '@/contexts/AuthContext'
 
 export function UserDashboardPage() {
   const { user } = useAuth()
   const { t } = useTranslation()
-  const isSpectator = user?.role === 'SPECTATOR'
+  const isSpectator = getPreferredCapability(user) === 'SPECTATOR'
   const cards = isSpectator
     ? [
         { title: t('nav:followedAthletes'), description: t('nav:followedAthletesDescription'), icon: Heart, to: '/app/stats' },

@@ -16,10 +16,13 @@ import {
 } from '@/components/ui/dialog'
 import { registrationApi } from '@/lib/api'
 import type { Team } from '@/types'
+import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
 export function TeamsPage() {
   const { raceId } = useParams()
+  const { user } = useAuth()
+  const canManageTeams = isAdminRole(user?.role)
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -72,10 +75,12 @@ export function TeamsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Teams</h1>
           <p className="text-muted-foreground">Teams athletes can join during registration</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New team
-        </Button>
+        {canManageTeams && (
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            New team
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -121,7 +126,7 @@ export function TeamsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {canManageTeams && <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>New team</DialogTitle></DialogHeader>
           <div className="grid gap-3">
@@ -133,7 +138,7 @@ export function TeamsPage() {
             <Button onClick={() => void handleCreate()} disabled={saving}>{saving ? 'Creating…' : 'Create'}</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   )
 }

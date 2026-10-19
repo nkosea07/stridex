@@ -21,7 +21,7 @@ public class ParticipantController {
     }
 
     @GetMapping("/my-registrations")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('CAP_ATHLETE')")
     public ResponseEntity<List<RegistrationDto>> myRegistrations() {
         return ResponseEntity.ok(participantService.getMyRegistrations());
     }

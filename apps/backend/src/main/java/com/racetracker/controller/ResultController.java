@@ -65,7 +65,7 @@ public class ResultController {
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/results")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<RaceResultDto>> listByRace(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(resultService.listByRace(raceId));
     }
 
@@ -77,7 +77,7 @@ public class ResultController {
         @RequestParam(defaultValue = "50") int size,
         @RequestParam(required = false) Long revision
     ) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(resultService.listByRacePage(raceId, page, size, revision));
     }
 
@@ -87,7 +87,7 @@ public class ResultController {
         @PathVariable UUID raceId,
         @RequestParam(defaultValue = "csv") String format
     ) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         ExportedFile file = resultExportService.export(raceId, format);
         return fileResponse(file);    }
 
@@ -97,21 +97,21 @@ public class ResultController {
         @PathVariable UUID raceId,
         @PathVariable UUID participantId
     ) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return pdfResponse(certificateService.generate(raceId, participantId), "certificate.pdf");
     }
 
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/rankings/teams")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<RankingEntryDto>> teamRankings(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(rankingService.teamRankings(raceId));
     }
 
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/rankings/countries")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<RankingEntryDto>> countryRankings(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(rankingService.countryRankings(raceId));
     }
 
@@ -153,18 +153,18 @@ public class ResultController {
         @PathVariable UUID raceId,
         @PathVariable UUID participantId
     ) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(resultService.getByRaceAndParticipant(raceId, participantId));
     }
 
     @GetMapping("/v${racetracker.api.version}/results/my")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('CAP_ATHLETE')")
     public ResponseEntity<List<RaceResultDto>> myResults() {
         return ResponseEntity.ok(resultService.getMyResults());
     }
 
     @GetMapping("/v${racetracker.api.version}/results/my/page")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('CAP_ATHLETE')")
     public ResponseEntity<RaceResultPageDto> myResultsPage(
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "50") int size
@@ -173,7 +173,7 @@ public class ResultController {
     }
 
     @PostMapping("/v${racetracker.api.version}/races/{raceId}/results/publish")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<ApiMessageResponse> publish(@PathVariable UUID raceId, Authentication authentication) {
         raceAccessGuard.assertCanManage(raceId);
         resultService.publish(raceId);

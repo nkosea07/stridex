@@ -1,9 +1,20 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/theme';
+import { useTranslation } from 'react-i18next';
+import { getPreferredCapability, getUserCapabilities, hasCapability, isOperationsRole } from '@/lib/capabilities';
+import { useAuthStore } from '@/store/auth';
 
 export default function TabLayout() {
   const { colors } = useTheme();
+  const { t } = useTranslation();
+  const { user } = useAuthStore();
+  const isOperationsUser = isOperationsRole(user?.role);
+  const capabilities = getUserCapabilities(user);
+  const activeCapability = getPreferredCapability(user);
+  const hasPersonalCapability = !isOperationsUser && capabilities.length > 0;
+  const athleteModeAvailable = !isOperationsUser && hasCapability(user, 'ATHLETE');
+  const spectatorModeAvailable = !isOperationsUser && hasCapability(user, 'SPECTATOR');
 
   return (
     <Tabs
@@ -43,7 +54,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="races"
         options={{
-          title: 'Races',
+          title: activeCapability === 'SPECTATOR' ? t('mobile:register.followRaces') : t('mobile:register.joinRace'),
+          href: hasPersonalCapability ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="flag" size={size} color={color} />
           ),
@@ -53,6 +65,7 @@ export default function TabLayout() {
         name="my-races"
         options={{
           title: 'My Races',
+          href: athleteModeAvailable && activeCapability === 'ATHLETE' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="calendar" size={size} color={color} />
           ),
@@ -62,8 +75,19 @@ export default function TabLayout() {
         name="results"
         options={{
           title: 'Results',
+          href: athleteModeAvailable && activeCapability === 'ATHLETE' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="trophy" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="followed"
+        options={{
+          title: t('mobile:following.title'),
+          href: spectatorModeAvailable && activeCapability === 'SPECTATOR' ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="heart" size={size} color={color} />
           ),
         }}
       />

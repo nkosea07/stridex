@@ -7,6 +7,7 @@ import com.racetracker.mapper.UserMapper;
 import com.racetracker.model.User;
 import com.racetracker.repository.AuthTokenRepository;
 import com.racetracker.repository.UserRepository;
+import com.racetracker.repository.UserCapabilityRepository;
 import com.racetracker.security.JwtService;
 import com.racetracker.service.impl.OAuthAccountServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,13 +36,14 @@ class OAuthAccountServiceImplTest {
     @Mock JwtService jwtService;
     @Mock UserMapper userMapper;
     @Mock AuthTokenRepository authTokenRepository;
+    @Mock UserCapabilityRepository userCapabilityRepository;
 
     private OAuthAccountServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new OAuthAccountServiceImpl(identityVerifier, userRepository, passwordEncoder,
-            jwtService, userMapper, authTokenRepository);
+            jwtService, userMapper, authTokenRepository, userCapabilityRepository);
     }
 
     private void stubTokenIssuance() {

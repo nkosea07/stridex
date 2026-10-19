@@ -15,6 +15,7 @@ import com.racetracker.repository.CheckpointRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.CheckpointService;
 import com.racetracker.service.CheckpointCutoff;
 import com.racetracker.service.LiveSummaryCacheInvalidator;
@@ -39,6 +40,7 @@ public class CheckpointServiceImpl implements CheckpointService {
     private final UserRepository userRepository;
     private final CheckpointMapper checkpointMapper;
     private final LiveSummaryCacheInvalidator liveSummaryCacheInvalidator;
+    private final RaceAccessGuard raceAccessGuard;
 
     public CheckpointServiceImpl(
         CheckpointRepository checkpointRepository,
@@ -47,7 +49,8 @@ public class CheckpointServiceImpl implements CheckpointService {
         RaceRepository raceRepository,
         UserRepository userRepository,
         CheckpointMapper checkpointMapper,
-        LiveSummaryCacheInvalidator liveSummaryCacheInvalidator
+        LiveSummaryCacheInvalidator liveSummaryCacheInvalidator,
+        RaceAccessGuard raceAccessGuard
     ) {
         this.checkpointRepository = checkpointRepository;
         this.checkpointRecordRepository = checkpointRecordRepository;
@@ -56,11 +59,13 @@ public class CheckpointServiceImpl implements CheckpointService {
         this.userRepository = userRepository;
         this.checkpointMapper = checkpointMapper;
         this.liveSummaryCacheInvalidator = liveSummaryCacheInvalidator;
+        this.raceAccessGuard = raceAccessGuard;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<CheckpointDto> listByRace(UUID raceId) {
+        raceAccessGuard.assertCanRead(raceId);
         verifyRaceExists(raceId);
         return checkpointRepository.findByRaceIdOrderByOrderIndexAsc(raceId)
             .stream()
@@ -71,6 +76,7 @@ public class CheckpointServiceImpl implements CheckpointService {
     @Override
     @Transactional
     public CheckpointDto create(UUID raceId, CheckpointCreateRequest request) {
+        raceAccessGuard.assertCanManage(raceId);
         Race race = getRace(raceId);
 
         Checkpoint checkpoint = new Checkpoint();
@@ -92,6 +98,7 @@ public class CheckpointServiceImpl implements CheckpointService {
     @Override
     @Transactional
     public CheckpointDto update(UUID raceId, UUID checkpointId, CheckpointUpdateRequest request) {
+        raceAccessGuard.assertCanManage(raceId);
         Checkpoint checkpoint = getCheckpoint(raceId, checkpointId);
 
         if (request.getName() != null) checkpoint.setName(request.getName());
@@ -112,6 +119,7 @@ public class CheckpointServiceImpl implements CheckpointService {
     @Override
     @Transactional
     public void delete(UUID raceId, UUID checkpointId) {
+        raceAccessGuard.assertCanManage(raceId);
         Checkpoint checkpoint = getCheckpoint(raceId, checkpointId);
         checkpointRepository.delete(checkpoint);
         liveSummaryCacheInvalidator.evictAllLastCheckpointsAfterCommit();
@@ -120,6 +128,7 @@ public class CheckpointServiceImpl implements CheckpointService {
     @Override
     @Transactional
     public CheckpointRecordDto record(UUID raceId, UUID checkpointId, CheckpointRecordRequest request) {
+        raceAccessGuard.assertCanAccessCheckpoint(raceId, checkpointId);
         Checkpoint checkpoint = getCheckpoint(raceId, checkpointId);
         Participant participant = resolveParticipant(raceId, request);
 
@@ -152,6 +161,7 @@ public class CheckpointServiceImpl implements CheckpointService {
     @Override
     @Transactional(readOnly = true)
     public List<CheckpointRecordDto> listRecords(UUID raceId, UUID checkpointId) {
+        raceAccessGuard.assertCanAccessCheckpoint(raceId, checkpointId);
         getCheckpoint(raceId, checkpointId);
         return checkpointRecordRepository.findByRaceIdAndCheckpointIdOrderByRecordedAtAsc(raceId, checkpointId).stream()
             .map(checkpointMapper::toRecordDto)
@@ -160,7 +170,9 @@ public class CheckpointServiceImpl implements CheckpointService {
 
     @Override
     @Transactional
-    public CheckpointRecordDto correctRecord(UUID raceId, UUID checkpointId, UUID recordId, CheckpointRecordCorrectionRequest request) {        getCheckpoint(raceId, checkpointId);
+    public CheckpointRecordDto correctRecord(UUID raceId, UUID checkpointId, UUID recordId, CheckpointRecordCorrectionRequest request) {
+        raceAccessGuard.assertCanManage(raceId);
+        getCheckpoint(raceId, checkpointId);
         CheckpointRecord record = checkpointRecordRepository.findByRaceIdAndCheckpointIdAndId(raceId, checkpointId, recordId)
             .orElseThrow(() -> new ResourceNotFoundException("Checkpoint record not found"));
 

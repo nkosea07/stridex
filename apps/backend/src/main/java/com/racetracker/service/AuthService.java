@@ -14,4 +14,5 @@ public interface AuthService {
     void resendVerification(ResendVerificationRequest request);
     UserDto getCurrentUser();
     UserDto updateProfile(UpdateProfileRequest request);
+    UserDto updateCapabilities(UpdateCapabilitiesRequest request);
 }

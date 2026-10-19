@@ -26,14 +26,14 @@ public class RaceInsightsController {
     @GetMapping("/summary")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
     public ResponseEntity<RaceInsightsSummaryDto> summary(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(raceInsightsService.summary(raceId));
     }
 
     @GetMapping("/anomalies")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
     public ResponseEntity<List<ParticipantAnomalyDto>> anomalies(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(raceInsightsService.anomalies(raceId));
     }
 }

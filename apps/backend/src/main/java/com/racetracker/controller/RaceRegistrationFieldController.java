@@ -28,7 +28,7 @@ public class RaceRegistrationFieldController {
     @GetMapping("")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<List<RaceRegistrationFieldDto>> list(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(participantService.listRegistrationFields(raceId, false));
     }
 

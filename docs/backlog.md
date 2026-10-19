@@ -21,7 +21,8 @@ are sent (best-effort; skipped when mail is disabled).
 user** erased — or anonymized where a legal/financial retention obligation applies — following
 GDPR best practice.
 
-**Current state (partial).** `DELETE /api/v1/me` → `AccountPrivacyServiceImpl.eraseAccount`
+**Historical pre-delivery baseline (superseded by the delivered status above).** Before the
+2026-10-11 implementation, `DELETE /api/v1/me` → `AccountPrivacyServiceImpl.eraseAccount`
 already: anonymizes the user and their participants, deletes push devices, invalidates
 outstanding refresh tokens, and writes an `ACCOUNT_ERASED` audit event. Missing: confirmation
 and re-authentication, a grace/undo window, full coverage of every related table, async handling
@@ -81,8 +82,9 @@ accepted version recorded at registration (`V32`). Client i18n still tracked in
 **Goal.** Publish a single, canonical privacy policy that is reachable from both the web and
 mobile apps, and reference it wherever personal data is collected or managed.
 
-**Current state.** No privacy policy page or route exists; registration/waiver flows and the
-account/privacy settings do not link to one.
+**Historical pre-delivery baseline (superseded by the delivered status above).** Before the
+2026-10-11 implementation, no privacy policy page or route existed; registration/waiver flows
+and the account/privacy settings did not link to one.
 
 **Scope.**
 

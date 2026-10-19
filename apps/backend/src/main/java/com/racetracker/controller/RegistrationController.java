@@ -22,7 +22,7 @@ public class RegistrationController {
     }
 
     @DeleteMapping("/{registrationId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('CAP_ATHLETE')")
     public ResponseEntity<ApiMessageResponse> cancelRegistration(@PathVariable UUID registrationId) {
         participantService.cancelRegistration(registrationId);
         return ResponseEntity.ok(new ApiMessageResponse("Registration cancelled"));

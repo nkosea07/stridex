@@ -14,6 +14,7 @@ import com.racetracker.service.LastCheckpointNameCache;
 import com.racetracker.service.LiveSummaryCacheInvalidator;
 import com.racetracker.service.SpectatorAlertService;
 import com.racetracker.service.TrackingService;
+import com.racetracker.security.CapabilityAuthorizationService;
 import com.racetracker.websocket.TrackingLivePublisher;
 import io.micrometer.observation.annotation.Observed;
 import org.springframework.security.core.Authentication;
@@ -46,6 +47,7 @@ public class TrackingServiceImpl implements TrackingService {
     private final LiveSummaryCacheInvalidator liveSummaryCacheInvalidator;
     private final LastCheckpointNameCache lastCheckpointNameCache;
     private final SpectatorAlertService spectatorAlertService;
+    private final CapabilityAuthorizationService capabilityAuthorizationService;
 
     public TrackingServiceImpl(
         RaceRepository raceRepository,
@@ -59,7 +61,8 @@ public class TrackingServiceImpl implements TrackingService {
         GpsDriftFilter gpsDriftFilter,
         LiveSummaryCacheInvalidator liveSummaryCacheInvalidator,
         LastCheckpointNameCache lastCheckpointNameCache,
-        SpectatorAlertService spectatorAlertService
+        SpectatorAlertService spectatorAlertService,
+        CapabilityAuthorizationService capabilityAuthorizationService
     ) {
         this.raceRepository = raceRepository;
         this.participantRepository = participantRepository;
@@ -73,12 +76,14 @@ public class TrackingServiceImpl implements TrackingService {
         this.liveSummaryCacheInvalidator = liveSummaryCacheInvalidator;
         this.lastCheckpointNameCache = lastCheckpointNameCache;
         this.spectatorAlertService = spectatorAlertService;
+        this.capabilityAuthorizationService = capabilityAuthorizationService;
     }
 
     @Override
     @Observed(name = "tracking.ingest.location")
     @Transactional
     public void recordLocation(UUID raceId, GpsLocationRequest request) {
+        capabilityAuthorizationService.require(com.racetracker.model.UserCapabilityType.ATHLETE);
         Participant participant = resolveCurrentParticipant(raceId);
         GpsLocation latest = saveLocation(participant, request);
         trackingLivePublisher.publishLocationUpdate(raceId, buildLiveTrackingResponse(participant, latest, raceId));
@@ -88,6 +93,7 @@ public class TrackingServiceImpl implements TrackingService {
     @Observed(name = "tracking.ingest.location_batch")
     @Transactional
     public void recordLocationsBatch(UUID raceId, GpsLocationBatchRequest request) {
+        capabilityAuthorizationService.require(com.racetracker.model.UserCapabilityType.ATHLETE);
         Participant participant = resolveCurrentParticipant(raceId);
         if (request == null || request.getLocations() == null || request.getLocations().isEmpty()) {
             return;
@@ -127,6 +133,7 @@ public class TrackingServiceImpl implements TrackingService {
     @Observed(name = "tracking.ingest.checkpoint")
     @Transactional
     public void recordCheckpoint(UUID raceId, TrackingCheckpointRequest request) {
+        capabilityAuthorizationService.require(com.racetracker.model.UserCapabilityType.ATHLETE);
         if (request == null || request.getCheckpointId() == null) {
             throw new ApiException("checkpointId is required");
         }

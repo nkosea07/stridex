@@ -4,11 +4,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useTrackingStore } from '@/store/tracking';
+import { CapabilityGate } from '@/components/CapabilityGate';
 
 const { width } = Dimensions.get('window');
 const SCANNER_SIZE = width * 0.7;
 
 export default function ScannerScreen() {
+  return (
+    <CapabilityGate capability="ATHLETE">
+      <ScannerScreenContent />
+    </CapabilityGate>
+  );
+}
+
+function ScannerScreenContent() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [flashOn, setFlashOn] = useState(false);

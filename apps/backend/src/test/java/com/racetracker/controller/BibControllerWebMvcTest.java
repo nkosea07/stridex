@@ -64,7 +64,7 @@ class BibControllerWebMvcTest {
         UUID raceId = UUID.randomUUID();
         UUID participantId = UUID.randomUUID();
         doThrow(new AccessDeniedException("denied"))
-            .when(raceAccessGuard).assertCanManage(raceId);
+            .when(raceAccessGuard).assertCanReadStaff(raceId);
 
         mockMvc.perform(get("/v1/races/{raceId}/bibs/{participantId}", raceId, participantId))
             .andExpect(status().isForbidden());

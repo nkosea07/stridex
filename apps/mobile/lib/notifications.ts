@@ -77,14 +77,20 @@ export const unregisterPushDevice = async (token: string): Promise<void> => {
 
 /** Unregisters the device token captured at registration (e.g. on sign-out). */
 export const unregisterCurrentPushDevice = async (): Promise<void> => {
+  let token: string | null = null;
   try {
-    const token = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+    token = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
     if (token) {
       await api.unregisterDevice(token);
-      await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
     }
   } catch (error) {
     console.warn('Failed to unregister current push device:', error);
+  } finally {
+    try {
+      await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
+    } catch (error) {
+      console.warn('Failed to clear current push device:', error);
+    }
   }
 };
 

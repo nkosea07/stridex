@@ -7,8 +7,21 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { authApi } from '@/lib/api'
+import { ApiError, authApi } from '@/lib/api'
+import type { UserCapability } from '@/types'
 import { toast } from 'sonner'
+
+type ExperienceChoice = UserCapability | 'BOTH'
+
+const experienceOptions: ReadonlyArray<{
+  value: ExperienceChoice
+  labelKey: string
+  descriptionKey: string
+}> = [
+  { value: 'ATHLETE', labelKey: 'register:experienceJoinRace', descriptionKey: 'register:experienceJoinRaceDescription' },
+  { value: 'SPECTATOR', labelKey: 'register:experienceFollowRaces', descriptionKey: 'register:experienceFollowRacesDescription' },
+  { value: 'BOTH', labelKey: 'register:experienceBoth', descriptionKey: 'register:experienceBothDescription' },
+]
 
 function getSafePublicReturnPath(value: unknown) {
   if (typeof value !== 'string') return undefined
@@ -28,6 +41,7 @@ export function RegisterPage() {
   const [searchParams] = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false)
+  const [experienceChoice, setExperienceChoice] = useState<ExperienceChoice | null>(null)
   const privacyPolicyPath = API_CONTRACT.legal?.privacyPolicyPath ?? '/privacy'
   const privacyPolicyVersion = API_CONTRACT.legal?.privacyPolicyVersion
   const [form, setForm] = useState({
@@ -61,6 +75,11 @@ export function RegisterPage() {
       return
     }
 
+    if (!organizerIntent && !experienceChoice) {
+      toast.error(t('register:errorExperience'))
+      return
+    }
+
     setIsLoading(true)
     try {
       const commonData = {
@@ -75,13 +94,22 @@ export function RegisterPage() {
       if (organizerIntent) {
         await authApi.registerOrganizer({ ...commonData, organizationName: form.organizationName.trim() })
       } else {
-        await authApi.register(commonData)
+        const experiences: UserCapability[] = experienceChoice === 'BOTH'
+          ? ['ATHLETE', 'SPECTATOR']
+          : [experienceChoice as UserCapability]
+        await authApi.register({ ...commonData, experiences })
       }
       authApi.logout()
       toast.success(organizerIntent ? t('register:successOrganizer') : t('register:successAthlete'))
       navigate('/login', { replace: true, state: returnTo ? { from: returnTo } : undefined })
-    } catch {
-      toast.error(t('register:errorFailed'))
+    } catch (error) {
+      if (error instanceof ApiError && (error.code === 'VALIDATION_ERROR' || error.status === 400)) {
+        toast.error(t('register:errorValidation'))
+      } else if (error instanceof ApiError && (error.code === 'CONFLICT' || error.status === 409)) {
+        toast.error(t('register:errorConflict'))
+      } else {
+        toast.error(t('register:errorFailed'))
+      }
     } finally {
       setIsLoading(false)
     }
@@ -153,6 +181,34 @@ export function RegisterPage() {
                   className="bg-muted/50"
                 />
               </div>
+
+              {!organizerIntent && (
+                <fieldset className="space-y-3">
+                  <legend className="text-sm font-medium text-foreground">{t('register:experienceLabel')}</legend>
+                  <p className="text-xs text-muted-foreground">{t('register:experienceDescription')}</p>
+                  <div className="grid gap-3">
+                    {experienceOptions.map((option) => (
+                      <label
+                        key={option.value}
+                        className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                      >
+                        <input
+                          type="radio"
+                          name="registration-experience"
+                          value={option.value}
+                          checked={experienceChoice === option.value}
+                          onChange={() => setExperienceChoice(option.value)}
+                          className="mt-1 h-4 w-4"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-foreground">{t(option.labelKey)}</span>
+                          <span className="block text-xs text-muted-foreground">{t(option.descriptionKey)}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
 
               {organizerIntent && (
                 <div className="space-y-2">

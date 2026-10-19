@@ -71,6 +71,11 @@ public class User {
     @Column(name = "privacy_policy_accepted_at")
     private OffsetDateTime privacyPolicyAcceptedAt;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcType(PostgreSQLEnumJdbcType.class)
+    @Column(name = "preferred_capability", columnDefinition = "user_capability")
+    private UserCapabilityType preferredCapability;
+
     @Column(name = "deletion_requested_at")
     private OffsetDateTime deletionRequestedAt;
 
@@ -90,10 +95,16 @@ public class User {
 
     // Relationships
     @OneToMany(mappedBy = "createdBy")
+    @Builder.Default
     private Set<Race> createdRaces = new HashSet<>();
 
     @ManyToMany(mappedBy = "admins")
+    @Builder.Default
     private Set<Race> adminRaces = new HashSet<>();
+
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    @Builder.Default
+    private Set<UserCapability> capabilities = new HashSet<>();
 
     public String getFullName() {
         return firstName + " " + lastName;

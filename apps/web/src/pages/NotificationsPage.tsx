@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Bell, RefreshCcw } from 'lucide-react'
 import { notificationsApi } from '@/lib/api'
@@ -7,36 +7,69 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useAuth } from '@/contexts/AuthContext'
+
+type SessionSnapshot = {
+  userId: string | null
+  generation: number
+}
 
 export function NotificationsPage() {
+  const { user, getSessionGeneration } = useAuth()
+  const userId = user?.id ?? null
+  const sessionGeneration = getSessionGeneration()
+  const sessionRef = useRef<SessionSnapshot>({ userId, generation: sessionGeneration })
+  sessionRef.current = { userId, generation: sessionGeneration }
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
   const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => {
+      const currentSession = sessionRef.current
+      return currentSession.userId === requestSession.userId && getSessionGeneration() === requestSession.generation
+    }
     if (mode === 'initial') setLoading(true)
     else setRefreshing(true)
-    try {
-      setNotifications(await notificationsApi.list())
-    } catch {
-      toast.error('Failed to load notifications')
-    } finally {
+    if (!requestSession.userId) {
+      setNotifications([])
       setLoading(false)
       setRefreshing(false)
+      return
     }
-  }, [])
+    try {
+      const nextNotifications = await notificationsApi.list()
+      if (isCurrentSession()) setNotifications(nextNotifications)
+    } catch {
+      if (isCurrentSession()) toast.error('Failed to load notifications')
+    } finally {
+      if (isCurrentSession()) {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    }
+  }, [getSessionGeneration, sessionGeneration, userId])
 
   useEffect(() => {
+    setNotifications([])
     void load('initial')
   }, [load])
 
   const markRead = async (notification: AppNotification) => {
     if (notification.read) return
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => {
+      const currentSession = sessionRef.current
+      return currentSession.userId === requestSession.userId && getSessionGeneration() === requestSession.generation
+    }
     try {
       const updated = await notificationsApi.markRead(notification.id)
-      setNotifications((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      if (isCurrentSession()) {
+        setNotifications((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      }
     } catch {
-      toast.error('Failed to mark notification as read')
+      if (isCurrentSession()) toast.error('Failed to mark notification as read')
     }
   }
 

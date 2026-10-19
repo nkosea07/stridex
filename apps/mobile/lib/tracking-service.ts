@@ -50,6 +50,10 @@ export type TrackingSessionRow = {
   updatedAt: string;
 };
 
+type TrackingCleanupStateRow = {
+  quarantined: number;
+};
+
 // Initialize SQLite Database
 let db: TrackingDatabase | null = null;
 
@@ -93,6 +97,11 @@ export const initDb = async () => {
     );
     CREATE INDEX IF NOT EXISTS idx_tracking_sessions_status_updated
       ON tracking_sessions(status, updatedAt);
+    CREATE TABLE IF NOT EXISTS tracking_cleanup_state (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      quarantined INTEGER NOT NULL DEFAULT 0,
+      updatedAt TEXT NOT NULL
+    );
   `);
   await addColumnIfMissing(db, 'ALTER TABLE locations ADD COLUMN clientPointId TEXT;');
   await addColumnIfMissing(db, 'ALTER TABLE locations ADD COLUMN syncAttempts INTEGER NOT NULL DEFAULT 0;');
@@ -111,6 +120,14 @@ export const initDb = async () => {
       ON locations(clientPointId)
       WHERE clientPointId IS NOT NULL;
   `);
+  await db.runAsync(
+    `INSERT OR IGNORE INTO tracking_cleanup_state (id, quarantined, updatedAt) VALUES (1, 0, ?)`,
+    [new Date().toISOString()],
+  );
+  const cleanupState = await db.getFirstAsync<TrackingCleanupStateRow>(
+    'SELECT quarantined FROM tracking_cleanup_state WHERE id = 1',
+  );
+  trackingQuarantined = cleanupState?.quarantined === 1;
   return db;
 };
 
@@ -139,6 +156,7 @@ TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }: any) => {
     if (!raceId) return;
 
     for (const location of locations) {
+      if (trackingQuarantined) return;
       const timestamp = new Date(location.timestamp).toISOString();
       const updatedAt = new Date().toISOString();
       await database.runAsync(
@@ -171,6 +189,7 @@ TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }: any) => {
     }
     
     // Attempt to sync immediately if we have network, or wait for the sync worker
+    if (trackingQuarantined) return;
     await syncPendingLocations(raceId);
   }
 });
@@ -190,6 +209,9 @@ TaskManager.defineTask(LOCATION_SYNC_TASK, async () => {
 
 // Simple state management for the active race ID in the background task
 let activeRaceId: string | null = null;
+let trackingQuarantined = false;
+
+export const isTrackingQuarantined = () => trackingQuarantined;
 
 const saveActiveTrackingSession = async (raceId: string, batterySaver: boolean) => {
   const database = await initDb();
@@ -225,6 +247,7 @@ const markTrackingSessionStopped = async (raceId?: string | null) => {
 
 export const getActiveTrackingSession = async (): Promise<TrackingSessionRow | null> => {
   const database = await initDb();
+  if (trackingQuarantined) return null;
   return database.getFirstAsync<TrackingSessionRow>(
     "SELECT * FROM tracking_sessions WHERE status = 'active' ORDER BY updatedAt DESC LIMIT 1"
   );
@@ -232,6 +255,10 @@ export const getActiveTrackingSession = async (): Promise<TrackingSessionRow | n
 
 export const setActiveRaceId = async (id: string | null, batterySaver = false) => {
   if (id) {
+    await initDb();
+    if (trackingQuarantined) {
+      throw new Error('Local tracking data is quarantined until cleanup succeeds.');
+    }
     await saveActiveTrackingSession(id, batterySaver);
     activeRaceId = id;
   } else {
@@ -241,6 +268,7 @@ export const setActiveRaceId = async (id: string | null, batterySaver = false) =
 };
 
 const getActiveRaceId = async () => {
+  if (trackingQuarantined) return null;
   if (activeRaceId) return activeRaceId;
 
   const activeSession = await getActiveTrackingSession();
@@ -292,7 +320,10 @@ export const unregisterLocationSyncTask = async () => {
 };
 
 export const syncPendingLocations = async (raceId: string) => {
+  if (trackingQuarantined) return;
+
   const database = await initDb();
+  if (trackingQuarantined) return;
   const pending = await database.getAllAsync<LocationRow>(
     'SELECT * FROM locations WHERE raceId = ? AND synced = 0 ORDER BY timestamp ASC LIMIT 100',
     [raceId]
@@ -338,6 +369,7 @@ export const syncPendingLocations = async (raceId: string) => {
   }
 
   try {
+    if (trackingQuarantined) return;
     const batch = filtered.map(p => ({
       latitude: p.latitude,
       longitude: p.longitude,
@@ -364,11 +396,59 @@ export const syncPendingLocations = async (raceId: string) => {
   }
 };
 
+/**
+ * Stop native tracking and remove local tracking data when a session no longer
+ * owns the device. This intentionally does not attempt to upload queued GPS
+ * points after logout, refresh invalidation, or account deletion.
+ */
+export const clearLocalTrackingData = async (): Promise<void> => {
+  const database = await initDb();
+  await database.runAsync(
+    `INSERT INTO tracking_cleanup_state (id, quarantined, updatedAt) VALUES (1, 1, ?)
+     ON CONFLICT(id) DO UPDATE SET quarantined = 1, updatedAt = excluded.updatedAt`,
+    [new Date().toISOString()],
+  );
+  trackingQuarantined = true;
+
+  try {
+    await stopBackgroundTracking();
+  } catch (error) {
+    console.warn('Failed to stop native tracking during session cleanup:', error);
+  }
+
+  try {
+    await database.execAsync(`
+      BEGIN TRANSACTION;
+      DELETE FROM locations;
+      DELETE FROM tracking_sessions;
+      UPDATE tracking_cleanup_state
+        SET quarantined = 0, updatedAt = datetime('now')
+        WHERE id = 1;
+      COMMIT;
+    `);
+    trackingQuarantined = false;
+  } catch (error) {
+    try {
+      await database.execAsync('ROLLBACK;');
+    } catch (rollbackError) {
+      console.warn('Failed to roll back tracking cleanup:', rollbackError);
+    }
+    throw error;
+  } finally {
+    activeRaceId = null;
+  }
+};
+
 export const startBackgroundTracking = async (
   raceId: string,
   options: TrackingOptions = DEFAULT_OPTIONS,
   batterySaver = false,
 ) => {
+  await initDb();
+  if (trackingQuarantined) {
+    throw new Error('Local tracking data is quarantined until cleanup succeeds.');
+  }
+
   const { status: foreground } = await Location.requestForegroundPermissionsAsync();
   if (foreground !== 'granted') throw new Error('Foreground location permission denied');
 
@@ -403,13 +483,27 @@ export const startBackgroundTracking = async (
 
 export const stopBackgroundTracking = async () => {
   const raceId = activeRaceId;
-  const isStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
-  if (isStarted) {
-    await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+  let failure: unknown = null;
+
+  try {
+    const isStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+    if (isStarted) {
+      await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+    }
+  } catch (error) {
+    failure = error;
   }
+
   await unregisterLocationSyncTask().catch((error) => {
     console.warn('Failed to unregister background location sync:', error);
   });
-  await markTrackingSessionStopped(raceId);
+
+  try {
+    await markTrackingSessionStopped(raceId);
+  } catch (error) {
+    failure ??= error;
+  }
+
   activeRaceId = null;
+  if (failure) throw failure;
 };

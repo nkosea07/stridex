@@ -1,6 +1,8 @@
 package com.racetracker.exception;
 
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.racetracker.dto.error.ErrorResponse;
+import com.racetracker.model.UserCapabilityType;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -12,10 +14,12 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -91,7 +95,7 @@ public class GlobalExceptionHandler {
                 .statusCode(HttpStatus.CONFLICT.value())
                 .error("Conflict")
                 .message(CONFLICT_MESSAGE)
-                .code("CONFLICT")
+                .code(ex.getCode())
                 .requestId(requestId())
                 .path(request.getRequestURI())
                 .build();
@@ -123,7 +127,7 @@ public class GlobalExceptionHandler {
                 .statusCode(HttpStatus.BAD_REQUEST.value())
                 .error("API Error")
                 .message(API_ERROR_MESSAGE)
-                .code("API_ERROR")
+                .code(ex.getCode())
                 .requestId(requestId)
                 .path(request.getRequestURI())
                 .build();
@@ -177,6 +181,29 @@ public class GlobalExceptionHandler {
                 .requestId(requestId())
                 .path(request.getRequestURI())
                 .build();
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableRequest(
+        HttpMessageNotReadableException ex,
+        HttpServletRequest request
+    ) {
+        String detail = ex.getMostSpecificCause() == null ? "" : ex.getMostSpecificCause().getMessage();
+        boolean capabilityValue = (detail + " " + ex.getMessage()).toLowerCase(Locale.ROOT)
+            .matches(".*(experience|capability|preferredcapability).*")
+            || ex.getMostSpecificCause() instanceof InvalidFormatException invalidFormat
+                && UserCapabilityType.class.equals(invalidFormat.getTargetType());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.BAD_REQUEST)
+            .statusCode(HttpStatus.BAD_REQUEST.value())
+            .error("Bad Request")
+            .message("The request contains an invalid value.")
+            .code(capabilityValue ? "INVALID_CAPABILITY" : "INVALID_REQUEST")
+            .requestId(requestId())
+            .path(request.getRequestURI())
+            .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 

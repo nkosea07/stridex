@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { checkpointsApi, routeApi } from '@/lib/api'
 import { toast } from 'sonner'
 import type { Checkpoint, CheckpointType, CheckpointRecord } from '@/types'
+import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 
 const checkpointTypeColors: Record<CheckpointType, string> = {
   START: 'bg-primary/20 text-primary',
@@ -24,6 +25,8 @@ const checkpointTypeColors: Record<CheckpointType, string> = {
 
 export function CheckpointsPage() {
   const { raceId } = useParams()
+  const { user } = useAuth()
+  const canManageRaceConfiguration = isAdminRole(user?.role)
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([])
   const [search, setSearch] = useState('')
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -229,17 +232,21 @@ export function CheckpointsPage() {
             <Download className="mr-2 h-4 w-4" />
             Export GPX
           </Button>
-          <Button variant="outline" onClick={() => gpxInputRef.current?.click()}>
-            <Upload className="mr-2 h-4 w-4" />
-            Import GPX
-          </Button>
-          <input
-            ref={gpxInputRef}
-            type="file"
-            accept=".gpx,application/gpx+xml"
-            className="hidden"
-            onChange={(e) => void handleImportGpx(e)}
-          />
+          {canManageRaceConfiguration && (
+            <>
+              <Button variant="outline" onClick={() => gpxInputRef.current?.click()}>
+                <Upload className="mr-2 h-4 w-4" />
+                Import GPX
+              </Button>
+              <input
+                ref={gpxInputRef}
+                type="file"
+                accept=".gpx,application/gpx+xml"
+                className="hidden"
+                onChange={(e) => void handleImportGpx(e)}
+              />
+            </>
+          )}
           <Button onClick={() => setIsAddDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Checkpoint
@@ -380,7 +387,7 @@ export function CheckpointsPage() {
                       {record.adjustedRecordedAt ? ` · adjusted ${new Date(record.adjustedRecordedAt).toLocaleString()}` : ''}
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => beginCorrection(record)}>Adjust</Button>
+                  {canManageRaceConfiguration && <Button variant="ghost" size="sm" onClick={() => beginCorrection(record)}>Adjust</Button>}
                 </div>
               ))}
             </div>

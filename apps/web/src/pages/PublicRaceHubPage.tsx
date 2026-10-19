@@ -14,6 +14,7 @@ import { RaceHeatmap } from '@/components/public/RaceHeatmap'
 import { RaceMediaGallery } from '@/components/public/RaceMediaGallery'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { PUBLIC_BROWSER_DEMO_RACE_ID } from '@/router/publicLoaders'
 import type { PublicRaceHubLoaderData } from '@/router/publicLoaders'
 
 const HUB_POLL_INTERVAL_MS = 15000
@@ -28,19 +29,21 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
   const raceId = routeRaceId ?? params.raceId
   const location = useLocation()
   const searchSectionRef = useRef<HTMLElement | null>(null)
+  const isBrowserDemo = raceId === PUBLIC_BROWSER_DEMO_RACE_ID
   const hasInitialData = initialData?.raceId === raceId
   const fallbackData = hasInitialData && initialData
     ? { hub: initialData.hub, items: initialData.liveAthletes }
     : undefined
+  const swrKey = raceId && !isBrowserDemo ? ['public-race-hub', raceId] : null
 
   const {
-    data: live,
-    error,
-    isLoading,
-    isValidating,
+    data: swrData,
+    error: swrError,
+    isLoading: swrIsLoading,
+    isValidating: swrIsValidating,
     mutate,
   } = useSWR<{ hub: PublicRaceHub; items: PublicAthleteSummary[] }>(
-    raceId ? ['public-race-hub', raceId] : null,
+    swrKey,
     async () => {
       const [hubData, liveData] = await Promise.all([
         publicTrackingApi.getRaceHub(raceId as string),
@@ -50,12 +53,18 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
     },
     {
       fallbackData,
-      revalidateOnMount: hasInitialData ? false : undefined,
-      refreshInterval: HUB_POLL_INTERVAL_MS,
-      keepPreviousData: true,
+      revalidateOnMount: isBrowserDemo || hasInitialData ? false : undefined,
+      revalidateOnFocus: !isBrowserDemo,
+      revalidateOnReconnect: !isBrowserDemo,
+      refreshInterval: isBrowserDemo ? 0 : HUB_POLL_INTERVAL_MS,
+      keepPreviousData: !isBrowserDemo,
     },
   )
 
+  const live = isBrowserDemo ? fallbackData : swrData
+  const error = isBrowserDemo ? undefined : swrError
+  const isLoading = isBrowserDemo ? false : swrIsLoading
+  const isValidating = isBrowserDemo ? false : swrIsValidating
   const hub = live?.hub ?? null
   const liveAthletes = live?.items ?? []
   const liveCount = liveAthletes.length
@@ -63,6 +72,7 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
   const [athletes, setAthletes] = useState<PublicAthleteSummary[]>(initialData?.liveAthletes ?? [])
   const [isSearching, setIsSearching] = useState(false)
   const trimmedQuery = query.trim()
+  const displayedAthletes = isBrowserDemo ? [] : athletes
   const returnTo = `${location.pathname}${location.search}${location.hash}`
 
   useEffect(() => {
@@ -72,7 +82,7 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
   }, [error])
 
   useEffect(() => {
-    if (!raceId || isLoading) return
+    if (!raceId || isBrowserDemo || isLoading) return
 
     if (!trimmedQuery) {
       return
@@ -104,16 +114,23 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [isLoading, raceId, trimmedQuery])
+  }, [isBrowserDemo, isLoading, raceId, trimmedQuery])
 
   useEffect(() => {
-    if (trimmedQuery || isLoading) return
+    setQuery('')
+    setIsSearching(false)
+    setAthletes([])
+  }, [raceId])
+
+  useEffect(() => {
+    if (!raceId || isBrowserDemo || trimmedQuery || isLoading) return
     setAthletes(liveAthletes)
-  }, [isLoading, liveAthletes, trimmedQuery])
+  }, [isBrowserDemo, isLoading, liveAthletes, raceId, trimmedQuery])
 
   const leaderboard = useMemo(() => hub?.leaderboard ?? [], [hub])
 
   const handleRefresh = () => {
+    if (isBrowserDemo) return
     void mutate()
   }
 
@@ -157,16 +174,18 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
             Find Athlete
           </button>
 
-          <Button
-            type="button"
-            variant="secondary"
-            className="rounded-full border border-white/10 bg-white/5 px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-100 hover:bg-white/10"
-            onClick={() => void handleRefresh()}
-            disabled={isValidating}
-          >
-            <RefreshCcw className={`mr-2 h-3.5 w-3.5 ${isValidating ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          {!isBrowserDemo && (
+            <Button
+              type="button"
+              variant="secondary"
+              className="rounded-full border border-white/10 bg-white/5 px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-100 hover:bg-white/10"
+              onClick={() => void handleRefresh()}
+              disabled={isValidating}
+            >
+              <RefreshCcw className={`mr-2 h-3.5 w-3.5 ${isValidating ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          )}
         </div>
 
         <div className="space-y-5">
@@ -176,14 +195,14 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
 
           <PublicRaceRegistrationPanel raceId={raceId} hub={hub} returnTo={returnTo} />
 
-          <RaceHeatmap raceId={raceId} />
+          {!isBrowserDemo && <RaceHeatmap raceId={raceId} />}
 
-          <RaceMediaGallery raceId={raceId} />
+          {!isBrowserDemo && <RaceMediaGallery raceId={raceId} />}
 
           <PublicAthleteSearch
             query={query}
             onQueryChange={setQuery}
-            resultCount={athletes.length}
+            resultCount={displayedAthletes.length}
             isSearching={isSearching}
           />
 
@@ -225,13 +244,13 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-3 py-1 font-mono text-xs font-bold text-cyan-100">
                   <Trophy className="h-3.5 w-3.5" />
-                  {athletes.length}
+                  {displayedAthletes.length}
                 </div>
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {athletes.length > 0 ? (
-                  athletes.map((athlete) => (
+                {displayedAthletes.length > 0 ? (
+                  displayedAthletes.map((athlete) => (
                     <PublicAthleteCard key={athlete.participantId} athlete={athlete} raceId={raceId} />
                   ))
                 ) : (

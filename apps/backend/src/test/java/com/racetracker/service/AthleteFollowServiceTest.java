@@ -5,10 +5,12 @@ import com.racetracker.model.AthleteFollow;
 import com.racetracker.model.Participant;
 import com.racetracker.model.Race;
 import com.racetracker.model.User;
+import com.racetracker.model.UserCapabilityType;
 import com.racetracker.repository.AthleteFollowRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
+import com.racetracker.security.CapabilityAuthorizationService;
 import com.racetracker.service.impl.AthleteFollowServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
@@ -28,8 +31,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,6 +45,7 @@ class AthleteFollowServiceTest {
     @Mock RaceRepository raceRepository;
     @Mock UserRepository userRepository;
     @Mock LastCheckpointNameCache lastCheckpointNameCache;
+    @Mock CapabilityAuthorizationService capabilityAuthorizationService;
 
     private AthleteFollowServiceImpl service;
     private User user;
@@ -51,7 +57,8 @@ class AthleteFollowServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AthleteFollowServiceImpl(followRepository, participantRepository, raceRepository, userRepository, lastCheckpointNameCache);
+        service = new AthleteFollowServiceImpl(followRepository, participantRepository, raceRepository, userRepository,
+            lastCheckpointNameCache, capabilityAuthorizationService);
         user = User.builder().id(UUID.randomUUID()).email(email).firstName("Fan").lastName("One").build();
         race = new Race();
         race.setId(raceId);
@@ -128,5 +135,19 @@ class AthleteFollowServiceTest {
         service.unfollow(raceId, participantId);
 
         verify(followRepository).delete(follow);
+    }
+
+    @Test
+    void athleteOnlyUserCannotFollowWithoutSpectatorCapability() {
+        doThrow(new AccessDeniedException("Missing capability"))
+            .when(capabilityAuthorizationService).require(UserCapabilityType.SPECTATOR);
+
+        FavoriteCreateRequest request = new FavoriteCreateRequest();
+        request.setRaceId(raceId);
+        request.setParticipantId(participantId);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.follow(request))
+            .isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(raceRepository, participantRepository, followRepository);
     }
 }

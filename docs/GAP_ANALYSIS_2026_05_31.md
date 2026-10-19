@@ -1,5 +1,9 @@
 # AMS Platform Gap Analysis Report (2026-05-31)
 
+> Historical snapshot from 2026-05-31. Superseded by
+> `docs/IMPLEMENTATION_GAP_ANALYSIS_2026_10_11.md` and the current register in
+> `docs/PENDING_WORK.md`; the findings below are retained for audit history.
+
 This report provides an updated audit of the AMS (Athlete Management System) against the requirements specified in `marathon_race_tracking_master_prompt.md`.
 
 ## 1. Executive Summary

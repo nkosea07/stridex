@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog'
 import { racesApi, participantsApi, checkpointsApi, resultsApi, trackingApi } from '@/lib/api'
 import type { Race, RaceStatus, Participant, Checkpoint, RaceResult, LiveTrackingData } from '@/types'
+import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
 const statusColors: Record<RaceStatus, string> = {
@@ -41,6 +42,8 @@ const statusActions: Record<RaceStatus, { label: string; nextStatus: RaceStatus;
 export function RaceDetailPage() {
   const { raceId } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canManageRace = isAdminRole(user?.role)
 
   const [race, setRace] = useState<Race | null>(null)
   const [participants, setParticipants] = useState<Participant[]>([])
@@ -205,16 +208,18 @@ export function RaceDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <Badge className={statusColors[race.status]}>{race.status.replace('_', ' ')}</Badge>
-          {statusActions[race.status]?.map((action) => (
-            <Button key={action.nextStatus} variant="outline" onClick={() => void handleStatusChange(action.nextStatus)}>
-              {action.icon}
-              <span className="ml-2">{action.label}</span>
+          {canManageRace && statusActions[race.status]?.map((action) => (
+              <Button key={action.nextStatus} variant="outline" onClick={() => void handleStatusChange(action.nextStatus)}>
+                {action.icon}
+                <span className="ml-2">{action.label}</span>
+              </Button>
+            ))}
+          {canManageRace && (
+            <Button variant="outline" onClick={openEdit}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
             </Button>
-          ))}
-          <Button variant="outline" onClick={openEdit}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
+          )}
         </div>
       </div>
 

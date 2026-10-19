@@ -1,11 +1,13 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PublicAthleteTrackingPage } from '@/pages/PublicAthleteTrackingPage'
 import { PublicRaceHubPage } from '@/pages/PublicRaceHubPage'
 import * as publicAthleteRouteModule from '../../app/routes/public-athlete'
 import * as publicRaceRouteModule from '../../app/routes/public-race'
-import { publicTrackingApi } from '@/lib/api'
+import { mediaApi, publicTrackingApi } from '@/lib/api'
+import { PUBLIC_BROWSER_DEMO_RACE_ID } from '@/router/publicLoaders'
+import '@/i18n'
 
 vi.mock('@/lib/api', () => ({
   publicTrackingApi: {
@@ -16,6 +18,9 @@ vi.mock('@/lib/api', () => ({
     getAthleteTracking: vi.fn(),
     getAthleteTrack: vi.fn().mockResolvedValue({ points: [] }),
     getHeatmap: vi.fn().mockResolvedValue([]),
+  },
+  mediaApi: {
+    publicList: vi.fn().mockResolvedValue([]),
   },
   favoritesApi: {
     list: vi.fn().mockResolvedValue([]),
@@ -29,6 +34,9 @@ const getLiveAthletesMock = vi.mocked(publicTrackingApi.getLiveAthletes)
 const getLiveFeedMock = vi.mocked(publicTrackingApi.getLiveFeed)
 const searchAthletesMock = vi.mocked(publicTrackingApi.searchAthletes)
 const getAthleteTrackingMock = vi.mocked(publicTrackingApi.getAthleteTracking)
+const getHeatmapMock = vi.mocked(publicTrackingApi.getHeatmap)
+const publicMediaListMock = vi.mocked(mediaApi.publicList)
+const API_RACE_ID = '123e4567-e89b-12d3-a456-426614174000'
 
 type PublicRaceLoaderArgs = Parameters<typeof publicRaceRouteModule.clientLoader>[0]
 type PublicAthleteLoaderArgs = Parameters<typeof publicAthleteRouteModule.clientLoader>[0]
@@ -57,7 +65,9 @@ function createAthleteLoaderArgs(params: PublicAthleteLoaderArgs['params']): Pub
 
 describe('public route loaders', () => {
   afterEach(() => {
+    cleanup()
     vi.clearAllMocks()
+    vi.useRealTimers()
   })
 
   it('throws a 404 response when the race hub loader is missing race params', async () => {
@@ -79,11 +89,11 @@ describe('public route loaders', () => {
   it('throws a 404 response when the athlete loader is missing route params', async () => {
     await expect(
       publicAthleteRouteModule.clientLoader({
-        params: { raceId: 'demo' },
-        request: new Request('http://localhost/race/demo/athlete'),
+        params: { raceId: API_RACE_ID },
+        request: new Request(`http://localhost/race/${API_RACE_ID}/athlete`),
         context: undefined as never,
         serverLoader: async () => undefined,
-        url: new URL('http://localhost/race/demo/athlete'),
+        url: new URL(`http://localhost/race/${API_RACE_ID}/athlete`),
         pattern: '/race/:raceId/athlete/:participantId',
       } as unknown as PublicAthleteLoaderArgs),
     ).rejects.toMatchObject({
@@ -92,11 +102,70 @@ describe('public route loaders', () => {
     })
   })
 
-  it('loads race hub data through the route loader without duplicate initial transport calls', async () => {
-    expect(typeof publicRaceRouteModule.clientLoader).toBe('function')
+  it('loads the browser demo from static data without invoking the public API', async () => {
+    const initialData = await publicRaceRouteModule.clientLoader(
+      createRaceLoaderArgs({ raceId: PUBLIC_BROWSER_DEMO_RACE_ID }),
+    )
 
+    render(
+      <MemoryRouter initialEntries={[`/race/${PUBLIC_BROWSER_DEMO_RACE_ID}`]}>
+        <Routes>
+          <Route
+            path="/race/:raceId"
+            element={
+              <PublicRaceHubPage
+                raceId={PUBLIC_BROWSER_DEMO_RACE_ID}
+                initialData={initialData}
+              />
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(initialData).toEqual({
+      raceId: PUBLIC_BROWSER_DEMO_RACE_ID,
+      hub: {
+        raceId: PUBLIC_BROWSER_DEMO_RACE_ID,
+        raceName: 'Race Tracker Browser Demo',
+        status: 'IN_PROGRESS',
+        raceDate: '2026-05-31T06:00:00.000Z',
+        city: 'Harare',
+        country: 'Zimbabwe',
+        distanceKm: 42.2,
+        leaderboard: [],
+      },
+      liveAthletes: [],
+    })
+    expect(await screen.findByText(/Race Tracker Browser Demo/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /refresh/i })).not.toBeInTheDocument()
+
+    vi.useFakeTimers()
+    fireEvent.change(screen.getByPlaceholderText(/Bib 1024/i), { target: { value: '101' } })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180)
+    })
+
+    expect(getRaceHubMock).not.toHaveBeenCalled()
+    expect(getLiveFeedMock).not.toHaveBeenCalled()
+    expect(getHeatmapMock).not.toHaveBeenCalled()
+    expect(publicMediaListMock).not.toHaveBeenCalled()
+    expect(searchAthletesMock).not.toHaveBeenCalled()
+  })
+
+  it('renders the unavailable state without race or loader data', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <PublicRaceHubPage />
+      </MemoryRouter>,
+    )
+
+    expect(container.firstChild).toHaveClass('min-h-screen', 'bg-slate-950')
+  })
+
+  it('resets UUID race state when navigating to the static browser demo', async () => {
     getRaceHubMock.mockResolvedValue({
-      raceId: 'demo',
+      raceId: API_RACE_ID,
       raceName: 'Demo Race',
       status: 'IN_PROGRESS',
       raceDate: '2026-05-31T06:00:00.000Z',
@@ -118,26 +187,89 @@ describe('public route loaders', () => {
       refreshedAt: '2026-05-31T06:00:00.000Z',
     })
 
-    const initialData = await publicRaceRouteModule.clientLoader(createRaceLoaderArgs({ raceId: 'demo' }))
+    const apiData = await publicRaceRouteModule.clientLoader(createRaceLoaderArgs({ raceId: API_RACE_ID }))
+    const demoData = await publicRaceRouteModule.clientLoader(
+      createRaceLoaderArgs({ raceId: PUBLIC_BROWSER_DEMO_RACE_ID }),
+    )
+    const { rerender } = render(
+      <MemoryRouter initialEntries={[`/race/${API_RACE_ID}`]}>
+        <PublicRaceHubPage raceId={API_RACE_ID} initialData={apiData} />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText(/Demo Race/i)).toBeInTheDocument()
+    expect(await screen.findByText(/Demo Athlete/i)).toBeInTheDocument()
+    fireEvent.change(screen.getByPlaceholderText(/Bib 1024/i), { target: { value: '101' } })
+    expect(screen.getByDisplayValue('101')).toBeInTheDocument()
+
+    vi.clearAllMocks()
+    rerender(
+      <MemoryRouter initialEntries={[`/race/${PUBLIC_BROWSER_DEMO_RACE_ID}`]}>
+        <PublicRaceHubPage raceId={PUBLIC_BROWSER_DEMO_RACE_ID} initialData={demoData} />
+      </MemoryRouter>,
+    )
+    window.dispatchEvent(new Event('focus'))
+    window.dispatchEvent(new Event('online'))
+
+    expect(await screen.findByText(/Race Tracker Browser Demo/i)).toBeInTheDocument()
+    expect(await screen.findByText(/No athletes matched that search/i)).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/Bib 1024/i)).toHaveValue('')
+    expect(screen.queryByText(/Demo Race/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Demo Athlete/i)).not.toBeInTheDocument()
+    expect(getRaceHubMock).not.toHaveBeenCalled()
+    expect(getLiveFeedMock).not.toHaveBeenCalled()
+    expect(getHeatmapMock).not.toHaveBeenCalled()
+    expect(publicMediaListMock).not.toHaveBeenCalled()
+    expect(searchAthletesMock).not.toHaveBeenCalled()
+  })
+
+  it('loads race hub data through the route loader without duplicate initial transport calls', async () => {
+    expect(typeof publicRaceRouteModule.clientLoader).toBe('function')
+
+    getRaceHubMock.mockResolvedValue({
+      raceId: API_RACE_ID,
+      raceName: 'Demo Race',
+      status: 'IN_PROGRESS',
+      raceDate: '2026-05-31T06:00:00.000Z',
+      city: 'Harare',
+      country: 'Zimbabwe',
+      distanceKm: 42.2,
+      leaderboard: [],
+    })
+    getLiveFeedMock.mockResolvedValue({
+      items: [{
+        participantId: 'athlete-1',
+        participantName: 'Demo Athlete',
+        bibNumber: '101',
+        status: 'STARTED',
+        lastCheckpoint: '10K',
+        elapsedTime: '00:40:00',
+      }],
+      nextCursor: null,
+      refreshedAt: '2026-05-31T06:00:00.000Z',
+    })
+
+    const initialData = await publicRaceRouteModule.clientLoader(createRaceLoaderArgs({ raceId: API_RACE_ID }))
 
     render(
-      <MemoryRouter initialEntries={['/race/demo']}>
+      <MemoryRouter initialEntries={[`/race/${API_RACE_ID}`]}>
         <Routes>
-          <Route path="/race/:raceId" element={<PublicRaceHubPage raceId="demo" initialData={initialData} />} />
+          <Route path="/race/:raceId" element={<PublicRaceHubPage raceId={API_RACE_ID} initialData={initialData} />} />
         </Routes>
       </MemoryRouter>,
     )
 
     expect(await screen.findByText(/Demo Race/i)).toBeInTheDocument()
     expect(await screen.findByText(/Search Results/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /refresh/i })).toBeInTheDocument()
 
     await waitFor(() => {
       expect(getRaceHubMock).toHaveBeenCalledTimes(1)
       expect(getLiveFeedMock).toHaveBeenCalledTimes(1)
     })
 
-    expect(getRaceHubMock).toHaveBeenCalledWith('demo')
-    expect(getLiveFeedMock).toHaveBeenCalledWith('demo', { limit: 100 })
+    expect(getRaceHubMock).toHaveBeenCalledWith(API_RACE_ID)
+    expect(getLiveFeedMock).toHaveBeenCalledWith(API_RACE_ID, { limit: 100 })
     expect(getLiveAthletesMock).not.toHaveBeenCalled()
     expect(searchAthletesMock).not.toHaveBeenCalled()
   })
@@ -159,17 +291,17 @@ describe('public route loaders', () => {
     })
 
     const initialData = await publicAthleteRouteModule.clientLoader(
-      createAthleteLoaderArgs({ raceId: 'demo', participantId: 'athlete-1' }),
+      createAthleteLoaderArgs({ raceId: API_RACE_ID, participantId: 'athlete-1' }),
     )
 
     render(
-      <MemoryRouter initialEntries={['/race/demo/athlete/athlete-1']}>
+      <MemoryRouter initialEntries={[`/race/${API_RACE_ID}/athlete/athlete-1`]}>
         <Routes>
           <Route
             path="/race/:raceId/athlete/:participantId"
             element={
               <PublicAthleteTrackingPage
-                raceId="demo"
+                raceId={API_RACE_ID}
                 participantId="athlete-1"
                 initialData={initialData}
               />
@@ -186,6 +318,6 @@ describe('public route loaders', () => {
       expect(getAthleteTrackingMock).toHaveBeenCalledTimes(1)
     })
 
-    expect(getAthleteTrackingMock).toHaveBeenCalledWith('demo', 'athlete-1')
+    expect(getAthleteTrackingMock).toHaveBeenCalledWith(API_RACE_ID, 'athlete-1')
   })
 })

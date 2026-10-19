@@ -9,12 +9,16 @@ import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.mapper.UserMapper;
 import com.racetracker.model.AuthToken;
 import com.racetracker.model.User;
+import com.racetracker.model.UserCapability;
 import com.racetracker.repository.AuthTokenRepository;
+import com.racetracker.repository.ParticipantRepository;
+import com.racetracker.repository.UserCapabilityRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.security.JwtService;
 import com.racetracker.service.impl.AuthServiceImpl;
 import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -24,13 +28,17 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Set;
+import java.util.EnumSet;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -40,6 +48,11 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceImplSecurityFlowTest {
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Mock
     private UserRepository userRepository;
@@ -67,6 +80,12 @@ class AuthServiceImplSecurityFlowTest {
 
     @Mock
     private AuditEventService auditEventService;
+
+    @Mock
+    private UserCapabilityRepository userCapabilityRepository;
+
+    @Mock
+    private ParticipantRepository participantRepository;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -166,11 +185,11 @@ class AuthServiceImplSecurityFlowTest {
         User saved = baseUser();
         saved.setId(UUID.randomUUID());
         saved.setEmail("newuser@example.com");
-        when(userRepository.save(any(User.class))).thenReturn(saved);
-        when(authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(saved.getId(), AuthToken.TokenType.EMAIL_VERIFICATION))
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(any(), eq(AuthToken.TokenType.EMAIL_VERIFICATION)))
             .thenReturn(List.of());
 
-        when(userMapper.toDto(saved)).thenReturn(new com.racetracker.dto.auth.UserDto());
+        when(userMapper.toDto(any(User.class))).thenReturn(new com.racetracker.dto.auth.UserDto());
 
         AuthResponse response = authService.register(request);
 
@@ -178,7 +197,7 @@ class AuthServiceImplSecurityFlowTest {
         assertNull(response.getRefreshToken());
         assertTrue(Boolean.TRUE.equals(response.getRequiresEmailVerification()));
         verify(authTokenRepository, atLeastOnce()).save(any(AuthToken.class));
-        verify(authEmailService).sendEmailVerification(eq(saved), anyString());
+        verify(authEmailService).sendEmailVerification(any(User.class), anyString());
     }
 
     @Test
@@ -207,6 +226,181 @@ class AuthServiceImplSecurityFlowTest {
         verify(userRepository).save(captor.capture());
         assertThat(captor.getValue().getPrivacyPolicyVersion()).isEqualTo("2026-10-11");
         assertThat(captor.getValue().getPrivacyPolicyAcceptedAt()).isNotNull();
+    }
+
+    @Test
+    void register_defaultsToAthleteCapabilityWhenExperienceIsOmitted() {
+        RegisterRequest request = new RegisterRequest();
+        request.setEmail("default@example.com");
+        request.setPassword("12345678");
+        request.setFirstName("Default");
+        request.setLastName("Athlete");
+
+        when(userRepository.existsByEmailIgnoreCase("default@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("12345678")).thenReturn("hashed");
+        User saved = baseUser();
+        saved.setEmail("default@example.com");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            user.setId(UUID.randomUUID());
+            return user;
+        });
+        when(authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(any(), any())).thenReturn(List.of());
+        when(userMapper.toDto(any(User.class))).thenReturn(new com.racetracker.dto.auth.UserDto());
+
+        authService.register(request);
+
+        ArgumentCaptor<com.racetracker.model.UserCapability> captor =
+            ArgumentCaptor.forClass(com.racetracker.model.UserCapability.class);
+        verify(userCapabilityRepository).save(captor.capture());
+        assertThat(captor.getValue().getCapability()).isEqualTo(com.racetracker.model.UserCapabilityType.ATHLETE);
+        assertThat(captor.getValue().getUser().getPreferredCapability())
+            .isEqualTo(com.racetracker.model.UserCapabilityType.ATHLETE);
+    }
+
+    @Test
+    void register_supportsSpectatorOnlyExperienceSet() {
+        RegisterRequest request = new RegisterRequest();
+        request.setEmail("spectator@example.com");
+        request.setPassword("12345678");
+        request.setFirstName("Spectator");
+        request.setLastName("User");
+        request.setExperiences(Set.of(com.racetracker.model.UserCapabilityType.SPECTATOR));
+
+        when(userRepository.existsByEmailIgnoreCase("spectator@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("12345678")).thenReturn("hashed");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            user.setId(UUID.randomUUID());
+            return user;
+        });
+        when(authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(any(), any())).thenReturn(List.of());
+        when(userMapper.toDto(any(User.class))).thenReturn(new com.racetracker.dto.auth.UserDto());
+
+        authService.register(request);
+
+        ArgumentCaptor<UserCapability> capabilityCaptor = ArgumentCaptor.forClass(UserCapability.class);
+        verify(userCapabilityRepository).save(capabilityCaptor.capture());
+        assertThat(capabilityCaptor.getValue().getCapability())
+            .isEqualTo(com.racetracker.model.UserCapabilityType.SPECTATOR);
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        assertThat(userCaptor.getValue().getPreferredCapability())
+            .isEqualTo(com.racetracker.model.UserCapabilityType.SPECTATOR);
+    }
+
+    @Test
+    void register_supportsBothExperienceSetWithAthletePreferredByDefault() {
+        RegisterRequest request = new RegisterRequest();
+        request.setEmail("both@example.com");
+        request.setPassword("12345678");
+        request.setFirstName("Dual");
+        request.setLastName("User");
+        request.setExperiences(EnumSet.of(
+            com.racetracker.model.UserCapabilityType.ATHLETE,
+            com.racetracker.model.UserCapabilityType.SPECTATOR));
+
+        when(userRepository.existsByEmailIgnoreCase("both@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("12345678")).thenReturn("hashed");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            user.setId(UUID.randomUUID());
+            return user;
+        });
+        when(authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(any(), any())).thenReturn(List.of());
+        when(userMapper.toDto(any(User.class))).thenReturn(new com.racetracker.dto.auth.UserDto());
+
+        authService.register(request);
+
+        ArgumentCaptor<UserCapability> capabilityCaptor = ArgumentCaptor.forClass(UserCapability.class);
+        verify(userCapabilityRepository, times(2)).save(capabilityCaptor.capture());
+        assertThat(capabilityCaptor.getAllValues())
+            .extracting(UserCapability::getCapability)
+            .containsExactlyInAnyOrder(
+                com.racetracker.model.UserCapabilityType.ATHLETE,
+                com.racetracker.model.UserCapabilityType.SPECTATOR);
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        assertThat(userCaptor.getValue().getPreferredCapability())
+            .isEqualTo(com.racetracker.model.UserCapabilityType.ATHLETE);
+    }
+
+    @Test
+    void updateCapabilitiesPersistsSelectionAndPreferredCapability() {
+        User user = baseUser();
+        when(userRepository.findByEmailIgnoreCaseForUpdate("athlete@example.com")).thenReturn(Optional.of(user));
+        when(userCapabilityRepository.findByUserIdAndCapability(any(), any())).thenReturn(Optional.empty());
+        when(userCapabilityRepository.save(any(com.racetracker.model.UserCapability.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepository.save(user)).thenReturn(user);
+        when(userMapper.toDto(user)).thenReturn(new com.racetracker.dto.auth.UserDto());
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken("athlete@example.com", null, List.of()));
+
+        com.racetracker.dto.auth.UpdateCapabilitiesRequest request = new com.racetracker.dto.auth.UpdateCapabilitiesRequest();
+        request.setCapabilities(EnumSet.of(com.racetracker.model.UserCapabilityType.ATHLETE,
+            com.racetracker.model.UserCapabilityType.SPECTATOR));
+        request.setPreferredCapability(com.racetracker.model.UserCapabilityType.SPECTATOR);
+
+        authService.updateCapabilities(request);
+
+        assertThat(user.getPreferredCapability()).isEqualTo(com.racetracker.model.UserCapabilityType.SPECTATOR);
+        verify(userCapabilityRepository, times(2)).save(any(com.racetracker.model.UserCapability.class));
+        verify(auditEventService).recordInCurrentTransaction(eq("CAPABILITIES_UPDATED"), eq(user.getId()),
+            eq("USER"), eq(user.getId().toString()), eq("SUCCESS"), anyMap());
+    }
+
+    @Test
+    void updateCapabilitiesBlocksAthleteRemovalForActiveRegistration() {
+        User user = baseUser();
+        when(userRepository.findByEmailIgnoreCaseForUpdate("athlete@example.com")).thenReturn(Optional.of(user));
+        when(participantRepository.existsByUserIdAndStatusIn(any(), any())).thenReturn(true);
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken("athlete@example.com", null, List.of()));
+
+        com.racetracker.dto.auth.UpdateCapabilitiesRequest request = new com.racetracker.dto.auth.UpdateCapabilitiesRequest();
+        request.setCapabilities(Set.of(com.racetracker.model.UserCapabilityType.SPECTATOR));
+        request.setPreferredCapability(com.racetracker.model.UserCapabilityType.SPECTATOR);
+
+        assertThatThrownBy(() -> authService.updateCapabilities(request))
+            .isInstanceOf(com.racetracker.exception.ConflictException.class)
+            .hasMessageContaining("active registration");
+        verifyNoInteractions(userCapabilityRepository);
+    }
+
+    @Test
+    void updateCapabilitiesRejectsEmptySelectionWithStableCode() {
+        User user = baseUser();
+        when(userRepository.findByEmailIgnoreCaseForUpdate("athlete@example.com")).thenReturn(Optional.of(user));
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken("athlete@example.com", null, List.of()));
+
+        com.racetracker.dto.auth.UpdateCapabilitiesRequest request =
+            new com.racetracker.dto.auth.UpdateCapabilitiesRequest();
+        request.setCapabilities(Set.of());
+        request.setPreferredCapability(com.racetracker.model.UserCapabilityType.ATHLETE);
+
+        assertThatThrownBy(() -> authService.updateCapabilities(request))
+            .isInstanceOf(com.racetracker.exception.ApiException.class)
+            .hasFieldOrPropertyWithValue("code", "CAPABILITIES_REQUIRED")
+            .hasMessageContaining("At least one capability");
+    }
+
+    @Test
+    void updateCapabilitiesRejectsMissingPreferredSelectionWithStableCode() {
+        User user = baseUser();
+        when(userRepository.findByEmailIgnoreCaseForUpdate("athlete@example.com")).thenReturn(Optional.of(user));
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken("athlete@example.com", null, List.of()));
+
+        com.racetracker.dto.auth.UpdateCapabilitiesRequest request =
+            new com.racetracker.dto.auth.UpdateCapabilitiesRequest();
+        request.setCapabilities(Set.of(com.racetracker.model.UserCapabilityType.ATHLETE));
+
+        assertThatThrownBy(() -> authService.updateCapabilities(request))
+            .isInstanceOf(com.racetracker.exception.ApiException.class)
+            .hasFieldOrPropertyWithValue("code", "PREFERRED_CAPABILITY_REQUIRED")
+            .hasMessageContaining("Preferred capability");
     }
 
     @Test

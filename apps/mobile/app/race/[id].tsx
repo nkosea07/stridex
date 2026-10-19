@@ -1,32 +1,31 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, Modal, TextInput, Switch } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { api, getApiErrorKind, getNonEmptyRouteId, type ApiErrorKind } from '@/lib/api';
+import {
+  createPublicResultsPaginationState,
+  loadNextPublicResultsPage,
+} from '@/lib/public-results-pagination';
 import { useAuthStore } from '@/store/auth';
-import type { RegistrationField } from '@/types';
+import { getPreferredCapability, isOperationsRole } from '@/lib/capabilities';
+import { useTranslation } from 'react-i18next';
+import { CapabilityGate } from '@/components/CapabilityGate';
+import { RequestErrorState } from '@/components/RequestErrorState';
+import { formatCurrency, formatDate, formatDistanceKm, formatNumber, statusTranslationKey } from '@/lib/format';
+import type { PublicRaceResult, RegistrationField } from '@/types';
 
 const DEFAULT_BANNER = 'https://images.unsplash.com/photo-1513593771513-7b58b6c4af38?w=800';
-
-function formatDate(value?: string) {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString();
-}
 
 function formatTime(value?: string) {
   if (!value) return '-';
   return String(value).slice(0, 5);
 }
 
-function statusLabel(status?: string) {
-  const normalized = String(status || '').toLowerCase();
-  if (normalized === 'registration_open') return 'Registration Open';
-  if (normalized === 'registration_closed') return 'Registration Closed';
-  if (normalized === 'in_progress') return 'In Progress';
-  if (normalized === 'completed') return 'Completed';
-  return 'Upcoming';
+function formatRegistrationFee(value: unknown, currency?: string) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '-';
+  return formatCurrency(amount, currency || 'USD');
 }
 
 function statusColors(status?: string) {
@@ -39,10 +38,38 @@ function statusColors(status?: string) {
 }
 
 export default function RaceDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  return (
+    <CapabilityGate anyOf={['ATHLETE', 'SPECTATOR']}>
+      <RaceDetailScreenContent />
+    </CapabilityGate>
+  );
+}
+
+function RaceDetailScreenContent() {
+  const { id: routeParam } = useLocalSearchParams<{ id?: string }>();
+  const routeId = getNonEmptyRouteId(routeParam);
   const { user } = useAuthStore();
+  const { t } = useTranslation();
+  const activeCapability = getPreferredCapability(user);
+  const canRegister = !isOperationsRole(user?.role) && activeCapability === 'ATHLETE';
+  const canFollow = !isOperationsRole(user?.role) && activeCapability === 'SPECTATOR';
   const [race, setRace] = useState<any>(null);
   const [checkpoints, setCheckpoints] = useState<any[]>([]);
+  const [publicResults, setPublicResults] = useState<PublicRaceResult[]>([]);
+  const [followedParticipantIds, setFollowedParticipantIds] = useState<string[]>([]);
+  const [busyFollowKeys, setBusyFollowKeys] = useState<Record<string, boolean>>({});
+  const busyFollowKeysRef = useRef<Record<string, boolean>>({});
+  const [raceErrorKind, setRaceErrorKind] = useState<ApiErrorKind | null>(null);
+  const [publicResultsErrorKind, setPublicResultsErrorKind] = useState<ApiErrorKind | null>(null);
+  const [favoritesErrorKind, setFavoritesErrorKind] = useState<ApiErrorKind | null>(null);
+  const [isFollowBootstrapLoading, setIsFollowBootstrapLoading] = useState(false);
+  const [participantPage, setParticipantPage] = useState(0);
+  const [publicResultsRevision, setPublicResultsRevision] = useState<number | null>(null);
+  const [failedParticipantPage, setFailedParticipantPage] = useState<number | null>(null);
+  const [hasMoreParticipants, setHasMoreParticipants] = useState(false);
+  const [isLoadingMoreParticipants, setIsLoadingMoreParticipants] = useState(false);
+  const participantRequestGenerationRef = useRef(0);
+  const participantPageInFlightRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRegistering, setIsRegistering] = useState(false);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
@@ -56,21 +83,145 @@ export default function RaceDetailScreen() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
-    if (!id) return;
-    const [raceResponse, checkpointsResponse] = await Promise.all([
-      api.getRace(String(id)),
-      api.getRaceCheckpoints(String(id)),
-    ]);
-    setRace(raceResponse);
-    setCheckpoints((checkpointsResponse as any[]).sort((a, b) => Number(a.orderIndex || 0) - Number(b.orderIndex || 0)));
-  }, [id]);
+    if (!routeId) {
+      setRace(null);
+      setCheckpoints([]);
+      setRaceErrorKind('not_found');
+      return;
+    }
+    setRaceErrorKind(null);
+    try {
+      const [raceResponse, checkpointsResponse] = await Promise.all([
+        api.getRace(routeId),
+        api.getRaceCheckpoints(routeId),
+      ]);
+      setRace(raceResponse);
+      setCheckpoints((checkpointsResponse as any[]).sort((a, b) => Number(a.orderIndex || 0) - Number(b.orderIndex || 0)));
+    } catch (error) {
+      setRace(null);
+      setCheckpoints([]);
+      setRaceErrorKind(getApiErrorKind(error));
+    }
+  }, [routeId]);
 
-  useEffect(() => {
-    load().finally(() => setIsLoading(false));
+  const reloadRace = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await load();
+    } finally {
+      setIsLoading(false);
+    }
   }, [load]);
 
+  useEffect(() => {
+    void reloadRace();
+  }, [reloadRace]);
+
+  const loadFollowData = useCallback(async () => {
+    const requestGeneration = ++participantRequestGenerationRef.current;
+    if (!routeId || !canFollow) {
+      setPublicResults([]);
+      setFollowedParticipantIds([]);
+      setPublicResultsErrorKind(null);
+      setFavoritesErrorKind(null);
+      setParticipantPage(0);
+      setPublicResultsRevision(null);
+      setFailedParticipantPage(null);
+      setHasMoreParticipants(false);
+      setIsLoadingMoreParticipants(false);
+      setIsFollowBootstrapLoading(false);
+      return;
+    }
+
+    setIsFollowBootstrapLoading(true);
+    setPublicResultsErrorKind(null);
+    setFavoritesErrorKind(null);
+    setFailedParticipantPage(null);
+    const [resultsResponse, favoritesResponse] = await Promise.allSettled([
+      api.getPublicRaceResults(routeId, 0, 50),
+      api.listFavorites(),
+    ]);
+
+    if (requestGeneration !== participantRequestGenerationRef.current) return;
+
+    if (resultsResponse.status === 'fulfilled') {
+      setPublicResults(resultsResponse.value.items);
+      setParticipantPage(resultsResponse.value.page);
+      setPublicResultsRevision(resultsResponse.value.revision);
+      setFailedParticipantPage(null);
+      setHasMoreParticipants(resultsResponse.value.page + 1 < resultsResponse.value.totalPages);
+    } else {
+      setPublicResults([]);
+      setParticipantPage(0);
+      setPublicResultsRevision(null);
+      setFailedParticipantPage(0);
+      setHasMoreParticipants(false);
+      setPublicResultsErrorKind(getApiErrorKind(resultsResponse.reason));
+    }
+
+    if (favoritesResponse.status === 'fulfilled') {
+      setFollowedParticipantIds(
+        favoritesResponse.value
+          .filter((favorite) => favorite.raceId === routeId)
+          .map((favorite) => favorite.participantId),
+      );
+    } else {
+      setFollowedParticipantIds([]);
+      setFavoritesErrorKind(getApiErrorKind(favoritesResponse.reason));
+    }
+    setIsFollowBootstrapLoading(false);
+  }, [canFollow, routeId]);
+
+  useEffect(() => {
+    void loadFollowData();
+  }, [loadFollowData]);
+
+  const loadMoreParticipants = useCallback(async (page = participantPage + 1) => {
+    if (
+      !routeId
+      || !canFollow
+      || !hasMoreParticipants
+      || isLoadingMoreParticipants
+      || participantPageInFlightRef.current
+      || publicResultsRevision === null
+    ) return;
+
+    participantPageInFlightRef.current = true;
+    const requestGeneration = ++participantRequestGenerationRef.current;
+    setIsLoadingMoreParticipants(true);
+    setPublicResultsErrorKind(null);
+    setFailedParticipantPage(null);
+    try {
+      const current = createPublicResultsPaginationState({
+        items: publicResults,
+        page: participantPage,
+        size: 50,
+        totalElements: publicResults.length,
+        totalPages: hasMoreParticipants ? participantPage + 2 : participantPage + 1,
+        revision: publicResultsRevision,
+      });
+      const response = await loadNextPublicResultsPage(current, (requestedPage, requestedSize, revision) => (
+        api.getPublicRaceResults(routeId, requestedPage, requestedSize, revision)
+      ));
+
+      if (requestGeneration !== participantRequestGenerationRef.current) return;
+
+      setPublicResults(response.items);
+      setParticipantPage(response.page);
+      setPublicResultsRevision(response.revision);
+      setHasMoreParticipants(response.page + 1 < response.totalPages);
+    } catch (error) {
+      if (requestGeneration !== participantRequestGenerationRef.current) return;
+      setFailedParticipantPage(page);
+      setPublicResultsErrorKind(getApiErrorKind(error));
+    } finally {
+      participantPageInFlightRef.current = false;
+      setIsLoadingMoreParticipants(false);
+    }
+  }, [canFollow, hasMoreParticipants, isLoadingMoreParticipants, participantPage, publicResults, publicResultsRevision, routeId]);
+
   const openRegistration = async () => {
-    if (!race) return;
+    if (!race || !canRegister) return;
 
     const firstCategory = (race.categories || [])[0];
     if (!firstCategory?.id) {
@@ -87,7 +238,8 @@ export default function RaceDetailScreen() {
     setIsRegisterOpen(true);
 
     try {
-      const fields = await api.getRegistrationFields(String(id));
+      if (!routeId) return;
+      const fields = await api.getRegistrationFields(routeId);
       setRegistrationFields(fields);
     } catch {
       setRegistrationFields([]);
@@ -106,7 +258,8 @@ export default function RaceDetailScreen() {
 
     try {
       setIsRegistering(true);
-      const registration = await api.registerForRace(String(id), {
+    if (!routeId) return;
+    const registration = await api.registerForRace(routeId, {
         categoryId: selectedCategoryId,
         emergencyContact: {
           name: contact.name,
@@ -136,12 +289,38 @@ export default function RaceDetailScreen() {
     }
   };
 
+  const toggleFollow = async (participantId: string) => {
+    if (!routeId || favoritesErrorKind || isFollowBootstrapLoading || busyFollowKeysRef.current[participantId]) return;
+
+    busyFollowKeysRef.current[participantId] = true;
+    setBusyFollowKeys((current) => ({ ...current, [participantId]: true }));
+    const isFollowing = followedParticipantIds.includes(participantId);
+    try {
+      if (isFollowing) {
+        await api.unfollowAthlete(routeId, participantId);
+        setFollowedParticipantIds((current) => current.filter((value) => value !== participantId));
+      } else {
+        await api.followAthlete(routeId, participantId);
+        setFollowedParticipantIds((current) => [...current, participantId]);
+      }
+    } catch {
+      Alert.alert(t(isFollowing ? 'mobile:race.unfollowFailed' : 'mobile:race.followFailed'));
+    } finally {
+      busyFollowKeysRef.current[participantId] = false;
+      setBusyFollowKeys((current) => ({ ...current, [participantId]: false }));
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#0F766E" />
       </View>
     );
+  }
+
+  if (raceErrorKind) {
+    return <RequestErrorState resource="race" kind={raceErrorKind} onRetry={() => void reloadRace()} />;
   }
 
   if (!race) {
@@ -164,7 +343,7 @@ export default function RaceDetailScreen() {
 
         <View style={styles.content}>
           <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-            <Text style={[styles.statusText, { color: statusStyle.text }]}>{statusLabel(race.status)}</Text>
+            <Text style={[styles.statusText, { color: statusStyle.text }]}>{t(statusTranslationKey(race.status))}</Text>
           </View>
 
           <Text style={styles.title}>{race.name}</Text>
@@ -172,7 +351,7 @@ export default function RaceDetailScreen() {
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}>
               <Ionicons name="calendar-outline" size={20} color="#0F766E" />
-              <Text style={styles.infoText}>{formatDate(race.raceDate)}</Text>
+              <Text style={styles.infoText}>{race.raceDate && !Number.isNaN(new Date(race.raceDate).getTime()) ? formatDate(race.raceDate) : '-'}</Text>
             </View>
             <View style={styles.infoItem}>
               <Ionicons name="time-outline" size={20} color="#0F766E" />
@@ -184,7 +363,7 @@ export default function RaceDetailScreen() {
             </View>
             <View style={styles.infoItem}>
               <Ionicons name="walk-outline" size={20} color="#0F766E" />
-              <Text style={styles.infoText}>{Number(race.distanceKm || 0)}km</Text>
+              <Text style={styles.infoText}>{formatDistanceKm(Number(race.distanceKm || 0))}</Text>
             </View>
           </View>
 
@@ -200,10 +379,12 @@ export default function RaceDetailScreen() {
                 <View key={String(category.id)} style={styles.categoryCard}>
                   <View>
                     <Text style={styles.categoryName}>{category.name}</Text>
-                    <Text style={styles.categoryDistance}>{Number(category.distanceKm || race.distanceKm || 0)}km</Text>
+                    <Text style={styles.categoryDistance}>{formatDistanceKm(Number(category.distanceKm || race.distanceKm || 0))}</Text>
                   </View>
                   <Text style={styles.categoryFee}>
-                    {category.registrationFee ? `${race.currency || ''} ${category.registrationFee}` : '-'}
+                    {category.registrationFee !== undefined && category.registrationFee !== null
+                      ? formatRegistrationFee(category.registrationFee, race.currency)
+                      : '-'}
                   </Text>
                 </View>
               ))
@@ -231,7 +412,7 @@ export default function RaceDetailScreen() {
                     <View style={styles.checkpointInfo}>
                       <Text style={styles.checkpointName}>{checkpoint.name}</Text>
                       <Text style={styles.checkpointDetails}>
-                        {Number(checkpoint.distanceFromStartKm || 0)}km
+                        {formatDistanceKm(Number(checkpoint.distanceFromStartKm || 0))}
                         {checkpoint.cutoffTime ? ` • Cutoff: ${checkpoint.cutoffTime}` : ''}
                       </Text>
                     </View>
@@ -247,7 +428,7 @@ export default function RaceDetailScreen() {
             <Text style={styles.sectionTitle}>Participants</Text>
             <View style={styles.participantsCard}>
               <Text style={styles.participantsCount}>
-                {filled.toLocaleString()} {max > 0 ? `/ ${max.toLocaleString()}` : ''}
+                {formatNumber(filled)} {max > 0 ? `/ ${formatNumber(max)}` : ''}
               </Text>
               <Text style={styles.participantsLabel}>registered</Text>
               <View style={styles.progressBar}>
@@ -256,14 +437,91 @@ export default function RaceDetailScreen() {
             </View>
           </View>
 
+          {canFollow && (publicResults.length > 0 || publicResultsErrorKind || favoritesErrorKind) && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('mobile:race.followAthletesTitle')}</Text>
+              <Text style={styles.followDescription}>{t('mobile:race.followAthletesDescription')}</Text>
+              {publicResultsErrorKind && (
+                <RequestErrorState
+                  resource="results"
+                  kind={publicResultsErrorKind}
+                  onRetry={() => void (failedParticipantPage && failedParticipantPage > 0 ? loadMoreParticipants(failedParticipantPage) : loadFollowData())}
+                  compact
+                />
+              )}
+              {publicResults.length ? (
+                <>
+                  <View style={styles.followList}>
+                    {publicResults.map((result) => {
+                      const isFollowing = followedParticipantIds.includes(result.participantId);
+                      const isBusy = Boolean(busyFollowKeys[result.participantId]);
+                      const followDisabled = isBusy || Boolean(favoritesErrorKind) || isFollowBootstrapLoading;
+                      return (
+                        <View key={result.participantId} style={styles.followRow}>
+                          <View style={styles.followDetails}>
+                            <Text style={styles.followName}>
+                              {result.participantName || t('mobile:following.athlete')}
+                              {result.bibNumber ? ` #${result.bibNumber}` : ''}
+                            </Text>
+                            {result.status && <Text style={styles.followStatus}>{t(statusTranslationKey(result.status), { defaultValue: result.status })}</Text>}
+                          </View>
+                          <TouchableOpacity
+                            style={[styles.followButton, isFollowing && styles.followButtonActive]}
+                            onPress={() => void toggleFollow(result.participantId)}
+                            disabled={followDisabled}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${t(isFollowing ? 'mobile:race.unfollow' : 'mobile:race.follow')} ${result.participantName || t('mobile:following.athlete')}`}
+                            accessibilityHint={t('mobile:race.followControlHint')}
+                            accessibilityState={{ selected: isFollowing, busy: isBusy, disabled: followDisabled }}
+                          >
+                            {isBusy ? (
+                              <ActivityIndicator size="small" color={isFollowing ? '#FFFFFF' : '#0F766E'} />
+                            ) : (
+                              <Text style={[styles.followButtonText, isFollowing && styles.followButtonTextActive]}>
+                                {isFollowing ? t('mobile:race.unfollow') : t('mobile:race.follow')}
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </View>
+                  {hasMoreParticipants && (
+                    <TouchableOpacity
+                      style={styles.loadMoreButton}
+                      onPress={() => void loadMoreParticipants()}
+                      disabled={isLoadingMoreParticipants}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('mobile:race.loadMoreAthletes')}
+                      accessibilityState={{ busy: isLoadingMoreParticipants, disabled: isLoadingMoreParticipants }}
+                    >
+                      {isLoadingMoreParticipants ? <ActivityIndicator size="small" color="#0F766E" /> : <Text style={styles.loadMoreText}>{t('mobile:race.loadMoreAthletes')}</Text>}
+                    </TouchableOpacity>
+                  )}
+                </>
+              ) : !publicResultsErrorKind ? (
+                <Text style={styles.placeholderText}>{t('mobile:race.noPublicAthletes')}</Text>
+              ) : null}
+              {favoritesErrorKind && (
+                <RequestErrorState resource="favorites" kind={favoritesErrorKind} onRetry={() => void loadFollowData()} compact />
+              )}
+            </View>
+          )}
+
           <View style={styles.bottomSpacing} />
         </View>
       </ScrollView>
 
       <View style={styles.registerContainer}>
-        <TouchableOpacity style={styles.registerButton} onPress={openRegistration} disabled={isRegistering}>
-          <Text style={styles.registerButtonText}>{isRegistering ? 'Registering...' : 'Register Now'}</Text>
-        </TouchableOpacity>
+        {canRegister ? (
+          <TouchableOpacity style={styles.registerButton} onPress={openRegistration} disabled={isRegistering} accessibilityRole="button" accessibilityLabel={t('mobile:race.registerNow')} accessibilityState={{ busy: isRegistering, disabled: isRegistering }}>
+            <Text style={styles.registerButtonText}>{isRegistering ? t('mobile:race.registering') : t('mobile:race.registerNow')}</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.registrationNotice}>
+            {user ? t('mobile:race.spectatorOnly') : t('mobile:race.athleteSignIn')}
+          </Text>
+        )}
       </View>
 
       <Modal visible={isRegisterOpen} animationType="slide" transparent onRequestClose={() => setIsRegisterOpen(false)}>
@@ -565,6 +823,73 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
+  followDescription: {
+    color: '#6B7280',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  followList: {
+    gap: 8,
+  },
+  followRow: {
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    flexDirection: 'row',
+    gap: 12,
+    padding: 12,
+  },
+  followDetails: {
+    flex: 1,
+    gap: 2,
+  },
+  followName: {
+    color: '#1F2937',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  followStatus: {
+    color: '#6B7280',
+    fontSize: 12,
+    textTransform: 'capitalize',
+  },
+  followButton: {
+    alignItems: 'center',
+    borderColor: '#0F766E',
+    borderRadius: 10,
+    borderWidth: 1,
+    minWidth: 82,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  followButtonActive: {
+    backgroundColor: '#0F766E',
+  },
+  followButtonText: {
+    color: '#0F766E',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  followButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  loadMoreButton: {
+    alignItems: 'center',
+    borderColor: '#99F6E4',
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 12,
+    minHeight: 42,
+    paddingHorizontal: 12,
+  },
+  loadMoreText: {
+    color: '#0F766E',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   progressBar: {
     height: 8,
     borderRadius: 999,
@@ -592,6 +917,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  registrationNotice: {
+    color: '#6B7280',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
   },
   bottomSpacing: {
     height: 24,

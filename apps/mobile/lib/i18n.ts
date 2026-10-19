@@ -8,6 +8,7 @@ import {
   SUPPORTED_LOCALES,
   sharedResources,
 } from '@race-tracker/i18n'
+import mobileEn from './locales/en/mobile.json'
 
 const LANGUAGE_STORAGE_KEY = 'race_tracker_language'
 
@@ -27,13 +28,13 @@ export async function initI18n(): Promise<I18nInstance> {
 
   if (!i18n.isInitialized) {
     await i18n.use(initReactI18next).init({
-      resources: { en: { ...sharedResources.en } },
+      resources: { en: { ...sharedResources.en, mobile: mobileEn } },
       lng: initial,
       supportedLngs: SUPPORTED_LOCALES,
       fallbackLng: FALLBACK_LOCALE,
       defaultNS: 'common',
       fallbackNS: 'common',
-      ns: [...SHARED_NAMESPACES],
+      ns: [...SHARED_NAMESPACES, 'mobile'],
       interpolation: { escapeValue: false },
       initImmediate: false,
     })

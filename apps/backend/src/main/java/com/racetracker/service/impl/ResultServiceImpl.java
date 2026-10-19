@@ -23,6 +23,8 @@ import com.racetracker.repository.RaceResultRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.repository.RaceResultRowProjection;
 import com.racetracker.repository.RaceResultRevisionRepository;
+import com.racetracker.security.CapabilityAuthorizationService;
+import com.racetracker.model.UserCapabilityType;
 import org.springframework.data.domain.PageRequest;
 import com.racetracker.service.ResultService;
 import org.springframework.security.core.Authentication;
@@ -53,6 +55,7 @@ public class ResultServiceImpl implements ResultService {
     private final ParticipantPenaltyRepository penaltyRepository;
     private final RaceResultRepository raceResultRepository;
     private final RaceCategoryRepository raceCategoryRepository;
+    private final CapabilityAuthorizationService capabilityAuthorizationService;
 
     public ResultServiceImpl(
         RaceRepository raceRepository,
@@ -63,7 +66,8 @@ public class ResultServiceImpl implements ResultService {
         RaceResultRevisionRepository resultRevisionRepository,
         ParticipantPenaltyRepository penaltyRepository,
         RaceResultRepository raceResultRepository,
-        RaceCategoryRepository raceCategoryRepository
+        RaceCategoryRepository raceCategoryRepository,
+        CapabilityAuthorizationService capabilityAuthorizationService
     ) {
         this.raceRepository = raceRepository;
         this.participantRepository = participantRepository;
@@ -74,6 +78,7 @@ public class ResultServiceImpl implements ResultService {
         this.penaltyRepository = penaltyRepository;
         this.raceResultRepository = raceResultRepository;
         this.raceCategoryRepository = raceCategoryRepository;
+        this.capabilityAuthorizationService = capabilityAuthorizationService;
     }
 
     @Override
@@ -139,6 +144,7 @@ public class ResultServiceImpl implements ResultService {
     @Override
     @Transactional(readOnly = true)
     public List<RaceResultDto> getMyResults() {
+        capabilityAuthorizationService.require(UserCapabilityType.ATHLETE);
         User user = resolveCurrentUser();
         return collectAllResultPages(null, user.getId(), false);
     }
@@ -165,6 +171,7 @@ public class ResultServiceImpl implements ResultService {
     @Override
     @Transactional(readOnly = true)
     public RaceResultPageDto getMyResultsPage(int page, int size) {
+        capabilityAuthorizationService.require(UserCapabilityType.ATHLETE);
         User user = resolveCurrentUser();
         return resultPage(null, user.getId(), false, page, size, null);
     }
@@ -380,7 +387,7 @@ public class ResultServiceImpl implements ResultService {
         dto.setParticipantId(participant.getId());
         dto.setRaceId(race.getId());
         dto.setCategoryId(participant.getCategory() != null ? participant.getCategory().getId() : null);
-        dto.setParticipant(participantMapper.toDto(participant));
+        dto.setParticipant(participantMapper.toResultDto(participant));
         dto.setBibNumber(participant.getBibNumber());
         dto.setCategory(participant.getCategory() != null ? participant.getCategory().getName() : null);
         dto.setStatus(mapStatus(participant.getStatus()));

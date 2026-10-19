@@ -14,6 +14,10 @@ authoritative OpenCode config/agents schema (`https://opencode.ai/config.json`).
 Legend: **Critical** = harness cannot function as intended · **High** = safety/behaviour
 silently wrong · **Medium** = drift or undiscoverable capability · **Low** = hygiene.
 
+> This document records the 2026-10-11 baseline. Use the remediation status below and
+> the current repository `AGENTS.md` workflow for present configuration; the findings table
+> is retained as historical evidence.
+
 ## Executive summary
 
 The harness is **defined but not wired**. Four subagent prompts exist

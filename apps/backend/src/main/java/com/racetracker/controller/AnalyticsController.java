@@ -32,7 +32,7 @@ public class AnalyticsController {
     }
 
     @GetMapping("/export")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<byte[]> export(
         @PathVariable UUID raceId,
         @RequestParam(defaultValue = "csv") String format
@@ -46,7 +46,7 @@ public class AnalyticsController {
     }
 
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<RaceAnalyticsSummaryDto> summary(@PathVariable UUID raceId) {
         raceAccessGuard.assertCanManage(raceId);
         return ResponseEntity.ok(analyticsService.summary(raceId));
@@ -55,7 +55,7 @@ public class AnalyticsController {
     @GetMapping("/demographics")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<DemographicsDto> demographics(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(analyticsService.demographics(raceId));
     }
 
@@ -65,7 +65,7 @@ public class AnalyticsController {
         @PathVariable UUID raceId,
         @RequestParam(defaultValue = "30") int days
     ) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(analyticsService.registrationSeries(raceId, days));
     }
 }

@@ -13,6 +13,10 @@ by independent verification of every Critical/High claim. Legend: **Done** = usa
 end-to-end · **Partial** = foundation exists, spec incomplete · **Missing** = not
 implemented.
 
+> This document contains the 2026-10-11 audit baseline. The critical/high table is a
+> historical finding set; later remediation status in this document and the current
+> `docs/PENDING_WORK.md` register supersede any item marked done there.
+
 ## Executive summary
 
 The platform is pilot-grade and broad (auth+MFA, RFID ingest via Redis Streams,

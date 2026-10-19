@@ -12,7 +12,7 @@ const defaultLocale = contract.i18n?.defaultLocale ?? 'en';
 const roots = [
   { name: 'shared', dir: path.join(root, 'packages/i18n/locales') },
   { name: 'web', dir: path.join(root, 'apps/web/src/i18n/locales') },
-  { name: 'mobile', dir: path.join(root, 'apps/mobile/i18n/locales') },
+  { name: 'mobile', dir: path.join(root, 'apps/mobile/lib/locales') },
 ];
 
 const sourceRoots = [

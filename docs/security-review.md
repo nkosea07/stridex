@@ -28,11 +28,10 @@ internal review to de-risk the pilot, not a substitute for an independent audit.
 | S3 | Low | Provider refund failures were unaudited. | Failures persist a `FAILED` row with `error_message`. |
 | S4 | Low | GDPR export/erase had no accountability trail. | Both write append-only audit events (`ACCOUNT_DATA_EXPORTED`, `ACCOUNT_ERASED`). |
 | S5 | Low | Readiness depended on SMTP reachability (mail health indicator). | Mail health indicator disabled; readiness reflects database/Redis only. |
+| S6 | Medium | Public Google OAuth and RFID read ingest had no request throttling. | `RequestRateLimiter` now applies per-IP OAuth limits and per-IP/per-reader RFID limits before service calls. |
 
 ## Residual risks and recommendations
 
-- **Rate limiting**: `POST /auth/oauth/google` and `POST /api/v1/rfid/read-events` are public
-  and unthrottled. Add per-IP/per-reader throttling via `RequestRateLimiter` before pilot.
 - **Provider refund endpoint**: `PesepayClient.refund` posts to a configurable path; confirm
   the exact Pesepay reversal contract against the provider's docs before enabling in prod.
 - **Tokeninfo dependency**: Google verification relies on the remote tokeninfo endpoint; it

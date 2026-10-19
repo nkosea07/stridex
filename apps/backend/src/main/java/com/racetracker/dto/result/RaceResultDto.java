@@ -1,6 +1,5 @@
 package com.racetracker.dto.result;
 
-import com.racetracker.dto.participant.ParticipantDto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 import lombok.Setter;
@@ -33,7 +32,7 @@ public class RaceResultDto {
     @JsonProperty("isDisqualified")
     private boolean isDisqualified;
     private String disqualificationReason;
-    private ParticipantDto participant;
+    private ParticipantResultDto participant;
 
     // Mobile contract fields
     private String bibNumber;

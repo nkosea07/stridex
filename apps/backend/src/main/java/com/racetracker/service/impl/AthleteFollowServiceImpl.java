@@ -12,6 +12,8 @@ import com.racetracker.repository.AthleteFollowRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
+import com.racetracker.security.CapabilityAuthorizationService;
+import com.racetracker.model.UserCapabilityType;
 import com.racetracker.service.AthleteFollowService;
 import com.racetracker.service.LastCheckpointNameCache;
 import org.springframework.security.core.Authentication;
@@ -31,24 +33,28 @@ public class AthleteFollowServiceImpl implements AthleteFollowService {
     private final RaceRepository raceRepository;
     private final UserRepository userRepository;
     private final LastCheckpointNameCache lastCheckpointNameCache;
+    private final CapabilityAuthorizationService capabilityAuthorizationService;
 
     public AthleteFollowServiceImpl(
         AthleteFollowRepository followRepository,
         ParticipantRepository participantRepository,
         RaceRepository raceRepository,
         UserRepository userRepository,
-        LastCheckpointNameCache lastCheckpointNameCache
+        LastCheckpointNameCache lastCheckpointNameCache,
+        CapabilityAuthorizationService capabilityAuthorizationService
     ) {
         this.followRepository = followRepository;
         this.participantRepository = participantRepository;
         this.raceRepository = raceRepository;
         this.userRepository = userRepository;
         this.lastCheckpointNameCache = lastCheckpointNameCache;
+        this.capabilityAuthorizationService = capabilityAuthorizationService;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<FavoriteAthleteDto> listFavorites() {
+        capabilityAuthorizationService.require(UserCapabilityType.SPECTATOR);
         User user = resolveCurrentUser();
         return followRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).stream()
             .map(follow -> toDto(follow.getParticipant()))
@@ -58,6 +64,7 @@ public class AthleteFollowServiceImpl implements AthleteFollowService {
     @Override
     @Transactional
     public FavoriteAthleteDto follow(FavoriteCreateRequest request) {
+        capabilityAuthorizationService.require(UserCapabilityType.SPECTATOR);
         User user = resolveCurrentUser();
         Race race = raceRepository.findById(request.getRaceId())
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
@@ -79,6 +86,7 @@ public class AthleteFollowServiceImpl implements AthleteFollowService {
     @Override
     @Transactional
     public void unfollow(UUID raceId, UUID participantId) {
+        capabilityAuthorizationService.require(UserCapabilityType.SPECTATOR);
         User user = resolveCurrentUser();
         followRepository.findByUserIdAndParticipantId(user.getId(), participantId)
             .ifPresent(followRepository::delete);

@@ -1,6 +1,6 @@
 package com.racetracker.service.impl;
 
-import com.racetracker.dto.participant.ParticipantDto;
+import com.racetracker.dto.result.ParticipantResultDto;
 import com.racetracker.dto.result.RaceResultDto;
 import com.racetracker.dto.result.RankingEntryDto;
 import com.racetracker.service.RankingService;
@@ -28,7 +28,7 @@ public class RankingServiceImpl implements RankingService {
     @Transactional(readOnly = true)
     public List<RankingEntryDto> teamRankings(UUID raceId) {
         return aggregate(raceId, result -> {
-            ParticipantDto participant = result.getParticipant();
+            ParticipantResultDto participant = result.getParticipant();
             if (participant == null) {
                 return null;
             }
@@ -41,7 +41,7 @@ public class RankingServiceImpl implements RankingService {
     @Transactional(readOnly = true)
     public List<RankingEntryDto> countryRankings(UUID raceId) {
         return aggregate(raceId, result -> {
-            ParticipantDto participant = result.getParticipant();
+            ParticipantResultDto participant = result.getParticipant();
             if (participant == null || participant.getNationality() == null || participant.getNationality().isBlank()) {
                 return null;
             }

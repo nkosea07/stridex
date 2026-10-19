@@ -48,7 +48,7 @@ public class RaceController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL', 'ATHLETE', 'SPECTATOR')")
     public ResponseEntity<RaceDto> get(@PathVariable UUID id) {
-        raceAccessGuard.assertCanManage(id);
+        raceAccessGuard.assertCanRead(id);
         return ResponseEntity.ok(raceService.getById(id));
     }
 

@@ -96,14 +96,15 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 | 2 | Object storage (S3 / MinIO) | Blocked — `MediaStorage` seam ready |
 | 3 | Apple OAuth (Services ID/team/key) | Blocked — Google only |
 | 4 | `gps_locations` partitioning (window + cadence) | Blocked — ops migration |
-| 5 | Public-endpoint rate limiting (OAuth + RFID) | Actionable now |
+| 5 | Public-endpoint rate limiting (OAuth + RFID) | Done — OAuth 10/15m per IP; RFID 120/min per IP + 600/min per reader key; heartbeat excluded |
 | 6 | Client i18n | Decided — see §1 |
 
 ## 5. Security residual risks (`docs/security-review.md`)
 
 - Pesepay refund endpoint contract unverified against provider docs.
 - Google verification depends on the remote tokeninfo call (no local JWKS cache).
-- `/auth/oauth/google` and `/rfid/read-events` unthrottled (see §4 #5).
+- OAuth and RFID ingest throttling is implemented; production Redis enforcement and alerting
+  still require deployment/runtime verification.
 - Erase irreversibility is mitigated by the grace period + cancel path (done).
 
 ## 6. Environment / CI caveats
@@ -117,7 +118,8 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 1. **Finish i18n Phase 1** area-by-area (admin → registration → tracking → public → shared),
    then **Phase 2** (mobile), **Phase 3** (backend), **Phase 4** (locales).
 2. **Push the branch and let CI run** (validates the new CI jobs, Docker builds, migration smoke).
-3. **§4 #5 rate limiting** (small, unblocked) and **§2 Section 5 dead-code removal** (low risk).
+3. Verify the deployed Redis-backed rate limits and metrics, then complete **§2 Section 5
+   dead-code removal** (low risk).
 4. Resolve **§4 #1–#4** decisions, then implement (SMS/WhatsApp, S3, Apple OAuth, partitioning).
 5. **§4 Section 4 contract-drift** cleanup + extend `validate-contracts.mjs`; **§2 Section 6**
    product features (results depth, timing imports, AI depth, bibs, media).

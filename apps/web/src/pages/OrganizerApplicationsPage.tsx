@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BadgeCheck, ClipboardList, Loader2, MailCheck, ShieldAlert } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ import { toast } from 'sonner'
 const statusFilters: Array<'PENDING' | 'APPROVED' | 'REJECTED'> = ['PENDING', 'APPROVED', 'REJECTED']
 
 export function OrganizerApplicationsPage() {
+  const { t } = useTranslation()
   const [status, setStatus] = useState<OrganizerApplicationStatus>('PENDING')
   const [items, setItems] = useState<OrganizerApplicationReview[]>([])
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({})
@@ -40,7 +42,7 @@ export function OrganizerApplicationsPage() {
     setPendingId(application.id)
     try {
       await organizerApplicationsApi.decide(application.id, decision, reviewNotes[application.id]?.trim())
-      toast.success(decision === 'APPROVE' ? 'Organizer approved; MFA is required before admin access.' : 'Organizer application rejected')
+      toast.success(decision === 'APPROVE' ? 'Organizer approved; password sign-in is required before admin access.' : 'Organizer application rejected')
       await loadApplications()
     } catch {
       toast.error('Decision was not saved. Refresh the list and try again.')
@@ -53,8 +55,8 @@ export function OrganizerApplicationsPage() {
     <div className="space-y-6 p-4 md:p-8">
       <div>
         <div className="flex items-center gap-2 text-primary"><ClipboardList className="h-5 w-5" /><span className="text-sm font-medium">Super-admin review</span></div>
-        <h1 className="mt-2 text-3xl font-semibold">Organizer applications</h1>
-        <p className="mt-2 text-muted-foreground">Approve verified organizers or reject applications with a review note. Approval never bypasses MFA.</p>
+        <h1 className="mt-2 text-3xl font-semibold">{t('nav:organizerApplications')}</h1>
+        <p className="mt-2 text-muted-foreground">Approve verified organizers or reject applications with a review note. Approved organizers sign in with their password.</p>
       </div>
 
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Application status">

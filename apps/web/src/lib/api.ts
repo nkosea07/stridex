@@ -43,14 +43,35 @@ import type {
   ConsentState,
   RaceInsightsSummary,
   ParticipantAnomaly,
-  RfidReaderCreateResponse
+  RfidReaderCreateResponse,
+  UserCapability,
 } from '@/types'
 import { API_CONTRACT } from '@race-tracker/contracts'
 
 const API_BASE = API_CONTRACT.web.apiBasePath
+const PUBLIC_AUTH_ENDPOINTS = new Set([
+  API_CONTRACT.endpoints.authLogin,
+  API_CONTRACT.endpoints.authRegister,
+  API_CONTRACT.endpoints.authRegisterOrganizer,
+  API_CONTRACT.endpoints.authOAuthGoogle,
+  API_CONTRACT.endpoints.authForgotPassword,
+  API_CONTRACT.endpoints.authResetPassword,
+  API_CONTRACT.endpoints.authVerifyEmail,
+  API_CONTRACT.endpoints.authResendVerification,
+  API_CONTRACT.endpoints.authMfaVerifyLogin,
+  API_CONTRACT.endpoints.authBrowserLogin,
+  API_CONTRACT.endpoints.authBrowserMfaVerifyLogin,
+  API_CONTRACT.endpoints.authRefresh,
+  API_CONTRACT.endpoints.authBrowserRefresh,
+])
 
-class ApiError extends Error {
-  constructor(public status: number, message: string) {
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+    public code?: string,
+    public details: string[] = [],
+  ) {
     super(message)
     this.name = 'ApiError'
   }
@@ -67,8 +88,54 @@ export interface BrowserAuthResponse {
   user: User
 }
 
+interface ApiErrorPayload {
+  message?: unknown
+  code?: unknown
+  details?: unknown
+}
+
+function isUserCapability(value: unknown): value is UserCapability {
+  return value === 'ATHLETE' || value === 'SPECTATOR'
+}
+
+export function normalizeUser(user: User): User {
+  const candidate = user as User & { capabilities?: unknown; preferredCapability?: unknown }
+  const hasCapabilitiesField = candidate.capabilities !== undefined
+  const capabilities = Array.from(new Set(
+    Array.isArray(candidate.capabilities) ? candidate.capabilities.filter(isUserCapability) : [],
+  ))
+  const legacyCapability = isUserCapability(user.role) ? user.role : undefined
+  const normalizedCapabilities = hasCapabilitiesField ? capabilities : legacyCapability ? [legacyCapability] : []
+  const preferredCapability = isUserCapability(candidate.preferredCapability)
+    && normalizedCapabilities.includes(candidate.preferredCapability)
+    ? candidate.preferredCapability
+    : normalizedCapabilities[0] ?? null
+
+  return {
+    ...user,
+    capabilities: normalizedCapabilities,
+    preferredCapability,
+  }
+}
+
+function normalizeAuthResponse(response: BrowserAuthResponse): BrowserAuthResponse {
+  return { ...response, user: normalizeUser(response.user) }
+}
+
+async function getApiError(response: Response, fallbackMessage: string) {
+  const rawPayload = await response.json().catch(() => ({}))
+  const payload = rawPayload && typeof rawPayload === 'object' ? rawPayload as ApiErrorPayload : {}
+  const details = Array.isArray(payload.details)
+    ? payload.details.filter((detail): detail is string => typeof detail === 'string')
+    : []
+  const message = typeof payload.message === 'string' ? payload.message : fallbackMessage
+  const code = typeof payload.code === 'string' ? payload.code : undefined
+  return new ApiError(response.status, message, code, details)
+}
+
 let accessToken: string | null = null
-let browserRefreshPromise: Promise<boolean> | null = null
+let browserRefreshPromise: { generation: number; promise: Promise<boolean> } | null = null
+let browserSessionGeneration = 0
 
 export function setAccessToken(token: string | null) {
   accessToken = token
@@ -78,58 +145,100 @@ export function getAccessToken() {
   return accessToken
 }
 
+function invalidateBrowserSession() {
+  browserSessionGeneration += 1
+  setAccessToken(null)
+}
+
 function getCookie(name: string) {
   if (typeof document === 'undefined') return undefined
   const prefix = `${name}=`
   return document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(prefix))?.slice(prefix.length)
 }
 
-async function refreshBrowserSession() {
-  if (browserRefreshPromise) return browserRefreshPromise
-  browserRefreshPromise = (async () => {
+async function refreshBrowserSession(expectedGeneration = browserSessionGeneration) {
+  if (expectedGeneration !== browserSessionGeneration) return false
+  if (browserRefreshPromise?.generation === expectedGeneration) return browserRefreshPromise.promise
+  const refreshGeneration = expectedGeneration
+  setAccessToken(null)
+  const promise = (async () => {
     const csrfToken = getCookie('rt_browser_csrf')
     if (!csrfToken) return false
-    const response = await fetch(`${API_BASE}${API_CONTRACT.endpoints.authBrowserRefresh}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'X-CSRF-Token': decodeURIComponent(csrfToken) },
-    })
-    if (!response.ok) return false
-    const session = await response.json() as BrowserAuthResponse
-    if (!session.token) return false
-    setAccessToken(session.token)
-    return true
+    try {
+      const response = await fetch(`${API_BASE}${API_CONTRACT.endpoints.authBrowserRefresh}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'X-CSRF-Token': decodeURIComponent(csrfToken) },
+      })
+      if (!response.ok) return false
+      const session = await response.json() as BrowserAuthResponse
+      if (!session.token || refreshGeneration !== browserSessionGeneration) return false
+      setAccessToken(session.token)
+      return true
+    } catch {
+      return false
+    }
   })()
+  browserRefreshPromise = { generation: refreshGeneration, promise }
   try {
-    return await browserRefreshPromise
+    return await promise
   } finally {
-    browserRefreshPromise = null
+    if (browserRefreshPromise?.promise === promise) browserRefreshPromise = null
   }
 }
 
-async function fetchApi<T>(endpoint: string, options?: RequestInit, allowRefresh = true): Promise<T> {
+async function fetchAuthenticated(
+  endpoint: string,
+  options?: RequestInit,
+  fallbackMessage = 'An error occurred',
+  allowRefresh = true,
+  requestGeneration = browserSessionGeneration,
+): Promise<Response> {
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
       ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
       ...options?.headers,
     },
   })
 
-  if (response.status === 401 && allowRefresh && !endpoint.startsWith('/auth/')) {
+  if (
+    response.status === 401
+    && allowRefresh
+    && !PUBLIC_AUTH_ENDPOINTS.has(endpoint)
+    && requestGeneration === browserSessionGeneration
+  ) {
     try {
-      if (await refreshBrowserSession()) return fetchApi<T>(endpoint, options, false)
+      if (
+        await refreshBrowserSession(requestGeneration)
+        && requestGeneration === browserSessionGeneration
+      ) {
+        return fetchAuthenticated(endpoint, options, fallbackMessage, false, requestGeneration)
+      }
     } catch {
-      setAccessToken(null)
+      if (requestGeneration === browserSessionGeneration) setAccessToken(null)
     }
   }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'An error occurred' }))
-    throw new ApiError(response.status, error.message)
+    throw await getApiError(response, fallbackMessage)
   }
+
+  return response
+}
+
+async function fetchApi<T>(
+  endpoint: string,
+  options?: RequestInit,
+): Promise<T> {
+  const response = await fetchAuthenticated(endpoint, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  })
 
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
@@ -168,6 +277,7 @@ function buildContractPath(
 async function fetchPublicApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
+    credentials: 'omit',
     headers: {
       'Content-Type': 'application/json',
       ...options?.headers,
@@ -175,42 +285,34 @@ async function fetchPublicApi<T>(endpoint: string, options?: RequestInit): Promi
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'An error occurred' }))
-    throw new ApiError(response.status, error.message)
+    throw await getApiError(response, 'An error occurred')
   }
 
   return response.json()
 }
 
 async function downloadExport(path: string): Promise<Blob> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    credentials: 'include',
-    headers: {
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Export failed' }))
-    throw new ApiError(response.status, error.message)
-  }
-
+  const response = await fetchAuthenticated(path, undefined, 'Export failed')
   return response.blob()
 }
 
 // Auth API
 export const authApi = {
-  login: (email: string, password: string) =>
-    fetchApi<BrowserAuthResponse>(API_CONTRACT.endpoints.authBrowserLogin, {
+  login: async (email: string, password: string) => {
+    invalidateBrowserSession()
+    return normalizeAuthResponse(await fetchApi<BrowserAuthResponse>(API_CONTRACT.endpoints.authBrowserLogin, {
       method: 'POST',
       body: JSON.stringify({ email, password }),
-    }),
+    }))
+  },
 
-  loginWithGoogle: (idToken: string) =>
-    fetchApi<BrowserAuthResponse>(buildContractPath(API_CONTRACT.endpoints.authOAuthGoogle, {}), {
+  loginWithGoogle: async (idToken: string) => {
+    invalidateBrowserSession()
+    return normalizeAuthResponse(await fetchApi<BrowserAuthResponse>(buildContractPath(API_CONTRACT.endpoints.authOAuthGoogle, {}), {
       method: 'POST',
       body: JSON.stringify({ idToken, provider: 'google' }),
-    }),
+    }))
+  },
 
   restoreBrowserSession: refreshBrowserSession,
   setAccessToken,
@@ -223,11 +325,12 @@ export const authApi = {
     phone?: string
     privacyPolicyAccepted?: boolean
     privacyPolicyVersion?: string
+    experiences?: UserCapability[]
   }) =>
     fetchApi<BrowserAuthResponse>(API_CONTRACT.endpoints.authRegister, {
       method: 'POST',
       body: JSON.stringify(data),
-    }),
+    }).then(normalizeAuthResponse),
 
   registerOrganizer: (data: { email: string; password: string; firstName: string; lastName: string; phone?: string; organizationName: string }) =>
     fetchApi<BrowserAuthResponse>(API_CONTRACT.endpoints.authRegisterOrganizer, {
@@ -235,13 +338,19 @@ export const authApi = {
       body: JSON.stringify(data),
     }),
   
-  me: () => fetchApi<User>(API_CONTRACT.endpoints.authMe),
+  me: () => fetchApi<User>(API_CONTRACT.endpoints.authMe).then(normalizeUser),
 
   updateProfile: (data: { firstName: string; lastName: string; phone?: string }) =>
     fetchApi<User>(API_CONTRACT.endpoints.authProfile, {
       method: 'PUT',
       body: JSON.stringify(data),
-    }),
+    }).then(normalizeUser),
+
+  updateCapabilities: (data: { capabilities: UserCapability[]; preferredCapability: UserCapability }) =>
+    fetchApi<User>(API_CONTRACT.endpoints.authProfileCapabilities, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }).then(normalizeUser),
 
   deleteAccount: (password: string, confirmation: string) =>
     fetchApi<DeletionStatus>(buildContractPath(API_CONTRACT.endpoints.myAccount, {}), {
@@ -276,6 +385,7 @@ export const authApi = {
     }),
   
   logout: async () => {
+    invalidateBrowserSession()
     const csrfToken = getCookie('rt_browser_csrf')
     try {
       await fetch(`${API_BASE}${API_CONTRACT.endpoints.authBrowserLogout}`, {
@@ -409,23 +519,18 @@ export const participantsApi = {
   importCsv: (raceId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    return fetch(`${API_BASE}${buildContractPath(API_CONTRACT.endpoints.raceParticipantImport, { raceId })}`, {
+    return fetchAuthenticated(buildContractPath(API_CONTRACT.endpoints.raceParticipantImport, { raceId }), {
       method: 'POST',
-      headers: {
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-      credentials: 'include',
       body: formData,
-    }).then(res => res.json())
+    }, 'CSV import failed').then(res => res.json())
   },
   
   exportCsv: (raceId: string) =>
-    fetch(`${API_BASE}${buildContractPath(API_CONTRACT.endpoints.raceParticipantExport, { raceId })}`, {
-      credentials: 'include',
-      headers: {
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-    }).then(res => res.blob()),
+    fetchAuthenticated(
+      buildContractPath(API_CONTRACT.endpoints.raceParticipantExport, { raceId }),
+      undefined,
+      'Participant export failed',
+    ).then(res => res.blob()),
 
   listImportJobs: (raceId: string) => fetchApi<ImportJob[]>(buildContractPath(API_CONTRACT.endpoints.raceParticipantImportJobs, { raceId })),
   
@@ -435,23 +540,22 @@ export const participantsApi = {
   )),
 
   downloadBib: (raceId: string, participantId: string) =>
-    fetch(`${API_BASE}${buildContractPath(API_CONTRACT.endpoints.raceBib, { raceId, participantId })}`, {
-      credentials: 'include',
-      headers: {
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-    }).then(res => res.blob()),
+    fetchAuthenticated(
+      buildContractPath(API_CONTRACT.endpoints.raceBib, { raceId, participantId }),
+      undefined,
+      'Bib download failed',
+    ).then(res => res.blob()),
 
   downloadBatchBibs: (raceId: string, participantIds: string[]) =>
-    fetch(`${API_BASE}${buildContractPath(API_CONTRACT.endpoints.raceBibBatch, { raceId })}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    fetchAuthenticated(
+      buildContractPath(API_CONTRACT.endpoints.raceBibBatch, { raceId }),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(participantIds),
       },
-      body: JSON.stringify(participantIds),
-    }).then(res => res.blob()),
+      'Bib download failed',
+    ).then(res => res.blob()),
 
   review: (raceId: string, id: string, decision: RegistrationDecision, reason?: string) =>
     fetchApi<Participant>(buildContractPath(API_CONTRACT.endpoints.raceParticipantReview, { raceId, id }), {
@@ -508,7 +612,7 @@ export interface PublicRegistrationPayload {
 }
 
 export const publicRegistrationApi = {
-  listFields: (raceId: string) => fetchApi<RegistrationField[]>(buildContractPath(API_CONTRACT.endpoints.publicRaceRegistrationFields, { raceId })),
+  listFields: (raceId: string) => fetchPublicApi<RegistrationField[]>(buildContractPath(API_CONTRACT.endpoints.publicRaceRegistrationFields, { raceId })),
 
   register: (raceId: string, payload: PublicRegistrationPayload) =>
     fetchApi<Registration>(buildContractPath(API_CONTRACT.endpoints.raceRegister, { id: raceId }), {
@@ -736,15 +840,10 @@ export const mediaApi = {
     formData.append('file', file)
     if (caption) formData.append('caption', caption)
     if (participantId) formData.append('participantId', participantId)
-    const response = await fetch(`${API_BASE}${buildContractPath(API_CONTRACT.endpoints.raceMedia, { raceId })}`, {
+    const response = await fetchAuthenticated(buildContractPath(API_CONTRACT.endpoints.raceMedia, { raceId }), {
       method: 'POST',
-      credentials: 'include',
-      headers: {
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
       body: formData,
-    })
-    if (!response.ok) throw new Error('Failed to upload media')
+    }, 'Failed to upload media')
     return response.json() as Promise<MediaItem>
   },
 
@@ -786,15 +885,10 @@ export const routeApi = {
   importGpx: async (raceId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    const response = await fetch(`${API_BASE}${buildContractPath(API_CONTRACT.endpoints.raceRouteGpx, { raceId })}`, {
+    const response = await fetchAuthenticated(buildContractPath(API_CONTRACT.endpoints.raceRouteGpx, { raceId }), {
       method: 'POST',
-      credentials: 'include',
-      headers: {
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
       body: formData,
-    })
-    if (!response.ok) throw new Error('Failed to import GPX route')
+    }, 'Failed to import GPX route')
     return response.json() as Promise<RoutePoint[]>
   },
 }
@@ -852,11 +946,6 @@ export function connectLiveTracking(raceId: string, onMessage: (data: LiveTracki
         onMessage(JSON.parse(message.body))
       }
     })
-  }
-
-  stompClient.onStompError = (frame) => {
-    console.error('Broker reported error: ' + frame.headers['message'])
-    console.error('Additional details: ' + frame.body)
   }
 
   stompClient.activate()

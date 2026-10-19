@@ -34,7 +34,8 @@ server-side: role gates via `@PreAuthorize`, per-race ownership via `RaceAccessG
 
 ### Cross-cutting
 
-- Auth: JWT access/refresh (browser cookies for web), MFA for privileged roles, lockout,
+- Auth: JWT access/refresh (browser cookies for web), verified-email password login,
+  lockout,
   rate limiting, append-only audit events, correlation IDs.
 - Config: `application.yml` + `RaceTrackerProperties`; `ProductionConfigurationValidator`
   rejects insecure production config at startup.

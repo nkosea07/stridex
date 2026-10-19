@@ -45,6 +45,7 @@
     "@react-router/node": "^7.16.0",
     "@stomp/stompjs": "^7.3.0",
     "class-variance-authority": "^0.7.1",
+    "cookie": "1.1.1",
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",
     "date-fns": "4.1.0",

@@ -5,7 +5,9 @@ import {
   startBackgroundTracking, 
   stopBackgroundTracking, 
   syncPendingLocations,
+  clearLocalTrackingData,
   initDb,
+  isTrackingQuarantined,
   DEFAULT_OPTIONS,
   BATTERY_SAVER_OPTIONS,
   getActiveTrackingSession,
@@ -136,6 +138,7 @@ export const useTrackingStore = create<ExtendedTrackingState>((set, get) => ({
 
   rehydrateFromLocalDb: async (raceId: string) => {
     const db = await initDb();
+    if (isTrackingQuarantined()) return;
     const rows = await db.getAllAsync<LocationRow>(
       'SELECT * FROM locations WHERE raceId = ? ORDER BY timestamp ASC',
       [raceId]
@@ -227,6 +230,35 @@ export const useTrackingStore = create<ExtendedTrackingState>((set, get) => ({
       startTime: null,
       syncInterval: null,
     });
+  },
+
+  clearTrackingData: async () => {
+    const { foregroundSubscription, syncInterval } = get();
+
+    if (foregroundSubscription) {
+      try {
+        foregroundSubscription.remove();
+      } catch (error) {
+        console.warn('Failed to remove foreground tracking subscription:', error);
+      }
+    }
+    if (syncInterval) clearInterval(syncInterval);
+
+    try {
+      await clearLocalTrackingData();
+    } finally {
+      set({
+        isTracking: false,
+        currentRace: null,
+        locations: [],
+        checkpointRecords: [],
+        liveStats: null,
+        foregroundSubscription: null,
+        startTime: null,
+        syncInterval: null,
+        batterySaver: false,
+      });
+    }
   },
 
   addLocation: (location: GpsLocation) => {

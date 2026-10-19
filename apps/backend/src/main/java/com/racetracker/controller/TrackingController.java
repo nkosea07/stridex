@@ -24,25 +24,22 @@ public class TrackingController {
     }
 
     @PostMapping("/v${racetracker.api.version}/tracking/{raceId}/location")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL', 'ATHLETE')")
+    @PreAuthorize("hasAuthority('CAP_ATHLETE')")
     public ResponseEntity<ApiMessageResponse> sendLocation(@PathVariable UUID raceId, @Valid @RequestBody GpsLocationRequest request) {
-        raceAccessGuard.assertCanManage(raceId);
         trackingService.recordLocation(raceId, request);
         return ResponseEntity.ok(new ApiMessageResponse("Location recorded"));
     }
 
     @PostMapping("/v${racetracker.api.version}/tracking/{raceId}/locations")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL', 'ATHLETE')")
+    @PreAuthorize("hasAuthority('CAP_ATHLETE')")
     public ResponseEntity<ApiMessageResponse> sendLocationsBatch(@PathVariable UUID raceId, @Valid @RequestBody GpsLocationBatchRequest request) {
-        raceAccessGuard.assertCanManage(raceId);
         trackingService.recordLocationsBatch(raceId, request);
         return ResponseEntity.ok(new ApiMessageResponse("Locations recorded"));
     }
 
     @PostMapping("/v${racetracker.api.version}/tracking/{raceId}/checkpoint")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL', 'ATHLETE')")
+    @PreAuthorize("hasAuthority('CAP_ATHLETE')")
     public ResponseEntity<ApiMessageResponse> recordCheckpoint(@PathVariable UUID raceId, @Valid @RequestBody TrackingCheckpointRequest request) {
-        raceAccessGuard.assertCanManage(raceId);
         trackingService.recordCheckpoint(raceId, request);
         return ResponseEntity.ok(new ApiMessageResponse("Checkpoint recorded"));
     }
@@ -50,7 +47,7 @@ public class TrackingController {
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/tracking/live")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<LiveTrackingResponse>> getLiveData(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(trackingService.getLiveData(raceId));
     }
 
@@ -60,7 +57,7 @@ public class TrackingController {
         @PathVariable UUID raceId,
         @PathVariable UUID participantId
     ) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(trackingService.getParticipantTrack(raceId, participantId));
     }
 }

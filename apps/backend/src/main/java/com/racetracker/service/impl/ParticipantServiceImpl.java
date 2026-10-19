@@ -10,6 +10,8 @@ import com.racetracker.mapper.ImportJobMapper;
 import com.racetracker.mapper.ParticipantMapper;
 import com.racetracker.model.*;
 import com.racetracker.repository.*;
+import com.racetracker.security.CapabilityAuthorizationService;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.ParticipantService;
 import com.racetracker.service.ParticipantCredentialService;
 import com.racetracker.service.RegistrationEmailService;
@@ -70,6 +72,8 @@ public class ParticipantServiceImpl implements ParticipantService {
     private final RegistrationEmailService registrationEmailService;
     private final com.racetracker.service.NotificationService notificationService;
     private final ParticipantImportProcessor importProcessor;
+    private final CapabilityAuthorizationService capabilityAuthorizationService;
+    private final RaceAccessGuard raceAccessGuard;
 
     public ParticipantServiceImpl(
         ParticipantRepository participantRepository,
@@ -86,7 +90,9 @@ public class ParticipantServiceImpl implements ParticipantService {
         ParticipantRegistrationAnswerRepository registrationAnswerRepository,
         RegistrationEmailService registrationEmailService,
         com.racetracker.service.NotificationService notificationService,
-        ParticipantImportProcessor importProcessor
+        ParticipantImportProcessor importProcessor,
+        CapabilityAuthorizationService capabilityAuthorizationService,
+        RaceAccessGuard raceAccessGuard
     ) {
         this.participantRepository = participantRepository;
         this.raceRepository = raceRepository;
@@ -103,15 +109,18 @@ public class ParticipantServiceImpl implements ParticipantService {
         this.registrationEmailService = registrationEmailService;
         this.notificationService = notificationService;
         this.importProcessor = importProcessor;
+        this.capabilityAuthorizationService = capabilityAuthorizationService;
+        this.raceAccessGuard = raceAccessGuard;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ParticipantDto> listByRace(UUID raceId) {
+        raceAccessGuard.assertCanReadStaff(raceId);
         verifyRaceExists(raceId);
         return participantRepository.findByRaceIdOrderByRegisteredAtDesc(raceId)
             .stream()
-            .map(participantMapper::toDto)
+            .map(this::toStaffAwareDto)
             .toList();
     }
 
@@ -121,25 +130,28 @@ public class ParticipantServiceImpl implements ParticipantService {
         if (status == null) {
             return listByRace(raceId);
         }
+        raceAccessGuard.assertCanReadStaff(raceId);
         verifyRaceExists(raceId);
         return participantRepository.findByRaceIdAndStatusOrderByRegisteredAtAsc(raceId, status)
             .stream()
-            .map(participantMapper::toDto)
+            .map(this::toStaffAwareDto)
             .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public ParticipantDto getByRaceAndId(UUID raceId, UUID participantId) {
+        raceAccessGuard.assertCanReadStaff(raceId);
         Participant participant = getParticipant(raceId, participantId);
         ParticipantDto dto = participantMapper.toDto(participant);
         dto.setAnswers(loadAnswers(participantId));
-        return dto;
+        return redactSensitiveStaffFields(dto);
     }
 
     @Override
     @Transactional
     public ParticipantDto create(UUID raceId, ParticipantCreateRequest request) {
+        raceAccessGuard.assertCanManage(raceId);
         Race race = getRace(raceId);
         Participant participant = new Participant();
         participant.setRace(race);
@@ -157,23 +169,25 @@ public class ParticipantServiceImpl implements ParticipantService {
 
         Participant saved = participantRepository.save(participant);
         participantCredentialService.syncParticipantCredentials(saved, request.getRfidTag(), request.getCredentials());
-        return participantMapper.toDto(saved);
+        return toStaffAwareDto(saved);
     }
 
     @Override
     @Transactional
     public ParticipantDto update(UUID raceId, UUID participantId, ParticipantUpdateRequest request) {
+        raceAccessGuard.assertCanManage(raceId);
         Participant participant = getParticipant(raceId, participantId);
         applyUpdateFields(participant, request);
 
         Participant saved = participantRepository.save(participant);
         participantCredentialService.syncParticipantCredentials(saved, request.getRfidTag(), request.getCredentials());
-        return participantMapper.toDto(saved);
+        return toStaffAwareDto(saved);
     }
 
     @Override
     @Transactional
     public void delete(UUID raceId, UUID participantId) {
+        raceAccessGuard.assertCanManage(raceId);
         Participant participant = getParticipant(raceId, participantId);
         registrationAnswerRepository.deleteByParticipantId(participantId);
         participantRepository.delete(participant);
@@ -182,7 +196,12 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     @Transactional
     public ParticipantDto checkIn(UUID raceId, UUID participantId) {
-        Participant participant = getParticipant(raceId, participantId);
+        raceAccessGuard.assertCanPerformOperationalAction(raceId);
+        Participant participant = participantRepository.findByRaceIdAndIdForUpdate(raceId, participantId)
+            .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
+        if (participant.getCheckedInAt() != null) {
+            return toStaffAwareDto(participant);
+        }
         if (participant.getStatus() != Participant.ParticipantStatus.REGISTERED
             && participant.getStatus() != Participant.ParticipantStatus.CONFIRMED) {
             throw new ApiException("Participant is not eligible for check-in");
@@ -192,12 +211,13 @@ public class ParticipantServiceImpl implements ParticipantService {
         Participant saved = participantRepository.save(participant);
         notifyParticipant(saved, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
             "registration.checked_in", "Check-in confirmed", "You are checked in for " + raceName(saved) + ".");
-        return participantMapper.toDto(saved);
+        return toStaffAwareDto(saved);
     }
 
     @Override
     @Transactional
     public ImportJobDto importCsv(UUID raceId, MultipartFile file) {
+        raceAccessGuard.assertCanManage(raceId);
         Race race = getRace(raceId);
         User user = resolveCurrentUser();
 
@@ -232,6 +252,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     @Transactional(readOnly = true)
     public ImportJobDto getImportJob(UUID raceId, UUID jobId) {
+        raceAccessGuard.assertCanReadStaff(raceId);
         ImportJob job = importJobRepository.findByRaceIdAndId(raceId, jobId)
             .orElseThrow(() -> new ResourceNotFoundException("Import job not found"));
         return importJobMapper.toDto(job);
@@ -240,6 +261,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     @Transactional(readOnly = true)
     public List<ImportJobDto> listImportJobs(UUID raceId) {
+        raceAccessGuard.assertCanReadStaff(raceId);
         verifyRaceExists(raceId);
         return importJobRepository.findByRaceIdOrderByCreatedAtDesc(raceId)
             .stream()
@@ -250,6 +272,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     @Transactional(readOnly = true)
     public String exportCsv(UUID raceId) {
+        raceAccessGuard.assertCanManage(raceId);
         List<Participant> participants = participantRepository.findByRaceIdOrderByRegisteredAtDesc(raceId);
         StringWriter out = new StringWriter();
         out.append("id,firstName,lastName,email,phone,bibNumber,status,gender,nationality,registeredAt\n");
@@ -274,6 +297,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     @Transactional
     public RegistrationDto registerForRace(UUID raceId, RaceRegistrationRequest request) {
+        capabilityAuthorizationService.require(com.racetracker.model.UserCapabilityType.ATHLETE);
         Race race = raceRepository.findByIdForUpdate(raceId)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
         User user = resolveCurrentUser();
@@ -346,6 +370,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     @Transactional(readOnly = true)
     public List<RegistrationDto> getMyRegistrations() {
+        capabilityAuthorizationService.require(com.racetracker.model.UserCapabilityType.ATHLETE);
         User user = resolveCurrentUser();
         return participantRepository.findByUserIdOrderByRegisteredAtDesc(user.getId())
             .stream()
@@ -356,6 +381,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     @Transactional
     public void cancelRegistration(UUID registrationId) {
+        capabilityAuthorizationService.require(com.racetracker.model.UserCapabilityType.ATHLETE);
         User user = resolveCurrentUser();
         Participant participant = participantRepository.findById(registrationId)
             .orElseThrow(() -> new ResourceNotFoundException("Registration not found"));
@@ -379,6 +405,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Transactional
     public ParticipantDto reviewRegistration(UUID raceId, UUID participantId,
                                              RegistrationApprovalRequest request, String actorEmail) {
+        raceAccessGuard.assertCanManage(raceId);
         if (!raceRepository.existsById(raceId)) {
             throw new ResourceNotFoundException("Race not found");
         }
@@ -438,6 +465,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Transactional
     public ParticipantDto verifyPayment(UUID raceId, UUID participantId,
                                         PaymentVerifyRequest request, String actorEmail) {
+        raceAccessGuard.assertCanManage(raceId);
         Participant participant = participantRepository.findByRaceIdAndIdForUpdate(raceId, participantId)
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
         Participant.PaymentStatus status;
@@ -462,6 +490,9 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     @Transactional(readOnly = true)
     public List<RaceRegistrationFieldDto> listRegistrationFields(UUID raceId, boolean activeOnly) {
+        if (!activeOnly) {
+            raceAccessGuard.assertCanReadStaff(raceId);
+        }
         Race race = raceRepository.findById(raceId)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
         if (activeOnly && race.getStatus() == Race.RaceStatus.DRAFT) {
@@ -476,6 +507,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     @Transactional
     public RaceRegistrationFieldDto createRegistrationField(UUID raceId, RegistrationFieldRequest request) {
+        raceAccessGuard.assertCanManage(raceId);
         Race race = getRace(raceId);
         String fieldKey = deriveFieldKey(request.getFieldKey(), request.getLabel());
         registrationFieldRepository.findByRaceIdAndFieldKey(raceId, fieldKey).ifPresent(existing -> {
@@ -505,6 +537,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     @Transactional
     public RaceRegistrationFieldDto updateRegistrationField(UUID raceId, UUID fieldId, RegistrationFieldRequest request) {
+        raceAccessGuard.assertCanManage(raceId);
         RaceRegistrationField field = registrationFieldRepository.findByRaceIdAndId(raceId, fieldId)
             .orElseThrow(() -> new ResourceNotFoundException("Registration field not found"));
 
@@ -534,6 +567,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     @Transactional
     public void deleteRegistrationField(UUID raceId, UUID fieldId) {
+        raceAccessGuard.assertCanManage(raceId);
         RaceRegistrationField field = registrationFieldRepository.findByRaceIdAndId(raceId, fieldId)
             .orElseThrow(() -> new ResourceNotFoundException("Registration field not found"));
         registrationFieldRepository.delete(field);
@@ -542,6 +576,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     @Transactional(readOnly = true)
     public List<TeamDto> listTeams(UUID raceId) {
+        raceAccessGuard.assertCanReadStaff(raceId);
         verifyRaceExists(raceId);
         return teamRepository.findByRaceIdOrderByNameAsc(raceId)
             .stream()
@@ -552,6 +587,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     @Transactional
     public TeamDto createTeam(UUID raceId, TeamCreateRequest request) {
+        raceAccessGuard.assertCanManage(raceId);
         Race race = getRace(raceId);
         User user = resolveCurrentUser();
         String name = request.getName().trim();
@@ -994,6 +1030,47 @@ public class ParticipantServiceImpl implements ParticipantService {
     private Participant getParticipant(UUID raceId, UUID participantId) {
         return participantRepository.findByRaceIdAndId(raceId, participantId)
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
+    }
+
+    private ParticipantDto toStaffAwareDto(Participant participant) {
+        return redactSensitiveStaffFields(participantMapper.toDto(participant));
+    }
+
+    private ParticipantDto redactSensitiveStaffFields(ParticipantDto dto) {
+        if (!isAssignedStaff() || dto == null) {
+            return dto;
+        }
+        dto.setEmail(null);
+        dto.setPhone(null);
+        dto.setDateOfBirth(null);
+        dto.setGender(null);
+        dto.setNationality(null);
+        dto.setRfidTag(null);
+        dto.setEmergencyContactName(null);
+        dto.setEmergencyContactPhone(null);
+        dto.setEmergencyContactRelation(null);
+        dto.setBloodType(null);
+        dto.setMedicalConditions(null);
+        dto.setAllergies(null);
+        dto.setRegistrationSource(null);
+        dto.setWaiverAcceptedAt(null);
+        dto.setWaiverVersion(null);
+        dto.setRejectionReason(null);
+        dto.setPaymentStatus(null);
+        dto.setPaymentReference(null);
+        dto.setPaymentAmount(null);
+        dto.setPaymentVerifiedAt(null);
+        dto.setCredentials(List.of());
+        dto.setAnswers(List.of());
+        return dto;
+    }
+
+    private boolean isAssignedStaff() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.isAuthenticated()
+            && authentication.getAuthorities().stream().anyMatch(authority ->
+                "ROLE_OFFICIAL".equals(authority.getAuthority())
+                    || "ROLE_VOLUNTEER".equals(authority.getAuthority()));
     }
 
     private Race getRace(UUID raceId) {

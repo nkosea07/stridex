@@ -2,13 +2,14 @@ import { View, Text, StyleSheet, Alert, ActivityIndicator, AppState, TouchableOp
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useTrackingStore } from '@/store/tracking';
-import { api } from '@/lib/api';
+import { api, getNonEmptyRouteId } from '@/lib/api';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from '@/components/Map';
 import type { Checkpoint, Race } from '@/types';
 import { HUD } from '@/components/HUD';
 import { BottomDrawer } from '@/components/BottomDrawer';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/theme';
+import { CapabilityGate } from '@/components/CapabilityGate';
 
 function normalizeRaceStatus(raw?: string): Race['status'] {
   const value = String(raw || '').toLowerCase();
@@ -37,7 +38,16 @@ function formatTime(seconds: number) {
 }
 
 export default function TrackingScreen() {
+  return (
+    <CapabilityGate capability="ATHLETE">
+      <TrackingScreenContent />
+    </CapabilityGate>
+  );
+}
+
+function TrackingScreenContent() {
   const { raceId } = useLocalSearchParams<{ raceId?: string }>();
+  const routeRaceId = getNonEmptyRouteId(raceId);
   const { isTracking, liveStats, locations, startTracking, stopTracking, currentRace, batterySaver, setBatterySaver, rehydrateFromLocalDb } = useTrackingStore();
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -75,7 +85,7 @@ export default function TrackingScreen() {
     let mounted = true;
 
     const loadRace = async () => {
-      const targetRaceId = raceId || currentRace?.id;
+      const targetRaceId = routeRaceId || getNonEmptyRouteId(currentRace?.id);
       if (!targetRaceId) {
         if (mounted) setIsLoading(false);
         return;
@@ -83,8 +93,8 @@ export default function TrackingScreen() {
 
       try {
         const [raceResponseRaw, checkpointsResponse] = await Promise.all([
-          api.getRace(String(targetRaceId)),
-          api.getRaceCheckpoints(String(targetRaceId)),
+          api.getRace(targetRaceId),
+          api.getRaceCheckpoints(targetRaceId),
         ]);
         const raceResponse = raceResponseRaw as any;
 
@@ -143,7 +153,7 @@ export default function TrackingScreen() {
     return () => {
       mounted = false;
     };
-  }, [raceId, currentRace]);
+  }, [routeRaceId, currentRace]);
 
   const handleStartTracking = async () => {
     if (!selectedRace) {
@@ -201,7 +211,7 @@ export default function TrackingScreen() {
   };
 
   const handleSos = () => {
-    const targetRaceId = raceId || currentRace?.id || selectedRace?.id;
+    const targetRaceId = routeRaceId || getNonEmptyRouteId(currentRace?.id) || getNonEmptyRouteId(selectedRace?.id);
     if (!targetRaceId) {
       Alert.alert('No active race', 'Start tracking a race before raising an SOS.');
       return;

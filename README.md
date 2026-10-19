@@ -207,7 +207,16 @@ Live tracking endpoints: `GET /api/v1/public/races/{raceId}/tracking/athletes/{p
 ### User Roles
 - **Super Admin**: Full platform access
 - **Race Admin**: Manage specific races
-- **Volunteer**: Checkpoint operations
+- **Official**: Participant, category, team, checkpoint, live tracking, RFID, results, analytics, insights, and media operations; read-only promotion visibility
+- **Volunteer**: Participant, category, team, checkpoint, live tracking, results, analytics, and media operations; read-only promotion visibility
+- **Athlete**: Personal registration, tracking, results, and statistics through the athlete app
+- **Spectator**: Anonymous public race results and live tracking
+
+The web operations shell exposes capabilities by role. `SUPER_ADMIN` and
+`RACE_ADMIN` receive race-management controls; `OFFICIAL` and `VOLUNTEER` receive
+the race operations workspace with only the tools supported by their backend role.
+Athletes and spectators remain on the athlete/public surfaces and are not granted
+admin routes. Server-side authorization remains authoritative for every action.
 
 ### Race Management
 - Create and configure races
@@ -285,10 +294,11 @@ staging or production:
 | Racer | `racer.local@racetracker.test` | `RacerTest123!` | `ATHLETE` |
 | Viewer | `viewer.local@racetracker.test` | `ViewerTest123!` | `SPECTATOR` |
 
-The three operations accounts are seeded only when the Spring `dev` profile is
-active and `LOCAL_TEST_USERS_ENABLED=true`; their values come from the ignored
-`apps/backend/.env` file. They are not created by Flyway migrations, so they
-will not exist after the local database volume is recreated.
+These users use password authentication without an MFA prompt in the current
+release. The three operations accounts are seeded only when the Spring `dev`
+profile is active and `LOCAL_TEST_USERS_ENABLED=true`; their values come from
+the ignored `apps/backend/.env` file. They are not created by Flyway migrations,
+so they will not exist after the local database volume is recreated.
 
 ## Development
 
@@ -361,8 +371,8 @@ Use the checked-in, credential-free [.env.pilot.example](.env.pilot.example) as
 the authoritative pilot variable list. The backend uses `DB_HOST`, `DB_PORT`,
 `DB_NAME`, `DB_USERNAME`, and `DB_PASSWORD`; it does not use the old
 `DATABASE_URL`/`DATABASE_USERNAME` names shown in historical setup snippets.
-Production also requires non-default `JWT_SECRET`, a base64-encoded 32-byte
-`MFA_ENCRYPTION_KEY`, an explicit HTTPS `FRONTEND_URL`, secure browser cookies,
+Production also requires a non-default `JWT_SECRET`, an explicit HTTPS
+`FRONTEND_URL`, secure browser cookies,
 and global RFID simulation disabled. Never put real values in this template or
 source control.
 

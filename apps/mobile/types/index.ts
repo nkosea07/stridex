@@ -1,4 +1,6 @@
 export type UserRole = 'SUPER_ADMIN' | 'RACE_ADMIN' | 'OFFICIAL' | 'VOLUNTEER' | 'ATHLETE' | 'SPECTATOR';
+export type UserCapability = 'ATHLETE' | 'SPECTATOR';
+export type RegistrationExperience = UserCapability;
 
 // User and Auth Types
 export interface User {
@@ -7,6 +9,8 @@ export interface User {
   firstName: string;
   lastName: string;
   role: UserRole;
+  capabilities: UserCapability[];
+  preferredCapability: UserCapability | null;
   phone?: string;
   isActive?: boolean;
   emailVerified?: boolean;
@@ -31,6 +35,48 @@ export interface RegisterRequest {
   phone?: string;
   privacyPolicyAccepted?: boolean;
   privacyPolicyVersion?: string;
+  experiences?: RegistrationExperience[];
+}
+
+export interface ProfileUpdateRequest {
+  firstName: string;
+  lastName: string;
+  phone?: string;
+}
+
+export interface CapabilityUpdateRequest {
+  capabilities: UserCapability[];
+  preferredCapability: UserCapability;
+}
+
+export interface FavoriteAthlete {
+  raceId: string;
+  raceName?: string;
+  participantId: string;
+  participantName?: string;
+  bibNumber?: string;
+  status?: string;
+  lastCheckpoint?: string;
+  distanceRemaining?: number;
+}
+
+export interface PublicRaceResult {
+  participantId: string;
+  participantName?: string;
+  bibNumber?: string;
+  status?: string;
+  totalTime?: string;
+  category?: string;
+  overallPosition?: number;
+}
+
+export interface PublicRaceResultPage {
+  items: PublicRaceResult[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  revision: number;
 }
 
 // Race Types
@@ -258,8 +304,9 @@ export interface AuthState {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<MobileLoginResult>;
   register: (userData: RegisterRequest) => Promise<AuthResponse>;
-  logout: () => void;
-  updateProfile: (data: Partial<User>) => Promise<void>;
+  logout: () => Promise<void>;
+  updateProfile: (data: ProfileUpdateRequest) => Promise<void>;
+  updateCapabilities: (data: CapabilityUpdateRequest) => Promise<void>;
 }
 
 export type ThemePreference = 'light' | 'dark' | 'system';
@@ -276,6 +323,7 @@ export interface TrackingState {
   addLocation: (location: GpsLocation) => void;
   recordCheckpoint: (record: CheckpointRecord) => void;
   setBatterySaver: (enabled: boolean) => void;
+  clearTrackingData: () => Promise<void>;
   rehydrateFromLocalDb: (raceId: string) => Promise<void>;
   recoverActiveTrackingSession: () => Promise<void>;
 }

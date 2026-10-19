@@ -3,6 +3,7 @@ package com.racetracker.config;
 import com.racetracker.model.Race;
 import com.racetracker.model.User;
 import com.racetracker.repository.RaceRepository;
+import com.racetracker.repository.RaceStaffAssignmentRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.security.JwtService;
 import com.racetracker.security.RaceAccessGuard;
@@ -44,6 +45,7 @@ class WebSocketConfigTest {
     @Mock UserDetailsService userDetailsService;
     @Mock UserRepository userRepository;
     @Mock RaceRepository raceRepository;
+    @Mock RaceStaffAssignmentRepository raceStaffAssignmentRepository;
 
     private RaceAccessGuard raceAccessGuard;
     private WebSocketConfig webSocketConfig;
@@ -55,7 +57,7 @@ class WebSocketConfigTest {
 
     @BeforeEach
     void setUp() {
-        raceAccessGuard = new RaceAccessGuard(raceRepository);
+        raceAccessGuard = new RaceAccessGuard(raceRepository, raceStaffAssignmentRepository);
         webSocketConfig = new WebSocketConfig(
             new WebSocketProperties(), jwtService, userDetailsService, userRepository, raceAccessGuard);
         channel = mock(MessageChannel.class);
@@ -140,6 +142,10 @@ class WebSocketConfigTest {
     void raceOperationsStaffMaySubscribeToKnownRaceTopics() {
         Race race = ownedRace(aliceRaceId, "alice@example.com");
         when(raceRepository.findByIdForAuthorization(aliceRaceId)).thenReturn(Optional.of(race));
+        when(raceStaffAssignmentRepository.existsActiveByRaceIdAndUserEmailAndStaffRole(
+            aliceRaceId, "official@example.com", User.UserRole.OFFICIAL)).thenReturn(true);
+        when(raceStaffAssignmentRepository.existsActiveByRaceIdAndUserEmailAndStaffRole(
+            aliceRaceId, "volunteer@example.com", User.UserRole.VOLUNTEER)).thenReturn(true);
 
         assertThat(intercept(subscription(
             "/topic/race." + aliceRaceId,

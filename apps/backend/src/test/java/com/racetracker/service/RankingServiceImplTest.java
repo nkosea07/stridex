@@ -1,6 +1,6 @@
 package com.racetracker.service;
 
-import com.racetracker.dto.participant.ParticipantDto;
+import com.racetracker.dto.result.ParticipantResultDto;
 import com.racetracker.dto.result.RaceResultDto;
 import com.racetracker.dto.result.RankingEntryDto;
 import com.racetracker.service.impl.RankingServiceImpl;
@@ -21,7 +21,7 @@ class RankingServiceImplTest {
     @Mock ResultService resultService;
 
     private RaceResultDto result(String team, String club, String country, String time) {
-        ParticipantDto participant = new ParticipantDto();
+        ParticipantResultDto participant = new ParticipantResultDto();
         participant.setTeamName(team);
         participant.setClubName(club);
         participant.setNationality(country);

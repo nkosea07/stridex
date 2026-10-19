@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { mediaApi } from '@/lib/api'
 import type { MediaItem } from '@/types'
+import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
 const statusColors: Record<string, string> = {
@@ -17,6 +18,8 @@ const statusColors: Record<string, string> = {
 
 export function MediaPage() {
   const { raceId } = useParams()
+  const { user } = useAuth()
+  const canModerateMedia = isAdminRole(user?.role)
   const [items, setItems] = useState<MediaItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
@@ -136,19 +139,21 @@ export function MediaPage() {
                 </div>
                 {item.caption && <p className="text-sm">{item.caption}</p>}
                 <div className="flex gap-2">
-                  {item.status !== 'APPROVED' && (
+                  {canModerateMedia && item.status !== 'APPROVED' && (
                     <Button size="sm" variant="outline" onClick={() => void handleModerate(item.id, true)}>
                       <Check className="mr-1 h-3 w-3" /> Approve
                     </Button>
                   )}
-                  {item.status !== 'REJECTED' && (
+                  {canModerateMedia && item.status !== 'REJECTED' && (
                     <Button size="sm" variant="outline" onClick={() => void handleModerate(item.id, false)}>
                       <X className="mr-1 h-3 w-3" /> Reject
                     </Button>
                   )}
-                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handleDelete(item.id)}>
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                  {canModerateMedia && (
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handleDelete(item.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

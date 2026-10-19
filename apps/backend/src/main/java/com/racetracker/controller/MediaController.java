@@ -47,7 +47,7 @@ public class MediaController {
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/media")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<MediaDto>> list(@PathVariable UUID raceId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return ResponseEntity.ok(mediaService.listForRace(raceId));
     }
 
@@ -84,14 +84,14 @@ public class MediaController {
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/media/{mediaId}/content")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<byte[]> staffContent(@PathVariable UUID raceId, @PathVariable UUID mediaId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return contentResponse(mediaService.content(raceId, mediaId, false));
     }
 
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/media/{mediaId}/thumbnail")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<byte[]> staffThumbnail(@PathVariable UUID raceId, @PathVariable UUID mediaId) {
-        raceAccessGuard.assertCanManage(raceId);
+        raceAccessGuard.assertCanReadStaff(raceId);
         return contentResponse(mediaService.thumbnail(raceId, mediaId, false));
     }
 

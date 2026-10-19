@@ -53,6 +53,7 @@ public class OrganizerApplicationService {
         userRequest.setPhone(request.getPhone());
         userRequest.setPrivacyPolicyAccepted(request.getPrivacyPolicyAccepted());
         userRequest.setPrivacyPolicyVersion(request.getPrivacyPolicyVersion());
+        userRequest.setCreateNormalCapabilities(false);
 
         AuthResponse response = authService.register(userRequest);
         User applicant = userRepository.findByEmailIgnoreCase(request.getEmail().trim())

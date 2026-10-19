@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RegistrationFieldsPage } from '@/pages/RegistrationFieldsPage'
 import { registrationApi } from '@/lib/api'
+import '@/i18n'
 
 vi.mock('@/lib/api', () => ({
   registrationApi: {

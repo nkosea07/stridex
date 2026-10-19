@@ -1,11 +1,15 @@
 package com.racetracker.service.impl;
 
 import com.racetracker.dto.auth.AuthResponse;
+import com.racetracker.dto.auth.UserDto;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.mapper.UserMapper;
 import com.racetracker.model.AuthToken;
 import com.racetracker.model.User;
+import com.racetracker.model.UserCapability;
+import com.racetracker.model.UserCapabilityType;
 import com.racetracker.repository.AuthTokenRepository;
+import com.racetracker.repository.UserCapabilityRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.security.JwtService;
 import com.racetracker.service.OAuthAccountService;
@@ -28,6 +32,7 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
     private final JwtService jwtService;
     private final UserMapper userMapper;
     private final AuthTokenRepository authTokenRepository;
+    private final UserCapabilityRepository userCapabilityRepository;
 
     public OAuthAccountServiceImpl(
         OAuthIdentityVerifier identityVerifier,
@@ -35,7 +40,8 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
         PasswordEncoder passwordEncoder,
         JwtService jwtService,
         UserMapper userMapper,
-        AuthTokenRepository authTokenRepository
+        AuthTokenRepository authTokenRepository,
+        UserCapabilityRepository userCapabilityRepository
     ) {
         this.identityVerifier = identityVerifier;
         this.userRepository = userRepository;
@@ -43,6 +49,7 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
         this.jwtService = jwtService;
         this.userMapper = userMapper;
         this.authTokenRepository = authTokenRepository;
+        this.userCapabilityRepository = userCapabilityRepository;
     }
 
     @Override
@@ -82,7 +89,16 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
             .emailVerified(true)
             .failedLoginAttempts(0)
             .build();
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        UserCapability capability = UserCapability.builder()
+            .user(saved)
+            .capability(UserCapabilityType.ATHLETE)
+            .active(true)
+            .build();
+        userCapabilityRepository.save(capability);
+        saved.getCapabilities().add(capability);
+        saved.setPreferredCapability(UserCapabilityType.ATHLETE);
+        return saved;
     }
 
     private AuthResponse issueSession(User user) {
@@ -104,11 +120,14 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
             .expiresAt(jwtService.extractExpiration(refreshToken))
             .build());
 
+        UserDto dto = userMapper.toDto(user);
         return AuthResponse.builder()
             .token(jwtService.generateAccessToken(user))
             .refreshToken(refreshToken)
             .requiresEmailVerification(false)
-            .user(userMapper.toDto(user))
+            .user(dto)
+            .capabilities(dto == null ? java.util.Set.of() : dto.getCapabilities())
+            .preferredCapability(dto == null ? null : dto.getPreferredCapability())
             .build();
     }
 

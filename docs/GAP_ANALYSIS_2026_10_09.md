@@ -1,5 +1,9 @@
 # AMS / StrideX Gap Analysis (2026-10-09)
 
+> Historical capability snapshot. Superseded by
+> `docs/IMPLEMENTATION_GAP_ANALYSIS_2026_10_11.md` and the current register in
+> `docs/PENDING_WORK.md`; use this document for historical comparison only.
+
 Audit of the committed codebase against `marathon_race_tracking_master_prompt.md`.
 Supersedes `docs/GAP_ANALYSIS_2026_05_31.md` (now stale).
 

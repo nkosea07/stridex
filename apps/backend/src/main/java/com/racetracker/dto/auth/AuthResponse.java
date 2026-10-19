@@ -1,11 +1,13 @@
 package com.racetracker.dto.auth;
 
+import com.racetracker.model.UserCapabilityType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.util.List;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -16,6 +18,8 @@ public class AuthResponse {
     private String refreshToken;
     private Boolean requiresEmailVerification;
     private UserDto user;
+    private Set<UserCapabilityType> capabilities;
+    private UserCapabilityType preferredCapability;
     private Boolean mfaRequired;
     private Boolean mfaEnrollmentRequired;
     private String mfaChallengeToken;

@@ -13,6 +13,7 @@ import com.racetracker.repository.RaceResultRepository;
 import com.racetracker.repository.RaceResultRevisionRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.service.impl.ResultServiceImpl;
+import com.racetracker.security.CapabilityAuthorizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +44,7 @@ class ResultServiceImplPaginationTest {
     @Mock private ParticipantPenaltyRepository penaltyRepository;
     @Mock private RaceResultRepository raceResultRepository;
     @Mock private RaceCategoryRepository raceCategoryRepository;
+    @Mock private CapabilityAuthorizationService capabilityAuthorizationService;
 
     private ResultServiceImpl resultService;
     private final UUID raceId = UUID.randomUUID();
@@ -51,7 +53,7 @@ class ResultServiceImplPaginationTest {
     void setUp() {
         resultService = new ResultServiceImpl(raceRepository, participantRepository, checkpointRecordRepository,
             userRepository, participantMapper, resultRevisionRepository, penaltyRepository,
-            raceResultRepository, raceCategoryRepository);
+            raceResultRepository, raceCategoryRepository, capabilityAuthorizationService);
         when(raceRepository.findById(raceId)).thenReturn(Optional.of(org.mockito.Mockito.mock(Race.class)));
     }
 

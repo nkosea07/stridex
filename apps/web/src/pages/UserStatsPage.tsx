@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertCircle, MapPin, RefreshCcw, UserMinus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import type { FavoriteAthlete, RaceResult } from '@/types'
-import { useAuth } from '@/contexts/AuthContext'
+import { getPreferredCapability, useAuth } from '@/contexts/AuthContext'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 type MyRegistration = {
@@ -16,10 +16,21 @@ type MyRegistration = {
   status: string
 }
 
+type SessionSnapshot = {
+  userId: string | null
+  generation: number
+}
+
 export function UserStatsPage() {
-  const { user } = useAuth()
+  const { user, getSessionGeneration } = useAuth()
+  const userId = user?.id ?? null
+  const sessionGeneration = getSessionGeneration()
+  const sessionRef = useRef<SessionSnapshot>({ userId, generation: sessionGeneration })
+  sessionRef.current = { userId, generation: sessionGeneration }
   const { t } = useTranslation()
-  const isSpectator = user?.role === 'SPECTATOR'
+  const activeCapability = getPreferredCapability(user)
+  const isAthleteMode = activeCapability === 'ATHLETE'
+  const isSpectatorMode = activeCapability === 'SPECTATOR'
   const [registrations, setRegistrations] = useState<MyRegistration[]>([])
   const [results, setResults] = useState<RaceResult[]>([])
   const [favorites, setFavorites] = useState<FavoriteAthlete[]>([])
@@ -29,31 +40,39 @@ export function UserStatsPage() {
 
   useEffect(() => {
     let mounted = true
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => {
+      const currentSession = sessionRef.current
+      return currentSession.userId === requestSession.userId && getSessionGeneration() === requestSession.generation
+    }
+    setRegistrations([])
+    setResults([])
+    setFavorites([])
+    setHasLoadError(false)
     const load = async () => {
       setIsLoading(true)
-      setHasLoadError(false)
       try {
         const [myRegistrations, myResults, myFavorites] = await Promise.all([
-          isSpectator ? Promise.resolve<MyRegistration[]>([]) : participantsApi.myRegistrations(),
-          isSpectator ? Promise.resolve<RaceResult[]>([]) : resultsApi.my(),
-          favoritesApi.list(),
+          isAthleteMode ? participantsApi.myRegistrations() : Promise.resolve<MyRegistration[]>([]),
+          isAthleteMode ? resultsApi.my() : Promise.resolve<RaceResult[]>([]),
+          isSpectatorMode ? favoritesApi.list() : Promise.resolve<FavoriteAthlete[]>([]),
         ])
-        if (!mounted) return
+        if (!mounted || !isCurrentSession()) return
         setRegistrations(myRegistrations)
         setResults(myResults)
         setFavorites(myFavorites)
       } catch {
-        if (!mounted) return
+        if (!mounted || !isCurrentSession()) return
         setHasLoadError(true)
       } finally {
-        if (mounted) setIsLoading(false)
+        if (mounted && isCurrentSession()) setIsLoading(false)
       }
     }
-    load()
+    void load()
     return () => {
       mounted = false
     }
-  }, [isSpectator, reloadKey])
+  }, [isAthleteMode, isSpectatorMode, reloadKey, sessionGeneration, userId])
 
   const finishedCount = useMemo(
     () => results.filter((result) => result.status === 'finished').length,
@@ -68,21 +87,27 @@ export function UserStatsPage() {
 
   const handleUnfollow = async (favorite: FavoriteAthlete) => {
     if (!favorite.raceId) return
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => {
+      const currentSession = sessionRef.current
+      return currentSession.userId === requestSession.userId && getSessionGeneration() === requestSession.generation
+    }
     try {
       await favoritesApi.unfollow(favorite.raceId, favorite.participantId)
+      if (!isCurrentSession()) return
       setFavorites((current) => current.filter((item) => item.participantId !== favorite.participantId))
-      toast.success('Removed from favorites')
+      toast.success(t('nav:removedFromFavorites'))
     } catch {
-      toast.error('Failed to update favorites')
+      if (isCurrentSession()) toast.error(t('nav:favoritesUpdateFailed'))
     }
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t(isSpectator ? 'nav:following' : 'nav:myPerformance')}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t(isSpectatorMode ? 'nav:following' : 'nav:myPerformance')}</h1>
         <p className="text-muted-foreground">
-          {t(isSpectator ? 'nav:followingDescription' : 'nav:myPerformanceDescription')}
+          {t(isSpectatorMode ? 'nav:followingDescription' : 'nav:myPerformanceDescription')}
         </p>
       </div>
 
@@ -100,32 +125,32 @@ export function UserStatsPage() {
         </Alert>
       )}
 
-      <div className={`grid gap-4 ${isSpectator ? 'md:grid-cols-1' : 'md:grid-cols-4'}`}>
-        {!isSpectator && <Card>
+      <div className={`grid gap-4 ${isAthleteMode ? 'md:grid-cols-4' : 'md:grid-cols-1'}`}>
+        {isAthleteMode && <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Registrations</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{t('nav:registrationsCount')}</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{isLoading ? '--' : registrations.length}</CardContent>
         </Card>}
-        {!isSpectator && <Card>
+        {isAthleteMode && <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Results</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{t('nav:resultsCount')}</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{isLoading ? '--' : results.length}</CardContent>
         </Card>}
-        {!isSpectator && <Card>
+        {isAthleteMode && <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Finished Races</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{t('nav:finishedRaces')}</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{isLoading ? '--' : finishedCount}</CardContent>
         </Card>}
-        {!isSpectator && <Card>
+        {isAthleteMode && <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Best Overall Position</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{t('nav:bestOverallPosition')}</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{isLoading ? '--' : bestOverall ?? '-'}</CardContent>
         </Card>}
-        {isSpectator && <Card>
+        {isSpectatorMode && <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">{t('nav:followedAthletes')}</CardTitle>
           </CardHeader>
@@ -133,7 +158,7 @@ export function UserStatsPage() {
         </Card>}
       </div>
 
-      <Card>
+      {isSpectatorMode && <Card>
         <CardHeader>
           <CardTitle className="text-base">{t('nav:followedAthletes')}</CardTitle>
         </CardHeader>
@@ -153,12 +178,12 @@ export function UserStatsPage() {
               >
                 <div>
                   <p className="font-medium">
-                    {favorite.participantName || 'Athlete'}
+                    {favorite.participantName || t('nav:athlete')}
                     {favorite.bibNumber ? <span className="text-muted-foreground"> #{favorite.bibNumber}</span> : null}
                   </p>
                   <p className="flex items-center gap-1 text-xs text-muted-foreground">
                     <MapPin className="h-3 w-3" />
-                    {favorite.raceName || 'Race'}
+                    {favorite.raceName || t('nav:race')}
                     {favorite.lastCheckpoint ? ` • ${favorite.lastCheckpoint}` : ''}
                   </p>
                 </div>
@@ -166,7 +191,7 @@ export function UserStatsPage() {
                   {favorite.status ? <Badge variant="outline">{favorite.status}</Badge> : null}
                   {favorite.raceId ? (
                     <Button asChild size="sm" variant="outline">
-                      <Link to={`/race/${favorite.raceId}/athlete/${favorite.participantId}`}>Track</Link>
+                      <Link to={`/race/${favorite.raceId}/athlete/${favorite.participantId}`}>{t('nav:track')}</Link>
                     </Button>
                   ) : null}
                   <Button size="icon" variant="ghost" onClick={() => void handleUnfollow(favorite)}>
@@ -177,7 +202,7 @@ export function UserStatsPage() {
             ))
           )}
         </CardContent>
-      </Card>
+      </Card>}
     </div>
   )
 }

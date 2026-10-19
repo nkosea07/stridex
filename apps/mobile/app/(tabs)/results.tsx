@@ -1,7 +1,11 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '@/lib/api';
+import { useTranslation } from 'react-i18next';
+import { api, getApiErrorKind, type ApiErrorKind } from '@/lib/api';
+import { CapabilityGate } from '@/components/CapabilityGate';
+import { RequestErrorState } from '@/components/RequestErrorState';
+import { formatDate, formatDistanceKm } from '@/lib/format';
 
 type ResultRow = {
   id: string;
@@ -19,7 +23,7 @@ function toDateLabel(value?: string) {
   if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString();
+  return formatDate(date);
 }
 
 function parseDurationToSeconds(value?: string): number | null {
@@ -38,48 +42,70 @@ function formatPace(secondsPerKm: number): string {
 }
 
 export default function ResultsScreen() {
+  return (
+    <CapabilityGate capability="ATHLETE">
+      <ResultsScreenContent />
+    </CapabilityGate>
+  );
+}
+
+function ResultsScreenContent() {
+  const { t } = useTranslation();
   const [results, setResults] = useState<ResultRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [resultPage, setResultPage] = useState(0);
   const [hasMoreResults, setHasMoreResults] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [errorKind, setErrorKind] = useState<ApiErrorKind | null>(null);
 
   const loadResults = useCallback(async (page = 0, append = false) => {
+    setErrorKind(null);
     if (append) setIsLoadingMore(true);
     try {
-    const [resultPageData, races] = await Promise.all([api.getMyResultsPage(page, 50), api.getRaces()]);
-    const raceMap = new Map((races as any[]).map((race) => [String(race.id), race]));
+      const [resultPageData, races] = await Promise.all([api.getMyResultsPage(page, 50), api.getRaces()]);
+      const raceMap = new Map((races as any[]).map((race) => [String(race.id), race]));
 
-    const mapped = resultPageData.items
-      .map((result) => {
-        const race = raceMap.get(String(result.raceId));
-        const raceDate = race?.raceDate;
-        return {
-          id: String(result.id || `${result.raceId}-${result.participantId}`),
-          race: race?.name || 'Race',
-          date: toDateLabel(raceDate),
-          time: result.totalTime || result.chipTime || result.gunTime || '-',
-          position: result.overallPosition,
-          category: result.category || race?.raceType || 'Category',
-          distance: Number(race?.distanceKm || 0),
-          averagePace: result.averagePace,
-          raceDateTs: raceDate ? new Date(raceDate).getTime() : 0,
-        };
-      })
-      .sort((a, b) => b.raceDateTs - a.raceDateTs);
+      const mapped = resultPageData.items
+        .map((result) => {
+          const race = raceMap.get(String(result.raceId));
+          const raceDate = race?.raceDate;
+          return {
+            id: String(result.id || `${result.raceId}-${result.participantId}`),
+            race: race?.name || 'Race',
+            date: toDateLabel(raceDate),
+            time: result.totalTime || result.chipTime || result.gunTime || '-',
+            position: result.overallPosition,
+            category: result.category || race?.raceType || 'Category',
+            distance: Number(race?.distanceKm || 0),
+            averagePace: result.averagePace,
+            raceDateTs: raceDate ? new Date(raceDate).getTime() : 0,
+          };
+        })
+        .sort((a, b) => b.raceDateTs - a.raceDateTs);
 
-    setResults((current) => append ? [...current, ...mapped] : mapped);
-    setResultPage(resultPageData.page);
-    setHasMoreResults(resultPageData.page + 1 < resultPageData.totalPages);
+      setResults((current) => append ? [...current, ...mapped] : mapped);
+      setResultPage(resultPageData.page);
+      setHasMoreResults(resultPageData.page + 1 < resultPageData.totalPages);
+    } catch (error) {
+      setErrorKind(getApiErrorKind(error));
     } finally {
       if (append) setIsLoadingMore(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadResults().finally(() => setIsLoading(false));
+  const reloadResults = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await loadResults(0);
+    } finally {
+      setIsLoading(false);
+    }
   }, [loadResults]);
+
+  useEffect(() => {
+    void reloadResults();
+  }, [reloadResults]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -169,12 +195,17 @@ export default function ResultsScreen() {
     );
   }
 
+  if (errorKind && results.length === 0) {
+    return <RequestErrorState resource="results" kind={errorKind} onRetry={() => void reloadResults()} />;
+  }
+
   return (
     <ScrollView
       style={styles.container}
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
+      {errorKind && <RequestErrorState resource="results" kind={errorKind} onRetry={() => void reloadResults()} compact />}
       <View style={styles.statsGrid}>
         <View style={styles.statCard}>
           <Ionicons name="flag" size={24} color="#0F766E" />
@@ -183,8 +214,8 @@ export default function ResultsScreen() {
         </View>
         <View style={styles.statCard}>
           <Ionicons name="walk" size={24} color="#0F766E" />
-          <Text style={styles.statValue}>{stats.totalDistance.toFixed(1)}</Text>
-          <Text style={styles.statLabel}>Total KM</Text>
+          <Text style={styles.statValue}>{formatDistanceKm(stats.totalDistance)}</Text>
+          <Text style={styles.statLabel}>{t('mobile:results.totalDistance')}</Text>
         </View>
         <View style={styles.statCard}>
           <Ionicons name="trophy" size={24} color="#0F766E" />
@@ -217,7 +248,7 @@ export default function ResultsScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Results</Text>
-          <TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('mobile:results.seeAll')} accessibilityState={{ disabled: true }}>
             <Text style={styles.seeAllText}>See All</Text>
           </TouchableOpacity>
         </View>
@@ -249,8 +280,14 @@ export default function ResultsScreen() {
           </View>
         )}
         {hasMoreResults && (
-          <TouchableOpacity disabled={isLoadingMore} onPress={() => void loadResults(resultPage + 1, true)}>
-            <Text style={styles.seeAllText}>{isLoadingMore ? 'Loading more results…' : 'Load more results'}</Text>
+          <TouchableOpacity
+            disabled={isLoadingMore}
+            onPress={() => void loadResults(resultPage + 1, true)}
+            accessibilityRole="button"
+            accessibilityLabel={t('mobile:results.loadMore')}
+            accessibilityState={{ busy: isLoadingMore, disabled: isLoadingMore }}
+          >
+            <Text style={styles.seeAllText}>{isLoadingMore ? t('mobile:results.loadingMore') : t('mobile:results.loadMore')}</Text>
           </TouchableOpacity>
         )}
       </View>

@@ -7,8 +7,13 @@ import com.racetracker.exception.TooManyRequestsException;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.mapper.UserMapper;
 import com.racetracker.model.AuthToken;
+import com.racetracker.model.Participant;
 import com.racetracker.model.User;
+import com.racetracker.model.UserCapability;
+import com.racetracker.model.UserCapabilityType;
 import com.racetracker.repository.AuthTokenRepository;
+import com.racetracker.repository.ParticipantRepository;
+import com.racetracker.repository.UserCapabilityRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.security.JwtService;
 import com.racetracker.service.AuthEmailService;
@@ -26,6 +31,8 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -37,6 +44,14 @@ public class AuthServiceImpl implements AuthService {
     private static final Duration ACCOUNT_LOCK_DURATION = Duration.ofMinutes(15);
     private static final Duration PASSWORD_RESET_TOKEN_TTL = Duration.ofHours(1);
     private static final Duration EMAIL_VERIFICATION_TOKEN_TTL = Duration.ofHours(24);
+    private static final Set<Participant.ParticipantStatus> ACTIVE_REGISTRATION_STATUSES = Set.of(
+        Participant.ParticipantStatus.REGISTERED,
+        Participant.ParticipantStatus.CONFIRMED,
+        Participant.ParticipantStatus.CHECKED_IN,
+        Participant.ParticipantStatus.STARTED,
+        Participant.ParticipantStatus.PENDING_REVIEW,
+        Participant.ParticipantStatus.WAITLISTED
+    );
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -47,6 +62,8 @@ public class AuthServiceImpl implements AuthService {
     private final AuthEmailService authEmailService;
     private final MfaAuthenticationServiceImpl mfaAuthenticationService;
     private final AuditEventService auditEventService;
+    private final UserCapabilityRepository userCapabilityRepository;
+    private final ParticipantRepository participantRepository;
 
     public AuthServiceImpl(
         UserRepository userRepository,
@@ -57,7 +74,9 @@ public class AuthServiceImpl implements AuthService {
         AuthTokenRepository authTokenRepository,
         AuthEmailService authEmailService,
         MfaAuthenticationServiceImpl mfaAuthenticationService,
-        AuditEventService auditEventService
+        AuditEventService auditEventService,
+        UserCapabilityRepository userCapabilityRepository,
+        ParticipantRepository participantRepository
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -68,6 +87,8 @@ public class AuthServiceImpl implements AuthService {
         this.authEmailService = authEmailService;
         this.mfaAuthenticationService = mfaAuthenticationService;
         this.auditEventService = auditEventService;
+        this.userCapabilityRepository = userCapabilityRepository;
+        this.participantRepository = participantRepository;
     }
 
     @Override
@@ -78,6 +99,12 @@ public class AuthServiceImpl implements AuthService {
             throw new ConflictException("Email already exists");
         }
 
+        Set<UserCapabilityType> initialCapabilities = request.isCreateNormalCapabilities()
+            ? resolveRegistrationCapabilities(request)
+            : Set.of();
+        UserCapabilityType initialCapability = initialCapabilities.contains(UserCapabilityType.ATHLETE)
+            ? UserCapabilityType.ATHLETE
+            : initialCapabilities.stream().findFirst().orElse(null);
         User user = User.builder()
             .email(normalizedEmail)
             .passwordHash(passwordEncoder.encode(request.getPassword()))
@@ -88,10 +115,22 @@ public class AuthServiceImpl implements AuthService {
             .isActive(true)
             .emailVerified(false)
             .failedLoginAttempts(0)
+            .preferredCapability(initialCapability)
             .build();
         applyPrivacyAcceptance(user, request.getPrivacyPolicyAccepted(), request.getPrivacyPolicyVersion());
 
         User saved = userRepository.save(user);
+        if (request.isCreateNormalCapabilities()) {
+            for (UserCapabilityType capabilityType : initialCapabilities) {
+                UserCapability capability = UserCapability.builder()
+                    .user(saved)
+                    .capability(capabilityType)
+                    .active(true)
+                    .build();
+                userCapabilityRepository.save(capability);
+                saved.getCapabilities().add(capability);
+            }
+        }
         issueEmailVerificationToken(saved);
 
         return buildVerificationRequiredResponse(saved);
@@ -252,6 +291,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public UserDto getCurrentUser() {
         User user = resolveCurrentUser();
         return userMapper.toDto(user);
@@ -263,6 +303,56 @@ public class AuthServiceImpl implements AuthService {
         User user = resolveCurrentUser();
         userMapper.updateProfile(request, user);
         User saved = userRepository.save(user);
+        return userMapper.toDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public UserDto updateCapabilities(UpdateCapabilitiesRequest request) {
+        User user = resolveCurrentUserForCapabilityUpdate();
+        Set<UserCapabilityType> requested = request.getCapabilities() == null
+            || request.getCapabilities().isEmpty()
+            || request.getCapabilities().stream().anyMatch(java.util.Objects::isNull)
+            ? Set.of()
+            : EnumSet.copyOf(request.getCapabilities());
+
+        if (requested.isEmpty()) {
+            throw new com.racetracker.exception.ApiException(
+                "At least one capability is required", "CAPABILITIES_REQUIRED");
+        }
+        if (request.getPreferredCapability() == null || !requested.contains(request.getPreferredCapability())) {
+            throw new com.racetracker.exception.ApiException(
+                "Preferred capability must be included in capabilities", "PREFERRED_CAPABILITY_REQUIRED");
+        }
+        if (!requested.contains(UserCapabilityType.ATHLETE)
+            && participantRepository.existsByUserIdAndStatusIn(user.getId(), ACTIVE_REGISTRATION_STATUSES)) {
+            throw new ConflictException(
+                "ATHLETE capability cannot be removed while an active registration exists",
+                "ATHLETE_CAPABILITY_REMOVAL_BLOCKED");
+        }
+
+        for (UserCapabilityType capabilityType : UserCapabilityType.values()) {
+            UserCapability capability = userCapabilityRepository
+                .findByUserIdAndCapability(user.getId(), capabilityType)
+                .orElseGet(() -> UserCapability.builder()
+                    .user(user)
+                    .capability(capabilityType)
+                    .build());
+            boolean active = requested.contains(capabilityType);
+            capability.setActive(active);
+            capability.setRevokedAt(active ? null : OffsetDateTime.now());
+            UserCapability savedCapability = userCapabilityRepository.save(capability);
+            user.getCapabilities().removeIf(existing -> capabilityType == existing.getCapability());
+            user.getCapabilities().add(savedCapability == null ? capability : savedCapability);
+        }
+
+        user.setPreferredCapability(request.getPreferredCapability());
+        User saved = userRepository.save(user);
+        auditEventService.recordInCurrentTransaction("CAPABILITIES_UPDATED", user.getId(), "USER",
+            user.getId().toString(), "SUCCESS", java.util.Map.of(
+                "preferredCapability", request.getPreferredCapability().name(),
+                "capabilityCount", requested.size()
+            ));
         return userMapper.toDto(saved);
     }
 
@@ -402,6 +492,35 @@ public class AuthServiceImpl implements AuthService {
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
+    private User resolveCurrentUserForCapabilityUpdate() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            throw new UnauthorizedException("Unauthorized");
+        }
+
+        return userRepository.findByEmailIgnoreCaseForUpdate(authentication.getName())
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    }
+
+    private Set<UserCapabilityType> resolveRegistrationCapabilities(RegisterRequest request) {
+        Set<UserCapabilityType> experiences = request.getExperiences();
+        if (experiences == null) {
+            return request.getExperience() == null
+                ? EnumSet.of(UserCapabilityType.ATHLETE)
+                : EnumSet.of(request.getExperience());
+        }
+        if (experiences.isEmpty() || experiences.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new com.racetracker.exception.ApiException(
+                "At least one experience is required", "CAPABILITIES_REQUIRED");
+        }
+
+        EnumSet<UserCapabilityType> resolved = EnumSet.copyOf(experiences);
+        if (request.getExperience() != null) {
+            resolved.add(request.getExperience());
+        }
+        return resolved;
+    }
+
     private String normalizeEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
     }
@@ -413,11 +532,15 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    private AuthResponse buildVerificationRequiredResponse(User user) {        return AuthResponse.builder()
+    private AuthResponse buildVerificationRequiredResponse(User user) {
+        UserDto dto = userMapper.toDto(user);
+        return AuthResponse.builder()
             .token(null)
             .refreshToken(null)
             .requiresEmailVerification(true)
-            .user(userMapper.toDto(user))
+            .user(dto)
+            .capabilities(dto == null ? Set.of() : dto.getCapabilities())
+            .preferredCapability(dto == null ? null : dto.getPreferredCapability())
             .build();
     }
 
@@ -428,11 +551,14 @@ public class AuthServiceImpl implements AuthService {
             : jwtService.generateRefreshToken(user);
         authTokenRepository.save(createRefreshToken(user, refreshToken));
 
+        UserDto dto = userMapper.toDto(user);
         return AuthResponse.builder()
             .token(mfaVerified ? jwtService.generateAccessToken(user, true) : jwtService.generateAccessToken(user))
             .refreshToken(refreshToken)
             .requiresEmailVerification(false)
-            .user(userMapper.toDto(user))
+            .user(dto)
+            .capabilities(dto == null ? Set.of() : dto.getCapabilities())
+            .preferredCapability(dto == null ? null : dto.getPreferredCapability())
             .build();
     }
 }

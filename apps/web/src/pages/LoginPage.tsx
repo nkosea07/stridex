@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { isOperationsRole, isPersonalRole, useAuth } from '@/contexts/AuthContext'
+import { isOperationsRole, isPersonalUser, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
 function getSafePublicReturnPath(value: unknown) {
@@ -41,7 +41,7 @@ export function LoginPage() {
       if (result.kind === 'authenticated') {
         const defaultPath = isOperationsRole(result.user.role)
           ? '/admin'
-          : isPersonalRole(result.user.role)
+          : isPersonalUser(result.user)
             ? '/app'
             : '/unauthorized'
         navigate(returnTo ?? defaultPath)

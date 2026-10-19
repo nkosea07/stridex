@@ -12,6 +12,7 @@ import com.racetracker.repository.CheckpointRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
+import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.impl.CheckpointServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,6 +43,7 @@ class CheckpointServiceImplTest {
     @Mock UserRepository userRepository;
     @Mock CheckpointMapper checkpointMapper;
     @Mock LiveSummaryCacheInvalidator liveSummaryCacheInvalidator;
+    @Mock RaceAccessGuard raceAccessGuard;
 
     private CheckpointServiceImpl service;
     private final UUID raceId = UUID.randomUUID();
@@ -49,7 +53,7 @@ class CheckpointServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new CheckpointServiceImpl(checkpointRepository, checkpointRecordRepository, participantRepository,
-            raceRepository, userRepository, checkpointMapper, liveSummaryCacheInvalidator);
+            raceRepository, userRepository, checkpointMapper, liveSummaryCacheInvalidator, raceAccessGuard);
     }
 
     @Test
@@ -119,5 +123,19 @@ class CheckpointServiceImplTest {
         service.record(raceId, checkpointId, request);
 
         assertThat(participant.getStatus()).isEqualTo(Participant.ParticipantStatus.STARTED);
+    }
+
+    @Test
+    void recordEnforcesCheckpointScopedRaceAccessBeforeLoadingCheckpoint() {
+        doThrow(new org.springframework.security.access.AccessDeniedException("wrong checkpoint"))
+            .when(raceAccessGuard).assertCanAccessCheckpoint(raceId, checkpointId);
+
+        CheckpointRecordRequest request = new CheckpointRecordRequest();
+        request.setParticipantId(participantId);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.record(raceId, checkpointId, request))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verifyNoInteractions(checkpointRepository, participantRepository, checkpointRecordRepository);
     }
 }

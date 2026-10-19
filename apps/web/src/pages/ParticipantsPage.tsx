@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { participantsApi, categoriesApi } from '@/lib/api'
 import { toast } from 'sonner'
 import type { ImportJob, Participant, ParticipantStatus, Penalty, RaceCategory } from '@/types'
+import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 
 const statusColors: Record<ParticipantStatus, string> = {
   REGISTERED: 'bg-muted text-muted-foreground',
@@ -38,6 +39,8 @@ const paymentColors: Record<string, string> = {
 
 export function ParticipantsPage() {
   const { raceId } = useParams()
+  const { user } = useAuth()
+  const canManageAdminActions = isAdminRole(user?.role)
   const [participants, setParticipants] = useState<Participant[]>([])
   const [importJobs, setImportJobs] = useState<ImportJob[]>([])
   const [search, setSearch] = useState('')
@@ -448,7 +451,7 @@ export function ParticipantsPage() {
                         <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {p.status === 'PENDING_REVIEW' && (
+                        {canManageAdminActions && p.status === 'PENDING_REVIEW' && (
                           <>
                             <DropdownMenuItem onClick={() => void handleReview(p.id, 'APPROVE')}>
                               <CheckCircle className="mr-2 h-4 w-4" />
@@ -471,14 +474,16 @@ export function ParticipantsPage() {
                               <CreditCard className="mr-2 h-4 w-4" />
                               Start Online Payment
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => void handleVerifyPayment(p.id)}>
-                              <CheckCircle className="mr-2 h-4 w-4" />
-                              Verify Payment
-                            </DropdownMenuItem>
+                            {canManageAdminActions && (
+                              <DropdownMenuItem onClick={() => void handleVerifyPayment(p.id)}>
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                Verify Payment
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                           </>
                         )}
-                        {p.paymentStatus === 'PAID' && (
+                        {canManageAdminActions && p.paymentStatus === 'PAID' && (
                           <>
                             <DropdownMenuItem onClick={() => void handleRefundPayment(p.id)}>
                               <RotateCcw className="mr-2 h-4 w-4" />
@@ -651,21 +656,27 @@ export function ParticipantsPage() {
                       <span className="font-medium">{penalty.seconds}s</span>
                       {penalty.reason ? <span className="text-muted-foreground"> — {penalty.reason}</span> : null}
                     </span>
-                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void handleRemovePenalty(penalty.id)}>
-                      Remove
-                    </Button>
+                    {canManageAdminActions && (
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void handleRemovePenalty(penalty.id)}>
+                        Remove
+                      </Button>
+                    )}
                   </div>
                 ))
               )}
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div><Label>Seconds</Label><Input type="number" value={penaltySeconds} onChange={(e) => setPenaltySeconds(e.target.value)} /></div>
-              <div className="col-span-2"><Label>Reason</Label><Input value={penaltyReason} onChange={(e) => setPenaltyReason(e.target.value)} placeholder="Optional" /></div>
-            </div>
+            {canManageAdminActions && (
+              <div className="grid grid-cols-3 gap-3">
+                <div><Label>Seconds</Label><Input type="number" value={penaltySeconds} onChange={(e) => setPenaltySeconds(e.target.value)} /></div>
+                <div className="col-span-2"><Label>Reason</Label><Input value={penaltyReason} onChange={(e) => setPenaltyReason(e.target.value)} placeholder="Optional" /></div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPenaltyOpen(false)}>Close</Button>
-            <Button onClick={() => void handleAddPenalty()} disabled={penaltyBusy}>{penaltyBusy ? 'Adding…' : 'Add penalty'}</Button>
+            {canManageAdminActions && (
+              <Button onClick={() => void handleAddPenalty()} disabled={penaltyBusy}>{penaltyBusy ? 'Adding…' : 'Add penalty'}</Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

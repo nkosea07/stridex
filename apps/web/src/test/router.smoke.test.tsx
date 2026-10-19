@@ -49,8 +49,9 @@ const runtimeRoutes: RouteObject[] = [
   },
 ]
 
-type MockSessionRole = 'admin' | 'raceAdmin' | 'official' | 'volunteer' | 'athlete' | 'spectator'
+type MockSessionRole = 'admin' | 'raceAdmin' | 'official' | 'volunteer' | 'athlete' | 'spectator' | 'dual' | 'empty'
 let mockSessionRole: MockSessionRole = 'athlete'
+let mockPreferredCapability: 'ATHLETE' | 'SPECTATOR' = 'ATHLETE'
 let failNextRaceList = false
 let failNextDashboardStats = false
 let raceListPayload: { content: unknown[] } = { content: [] }
@@ -58,10 +59,50 @@ const API_RACE_ID = '123e4567-e89b-12d3-a456-426614174000'
 
 function startBrowserSession(role: MockSessionRole) {
   mockSessionRole = role
+  mockPreferredCapability = role === 'spectator' ? 'SPECTATOR' : 'ATHLETE'
   document.cookie = `rt_browser_csrf=${role}-csrf; path=/`
 }
 
-const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+function getMockRole() {
+  return mockSessionRole === 'admin'
+    ? 'SUPER_ADMIN'
+    : mockSessionRole === 'raceAdmin'
+      ? 'RACE_ADMIN'
+    : mockSessionRole === 'official'
+        ? 'OFFICIAL'
+        : mockSessionRole === 'volunteer'
+          ? 'VOLUNTEER'
+          : mockSessionRole === 'spectator'
+            ? 'SPECTATOR'
+            : 'ATHLETE'
+}
+
+function getMockCapabilities() {
+  if (mockSessionRole === 'dual') return ['ATHLETE', 'SPECTATOR']
+  if (mockSessionRole === 'empty') return []
+  if (mockSessionRole === 'athlete') return ['ATHLETE']
+  if (mockSessionRole === 'spectator') return ['SPECTATOR']
+  return []
+}
+
+function getMockUser() {
+  const role = getMockRole()
+  const capabilities = getMockCapabilities()
+  return {
+    id: `${role.toLowerCase()}-user`,
+    email: role === 'SUPER_ADMIN' ? 'admin@example.com' : `${role.toLowerCase()}@example.com`,
+    firstName: role === 'SUPER_ADMIN' ? 'Admin' : role === 'OFFICIAL' ? 'Official' : role === 'VOLUNTEER' ? 'Volunteer' : 'Athlete',
+    lastName: 'Demo',
+    role,
+    capabilities,
+    preferredCapability: capabilities.includes(mockPreferredCapability) ? mockPreferredCapability : null,
+    isActive: true,
+    emailVerified: true,
+    createdAt: new Date().toISOString(),
+  }
+}
+
+const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input)
 
   if (url.includes('/auth/browser/refresh')) {
@@ -71,35 +112,20 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) =>
     })
   }
 
-  if (url.includes('/auth/me')) {
-    const role = mockSessionRole === 'admin'
-      ? 'SUPER_ADMIN'
-      : mockSessionRole === 'raceAdmin'
-        ? 'RACE_ADMIN'
-      : mockSessionRole === 'official'
-        ? 'OFFICIAL'
-        : mockSessionRole === 'volunteer'
-          ? 'VOLUNTEER'
-          : mockSessionRole === 'spectator'
-            ? 'SPECTATOR'
-            : 'ATHLETE'
-
+  if (url.includes('/auth/profile/capabilities')) {
+    const body = typeof init?.body === 'string' ? JSON.parse(init.body) as { preferredCapability?: 'ATHLETE' | 'SPECTATOR' } : {}
+    if (body.preferredCapability) mockPreferredCapability = body.preferredCapability
     return new Response(
-      JSON.stringify({
-        id: `${role.toLowerCase()}-user`,
-        email: role === 'SUPER_ADMIN' ? 'admin@example.com' : `${role.toLowerCase()}@example.com`,
-        firstName: role === 'SUPER_ADMIN' ? 'Admin' : role === 'OFFICIAL' ? 'Official' : role === 'VOLUNTEER' ? 'Volunteer' : 'Athlete',
-        lastName: 'Demo',
-        role,
-        isActive: true,
-        emailVerified: true,
-        createdAt: new Date().toISOString(),
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      },
+      JSON.stringify(getMockUser()),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
     )
+  }
+
+  if (url.includes('/auth/me')) {
+    return new Response(JSON.stringify(getMockUser()), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   if (url.includes('/public/races/') && url.includes('/media')) {
@@ -240,6 +266,7 @@ describe('appRoutes', () => {
     document.cookie = 'rt_browser_csrf=; Max-Age=0; path=/'
     setAccessToken(null)
     mockSessionRole = 'athlete'
+    mockPreferredCapability = 'ATHLETE'
     failNextRaceList = false
     failNextDashboardStats = false
     raceListPayload = { content: [] }
@@ -290,6 +317,24 @@ describe('appRoutes', () => {
     }
 
     expect(await findExpectedContent()).toBeInTheDocument()
+  })
+
+  it('switches the active mode for a dual-capability account', async () => {
+    startBrowserSession('dual')
+    const router = createMemoryRouter(runtimeRoutes, { initialEntries: ['/app'] })
+
+    render(<RouterProvider router={router} />)
+
+    expect(await screen.findByRole('heading', { name: /my dashboard/i })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Spectator mode' }))
+
+    expect(await screen.findByRole('heading', { name: /spectator dashboard/i })).toBeInTheDocument()
+    const capabilityCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/auth/profile/capabilities'))
+    expect(capabilityCall).toBeDefined()
+    expect(JSON.parse(String(capabilityCall?.[1]?.body))).toMatchObject({
+      capabilities: ['ATHLETE', 'SPECTATOR'],
+      preferredCapability: 'SPECTATOR',
+    })
   })
 
   it('renders translated admin navigation labels', async () => {
@@ -391,6 +436,26 @@ describe('appRoutes', () => {
   it('keeps race operations staff out of the personal app shell', async () => {
     startBrowserSession('official')
     const router = createMemoryRouter(runtimeRoutes, { initialEntries: ['/app'] })
+
+    render(<RouterProvider router={router} />)
+
+    expect(await screen.findByRole('heading', { name: /access denied/i })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/unauthorized')
+  })
+
+  it('protects direct personal routes when the account has no personal capability', async () => {
+    startBrowserSession('official')
+    const router = createMemoryRouter(runtimeRoutes, { initialEntries: ['/app/stats'] })
+
+    render(<RouterProvider router={router} />)
+
+    expect(await screen.findByRole('heading', { name: /access denied/i })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/unauthorized')
+  })
+
+  it.each(['/app', '/app/stats', '/app/settings'])('rejects an explicitly empty capability account from %s', async (initialEntry) => {
+    startBrowserSession('empty')
+    const router = createMemoryRouter(runtimeRoutes, { initialEntries: [initialEntry] })
 
     render(<RouterProvider router={router} />)
 
