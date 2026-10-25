@@ -18,6 +18,9 @@ spec:
           image: ghcr.io/nkosea07/race-tracker-backend:REPLACE_WITH_COMMIT_SHA
           ports:
             - containerPort: 8081
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod"
           envFrom:
             - configMapRef:
                 name: race-tracker-config

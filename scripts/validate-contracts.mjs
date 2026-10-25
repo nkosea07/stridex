@@ -7,6 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const contractPath = path.join(root, 'packages/contracts/contract.json');
 const backendConfigPath = path.join(root, 'apps/backend/src/main/resources/application.yml');
 const backendSecurityPath = path.join(root, 'apps/backend/src/main/java/com/racetracker/config/SecurityConfig.java');
+const backendAuthServicePath = path.join(root, 'apps/backend/src/main/java/com/racetracker/service/impl/AuthServiceImpl.java');
 const backendControllerDirectory = path.join(root, 'apps/backend/src/main/java/com/racetracker/controller');
 const webApiPath = path.join(root, 'apps/web/src/lib/api.ts');
 const mobileApiPath = path.join(root, 'apps/mobile/lib/api.ts');
@@ -371,6 +372,10 @@ assert(
 assert(
   contract.legal && contract.legal.privacyPolicyPath === '/privacy',
   'contract.legal.privacyPolicyPath must be "/privacy".',
+);
+assert(
+  read(backendAuthServicePath).includes(`CURRENT_PRIVACY_POLICY_VERSION = "${contract.legal.privacyPolicyVersion}"`),
+  'Backend registration privacy policy version must match contract.legal.privacyPolicyVersion.',
 );
 
 assert(

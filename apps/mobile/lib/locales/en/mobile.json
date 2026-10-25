@@ -1,4 +1,12 @@
 {
+  "login": {
+    "recoveryTitle": "Account recovery",
+    "recoveryCredentialsRequired": "Enter your email and password first.",
+    "recoveryResult": "If your account is eligible, its deletion has been cancelled. You can now sign in.",
+    "recoveryError": "We could not check the deletion request. Please try again.",
+    "cancelDeletion": "Cancel a pending account deletion",
+    "recovering": "Checking account deletion…"
+  },
   "register": {
     "onboardingTitle": "What brings you to Race Tracker?",
     "onboardingSubtitle": "Choose one or both experiences. You can change your preferred mode later.",

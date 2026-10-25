@@ -15,6 +15,7 @@ import com.racetracker.service.AccountPrivacyService;
 import com.racetracker.service.AuditEventService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -100,11 +101,13 @@ public class AccountDeletionServiceImpl implements AccountDeletionService {
     @Override
     @Transactional
     public DeletionStatusDto cancel(UUID userId) {
-        User user = requireUser(userId);
+        User user = userRepository.findByIdForUpdate(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         if (user.getDeletedAt() != null) {
             throw new ConflictException("This account has already been deleted");
         }
-        if (user.getDeletionRequestedAt() != null) {
+        if (user.getDeletionRequestedAt() != null && user.getDeletionScheduledFor() != null
+            && user.getDeletionScheduledFor().isAfter(OffsetDateTime.now())) {
             user.setDeletionRequestedAt(null);
             user.setDeletionScheduledFor(null);
             user.setIsActive(true);
@@ -116,22 +119,48 @@ public class AccountDeletionServiceImpl implements AccountDeletionService {
     }
 
     @Override
+    @Transactional
+    public void cancelWithPassword(String email, String password) {
+        User user = userRepository.findByEmailIgnoreCaseForUpdate(email).orElse(null);
+        if (user == null || user.getPasswordHash() == null
+            || !passwordEncoder.matches(password, user.getPasswordHash())
+            || user.getDeletedAt() != null || user.getDeletionRequestedAt() == null
+            || user.getDeletionScheduledFor() == null
+            || !user.getDeletionScheduledFor().isAfter(OffsetDateTime.now())) {
+            return;
+        }
+        user.setDeletionRequestedAt(null);
+        user.setDeletionScheduledFor(null);
+        user.setIsActive(true);
+        userRepository.save(user);
+        auditEventService.recordInCurrentTransaction("ACCOUNT_DELETION_CANCELLED", user.getId(), "USER",
+            user.getId().toString(), "SUCCESS", Map.of("method", "PASSWORD"));
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public DeletionStatusDto status(UUID userId) {
         return toStatus(requireUser(userId));
     }
 
     @Override
-    @Transactional
     public int purgeExpired() {
-        List<User> due = userRepository.findDueForPurge(OffsetDateTime.now());
-        for (User user : due) {
-            String email = user.getEmail();
-            String firstName = user.getFirstName();
-            accountPrivacyService.eraseAccount(user.getId());
-            authEmailService.sendAccountDeletionCompleted(email, firstName);
+        OffsetDateTime cutoff = OffsetDateTime.now();
+        List<User> due = userRepository.findDueForPurge(cutoff, PageRequest.of(0, 50));
+        int staged = 0;
+        while (!due.isEmpty()) {
+            for (User user : due) {
+                try {
+                    accountPrivacyService.eraseAccount(user.getId());
+                    staged++;
+                } catch (RuntimeException ex) {
+                    log.error("Account erasure staging failed; userId={}", user.getId(), ex);
+                }
+            }
+            User last = due.get(due.size() - 1);
+            due = userRepository.findDueForPurgeAfter(cutoff, last.getDeletionScheduledFor(), last.getId(), 50);
         }
-        return due.size();
+        return staged;
     }
 
     @Scheduled(
@@ -142,7 +171,7 @@ public class AccountDeletionServiceImpl implements AccountDeletionService {
         try {
             int purged = purgeExpired();
             if (purged > 0) {
-                log.info("Account deletion purge erased {} account(s)", purged);
+                log.info("Account deletion purge staged {} account(s) for object cleanup", purged);
             }
         } catch (RuntimeException ex) {
             log.error("Account deletion purge failed", ex);

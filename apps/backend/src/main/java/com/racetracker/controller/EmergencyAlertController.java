@@ -30,14 +30,21 @@ public class EmergencyAlertController {
     }
 
     @PostMapping("/v${racetracker.api.version}/races/{raceId}/emergency")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN') or hasAuthority('CAP_ATHLETE')")
     public ResponseEntity<EmergencyAlertDto> raise(
         @PathVariable UUID raceId,
         @Valid @RequestBody EmergencyAlertRequest request,
         Authentication authentication
     ) {
-        raceAccessGuard.assertCanManage(raceId);
-        EmergencyAlertDto alert = emergencyAlertService.raise(raceId, request, authentication.getName());
+        boolean staff = authentication.getAuthorities().stream().anyMatch(authority ->
+            authority.getAuthority().equals("ROLE_SUPER_ADMIN") || authority.getAuthority().equals("ROLE_RACE_ADMIN"));
+        EmergencyAlertDto alert;
+        if (staff) {
+            raceAccessGuard.assertCanManage(raceId);
+            alert = emergencyAlertService.raise(raceId, request, authentication.getName());
+        } else {
+            alert = emergencyAlertService.raiseForAthlete(raceId, request, authentication.getName());
+        }
         auditEventService.recordForActor("EMERGENCY_ALERT_RAISED", authentication.getName(), "RACE", raceId.toString(),
             "SUCCESS", Map.of("alertId", alert.getId().toString()));
         return ResponseEntity.accepted().body(alert);

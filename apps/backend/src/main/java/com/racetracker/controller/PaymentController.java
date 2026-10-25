@@ -2,6 +2,9 @@ package com.racetracker.controller;
 
 import com.racetracker.dto.participant.PaymentDto;
 import com.racetracker.dto.participant.PaymentRefundRequest;
+import com.racetracker.dto.participant.ExternalRefundAttemptRequest;
+import com.racetracker.dto.participant.ExternalRefundReconciliationRequest;
+import jakarta.validation.Valid;
 import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.AuditEventService;
 import com.racetracker.service.PaymentService;
@@ -72,6 +75,34 @@ public class PaymentController {
             authentication.getName());
         auditEventService.recordForActor("PAYMENT_REFUNDED", authentication.getName(), "PARTICIPANT",
             participantId.toString(), "SUCCESS", Map.of());
+        return ResponseEntity.ok(payment);
+    }
+
+    @PostMapping("/v${racetracker.api.version}/races/{raceId}/participants/{participantId}/payment/refund/attempt")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<PaymentDto> stageExternalRefund(@PathVariable UUID raceId, @PathVariable UUID participantId,
+                                                           @Valid @RequestBody ExternalRefundAttemptRequest request,
+                                                           Authentication authentication) {
+        raceAccessGuard.assertCanManage(raceId);
+        PaymentDto payment = paymentService.stageExternalRefund(raceId, participantId, request.reason(),
+            authentication.getName());
+        auditEventService.recordForActor("EXTERNAL_REFUND_ATTEMPT_STAGED", authentication.getName(), "PARTICIPANT",
+            participantId.toString(), "SUCCESS", Map.of("raceId", raceId.toString()));
+        return ResponseEntity.accepted().body(payment);
+    }
+
+    @PostMapping("/v${racetracker.api.version}/races/{raceId}/participants/{participantId}/payment/refund/reconcile")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<PaymentDto> reconcileExternalRefund(@PathVariable UUID raceId, @PathVariable UUID participantId,
+                                                                @Valid @RequestBody ExternalRefundReconciliationRequest request,
+                                                                Authentication authentication) {
+        raceAccessGuard.assertCanManage(raceId);
+        PaymentDto payment = paymentService.reconcileExternalRefund(raceId, participantId,
+            request.providerReference(), request.reason(),
+            request.outcome() == ExternalRefundReconciliationRequest.Outcome.REFUNDED,
+            authentication.getName());
+        auditEventService.recordForActor("EXTERNAL_REFUND_RECONCILED", authentication.getName(), "PARTICIPANT",
+            participantId.toString(), "SUCCESS", Map.of("outcome", request.outcome().name()));
         return ResponseEntity.ok(payment);
     }
 

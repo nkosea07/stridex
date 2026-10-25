@@ -51,6 +51,7 @@ import { API_CONTRACT } from '@race-tracker/contracts'
 const API_BASE = API_CONTRACT.web.apiBasePath
 const PUBLIC_AUTH_ENDPOINTS = new Set([
   API_CONTRACT.endpoints.authLogin,
+  API_CONTRACT.endpoints.authDeletionCancel,
   API_CONTRACT.endpoints.authRegister,
   API_CONTRACT.endpoints.authRegisterOrganizer,
   API_CONTRACT.endpoints.authOAuthGoogle,
@@ -332,7 +333,7 @@ export const authApi = {
       body: JSON.stringify(data),
     }).then(normalizeAuthResponse),
 
-  registerOrganizer: (data: { email: string; password: string; firstName: string; lastName: string; phone?: string; organizationName: string }) =>
+  registerOrganizer: (data: { email: string; password: string; firstName: string; lastName: string; phone?: string; organizationName: string; privacyPolicyAccepted: boolean; privacyPolicyVersion: string }) =>
     fetchApi<BrowserAuthResponse>(API_CONTRACT.endpoints.authRegisterOrganizer, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -364,6 +365,12 @@ export const authApi = {
   cancelDeletion: () =>
     fetchApi<DeletionStatus>(buildContractPath(API_CONTRACT.endpoints.myDeletionCancel, {}), {
       method: 'POST',
+    }),
+
+  cancelDeletionWithPassword: (email: string, password: string) =>
+    fetchApi<{ message: string }>(API_CONTRACT.endpoints.authDeletionCancel, {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
     }),
 
   exportData: () =>
@@ -515,6 +522,18 @@ export const participantsApi = {
   
   refundPayment: (raceId: string, id: string) =>
     fetchApi<Payment>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPaymentRefund, { raceId, id }), { method: 'POST' }),
+
+  stageExternalRefund: (raceId: string, id: string, reason: string) =>
+    fetchApi<Payment>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPaymentRefundAttempt, { raceId, id }), {
+      method: 'POST', body: JSON.stringify({ reason }),
+    }),
+
+  reconcileExternalRefund: (raceId: string, id: string, data: {
+    providerReference: string; reason: string; outcome: 'REFUNDED' | 'NOT_REFUNDED'
+  }) =>
+    fetchApi<Payment>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPaymentRefundReconcile, { raceId, id }), {
+      method: 'POST', body: JSON.stringify(data),
+    }),
   
   importCsv: (raceId: string, file: File) => {
     const formData = new FormData()

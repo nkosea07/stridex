@@ -3,6 +3,7 @@ package com.racetracker.controller;
 import com.racetracker.dto.route.RoutePointDto;
 import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.RaceRouteService;
+import com.racetracker.service.PublicRaceVisibility;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,10 +18,13 @@ public class RaceRouteController {
 
     private final RaceRouteService raceRouteService;
     private final RaceAccessGuard raceAccessGuard;
+    private final PublicRaceVisibility publicRaceVisibility;
 
-    public RaceRouteController(RaceRouteService raceRouteService, RaceAccessGuard raceAccessGuard) {
+    public RaceRouteController(RaceRouteService raceRouteService, RaceAccessGuard raceAccessGuard,
+                               PublicRaceVisibility publicRaceVisibility) {
         this.raceRouteService = raceRouteService;
         this.raceAccessGuard = raceAccessGuard;
+        this.publicRaceVisibility = publicRaceVisibility;
     }
 
     @PostMapping(value = "/v${racetracker.api.version}/races/{raceId}/route/gpx",
@@ -53,6 +57,7 @@ public class RaceRouteController {
 
     @GetMapping("/v${racetracker.api.version}/public/races/{raceId}/route")
     public ResponseEntity<List<RoutePointDto>> publicRoute(@PathVariable UUID raceId) {
+        publicRaceVisibility.requireVisible(raceId);
         return ResponseEntity.ok(raceRouteService.getRoute(raceId));
     }
 }

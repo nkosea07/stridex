@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.mail.MailException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
@@ -80,17 +81,35 @@ public class AuthEmailServiceImpl implements AuthEmailService {
         send(user.getEmail(), "Your Race Tracker account is scheduled for deletion", htmlContent, true);
     }
 
-    @Async
     @Override
-    public void sendAccountDeletionCompleted(String email, String firstName) {
+    public void sendAccountDeletionCompletedConfirmed(String email, String firstName) {
         if (email == null || email.isBlank()) {
-            return;
+            throw new com.racetracker.exception.ServiceUnavailableException(
+                "Account deletion notice address is unavailable", "ACCOUNT_DELETION_NOTICE_UNAVAILABLE");
         }
         Context context = new Context();
         context.setVariable("firstName", firstName);
-
         String htmlContent = templateEngine.process("account-deletion-completed", context);
-        send(email, "Your Race Tracker account has been deleted", htmlContent, true);
+        sendConfirmed(email, "Your Race Tracker account has been deleted", htmlContent);
+    }
+
+    private void sendConfirmed(String to, String subject, String body) {
+        if (!raceTrackerProperties.getEmail().isEnabled()) {
+            throw new com.racetracker.exception.ServiceUnavailableException(
+                "Account deletion email delivery is disabled", "ACCOUNT_DELETION_NOTICE_UNAVAILABLE");
+        }
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, StandardCharsets.UTF_8.name());
+            helper.setFrom(raceTrackerProperties.getEmail().getFromAddress());
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(body, true);
+            mailSender.send(message);
+        } catch (MessagingException | MailException ex) {
+            throw new com.racetracker.exception.ServiceUnavailableException(
+                "Account deletion email delivery failed", "ACCOUNT_DELETION_NOTICE_UNAVAILABLE");
+        }
     }
 
     private void send(String to, String subject, String body, boolean isHtml) {

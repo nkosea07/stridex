@@ -17,6 +17,7 @@ import com.racetracker.service.EmergencyAlertService;
 import com.racetracker.service.NotificationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashSet;
@@ -52,11 +53,25 @@ public class EmergencyAlertServiceImpl implements EmergencyAlertService {
     @Override
     @Transactional
     public EmergencyAlertDto raise(UUID raceId, EmergencyAlertRequest request, String actorEmail) {
+        return raiseInternal(raceId, request, actorEmail, false);
+    }
+
+    @Override
+    @Transactional
+    public EmergencyAlertDto raiseForAthlete(UUID raceId, EmergencyAlertRequest request, String actorEmail) {
+        return raiseInternal(raceId, request, actorEmail, true);
+    }
+
+    private EmergencyAlertDto raiseInternal(UUID raceId, EmergencyAlertRequest request, String actorEmail,
+                                            boolean requireParticipant) {
         Race race = raceRepository.findById(raceId)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
         User reporter = userRepository.findByEmailIgnoreCase(actorEmail)
             .orElseThrow(() -> new UnauthorizedException("Unauthorized"));
         Participant participant = participantRepository.findByRaceIdAndUserId(raceId, reporter.getId()).orElse(null);
+        if (requireParticipant && participant == null) {
+            throw new AccessDeniedException("You do not have an athlete registration for this race");
+        }
 
         EmergencyAlert alert = EmergencyAlert.builder()
             .race(race)

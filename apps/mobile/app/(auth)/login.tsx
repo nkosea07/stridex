@@ -3,6 +3,8 @@ import { Link, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/auth';
+import { api } from '@/lib/api';
+import { useTranslation } from 'react-i18next';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -10,6 +12,24 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuthStore();
+  const { t } = useTranslation();
+  const [isRecovering, setIsRecovering] = useState(false);
+
+  const handleRecovery = async () => {
+    if (!email || !password) {
+      Alert.alert(t('mobile:login.recoveryTitle'), t('mobile:login.recoveryCredentialsRequired'));
+      return;
+    }
+    setIsRecovering(true);
+    try {
+      await api.cancelDeletionWithPassword(email.trim(), password);
+      Alert.alert(t('mobile:login.recoveryTitle'), t('mobile:login.recoveryResult'));
+    } catch {
+      Alert.alert(t('mobile:login.recoveryTitle'), t('mobile:login.recoveryError'));
+    } finally {
+      setIsRecovering(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -96,6 +116,12 @@ export default function LoginScreen() {
           >
             <Text style={styles.signInButtonText}>
               {isLoading ? 'Signing in...' : 'Sign In'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleRecovery} disabled={isLoading || isRecovering}
+            accessibilityRole="button" accessibilityLabel={t('mobile:login.cancelDeletion')}>
+            <Text style={styles.forgotPasswordText}>
+              {isRecovering ? t('mobile:login.recovering') : t('mobile:login.cancelDeletion')}
             </Text>
           </TouchableOpacity>
         </View>

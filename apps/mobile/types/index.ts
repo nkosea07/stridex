@@ -33,8 +33,8 @@ export interface RegisterRequest {
   email: string;
   password: string;
   phone?: string;
-  privacyPolicyAccepted?: boolean;
-  privacyPolicyVersion?: string;
+  privacyPolicyAccepted: boolean;
+  privacyPolicyVersion: string;
   experiences?: RegistrationExperience[];
 }
 

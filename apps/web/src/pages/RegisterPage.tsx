@@ -43,7 +43,7 @@ export function RegisterPage() {
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false)
   const [experienceChoice, setExperienceChoice] = useState<ExperienceChoice | null>(null)
   const privacyPolicyPath = API_CONTRACT.legal?.privacyPolicyPath ?? '/privacy'
-  const privacyPolicyVersion = API_CONTRACT.legal?.privacyPolicyVersion
+  const privacyPolicyVersion = API_CONTRACT.legal.privacyPolicyVersion
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',

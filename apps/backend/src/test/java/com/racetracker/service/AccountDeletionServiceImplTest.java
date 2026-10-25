@@ -101,7 +101,7 @@ class AccountDeletionServiceImplTest {
         user.setDeletionRequestedAt(OffsetDateTime.now());
         user.setDeletionScheduledFor(OffsetDateTime.now().plusDays(30));
         user.setIsActive(false);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
 
         DeletionStatusDto status = service.cancel(userId);
 
@@ -111,15 +111,87 @@ class AccountDeletionServiceImplTest {
     }
 
     @Test
-    void purgeExpiredErasesDueAccounts() {
+    void purgeExpiredStagesDueAccountsWithoutSendingCompletion() {
         User due = user();
         due.setId(UUID.randomUUID());
-        when(userRepository.findDueForPurge(any(OffsetDateTime.class))).thenReturn(List.of(due));
+        due.setDeletionScheduledFor(OffsetDateTime.now().minusMinutes(1));
+        when(userRepository.findDueForPurge(any(OffsetDateTime.class), any(org.springframework.data.domain.Pageable.class)))
+            .thenReturn(List.of(due));
 
         int purged = service.purgeExpired();
 
         assertThat(purged).isEqualTo(1);
         verify(accountPrivacyService).eraseAccount(due.getId());
-        verify(authEmailService).sendAccountDeletionCompleted(due.getEmail(), due.getFirstName());
+        org.mockito.Mockito.verify(authEmailService, org.mockito.Mockito.never())
+            .sendAccountDeletionCompletedConfirmed(any(), any());
+    }
+
+    @Test
+    void failedErasureDoesNotStarveLaterDueAccounts() {
+        User failed = user();
+        failed.setId(UUID.randomUUID());
+        failed.setDeletionScheduledFor(OffsetDateTime.now().minusMinutes(3));
+        User next = user();
+        next.setId(UUID.randomUUID());
+        next.setDeletionScheduledFor(OffsetDateTime.now().minusMinutes(2));
+        User later = user();
+        later.setId(UUID.randomUUID());
+        later.setDeletionScheduledFor(OffsetDateTime.now().minusMinutes(1));
+        when(userRepository.findDueForPurge(any(OffsetDateTime.class), any(org.springframework.data.domain.Pageable.class)))
+            .thenReturn(List.of(failed, next));
+        when(userRepository.findDueForPurgeAfter(any(OffsetDateTime.class), any(OffsetDateTime.class), any(UUID.class),
+            org.mockito.ArgumentMatchers.eq(50))).thenReturn(List.of(later), List.of());
+        org.mockito.Mockito.doThrow(new IllegalStateException("storage unavailable"))
+            .when(accountPrivacyService).eraseAccount(failed.getId());
+
+        assertThat(service.purgeExpired()).isEqualTo(2);
+
+        verify(accountPrivacyService).eraseAccount(next.getId());
+        verify(accountPrivacyService).eraseAccount(later.getId());
+    }
+
+    @Test
+    void passwordRecoveryReactivatesOnlyWithinGracePeriod() {
+        User user = user();
+        user.setIsActive(false);
+        user.setDeletionRequestedAt(OffsetDateTime.now().minusDays(1));
+        user.setDeletionScheduledFor(OffsetDateTime.now().plusDays(1));
+        when(userRepository.findByEmailIgnoreCaseForUpdate(user.getEmail())).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("pw", "hash")).thenReturn(true);
+
+        service.cancelWithPassword(user.getEmail(), "pw");
+
+        assertThat(user.getIsActive()).isTrue();
+        assertThat(user.getDeletionRequestedAt()).isNull();
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void passwordRecoveryDoesNotReactivateAfterDeadline() {
+        User user = user();
+        user.setIsActive(false);
+        user.setDeletionRequestedAt(OffsetDateTime.now().minusDays(31));
+        user.setDeletionScheduledFor(OffsetDateTime.now().minusHours(1));
+        when(userRepository.findByEmailIgnoreCaseForUpdate(user.getEmail())).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("pw", "hash")).thenReturn(true);
+
+        service.cancelWithPassword(user.getEmail(), "pw");
+
+        assertThat(user.getIsActive()).isFalse();
+        org.mockito.Mockito.verify(userRepository, org.mockito.Mockito.never()).save(user);
+    }
+
+    @Test
+    void passwordRecoveryWithWrongCredentialsDoesNotReactivate() {
+        User user = user();
+        user.setIsActive(false);
+        user.setDeletionRequestedAt(OffsetDateTime.now());
+        user.setDeletionScheduledFor(OffsetDateTime.now().plusDays(1));
+        when(userRepository.findByEmailIgnoreCaseForUpdate(user.getEmail())).thenReturn(Optional.of(user));
+
+        service.cancelWithPassword(user.getEmail(), "wrong");
+
+        assertThat(user.getIsActive()).isFalse();
+        org.mockito.Mockito.verify(userRepository, org.mockito.Mockito.never()).save(user);
     }
 }

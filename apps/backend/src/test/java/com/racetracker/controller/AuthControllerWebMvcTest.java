@@ -11,6 +11,7 @@ import com.racetracker.security.JwtAuthenticationFilter;
 import com.racetracker.security.ClientAddressResolver;
 import com.racetracker.security.RequestRateLimiter;
 import com.racetracker.service.AuthService;
+import com.racetracker.service.AccountDeletionService;
 import com.racetracker.service.OrganizerApplicationService;
 import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,9 @@ class AuthControllerWebMvcTest {
 
     @MockBean
     private AuthService authService;
+
+    @MockBean
+    private AccountDeletionService accountDeletionService;
 
     @MockBean
     private OrganizerApplicationService organizerApplicationService;
@@ -86,6 +90,18 @@ class AuthControllerWebMvcTest {
             .andExpect(jsonPath("$.token").value("access-token"))
             .andExpect(jsonPath("$.refreshToken").value("refresh-token"))
             .andExpect(jsonPath("$.user.email").value("athlete@example.com"));
+    }
+
+    @Test
+    void signedOutDeletionCancellationReturnsGenericMessageWithoutSession() throws Exception {
+        mockMvc.perform(post("/v1/auth/deletion/cancel")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"athlete@example.com\",\"password\":\"secret123\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.message").exists())
+            .andExpect(jsonPath("$.token").doesNotExist());
+
+        verify(accountDeletionService).cancelWithPassword("athlete@example.com", "secret123");
     }
 
     @Test

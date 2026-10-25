@@ -85,6 +85,9 @@ public interface RaceRepository extends JpaRepository<Race, UUID> {
     @EntityGraph(attributePaths = {"categories", "participants"})
     Optional<Race> findById(UUID id);
 
+    @Query("select r from Race r where r.id = :id")
+    Optional<Race> findByIdForPublicVisibility(@Param("id") UUID id);
+
     @Query("""
         select distinct r from Race r
         left join fetch r.createdBy

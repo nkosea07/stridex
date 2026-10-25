@@ -2,9 +2,13 @@ package com.racetracker.service.impl;
 
 import com.racetracker.dto.privacy.ConsentDto;
 import com.racetracker.dto.privacy.ConsentUpdateRequest;
+import com.racetracker.exception.ConflictException;
 import com.racetracker.exception.ResourceNotFoundException;
+import com.racetracker.model.AccountErasure;
 import com.racetracker.model.Participant;
+import com.racetracker.model.PrivacyObjectDeletionJob;
 import com.racetracker.model.User;
+import com.racetracker.repository.AccountErasureRepository;
 import com.racetracker.repository.AthleteFollowRepository;
 import com.racetracker.repository.AuthTokenRepository;
 import com.racetracker.repository.EmergencyAlertRepository;
@@ -14,10 +18,12 @@ import com.racetracker.repository.NotificationRepository;
 import com.racetracker.repository.ParticipantCredentialRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.PushDeviceRepository;
+import com.racetracker.repository.PrivacyObjectDeletionJobRepository;
 import com.racetracker.repository.RaceMediaRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.service.AccountPrivacyService;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +47,8 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
     private final NotificationPreferenceRepository notificationPreferenceRepository;
     private final AthleteFollowRepository athleteFollowRepository;
     private final RaceMediaRepository raceMediaRepository;
+    private final AccountErasureRepository accountErasureRepository;
+    private final PrivacyObjectDeletionJobRepository deletionJobRepository;
     private final EmergencyAlertRepository emergencyAlertRepository;
     private final PasswordEncoder passwordEncoder;
     private final com.racetracker.service.AuditEventService auditEventService;
@@ -56,6 +64,8 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         NotificationPreferenceRepository notificationPreferenceRepository,
         AthleteFollowRepository athleteFollowRepository,
         RaceMediaRepository raceMediaRepository,
+        AccountErasureRepository accountErasureRepository,
+        PrivacyObjectDeletionJobRepository deletionJobRepository,
         EmergencyAlertRepository emergencyAlertRepository,
         PasswordEncoder passwordEncoder,
         com.racetracker.service.AuditEventService auditEventService
@@ -70,13 +80,15 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         this.notificationPreferenceRepository = notificationPreferenceRepository;
         this.athleteFollowRepository = athleteFollowRepository;
         this.raceMediaRepository = raceMediaRepository;
+        this.accountErasureRepository = accountErasureRepository;
+        this.deletionJobRepository = deletionJobRepository;
         this.emergencyAlertRepository = emergencyAlertRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditEventService = auditEventService;
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public Map<String, Object> exportData(UUID userId) {
         User user = requireUser(userId);
         auditEventService.recordInCurrentTransaction("ACCOUNT_DATA_EXPORTED", userId, "USER", userId.toString(),
@@ -126,7 +138,8 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
 
     @Override
     @Transactional
-    public ConsentDto updateConsent(UUID userId, ConsentUpdateRequest request) {        User user = requireUser(userId);
+    public ConsentDto updateConsent(UUID userId, ConsentUpdateRequest request) {
+        User user = requireUser(userId);
         if (Boolean.TRUE.equals(request.getDataProcessingConsent())) {
             if (user.getDataProcessingConsentAt() == null) {
                 user.setDataProcessingConsentAt(OffsetDateTime.now());
@@ -147,7 +160,133 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
     @Override
     @Transactional
     public void eraseAccount(UUID userId) {
-        User user = requireUser(userId);
+        User user = userRepository.findByIdForUpdate(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (user.getDeletedAt() != null || accountErasureRepository.existsById(userId)) {
+            return;
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        if (user.getDeletionScheduledFor() == null || user.getDeletionScheduledFor().isAfter(now)) {
+            throw new ConflictException("Account deletion is not due");
+        }
+
+        AccountErasure erasure = new AccountErasure();
+        erasure.setUserId(userId);
+        erasure.setStagedAt(now);
+        erasure.setNotificationEmail(user.getEmail());
+        erasure.setNotificationFirstName(user.getFirstName());
+        accountErasureRepository.saveAndFlush(erasure);
+        deletionJobRepository.stageOriginals(userId, now);
+        deletionJobRepository.stageThumbnails(userId, now);
+        raceMediaRepository.deletePersonalMediaForUser(userId);
+        auditEventService.recordInCurrentTransaction("ACCOUNT_ERASURE_STAGED", userId, "USER", userId.toString(),
+            "SUCCESS", Map.of());
+    }
+
+    public record ClaimedJob(UUID id, String storageKey, String storageScope, UUID leaseToken) {}
+
+    @Transactional
+    public List<ClaimedJob> claimJobs(int limit) {
+        OffsetDateTime now = OffsetDateTime.now();
+        List<ClaimedJob> claimed = new ArrayList<>();
+        for (UUID id : deletionJobRepository.findClaimableIds(now, limit)) {
+            PrivacyObjectDeletionJob job = deletionJobRepository.findById(id).orElseThrow();
+            UUID token = UUID.randomUUID();
+            job.setStatus(PrivacyObjectDeletionJob.Status.PROCESSING);
+            job.setAttempts(job.getAttempts() + 1);
+            job.setLeaseToken(token);
+            job.setLeaseUntil(now.plusMinutes(5));
+            claimed.add(new ClaimedJob(id, job.getStorageKey(), job.getStorageScope(), token));
+        }
+        return claimed;
+    }
+
+    @Transactional
+    public void completeJob(UUID id, UUID leaseToken) {
+        PrivacyObjectDeletionJob job = deletionJobRepository.findByIdForUpdate(id).orElseThrow();
+        if (job.getStatus() != PrivacyObjectDeletionJob.Status.PROCESSING
+            || !leaseToken.equals(job.getLeaseToken())) {
+            return;
+        }
+        job.setStatus(PrivacyObjectDeletionJob.Status.COMPLETED);
+        job.setCompletedAt(OffsetDateTime.now());
+        job.setLeaseToken(null);
+        job.setLeaseUntil(null);
+    }
+
+    @Transactional
+    public void retryJob(UUID id, UUID leaseToken) {
+        PrivacyObjectDeletionJob job = deletionJobRepository.findByIdForUpdate(id).orElseThrow();
+        if (job.getStatus() != PrivacyObjectDeletionJob.Status.PROCESSING
+            || !leaseToken.equals(job.getLeaseToken())) {
+            return;
+        }
+        job.setStatus(PrivacyObjectDeletionJob.Status.PENDING);
+        job.setLeaseToken(null);
+        job.setLeaseUntil(null);
+        long delaySeconds = Math.min(3600, 5L << Math.min(job.getAttempts(), 10));
+        job.setNextAttemptAt(OffsetDateTime.now().plusSeconds(delaySeconds));
+    }
+
+    @Transactional
+    public int finalizeReady(int limit) {
+        int finalized = 0;
+        for (UUID userId : accountErasureRepository.findReadyToFinalize(
+            PrivacyObjectDeletionJob.Status.COMPLETED, PageRequest.of(0, limit))) {
+            User user = userRepository.findByIdForUpdate(userId).orElseThrow();
+            AccountErasure erasure = accountErasureRepository.findByUserIdForUpdate(userId).orElseThrow();
+            if (erasure.getFinalizedAt() != null || deletionJobRepository.countByUserIdAndStatusNot(
+                userId, PrivacyObjectDeletionJob.Status.COMPLETED) != 0) {
+                continue;
+            }
+            anonymizeAccount(user);
+            erasure.setFinalizedAt(OffsetDateTime.now());
+            finalized++;
+        }
+        return finalized;
+    }
+
+    public record NotificationClaim(UUID userId, String email, String firstName, UUID leaseToken) {}
+
+    @Transactional
+    public List<NotificationClaim> claimNotifications(int limit) {
+        OffsetDateTime now = OffsetDateTime.now();
+        List<NotificationClaim> claimed = new ArrayList<>();
+        for (UUID userId : accountErasureRepository.findNotificationClaims(now, limit)) {
+            AccountErasure erasure = accountErasureRepository.findById(userId).orElseThrow();
+            UUID token = UUID.randomUUID();
+            erasure.setNotificationLeaseToken(token);
+            erasure.setNotificationLeaseUntil(now.plusMinutes(5));
+            claimed.add(new NotificationClaim(userId, erasure.getNotificationEmail(),
+                erasure.getNotificationFirstName(), token));
+        }
+        return claimed;
+    }
+
+    @Transactional
+    public void completeNotification(UUID userId, UUID leaseToken) {
+        AccountErasure erasure = accountErasureRepository.findByUserIdForUpdate(userId).orElseThrow();
+        if (!leaseToken.equals(erasure.getNotificationLeaseToken())) {
+            return;
+        }
+        erasure.setNotificationDispatchedAt(OffsetDateTime.now());
+        erasure.setNotificationEmail(null);
+        erasure.setNotificationFirstName(null);
+        erasure.setNotificationLeaseToken(null);
+        erasure.setNotificationLeaseUntil(null);
+    }
+
+    @Transactional
+    public void retryNotification(UUID userId, UUID leaseToken) {
+        AccountErasure erasure = accountErasureRepository.findByUserIdForUpdate(userId).orElseThrow();
+        if (leaseToken.equals(erasure.getNotificationLeaseToken())) {
+            erasure.setNotificationLeaseToken(null);
+            erasure.setNotificationLeaseUntil(OffsetDateTime.now().plusMinutes(5));
+        }
+    }
+
+    private void anonymizeAccount(User user) {
+        UUID userId = user.getId();
 
         List<Participant> participants = participantRepository.findByUserIdOrderByRegisteredAtDesc(userId);
         List<UUID> participantIds = participants.stream().map(Participant::getId).toList();
@@ -166,7 +305,6 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         notificationRepository.deleteByUserId(userId);
         notificationPreferenceRepository.deleteByUserId(userId);
         authTokenRepository.deleteByUserId(userId);
-        raceMediaRepository.deleteByUploadedBy(userId);
         // Safety records are retained but de-identified.
         emergencyAlertRepository.anonymizeReporterByUserId(userId);
 

@@ -18,9 +18,9 @@ import com.racetracker.model.Race;
 import com.racetracker.repository.CheckpointRecordRepository;
 import com.racetracker.repository.GpsLocationRepository;
 import com.racetracker.repository.ParticipantRepository;
-import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.RaceFeedRevisionRepository;
 import com.racetracker.service.PublicTrackingService;
+import com.racetracker.service.PublicRaceVisibility;
 import com.racetracker.service.GpsDriftFilter;
 import com.racetracker.service.LastCheckpointNameCache;
 import io.micrometer.observation.annotation.Observed;
@@ -49,7 +49,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     private static final int DEFAULT_FEED_LIMIT = 25;
     private static final int MAX_FEED_LIMIT = 100;
 
-    private final RaceRepository raceRepository;
+    private final PublicRaceVisibility publicRaceVisibility;
     private final ParticipantRepository participantRepository;
     private final GpsLocationRepository gpsLocationRepository;
     private final CheckpointRecordRepository checkpointRecordRepository;
@@ -58,7 +58,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     private final RaceTrackerProperties raceTrackerProperties;
 
     public PublicTrackingServiceImpl(
-        RaceRepository raceRepository,
+        PublicRaceVisibility publicRaceVisibility,
         ParticipantRepository participantRepository,
         GpsLocationRepository gpsLocationRepository,
         CheckpointRecordRepository checkpointRecordRepository,
@@ -66,7 +66,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
         LastCheckpointNameCache lastCheckpointNameCache,
         RaceTrackerProperties raceTrackerProperties
     ) {
-        this.raceRepository = raceRepository;
+        this.publicRaceVisibility = publicRaceVisibility;
         this.participantRepository = participantRepository;
         this.gpsLocationRepository = gpsLocationRepository;
         this.checkpointRecordRepository = checkpointRecordRepository;
@@ -79,7 +79,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     @Observed(name = "tracking.public.race_hub")
     @Transactional(readOnly = true)
     public PublicRaceHubResponse getRaceHub(UUID raceId) {
-        Race race = getVisibleRace(raceId);
+        Race race = publicRaceVisibility.requireVisible(raceId);
 
         PublicRaceHubResponse response = new PublicRaceHubResponse();
         response.setRaceId(race.getId());
@@ -133,7 +133,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     @Observed(name = "tracking.public.live_athletes")
     @Transactional(readOnly = true)
     public List<PublicRaceAthleteSummaryResponse> getLiveAthletes(UUID raceId, String query) {
-        getVisibleRace(raceId);
+        publicRaceVisibility.requireVisible(raceId);
 
         if (!hasText(query)) {
             return getLiveFeed(raceId, null, null, MAX_FEED_LIMIT).getItems();
@@ -152,7 +152,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     @Observed(name = "tracking.public.live_feed")
     @Transactional(readOnly = true)
     public PublicRaceLiveFeedResponse getLiveFeed(UUID raceId, String query, String cursor, int limit) {
-        getVisibleRace(raceId);
+        publicRaceVisibility.requireVisible(raceId);
 
         int boundedLimit = Math.max(1, Math.min(limit <= 0 ? DEFAULT_FEED_LIMIT : limit, MAX_FEED_LIMIT));
         long revision = feedRevisionRepository.currentRevision(raceId);
@@ -182,7 +182,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     @Observed(name = "tracking.public.athlete_detail")
     @Transactional(readOnly = true)
     public PublicAthleteTrackingResponse getAthleteTracking(UUID raceId, UUID participantId) {
-        getVisibleRace(raceId);
+        publicRaceVisibility.requireVisible(raceId);
         Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
 
@@ -210,7 +210,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     @Observed(name = "tracking.public.athlete_track")
     @Transactional(readOnly = true)
     public PublicParticipantTrackResponse getAthleteTrack(UUID raceId, UUID participantId) {
-        getVisibleRace(raceId);
+        publicRaceVisibility.requireVisible(raceId);
         Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
 
@@ -251,23 +251,12 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     @Observed(name = "tracking.public.heatmap")
     @Transactional(readOnly = true)
     public List<HeatCellDto> getRaceHeatmap(UUID raceId, OffsetDateTime from, OffsetDateTime to, Integer scale) {
-        getVisibleRace(raceId);
+        publicRaceVisibility.requireVisible(raceId);
         int boundedScale = scale == null ? raceTrackerProperties.getTracking().getHeatmapScale()
             : Math.max(1, Math.min(scale, 6));
         return gpsLocationRepository.heatCells(raceId, from, to, boundedScale).stream()
             .map(cell -> new HeatCellDto(cell.getLatitude(), cell.getLongitude(), cell.getWeight()))
             .toList();
-    }
-
-    private Race getVisibleRace(UUID raceId) {
-        Race race = raceRepository.findById(raceId)
-            .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
-
-        if (race.getStatus() == Race.RaceStatus.DRAFT) {
-            throw new ResourceNotFoundException("Race not found");
-        }
-
-        return race;
     }
 
     private List<PublicRaceAthleteSummaryResponse> buildAthleteSummaries(

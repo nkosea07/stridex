@@ -13,6 +13,7 @@ import com.racetracker.service.RankingService;
 import com.racetracker.service.ExportedFile;
 import com.racetracker.service.ResultExportService;
 import com.racetracker.service.ResultService;
+import com.racetracker.service.PublicRaceVisibility;
 import com.racetracker.service.AuditEventService;
 import com.racetracker.security.ClientAddressResolver;
 import com.racetracker.security.RequestRateLimiter;
@@ -39,6 +40,7 @@ public class ResultController {
     private final CertificateTokenService certificateTokenService;
     private final RankingService rankingService;
     private final RaceAccessGuard raceAccessGuard;
+    private final PublicRaceVisibility publicRaceVisibility;
 
     public ResultController(
         ResultService resultService,
@@ -49,7 +51,8 @@ public class ResultController {
         CertificateService certificateService,
         CertificateTokenService certificateTokenService,
         RankingService rankingService,
-        RaceAccessGuard raceAccessGuard
+        RaceAccessGuard raceAccessGuard,
+        PublicRaceVisibility publicRaceVisibility
     ) {
         this.resultService = resultService;
         this.auditEventService = auditEventService;
@@ -60,6 +63,7 @@ public class ResultController {
         this.certificateTokenService = certificateTokenService;
         this.rankingService = rankingService;
         this.raceAccessGuard = raceAccessGuard;
+        this.publicRaceVisibility = publicRaceVisibility;
     }
 
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/results")
@@ -124,6 +128,7 @@ public class ResultController {
         HttpServletRequest request
     ) {
         requestRateLimiter.checkPublicTracking(raceId.toString(), clientAddressResolver.resolve(request));
+        publicRaceVisibility.requireVisible(raceId);
         RaceResultPageDto results = resultService.listPublishedByRacePage(raceId, page, size, revision);
         List<PublicRaceResultDto> publicItems = results.items().stream().map(this::toPublicResult).toList();
         return ResponseEntity.ok(new PublicRaceResultPageDto(publicItems, results.page(), results.size(),
@@ -138,6 +143,7 @@ public class ResultController {
         HttpServletRequest request
     ) {
         requestRateLimiter.checkPublicTracking(raceId.toString(), clientAddressResolver.resolve(request));
+        publicRaceVisibility.requireVisible(raceId);
         var claims = certificateTokenService.verify(token);
         if (claims.isEmpty()
             || !claims.get().raceId().equals(raceId)

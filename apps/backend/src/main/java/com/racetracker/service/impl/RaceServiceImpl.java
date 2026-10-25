@@ -208,10 +208,7 @@ public class RaceServiceImpl implements RaceService {
     }
 
     private boolean isPublicRace(Race race) {
-        return Boolean.TRUE.equals(race.getIsPublicRegistration())
-            && race.getStatus() != null
-            && race.getStatus() != Race.RaceStatus.DRAFT
-            && race.getArchivedAt() == null;
+        return com.racetracker.service.PublicRaceVisibility.isVisible(race);
     }
 
     private User currentUserOrNull() {

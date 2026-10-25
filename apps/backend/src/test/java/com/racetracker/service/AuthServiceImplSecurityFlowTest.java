@@ -6,6 +6,7 @@ import com.racetracker.dto.auth.RegisterRequest;
 import com.racetracker.dto.auth.AuthResponse;
 import com.racetracker.exception.TooManyRequestsException;
 import com.racetracker.exception.UnauthorizedException;
+import com.racetracker.exception.ApiException;
 import com.racetracker.mapper.UserMapper;
 import com.racetracker.model.AuthToken;
 import com.racetracker.model.User;
@@ -178,6 +179,8 @@ class AuthServiceImplSecurityFlowTest {
         request.setPassword("12345678");
         request.setFirstName("New");
         request.setLastName("User");
+        request.setPrivacyPolicyAccepted(true);
+        request.setPrivacyPolicyVersion("2026-10-11");
 
         when(userRepository.existsByEmailIgnoreCase("newuser@example.com")).thenReturn(false);
         when(passwordEncoder.encode("12345678")).thenReturn("hashed");
@@ -229,12 +232,44 @@ class AuthServiceImplSecurityFlowTest {
     }
 
     @Test
+    void registerRejectsMissingPrivacyConsent() {
+        RegisterRequest request = new RegisterRequest();
+        request.setEmail("new@example.com");
+        request.setPassword("12345678");
+        request.setFirstName("New");
+        request.setLastName("User");
+
+        assertThatThrownBy(() -> authService.register(request))
+            .isInstanceOf(ApiException.class)
+            .extracting("code").isEqualTo("PRIVACY_CONSENT_REQUIRED");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void registerRejectsStalePrivacyPolicyVersion() {
+        RegisterRequest request = new RegisterRequest();
+        request.setEmail("new@example.com");
+        request.setPassword("12345678");
+        request.setFirstName("New");
+        request.setLastName("User");
+        request.setPrivacyPolicyAccepted(true);
+        request.setPrivacyPolicyVersion("old");
+
+        assertThatThrownBy(() -> authService.register(request))
+            .isInstanceOf(ApiException.class)
+            .extracting("code").isEqualTo("PRIVACY_POLICY_VERSION_MISMATCH");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
     void register_defaultsToAthleteCapabilityWhenExperienceIsOmitted() {
         RegisterRequest request = new RegisterRequest();
         request.setEmail("default@example.com");
         request.setPassword("12345678");
         request.setFirstName("Default");
         request.setLastName("Athlete");
+        request.setPrivacyPolicyAccepted(true);
+        request.setPrivacyPolicyVersion("2026-10-11");
 
         when(userRepository.existsByEmailIgnoreCase("default@example.com")).thenReturn(false);
         when(passwordEncoder.encode("12345678")).thenReturn("hashed");
@@ -266,6 +301,8 @@ class AuthServiceImplSecurityFlowTest {
         request.setFirstName("Spectator");
         request.setLastName("User");
         request.setExperiences(Set.of(com.racetracker.model.UserCapabilityType.SPECTATOR));
+        request.setPrivacyPolicyAccepted(true);
+        request.setPrivacyPolicyVersion("2026-10-11");
 
         when(userRepository.existsByEmailIgnoreCase("spectator@example.com")).thenReturn(false);
         when(passwordEncoder.encode("12345678")).thenReturn("hashed");
@@ -299,6 +336,8 @@ class AuthServiceImplSecurityFlowTest {
         request.setExperiences(EnumSet.of(
             com.racetracker.model.UserCapabilityType.ATHLETE,
             com.racetracker.model.UserCapabilityType.SPECTATOR));
+        request.setPrivacyPolicyAccepted(true);
+        request.setPrivacyPolicyVersion("2026-10-11");
 
         when(userRepository.existsByEmailIgnoreCase("both@example.com")).thenReturn(false);
         when(passwordEncoder.encode("12345678")).thenReturn("hashed");

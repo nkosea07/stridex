@@ -10,6 +10,7 @@ import com.racetracker.dto.publictracking.PublicRaceLiveFeedResponse;
 import com.racetracker.exception.ApiException;
 import com.racetracker.service.ParticipantService;
 import com.racetracker.service.PublicTrackingService;
+import com.racetracker.service.PublicRaceVisibility;
 import com.racetracker.security.ClientAddressResolver;
 import com.racetracker.security.RequestRateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,17 +31,20 @@ public class PublicTrackingController {
 
     private final PublicTrackingService publicTrackingService;
     private final ParticipantService participantService;
+    private final PublicRaceVisibility publicRaceVisibility;
     private final RequestRateLimiter requestRateLimiter;
     private final ClientAddressResolver clientAddressResolver;
 
     public PublicTrackingController(
         PublicTrackingService publicTrackingService,
         ParticipantService participantService,
+        PublicRaceVisibility publicRaceVisibility,
         RequestRateLimiter requestRateLimiter,
         ClientAddressResolver clientAddressResolver
     ) {
         this.publicTrackingService = publicTrackingService;
         this.participantService = participantService;
+        this.publicRaceVisibility = publicRaceVisibility;
         this.requestRateLimiter = requestRateLimiter;
         this.clientAddressResolver = clientAddressResolver;
     }
@@ -54,6 +58,7 @@ public class PublicTrackingController {
     @GetMapping("/registration-fields")
     public ResponseEntity<List<RaceRegistrationFieldDto>> getRegistrationFields(@PathVariable UUID raceId, HttpServletRequest request) {
         rateLimit(raceId, request);
+        publicRaceVisibility.requireVisible(raceId);
         return ResponseEntity.ok(participantService.listRegistrationFields(raceId, true));
     }
 
