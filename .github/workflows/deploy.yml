@@ -30,6 +30,91 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Render and validate deployment config
+        env:
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+          MAIL_ENABLED: ${{ vars.MAIL_ENABLED }}
+          MAIL_HOST: ${{ vars.MAIL_HOST }}
+          MAIL_PORT: ${{ vars.MAIL_PORT }}
+          MAIL_FROM: ${{ vars.MAIL_FROM }}
+          DEPLOY_ENVIRONMENT: ${{ github.event.inputs.environment }}
+          CONFIG_MANIFEST: ${{ runner.temp }}/race-tracker-config.yaml
+        run: |
+          python3 - <<'PY'
+          import ipaddress
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import sys
+          from urllib.parse import urlsplit
+
+          def reject(name):
+              sys.exit(f"Invalid or missing GitHub environment variable: {name}")
+
+          bucket = os.environ.get("AWS_S3_BUCKET", "")
+          if (bucket != bucket.strip() or not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", bucket)
+                  or ".." in bucket or ".-" in bucket or "-." in bucket
+                  or any(word in bucket for word in ("example", "placeholder", "change-me", "replace-with", "your-bucket"))
+                  or bucket.endswith(("-s3alias", "--ol-s3", "--x-s3", ".mrap", "--table-s3"))):
+              reject("AWS_S3_BUCKET")
+          try:
+              ipaddress.ip_address(bucket)
+          except ValueError:
+              pass
+          else:
+              reject("AWS_S3_BUCKET")
+
+          frontend_url = os.environ.get("FRONTEND_URL", "")
+          if (frontend_url != frontend_url.strip() or re.search(r"[\x00-\x20\x7f]", frontend_url)
+                  or not frontend_url.startswith("https://")):
+              reject("FRONTEND_URL")
+          try:
+              origin = urlsplit(frontend_url)
+              host = origin.hostname or ""
+              port = origin.port
+          except ValueError:
+              reject("FRONTEND_URL")
+          if (not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+", host)
+                  or len(host) > 253 or host.endswith((".example", ".invalid", ".test", ".local"))
+                  or any(label in ("placeholder", "change-me", "changeme", "replace-with", "your-domain")
+                         for label in host.split("."))
+                  or host in ("example.com", "example.org", "example.net")
+                  or host.endswith((".example.com", ".example.org", ".example.net"))
+                  or "@" in origin.netloc or origin.path not in ("", "/")
+                  or origin.query or origin.fragment or (port is not None and port == 0)):
+              reject("FRONTEND_URL")
+          frontend_url = f"https://{origin.netloc}"
+
+          mail_enabled = os.environ.get("MAIL_ENABLED", "")
+          environment = os.environ.get("DEPLOY_ENVIRONMENT", "")
+          if mail_enabled not in ("true", "false") or (environment == "production" and mail_enabled != "true"):
+              reject("MAIL_ENABLED")
+          mail_host = os.environ.get("MAIL_HOST", "") if mail_enabled == "true" else "localhost"
+          mail_port = os.environ.get("MAIL_PORT", "") if mail_enabled == "true" else "587"
+          mail_from = os.environ.get("MAIL_FROM", "") if mail_enabled == "true" else "noreply@localhost"
+          if mail_enabled == "true":
+              if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]+", mail_host)
+                      or "placeholder" in mail_host.lower() or "example" in mail_host.lower()):
+                  reject("MAIL_HOST")
+              if not mail_port.isdigit() or not 1 <= int(mail_port) <= 65535:
+                  reject("MAIL_PORT")
+              if (not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", mail_from)
+                      or "example" in mail_from.lower()):
+                  reject("MAIL_FROM")
+
+          template = Path("deploy/k8s/config.yaml").read_text()
+          for name, value in (("AWS_S3_BUCKET", bucket), ("FRONTEND_URL", frontend_url),
+                              ("MAIL_ENABLED", mail_enabled), ("MAIL_HOST", mail_host),
+                              ("MAIL_PORT", mail_port), ("MAIL_FROM", mail_from)):
+              marker = f"REPLACE_WITH_{name}"
+              if template.count(marker) != 1:
+                  sys.exit(f"Deployment template must contain exactly one {name} marker")
+              template = template.replace(marker, json.dumps(value))
+          Path(os.environ["CONFIG_MANIFEST"]).write_text(template)
+          PY
+
       - name: Configure kubectl
         env:
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
@@ -47,7 +132,7 @@ jobs:
             exit 1
           fi
           kubectl apply -f deploy/k8s/namespace.yaml
-          kubectl apply -f deploy/k8s/config.yaml
+          kubectl apply -f "$RUNNER_TEMP/race-tracker-config.yaml"
           kubectl -n race-tracker get secret race-tracker-secrets >/dev/null
           secret_value() {
             kubectl -n race-tracker get secret race-tracker-secrets -o "jsonpath={.data.$1}" | base64 --decode
@@ -70,6 +155,10 @@ jobs:
           config_value() {
             kubectl -n race-tracker get configmap race-tracker-config -o "jsonpath={.data.$1}"
           }
+          if [[ "$(config_value MAIL_ENABLED)" == "true" ]]; then
+            require_secret MAIL_USERNAME
+            require_secret MAIL_PASSWORD
+          fi
           storage_provider="$(config_value STORAGE_PROVIDER)"
           case "$storage_provider" in
             aws-s3)
