@@ -67,13 +67,15 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
   - mobile: unused deps (`swr`, `@rnmapbox/maps`, `expo-linking`, `expo-web-browser`,
     `expo-system-ui`), dead `checkpointRecords`/`estimatedFinishTime`/`getMobileRuntimeInfo`,
     register debug logging.
-- **Section 6 — genuinely missing features: Pending.**
-  - Results: personal bests, qualification status, cross-race history.
-  - CSV **timing/checkpoint** imports (only participant import exists).
-  - AI depth: predictions/forecasting/fraud (current insights are heuristic).
-  - Printable bibs: 1D barcode, sponsor branding, templates.
-  - Media: facial matching / social sharing (arguably AI scope).
-  - Mobile parity: offline QR-checkpoint queue, results detail/certificate, favorites/spectator.
+- **Section 6 — genuinely missing features: Partial.**
+  - Results: personal bests, qualification status, and cross-race history endpoints/UI added.
+  - CSV **timing/checkpoint** imports added; import preview and participant Excel export added.
+  - AI depth: deterministic dropout-risk foundation added; forecasting/fraud/LLM remain pending.
+  - Printable bibs: 1D barcode, sponsor branding, accent color, and template metadata added.
+  - Media: facial matching and social sharing remain pending.
+  - Mobile parity: operations timing mode added; offline QR queue and certificate detail remain pending.
+  - Race depth: timezone, stages, sponsors, cancellation reason, and bib branding added; advanced stage classifications remain pending.
+  - PWA: manifest and offline shell added; install/offline device evidence pending.
 
 ## 3. Product / enterprise (P2 from gap analysis)
 
@@ -92,7 +94,7 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 
 | # | Item | Status |
 |---|---|---|
-| 1 | SMS/WhatsApp provider (Twilio / Africa's Talking / Meta) | Blocked — placeholder logic |
+| 1 | SMS/WhatsApp provider | Decided — WhatsApp via Meta Cloud API; SMS disabled for this release |
 | 2 | Object storage (S3 / MinIO) | Blocked — `MediaStorage` seam ready |
 | 3 | Apple OAuth (Services ID/team/key) | Blocked — Google only |
 | 4 | `gps_locations` partitioning (window + cadence) | Blocked — ops migration |
@@ -111,7 +113,7 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 
 - New CI jobs `load-smoke` (k6) and `e2e` (Cypress) have **not run on GitHub Actions** yet.
 - Docker image builds (CI `containers` job) not run locally.
-- Migrations are validated locally on PostGIS **V1–V33**; nothing is pushed and no PR is open.
+- Migrations are validated locally on PostGIS **V1–V42**, including a V36→V42 upgrade fixture; nothing is pushed and no PR is open.
 
 ## 7. Suggested sequencing
 

@@ -9,6 +9,12 @@ permissions:
   contents: read
 
 jobs:
+  deployment-preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s deploy/k8s -p 'test_*.py' -v
+
   javascript:
     runs-on: ubuntu-latest
     steps:
@@ -62,6 +68,11 @@ jobs:
           cache-dependency-path: apps/backend/pom.xml
       - run: mvn -B test
         working-directory: apps/backend
+      - name: Release gate checks
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          psql "postgresql://race_test:race_test_password@localhost:5432/race_tracker" -f scripts/release-gate.sql
       - run: mvn -B test
         working-directory: apps/rfid-reader-demo
       - run: mvn -B test

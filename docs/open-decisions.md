@@ -5,19 +5,14 @@ current state, the decision needed, and the concrete steps to finish.
 
 ## 1. SMS / WhatsApp providers
 
-**State.** `NotificationDispatcher` + `NotificationChannel` adapters exist; `SmsNotificationChannel`
-and `WhatsAppNotificationChannel` are config-gated placeholders (`racetracker.notifications.sms-enabled`,
-`racetracker.notifications.whatsapp-enabled`) that log and drop when enabled without a provider.
+**Decided.** WhatsApp uses the Meta Cloud API. SMS is disabled for this release.
 
-**Decision.** Provider choice — Twilio, Africa's Talking (strong ZA/Zim coverage), or Meta
-WhatsApp Cloud API.
+**State.** `WhatsAppCloudClient` sends approved template messages, signed webhooks update
+`notification_deliveries`, and production requires the WhatsApp credentials when enabled.
+`SmsNotificationChannel` is permanently disabled, production validation rejects enabling SMS,
+and the web settings surface marks SMS unavailable.
 
-**Steps.**
-1. Add the provider SDK (or a `RestClient`-based client) under `service/impl`.
-2. Implement `send(...)` in the two channels using `NotificationMessage.recipientPhone`.
-3. Add credentials to `RaceTrackerProperties.Notifications` + `.env.pilot.example` +
-   `ProductionConfigurationValidator` (require config when enabled).
-4. Keep delivery audit (`notification_deliveries`) — statuses already recorded.
+**Remaining.** Approve the Meta templates per event/locale and run staging delivery evidence.
 
 ## 2. Object storage (S3 / MinIO)
 

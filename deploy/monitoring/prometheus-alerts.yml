@@ -40,6 +40,46 @@ groups:
         annotations:
           summary: "Account erasure completion notice is overdue"
           description: "At least one finalized account has no confirmed deletion notice. Check email delivery and account_erasures before clearing retained contact data."
+      - alert: PrivacyErasureFinalizationFailed
+        expr: privacy_erasure_finalization_failed > 0
+        for: 15m
+        labels:
+          severity: high
+        annotations:
+          summary: "Account erasure finalization is failing"
+          description: "At least one account erasure or legacy scrub has a recorded finalization failure. Inspect account_erasures and the privacy worker logs."
+      - alert: PaymentReversalReviewOpen
+        expr: payments_reversal_review_open > 0
+        for: 30m
+        labels:
+          severity: high
+        annotations:
+          summary: "Provider reversal awaits finance review"
+          description: "At least one payment reversal has not been reconciled. Verify the provider record and record the outcome against the refund attempt."
+      - alert: EmergencyNotificationOverdue
+        expr: emergency_notification_overdue > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SOS notification delivery is overdue"
+          description: "At least one SOS staff notification has been pending for more than two minutes. Check the dispatcher and channel configuration."
+      - alert: EmergencyNotificationExhausted
+        expr: emergency_notification_exhausted > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SOS notification delivery exhausted"
+          description: "At least one SOS notification job exhausted its retries. Escalate to the race-day on-call operator through the phone tree."
+      - alert: EmergencyAlertEscalationRequired
+        expr: emergency_alert_escalation_required > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SOS alert has no confirmed organizer delivery"
+          description: "An SOS alert has no recipients or no successful delivery. Contact assigned staff and the race director out of band."
       - alert: GpsIngestStalled
         expr: increase(tracking_ingest_location_seconds_count[10m]) == 0 and increase(tracking_live_aggregate_seconds_count[10m]) > 0
         for: 10m
