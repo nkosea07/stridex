@@ -16,4 +16,6 @@ public class RaceCategoryRequest {
     private String bibPrefix;
     private Integer maxParticipants;
     private BigDecimal registrationFee;
+    private BigDecimal earlyBirdFee;
+    private BigDecimal teamFee;
 }

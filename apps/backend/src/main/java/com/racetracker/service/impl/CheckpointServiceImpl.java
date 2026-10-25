@@ -129,6 +129,23 @@ public class CheckpointServiceImpl implements CheckpointService {
     @Transactional
     public CheckpointRecordDto record(UUID raceId, UUID checkpointId, CheckpointRecordRequest request) {
         raceAccessGuard.assertCanAccessCheckpoint(raceId, checkpointId);
+        if (request.getRecordedAt() != null) {
+            throw new ApiException("Live checkpoint records cannot specify recordedAt",
+                "CHECKPOINT_TIMESTAMP_NOT_ALLOWED");
+        }
+        return saveRecord(raceId, checkpointId, request, OffsetDateTime.now());
+    }
+
+    @Override
+    @Transactional
+    public CheckpointRecordDto recordImported(UUID raceId, UUID checkpointId, CheckpointRecordRequest request) {
+        raceAccessGuard.assertCanImportTiming(raceId);
+        return saveRecord(raceId, checkpointId, request,
+            request.getRecordedAt() == null ? OffsetDateTime.now() : request.getRecordedAt());
+    }
+
+    private CheckpointRecordDto saveRecord(UUID raceId, UUID checkpointId, CheckpointRecordRequest request,
+                                           OffsetDateTime recordedAt) {
         Checkpoint checkpoint = getCheckpoint(raceId, checkpointId);
         Participant participant = resolveParticipant(raceId, request);
 
@@ -140,7 +157,6 @@ public class CheckpointServiceImpl implements CheckpointService {
         record.setRace(checkpoint.getRace());
         record.setCheckpoint(checkpoint);
         record.setParticipant(participant);
-        OffsetDateTime recordedAt = OffsetDateTime.now();
         record.setRecordedAt(recordedAt);
         record.setRecordMethod(parseRecordMethod(request.getMethod()));
         record.setIsVerified(true);

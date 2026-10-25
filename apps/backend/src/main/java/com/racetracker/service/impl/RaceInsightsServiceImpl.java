@@ -90,7 +90,11 @@ public class RaceInsightsServiceImpl implements RaceInsightsService {
             .filter(p -> p.getStatus() == Participant.ParticipantStatus.STARTED).count());
         dto.setAveragePaceSecondsPerKm(paceSamples == 0 ? 0 : round2(paceSum / paceSamples));
         dto.setPredictedLeaderFinishTime(predictedLeader != null ? predictedLeader.toString() : null);
-        dto.setAnomalyCount(anomalies(raceId).size());
+        List<ParticipantAnomalyDto> anomalies = anomalies(raceId);
+        dto.setAnomalyCount(anomalies.size());
+        dto.setAtRiskParticipants(anomalies.size());
+        dto.setDropoutRiskPercent(participants.isEmpty() ? 0
+            : round2((anomalies.size() * 100.0) / participants.size()));
         return dto;
     }
 

@@ -138,4 +138,44 @@ class CheckpointServiceImplTest {
 
         verifyNoInteractions(checkpointRepository, participantRepository, checkpointRecordRepository);
     }
+
+    @Test
+    void liveRecordRejectsClientSuppliedTimestamp() {
+        CheckpointRecordRequest request = new CheckpointRecordRequest();
+        request.setParticipantId(participantId);
+        request.setRecordedAt(OffsetDateTime.now().minusHours(2));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.record(raceId, checkpointId, request))
+            .isInstanceOf(com.racetracker.exception.ApiException.class)
+            .extracting("code").isEqualTo("CHECKPOINT_TIMESTAMP_NOT_ALLOWED");
+
+        verifyNoInteractions(checkpointRepository, participantRepository, checkpointRecordRepository);
+    }
+
+    @Test
+    void importedRecordUsesHistoricalTimestampAfterRaceAuthorization() {
+        Race race = new Race();
+        race.setId(raceId);
+        Checkpoint checkpoint = new Checkpoint();
+        checkpoint.setId(checkpointId);
+        checkpoint.setRace(race);
+        Participant participant = Participant.builder().id(participantId).race(race).build();
+        OffsetDateTime historicalTime = OffsetDateTime.now().minusHours(2);
+        CheckpointRecordRequest request = new CheckpointRecordRequest();
+        request.setParticipantId(participantId);
+        request.setRecordedAt(historicalTime);
+        when(checkpointRepository.findByRaceIdAndId(raceId, checkpointId)).thenReturn(Optional.of(checkpoint));
+        when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
+        when(checkpointRecordRepository.findByParticipantIdAndCheckpointId(participantId, checkpointId))
+            .thenReturn(Optional.empty());
+        when(checkpointRecordRepository.save(any(CheckpointRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(checkpointMapper.toRecordDto(any(CheckpointRecord.class))).thenReturn(new CheckpointRecordDto());
+
+        service.recordImported(raceId, checkpointId, request);
+
+        org.mockito.Mockito.verify(raceAccessGuard).assertCanImportTiming(raceId);
+        ArgumentCaptor<CheckpointRecord> captor = ArgumentCaptor.forClass(CheckpointRecord.class);
+        org.mockito.Mockito.verify(checkpointRecordRepository).save(captor.capture());
+        assertThat(captor.getValue().getRecordedAt()).isEqualTo(historicalTime);
+    }
 }

@@ -111,8 +111,40 @@ public class MediaServiceImpl implements MediaService {
     @Override
     @Transactional(readOnly = true)
     public List<MediaDto> listApproved(UUID raceId) {
-        return mediaRepository.findByRaceIdAndStatusOrderByCreatedAtDesc(raceId, RaceMedia.MediaStatus.APPROVED)
+        return mediaRepository.findPublicVisibleByRaceId(raceId)
             .stream().map(this::toDto).toList();
+    }
+
+    @Override
+    @Transactional
+    public MediaDto attestNonPerson(UUID raceId, UUID mediaId, String reason, String actorEmail) {
+        if (reason == null || reason.isBlank()) {
+            throw new ApiException("Publication attestation reason is required", "MEDIA_ATTESTATION_REASON_REQUIRED");
+        }
+        RaceMedia media = mediaRepository.findByRaceIdAndId(raceId, mediaId)
+            .orElseThrow(() -> new ResourceNotFoundException("Media not found"));
+        if (media.getParticipant() != null) {
+            throw new ApiException("Participant media requires participant consent", "MEDIA_PARTICIPANT_CONSENT_REQUIRED");
+        }
+        media.setNonPersonPublicationAttestedAt(OffsetDateTime.now());
+        media.setNonPersonPublicationAttestedBy(resolveUserId(actorEmail));
+        media.setNonPersonPublicationReason(reason.trim());
+        return toDto(mediaRepository.save(media));
+    }
+
+    @Override
+    @Transactional
+    public MediaDto revokeNonPerson(UUID raceId, UUID mediaId, String actorEmail) {
+        RaceMedia media = mediaRepository.findByRaceIdAndId(raceId, mediaId)
+            .orElseThrow(() -> new ResourceNotFoundException("Media not found"));
+        if (media.getParticipant() != null) {
+            throw new ApiException("Participant media requires participant consent",
+                "MEDIA_PARTICIPANT_CONSENT_REQUIRED");
+        }
+        media.setNonPersonPublicationAttestedAt(null);
+        media.setNonPersonPublicationAttestedBy(null);
+        media.setNonPersonPublicationReason(null);
+        return toDto(mediaRepository.save(media));
     }
 
     @Override
@@ -157,7 +189,9 @@ public class MediaServiceImpl implements MediaService {
     private RaceMedia requireVisible(UUID raceId, UUID mediaId, boolean publicOnly) {
         RaceMedia media = mediaRepository.findByRaceIdAndId(raceId, mediaId)
             .orElseThrow(() -> new ResourceNotFoundException("Media not found"));
-        if (publicOnly && media.getStatus() != RaceMedia.MediaStatus.APPROVED) {
+        if (publicOnly && (media.getStatus() != RaceMedia.MediaStatus.APPROVED
+            || (media.getParticipant() != null && media.getParticipant().getMediaPublicationConsentAt() == null)
+            || (media.getParticipant() == null && media.getNonPersonPublicationAttestedAt() == null))) {
             throw new ResourceNotFoundException("Media not found");
         }
         return media;
@@ -182,6 +216,14 @@ public class MediaServiceImpl implements MediaService {
         dto.setHeight(media.getHeight());
         dto.setCaption(media.getCaption());
         dto.setStatus(media.getStatus() != null ? media.getStatus().name() : null);
+        boolean participantConsent = media.getParticipant() != null
+            && media.getParticipant().getMediaPublicationConsentAt() != null;
+        boolean nonPersonAttested = media.getParticipant() == null
+            && media.getNonPersonPublicationAttestedAt() != null;
+        dto.setParticipantConsent(participantConsent);
+        dto.setNonPersonAttested(nonPersonAttested);
+        dto.setPubliclyVisible(media.getStatus() == RaceMedia.MediaStatus.APPROVED
+            && (participantConsent || nonPersonAttested));
         dto.setCreatedAt(media.getCreatedAt());
         return dto;
     }

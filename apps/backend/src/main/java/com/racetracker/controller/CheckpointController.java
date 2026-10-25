@@ -4,6 +4,7 @@ import com.racetracker.dto.auth.ApiMessageResponse;
 import com.racetracker.dto.checkpoint.*;
 import com.racetracker.service.CheckpointExportService;
 import com.racetracker.service.CheckpointService;
+import com.racetracker.service.TimingImportService;
 import com.racetracker.service.ExportedFile;
 import com.racetracker.security.RaceAccessGuard;
 import jakarta.validation.Valid;
@@ -21,12 +22,14 @@ import java.util.UUID;
 public class CheckpointController {
 
     private final CheckpointService checkpointService;
+    private final TimingImportService timingImportService;
     private final CheckpointExportService checkpointExportService;
     private final RaceAccessGuard raceAccessGuard;
 
-    public CheckpointController(CheckpointService checkpointService, CheckpointExportService checkpointExportService,
-                                RaceAccessGuard raceAccessGuard) {
+    public CheckpointController(CheckpointService checkpointService, TimingImportService timingImportService,
+                                CheckpointExportService checkpointExportService, RaceAccessGuard raceAccessGuard) {
         this.checkpointService = checkpointService;
+        this.timingImportService = timingImportService;
         this.checkpointExportService = checkpointExportService;
         this.raceAccessGuard = raceAccessGuard;
     }
@@ -50,6 +53,16 @@ public class CheckpointController {
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.filename() + "\"")
             .contentType(MediaType.parseMediaType(file.contentType()))
             .body(file.content());
+    }
+
+    @PostMapping(value = "/{raceId}/checkpoints/import", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
+    public ResponseEntity<com.racetracker.dto.checkpoint.TimingImportResultDto> importTiming(
+        @PathVariable UUID raceId,
+        @RequestPart("file") org.springframework.web.multipart.MultipartFile file
+    ) {
+        raceAccessGuard.assertCanImportTiming(raceId);
+        return ResponseEntity.ok(timingImportService.importCsv(raceId, file));
     }
 
     @PostMapping("/{raceId}/checkpoints")

@@ -14,6 +14,10 @@ public interface MediaService {
 
     List<MediaDto> listApproved(UUID raceId);
 
+    MediaDto attestNonPerson(UUID raceId, UUID mediaId, String reason, String actorEmail);
+
+    MediaDto revokeNonPerson(UUID raceId, UUID mediaId, String actorEmail);
+
     MediaDto moderate(UUID raceId, UUID mediaId, boolean approve, String actorEmail);
 
     void delete(UUID raceId, UUID mediaId);

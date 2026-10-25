@@ -12,6 +12,14 @@ import com.racetracker.service.AnalyticsService;
 import com.racetracker.service.ExportedFile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.itextpdf.kernel.geom.PageSize;
+import com.itextpdf.kernel.pdf.PdfDocument;
+import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.layout.Document;
+import com.itextpdf.layout.element.Paragraph;
+import com.itextpdf.layout.element.Table;
+import com.itextpdf.layout.element.Cell;
+import java.io.ByteArrayOutputStream;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -53,8 +61,45 @@ public class AnalyticsExportServiceImpl implements AnalyticsExportService {
                 "text/csv", safeName + "-analytics.csv");
             case "xlsx" -> new ExportedFile(TabularExportWriter.xlsx(toSheets(summary, demographics, registrations)),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", safeName + "-analytics.xlsx");
-            default -> throw new ApiException("Unsupported export format: " + format + " (use csv or xlsx)");
+            case "pdf" -> new ExportedFile(toPdf(race, summary, demographics, registrations),
+                "application/pdf", safeName + "-analytics.pdf");
+            default -> throw new ApiException("Unsupported export format: " + format + " (use csv, xlsx or pdf)");
         };
+    }
+
+    private byte[] toPdf(Race race, RaceAnalyticsSummaryDto summary, DemographicsDto demographics,
+                         List<RegistrationPointDto> registrations) {
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            PdfDocument pdf = new PdfDocument(new PdfWriter(output));
+            Document document = new Document(pdf, PageSize.A4);
+            document.add(new Paragraph(race.getName() + " - Analytics").setBold().setFontSize(16));
+            Table summaryTable = new Table(2);
+            for (String[] row : summaryRows(summary)) {
+                summaryTable.addCell(new Cell().add(new Paragraph(row[0])));
+                summaryTable.addCell(new Cell().add(new Paragraph(row[1])));
+            }
+            document.add(summaryTable);
+            document.add(new Paragraph("Demographics").setBold().setMarginTop(12));
+            Table demographicTable = new Table(3);
+            for (String[] row : demographicsRows(demographics)) {
+                for (String value : row) {
+                    demographicTable.addCell(new Cell().add(new Paragraph(value)));
+                }
+            }
+            document.add(demographicTable);
+            document.add(new Paragraph("Registrations (last " + REGISTRATION_WINDOW_DAYS + " days)")
+                .setBold().setMarginTop(12));
+            Table registrationTable = new Table(2);
+            for (String[] row : registrationRows(registrations)) {
+                registrationTable.addCell(new Cell().add(new Paragraph(row[0])));
+                registrationTable.addCell(new Cell().add(new Paragraph(row[1])));
+            }
+            document.add(registrationTable);
+            document.close();
+            return output.toByteArray();
+        } catch (Exception ex) {
+            throw new ApiException("Failed to export analytics as PDF");
+        }
     }
 
     private Map<String, List<String[]>> toSheets(RaceAnalyticsSummaryDto summary,

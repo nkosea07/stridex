@@ -27,7 +27,7 @@ public class NotificationPreference {
     private Boolean pushEnabled = true;
 
     @Column(name = "sms_enabled", nullable = false)
-    private Boolean smsEnabled = true;
+    private Boolean smsEnabled = false;
 
     @Column(name = "whatsapp_enabled", nullable = false)
     private Boolean whatsappEnabled = true;

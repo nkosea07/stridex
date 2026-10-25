@@ -169,6 +169,18 @@ public class ResultController {
         return ResponseEntity.ok(resultService.getMyResults());
     }
 
+    @GetMapping("/v${racetracker.api.version}/results/my/history")
+    @PreAuthorize("hasAuthority('CAP_ATHLETE')")
+    public ResponseEntity<List<com.racetracker.dto.result.AthleteHistoryEntryDto>> myHistory() {
+        return ResponseEntity.ok(resultService.getMyHistory());
+    }
+
+    @GetMapping("/v${racetracker.api.version}/results/my/personal-bests")
+    @PreAuthorize("hasAuthority('CAP_ATHLETE')")
+    public ResponseEntity<List<com.racetracker.dto.result.PersonalBestDto>> myPersonalBests() {
+        return ResponseEntity.ok(resultService.getMyPersonalBests());
+    }
+
     @GetMapping("/v${racetracker.api.version}/results/my/page")
     @PreAuthorize("hasAuthority('CAP_ATHLETE')")
     public ResponseEntity<RaceResultPageDto> myResultsPage(

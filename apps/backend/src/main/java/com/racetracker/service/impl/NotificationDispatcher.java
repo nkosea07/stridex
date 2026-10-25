@@ -61,20 +61,23 @@ public class NotificationDispatcher {
     private void fanOut(UUID notificationId, NotificationMessage message) {
         for (NotificationChannel channel : channels) {
             if (!channel.isEnabled()) {
-                safeRecord(notificationId, channel.channel(), NotificationDelivery.Status.SKIPPED, null);
+                safeRecord(notificationId, channel.channel(), NotificationDelivery.Status.SKIPPED, null, null);
                 continue;
             }
             if (!preferenceService.isChannelEnabled(message.userId(), channel.channel())) {
-                safeRecord(notificationId, channel.channel(), NotificationDelivery.Status.SKIPPED, "disabled by user preference");
+                safeRecord(notificationId, channel.channel(), NotificationDelivery.Status.SKIPPED,
+                    "disabled by user preference", null);
                 continue;
             }
             try {
+                channel.clearProviderMessageId();
                 channel.send(message);
-                safeRecord(notificationId, channel.channel(), NotificationDelivery.Status.SENT, null);
+                safeRecord(notificationId, channel.channel(), NotificationDelivery.Status.SENT, null,
+                    channel.lastProviderMessageId());
             } catch (Exception ex) {
                 log.warn("Notification channel {} failed for user {}: {}",
                     channel.channel(), message.userId(), ex.getMessage());
-                safeRecord(notificationId, channel.channel(), NotificationDelivery.Status.FAILED, ex.getMessage());
+                safeRecord(notificationId, channel.channel(), NotificationDelivery.Status.FAILED, ex.getMessage(), null);
             }
         }
 
@@ -86,9 +89,13 @@ public class NotificationDispatcher {
     }
 
     private void safeRecord(UUID notificationId, NotificationDelivery.Channel channel,
-                            NotificationDelivery.Status status, String errorMessage) {
+                            NotificationDelivery.Status status, String errorMessage, String providerMessageId) {
         try {
-            deliveryRecorder.record(notificationId, channel, status, errorMessage);
+            if (providerMessageId == null) {
+                deliveryRecorder.record(notificationId, channel, status, errorMessage);
+            } else {
+                deliveryRecorder.record(notificationId, channel, status, errorMessage, providerMessageId);
+            }
         } catch (RuntimeException ex) {
             log.warn("Failed to record delivery for notification {}: {}", notificationId, ex.getMessage());
         }

@@ -20,8 +20,26 @@ import java.util.UUID;
 
 public interface ParticipantRepository extends JpaRepository<Participant, UUID> {
 
+    boolean existsByRaceIdAndEmailIgnoreCase(UUID raceId, String email);
+
+    boolean existsByRfidTag(String rfidTag);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Participant p where p.id = :id")
+    Optional<Participant> findByIdForUpdate(@Param("id") UUID id);
+
     @EntityGraph(attributePaths = {"race", "category", "user", "credentials"})
     List<Participant> findByRaceIdOrderByRegisteredAtDesc(UUID raceId);
+
+    @Query("""
+        select new com.racetracker.repository.ParticipantExportRow(
+            p.id, p.firstName, p.lastName, p.email, p.phone, p.bibNumber,
+            p.status, p.gender, p.nationality, p.registeredAt)
+        from Participant p
+        where p.race.id = :raceId
+        order by p.registeredAt desc
+    """)
+    List<ParticipantExportRow> findExportRowsByRaceId(@Param("raceId") UUID raceId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"race", "category", "user", "credentials"})
     List<Participant> findByRaceId(UUID raceId);
@@ -205,6 +223,10 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
     boolean existsByRaceIdAndUserId(UUID raceId, UUID userId);
 
     boolean existsByUserIdAndStatusIn(UUID userId, Collection<Participant.ParticipantStatus> statuses);
+
+    boolean existsByBibNumber(String bibNumber);
+
+    boolean existsByAthleteCode(String athleteCode);
 
     long countByRaceId(UUID raceId);
 

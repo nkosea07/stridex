@@ -3,10 +3,12 @@ package com.racetracker.service.impl;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
+import com.google.zxing.oned.Code128Writer;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.itextpdf.io.image.ImageData;
 import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.kernel.colors.ColorConstants;
+import com.itextpdf.kernel.colors.DeviceRgb;
 import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
@@ -20,8 +22,10 @@ import com.racetracker.exception.ApiException;
 import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.model.Participant;
 import com.racetracker.model.Race;
+import com.racetracker.model.RaceSponsor;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceRepository;
+import com.racetracker.repository.RaceSponsorRepository;
 import com.racetracker.service.BibService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +45,7 @@ public class BibServiceImpl implements BibService {
 
     private final ParticipantRepository participantRepository;
     private final RaceRepository raceRepository;
+    private final RaceSponsorRepository sponsorRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -78,9 +83,11 @@ public class BibServiceImpl implements BibService {
             Document document = new Document(pdf, PageSize.A5.rotate());
             document.setMargins(20, 20, 20, 20);
 
+            List<RaceSponsor> sponsors = participants.isEmpty() ? List.of()
+                : sponsorRepository.findByRaceIdOrderByDisplayOrderAsc(participants.get(0).getRace().getId());
             for (int i = 0; i < participants.size(); i++) {
                 Participant p = participants.get(i);
-                addBibPage(document, p);
+                addBibPage(document, p, sponsors);
                 if (i < participants.size() - 1) {
                     document.add(new com.itextpdf.layout.element.AreaBreak());
                 }
@@ -94,9 +101,19 @@ public class BibServiceImpl implements BibService {
         }
     }
 
-    private void addBibPage(Document document, Participant participant) throws Exception {
+    private void addBibPage(Document document, Participant participant, List<RaceSponsor> sponsors) throws Exception {
         Race race = participant.getRace();
-        
+
+        if (sponsors != null && !sponsors.isEmpty()) {
+            String sponsorLine = sponsors.stream().limit(3).map(RaceSponsor::getName)
+                .reduce((left, right) -> left + "  •  " + right).orElse("");
+            document.add(new Paragraph("SPONSORS: " + sponsorLine)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setFontSize(8)
+                .setFontColor(ColorConstants.GRAY)
+                .setMarginBottom(6));
+        }
+
         // Race Name
         document.add(new Paragraph(race.getName().toUpperCase())
             .setTextAlignment(TextAlignment.CENTER)
@@ -114,9 +131,11 @@ public class BibServiceImpl implements BibService {
 
         // Bib Number
         String bibNumber = participant.getBibNumber() != null ? participant.getBibNumber() : "---";
+        DeviceRgb accent = accentColor(race.getBibAccentColor());
         document.add(new Paragraph(bibNumber)
             .setTextAlignment(TextAlignment.CENTER)
             .setFontSize(120)
+            .setFontColor(accent == null ? ColorConstants.BLACK : accent)
             .setBold()
             .setMarginBottom(10));
 
@@ -133,7 +152,14 @@ public class BibServiceImpl implements BibService {
         Image image = new Image(imageData);
         image.setHorizontalAlignment(HorizontalAlignment.CENTER);
         document.add(image);
-        
+
+        byte[] barcode = generateBarcode(participant.getAthleteCode() == null
+            ? "AMS-PARTICIPANT-" + participant.getId() : participant.getAthleteCode(), 520, 90);
+        Image barcodeImage = new Image(ImageDataFactory.create(barcode));
+        barcodeImage.setHorizontalAlignment(HorizontalAlignment.CENTER);
+        barcodeImage.setMarginTop(8);
+        document.add(barcodeImage);
+
         // Emergency Contact
         if (participant.getEmergencyContactName() != null && participant.getEmergencyContactPhone() != null) {
             document.add(new Paragraph("ICE: " + participant.getEmergencyContactName() + " (" + participant.getEmergencyContactPhone() + ")")
@@ -141,6 +167,24 @@ public class BibServiceImpl implements BibService {
                 .setFontSize(10)
                 .setFontColor(ColorConstants.RED)
                 .setFixedPosition(20, 20, 500));
+        }
+    }
+
+    private DeviceRgb accentColor(String hex) {
+        if (hex == null || !hex.matches("^#[0-9A-Fa-f]{6}$")) {
+            return null;
+        }
+        return new DeviceRgb(
+            Integer.parseInt(hex.substring(1, 3), 16),
+            Integer.parseInt(hex.substring(3, 5), 16),
+            Integer.parseInt(hex.substring(5, 7), 16));
+    }
+
+    private byte[] generateBarcode(String text, int width, int height) throws Exception {
+        BitMatrix bitMatrix = new Code128Writer().encode(text, BarcodeFormat.CODE_128, width, height);
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            MatrixToImageWriter.writeToStream(bitMatrix, "PNG", baos);
+            return baos.toByteArray();
         }
     }
 

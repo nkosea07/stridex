@@ -14,9 +14,12 @@ public class RegistrationDto {
     private UUID raceId;
     private UUID userId;
     private UUID categoryId;
+    private String athleteCode;
+
     private String bibNumber;
     private String status;
     private OffsetDateTime registrationDate;
+    private boolean mediaPublicationConsent;
     private EmergencyContact emergencyContact;
     private String shirtSize;
     private String paymentStatus;

@@ -35,7 +35,7 @@ public class NotificationPreferenceServiceImpl implements NotificationPreference
         });
         entity.setEmailEnabled(preferences.isEmailEnabled());
         entity.setPushEnabled(preferences.isPushEnabled());
-        entity.setSmsEnabled(preferences.isSmsEnabled());
+        entity.setSmsEnabled(false);
         entity.setWhatsappEnabled(preferences.isWhatsappEnabled());
         return toDto(repository.save(entity));
     }
@@ -51,7 +51,7 @@ public class NotificationPreferenceServiceImpl implements NotificationPreference
             case IN_APP -> true;
             case EMAIL -> !Boolean.FALSE.equals(preference.getEmailEnabled());
             case PUSH -> !Boolean.FALSE.equals(preference.getPushEnabled());
-            case SMS -> !Boolean.FALSE.equals(preference.getSmsEnabled());
+            case SMS -> false;
             case WHATSAPP -> !Boolean.FALSE.equals(preference.getWhatsappEnabled());
         };
     }
@@ -63,7 +63,7 @@ public class NotificationPreferenceServiceImpl implements NotificationPreference
         }
         dto.setEmailEnabled(!Boolean.FALSE.equals(entity.getEmailEnabled()));
         dto.setPushEnabled(!Boolean.FALSE.equals(entity.getPushEnabled()));
-        dto.setSmsEnabled(!Boolean.FALSE.equals(entity.getSmsEnabled()));
+        dto.setSmsEnabled(false);
         dto.setWhatsappEnabled(!Boolean.FALSE.equals(entity.getWhatsappEnabled()));
         return dto;
     }

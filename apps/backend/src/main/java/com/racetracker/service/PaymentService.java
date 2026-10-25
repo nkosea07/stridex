@@ -1,9 +1,11 @@
 package com.racetracker.service;
 
 import com.racetracker.dto.participant.PaymentDto;
+import com.racetracker.dto.participant.ExternalRefundAttemptDto;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.List;
 
 public interface PaymentService {
 
@@ -17,4 +19,19 @@ public interface PaymentService {
 
     PaymentDto reconcileExternalRefund(UUID raceId, UUID participantId, String providerReference,
                                        String reason, boolean refunded, String actorEmail);
+
+    ExternalRefundAttemptDto stageExternalRefundAttempt(UUID raceId, UUID participantId, UUID paymentId,
+                                                        String reason, String actorEmail);
+
+    ExternalRefundAttemptDto reconcileExternalRefundAttempt(UUID raceId, UUID participantId, UUID attemptId,
+                                                            String providerReference, String reason,
+                                                            boolean refunded, String actorEmail);
+
+    ExternalRefundAttemptDto getExternalRefundAttempt(UUID raceId, UUID participantId, UUID attemptId);
+
+    List<ExternalRefundAttemptDto> listExternalRefundAttempts(UUID raceId, UUID participantId);
+
+    List<PaymentDto> eligibleRefundPayments(UUID raceId, UUID participantId);
+
+    List<UUID> eligibleRefundParticipantIds(UUID raceId);
 }

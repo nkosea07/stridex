@@ -98,8 +98,11 @@ Both registration paths require `privacyPolicyAccepted=true` and the current `pr
 ### External refunds and privacy erasure
 
 - `POST /api/v1/races/{raceId}/participants/{participantId}/payment/refund` returns `REFUND_AUTOMATION_UNAVAILABLE`; it does not call the payment provider.
-- A super admin stages a full-payable refund attempt at `POST .../payment/refund/attempt` with a reason, completes or verifies the action outside the platform, then records `REFUNDED` or `NOT_REFUNDED` at `POST .../payment/refund/reconcile` with a provider receipt/case reference and reason. The server computes the amount and locks the payment; the UI does not perform a one-click refund.
+- A super admin stages a full-payable refund attempt at `POST .../payment/refund/attempts` with a reason and an optional completed `paymentId`, completes or verifies the action outside the platform, then records `REFUNDED` or `NOT_REFUNDED` at `POST .../payment/refund/attempts/{attemptId}/reconcile` with a provider receipt/case reference and reason. `GET .../payment/refund/attempts` and `GET .../payment/refund/attempts/{attemptId}` expose attempt status. The legacy `POST .../payment/refund/attempt` and `.../payment/refund/reconcile` routes remain as v1 compatibility wrappers that require one unambiguous payment or pending attempt. The server computes the amount and locks the payment; the UI does not perform a one-click refund.
+- Provider `REVERSED` callbacks create an open `payment_reversal_cases` row and leave the payment completed pending finance verification. Super admins review them at `GET /api/v1/admin/payments/reversal-cases`; the metric is `payments_reversal_review_open`. Partial legacy refund attempts cannot be reconciled as full refunds (`REFUND_AMOUNT_MISMATCH`).
+- Super admins can list blocked unknown-scope erasure jobs at `GET /api/v1/admin/privacy/object-deletion-jobs?scope=UNVERIFIED_LEGACY` and record a verified historical scope at `PATCH .../{jobId}/scope` with a reason. Both operations are audited; a changed scope only retries when it matches the configured storage provider.
 - Due account deletion first removes media metadata and persists original/thumbnail deletion jobs. The cleanup worker retries private storage deletion and only then finalizes account anonymization and sends the completion notice. Monitor `privacy_object_cleanup_overdue_jobs` and follow `docs/pilot-operations-runbook.md` for failures.
+- Participant media consent is managed at `PUT /api/v1/participants/my-registrations/{participantId}/media-consent`. Public listings, originals, and thumbnails require moderator approval plus current participant consent; untagged event media requires an audited `attest-non-person` record, which can be revoked with `DELETE` on the same route.
 - Anonymous race-scoped routes, tracking, results, registration fields, and media return 404 unless public registration is enabled, the race is non-draft, and it is unarchived.
 
 ### Races
@@ -110,6 +113,14 @@ Both registration paths require `privacyPolicyAccepted=true` and the current `pr
 - `PATCH /api/v1/races/{id}/status`
 - `DELETE /api/v1/races/{id}`
 
+### Emergency SOS
+- `POST /api/v1/races/{raceId}/checkpoints/{checkpointId}/emergency` for authorized checkpoint staff
+- `POST /api/v1/races/{raceId}/emergency`
+- `GET /api/v1/races/{raceId}/emergency`
+- `PATCH /api/v1/races/{raceId}/emergency/{alertId}` with `ACKNOWLEDGED` or `RESOLVED`
+
+SOS alerts are persisted before durable staff notification jobs are staged. Coordinates are optional but must be a complete, in-range pair. Delivery is retried with backoff; no recipients or exhausted attempts set `ESCALATION_REQUIRED`, and resolving an alert cancels pending jobs. Legacy alerts are classified `LEGACY_UNVERIFIED` and excluded from critical escalation counts.
+
 ### Participants and Registration
 - `GET /api/v1/races/{raceId}/participants`
 - `GET /api/v1/races/{raceId}/participants/{id}`
@@ -119,16 +130,21 @@ Both registration paths require `privacyPolicyAccepted=true` and the current `pr
 - `POST /api/v1/races/{raceId}/participants/{id}/check-in`
 - `POST /api/v1/races/{raceId}/participants/import`
 - `GET /api/v1/races/{raceId}/participants/export`
+
+Participant CSV and XLSX exports are capped at 10,000 participants per race for the pilot. Larger exports return `EXPORT_TOO_LARGE` (HTTP 400); export generation failures return `EXPORT_GENERATION_FAILED` (HTTP 503).
 - `POST /api/v1/races/{raceId}/register`
 - `GET /api/v1/participants/my-registrations`
 - `DELETE /api/v1/registrations/{registrationId}`
 
 ### Checkpoints
+- `GET /api/v1/operations/checkpoints?page=0&size=50` for the authenticated volunteer (maximum size 100)
 - `GET /api/v1/races/{raceId}/checkpoints`
 - `POST /api/v1/races/{raceId}/checkpoints`
 - `PUT /api/v1/races/{raceId}/checkpoints/{checkpointId}`
 - `DELETE /api/v1/races/{raceId}/checkpoints/{checkpointId}`
 - `POST /api/v1/races/{raceId}/checkpoints/{checkpointId}/record`
+
+Live checkpoint submissions use the server receipt time and reject a client-supplied `recordedAt` with `CHECKPOINT_TIMESTAMP_NOT_ALLOWED`. Authorized race admins and assigned officials may import historical timing CSV rows at `POST /api/v1/races/{raceId}/checkpoints/import`; volunteers cannot use that import route.
 
 ### RFID / Bib Timing Bridge
 - `POST /api/v1/races/{raceId}/rfid/readers`

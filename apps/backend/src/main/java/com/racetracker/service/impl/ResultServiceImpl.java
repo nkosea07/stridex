@@ -177,6 +177,54 @@ public class ResultServiceImpl implements ResultService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<com.racetracker.dto.result.AthleteHistoryEntryDto> getMyHistory() {
+        capabilityAuthorizationService.require(UserCapabilityType.ATHLETE);
+        User user = resolveCurrentUser();
+        return raceResultRepository.findAllByUserId(user.getId()).stream()
+            .map(row -> new com.racetracker.dto.result.AthleteHistoryEntryDto(
+                row.getRace().getId(), row.getRace().getName(), row.getRace().getRaceDate(),
+                row.getRace().getDistanceKm(),
+                row.getChipTime() != null ? formatDuration(row.getChipTime()) : null,
+                row.getOverallPosition(), row.getCategoryPosition(),
+                Boolean.TRUE.equals(row.getIsOfficial()), Boolean.TRUE.equals(row.getIsDisqualified()),
+                medalFor(row.getOverallPosition() == null ? null : row.getOverallPosition().longValue(),
+                    row.getRace().getMedalPlaces(), Boolean.TRUE.equals(row.getIsOfficial()),
+                    Boolean.TRUE.equals(row.getIsDisqualified())),
+                qualificationFor(row.getOverallPosition() == null ? null : row.getOverallPosition().longValue(),
+                    row.getRace().getMedalPlaces(),
+                    Boolean.TRUE.equals(row.getIsOfficial()), Boolean.TRUE.equals(row.getIsDisqualified()))))
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.racetracker.dto.result.PersonalBestDto> getMyPersonalBests() {
+        capabilityAuthorizationService.require(UserCapabilityType.ATHLETE);
+        User user = resolveCurrentUser();
+        Map<java.math.BigDecimal, RaceResult> best = new java.util.LinkedHashMap<>();
+        Map<java.math.BigDecimal, Integer> counts = new java.util.HashMap<>();
+        for (RaceResult row : raceResultRepository.findAllByUserId(user.getId())) {
+            if (!Boolean.TRUE.equals(row.getIsOfficial()) || Boolean.TRUE.equals(row.getIsDisqualified())
+                || row.getChipTime() == null || row.getRace().getDistanceKm() == null) {
+                continue;
+            }
+            java.math.BigDecimal distance = row.getRace().getDistanceKm();
+            counts.merge(distance, 1, Integer::sum);
+            RaceResult current = best.get(distance);
+            if (current == null || row.getChipTime().compareTo(current.getChipTime()) < 0) {
+                best.put(distance, row);
+            }
+        }
+        return best.entrySet().stream()
+            .map(entry -> new com.racetracker.dto.result.PersonalBestDto(entry.getKey(),
+                formatDuration(entry.getValue().getChipTime()), entry.getValue().getRace().getId(),
+                entry.getValue().getRace().getName(), counts.getOrDefault(entry.getKey(), 1)))
+            .sorted(java.util.Comparator.comparing(com.racetracker.dto.result.PersonalBestDto::distanceKm))
+            .toList();
+    }
+
+    @Override
     @Transactional
     public void publish(UUID raceId) {
         Race race = raceRepository.findById(raceId)
@@ -305,7 +353,12 @@ public class ResultServiceImpl implements ResultService {
             dto.setCategoryPosition(toPosition(projection.getCategoryPosition()));
             dto.setAgeGroup(projection.getAgeGroup());
             dto.setAgeGroupPosition(toPosition(projection.getAgeGroupPosition()));
-            dto.setMedal(medalFor(projection.getOverallPosition(), dto.isOfficial(), dto.isDisqualified()));
+            dto.setMedal(medalFor(projection.getOverallPosition() == null ? null
+                    : projection.getOverallPosition().longValue(), participant.getRace().getMedalPlaces(),
+                dto.isOfficial(), dto.isDisqualified()));
+            dto.setQualificationStatus(qualificationFor(dto.getOverallPosition() == null ? null
+                    : dto.getOverallPosition().longValue(), participant.getRace().getMedalPlaces(),
+                dto.isOfficial(), dto.isDisqualified()));
             results.add(dto);
         }
         return List.copyOf(results);
@@ -356,7 +409,9 @@ public class ResultServiceImpl implements ResultService {
         dto.setDisqualificationReason(row.getDisqualificationReason());
         dto.setCertificateAvailable(official);
         dto.setMedal(medalFor(row.getOverallPosition() == null ? null : row.getOverallPosition().longValue(),
-            official, disqualified));
+            row.getRace().getMedalPlaces(), official, disqualified));
+        dto.setQualificationStatus(qualificationFor(row.getOverallPosition() == null ? null
+                : row.getOverallPosition().longValue(), row.getRace().getMedalPlaces(), official, disqualified));
     }
 
     private Race requireRace(UUID raceId) {
@@ -368,16 +423,29 @@ public class ResultServiceImpl implements ResultService {
         return position == null ? null : Math.toIntExact(position);
     }
 
-    private String medalFor(Long overallPosition, boolean official, boolean disqualified) {
+    private String medalFor(Long overallPosition, Integer medalPlaces, boolean official, boolean disqualified) {
         if (!official || disqualified || overallPosition == null) {
+            return null;
+        }
+        int places = medalPlaces == null ? 3 : Math.max(0, medalPlaces);
+        if (overallPosition > places) {
             return null;
         }
         return switch (overallPosition.intValue()) {
             case 1 -> "GOLD";
             case 2 -> "SILVER";
             case 3 -> "BRONZE";
-            default -> null;
+            default -> "MEDAL";
         };
+    }
+
+    private String qualificationFor(Long overallPosition, Integer medalPlaces, boolean official,
+                                    boolean disqualified) {
+        if (!official || disqualified || overallPosition == null) {
+            return "NOT_QUALIFIED";
+        }
+        int places = medalPlaces == null ? 3 : Math.max(0, medalPlaces);
+        return overallPosition <= places ? "QUALIFIED" : "NOT_QUALIFIED";
     }
 
     private ResultComputation computeResult(Race race, Participant participant, List<CheckpointRecord> records, int penaltySeconds) {

@@ -29,7 +29,7 @@ public class SmsNotificationChannel implements NotificationChannel {
 
     @Override
     public boolean isEnabled() {
-        return properties.getNotifications() != null && properties.getNotifications().isSmsEnabled();
+        return false;
     }
 
     @Override

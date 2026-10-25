@@ -15,6 +15,7 @@ import com.racetracker.repository.GpsLocationRepository;
 import com.racetracker.repository.NotificationPreferenceRepository;
 import com.racetracker.repository.NotificationRepository;
 import com.racetracker.repository.ParticipantCredentialRepository;
+import com.racetracker.repository.ParticipantRegistrationAnswerRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.PushDeviceRepository;
 import com.racetracker.repository.PrivacyObjectDeletionJobRepository;
@@ -27,6 +28,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.util.List;
 import java.util.Optional;
@@ -51,6 +54,7 @@ class AccountPrivacyServiceImplTest {
     @Mock PushDeviceRepository pushDeviceRepository;
     @Mock AuthTokenRepository authTokenRepository;
     @Mock ParticipantCredentialRepository participantCredentialRepository;
+    @Mock ParticipantRegistrationAnswerRepository registrationAnswerRepository;
     @Mock GpsLocationRepository gpsLocationRepository;
     @Mock NotificationPreferenceRepository notificationPreferenceRepository;
     @Mock AthleteFollowRepository athleteFollowRepository;
@@ -60,17 +64,20 @@ class AccountPrivacyServiceImplTest {
     @Mock EmergencyAlertRepository emergencyAlertRepository;
     @Mock PasswordEncoder passwordEncoder;
     @Mock AuditEventService auditEventService;
+    @Mock PlatformTransactionManager transactionManager;
 
     private AccountPrivacyServiceImpl service;
     private final UUID userId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(transactionManager.getTransaction(any()))
+            .thenAnswer(inv -> new SimpleTransactionStatus());
         service = new AccountPrivacyServiceImpl(userRepository, participantRepository, notificationRepository,
-            pushDeviceRepository, authTokenRepository, participantCredentialRepository, gpsLocationRepository,
+            pushDeviceRepository, authTokenRepository, participantCredentialRepository, registrationAnswerRepository, gpsLocationRepository,
             notificationPreferenceRepository, athleteFollowRepository, raceMediaRepository, accountErasureRepository,
             deletionJobRepository, emergencyAlertRepository,
-            passwordEncoder, auditEventService);
+            passwordEncoder, auditEventService, transactionManager);
     }
 
     private User user() {
@@ -133,8 +140,9 @@ class AccountPrivacyServiceImplTest {
     void finalizationWaitsForEveryObjectJob() {
         AccountErasure erasure = new AccountErasure();
         erasure.setUserId(userId);
-        when(accountErasureRepository.findReadyToFinalize(PrivacyObjectDeletionJob.Status.COMPLETED,
-            PageRequest.of(0, 50))).thenReturn(List.of(userId));
+        when(accountErasureRepository.findReadyToFinalize(org.mockito.ArgumentMatchers.eq(PrivacyObjectDeletionJob.Status.COMPLETED),
+            any(OffsetDateTime.class), org.mockito.ArgumentMatchers.eq(PageRequest.of(0, 50))))
+            .thenReturn(List.of(userId));
         when(accountErasureRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(erasure));
         when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user()));
         when(deletionJobRepository.countByUserIdAndStatusNot(userId, PrivacyObjectDeletionJob.Status.COMPLETED))
@@ -153,11 +161,14 @@ class AccountPrivacyServiceImplTest {
         race.setId(UUID.randomUUID());
         Participant participant = Participant.builder().id(UUID.randomUUID()).race(race)
             .firstName("Ada").lastName("Runner").email("runner@example.com").phone("0700")
-            .emergencyContactPhone("0711").build();
+            .emergencyContactPhone("0711").dateOfBirth(java.time.LocalDate.of(1990, 1, 1))
+            .bloodType("O+").nationality("ZW").bibNumber("BIB-10").rfidTag("TAG-10")
+            .clubName("Running Club").shirtSize("M").build();
         AccountErasure erasure = new AccountErasure();
         erasure.setUserId(userId);
-        when(accountErasureRepository.findReadyToFinalize(PrivacyObjectDeletionJob.Status.COMPLETED,
-            PageRequest.of(0, 50))).thenReturn(List.of(userId));
+        when(accountErasureRepository.findReadyToFinalize(org.mockito.ArgumentMatchers.eq(PrivacyObjectDeletionJob.Status.COMPLETED),
+            any(OffsetDateTime.class), org.mockito.ArgumentMatchers.eq(PageRequest.of(0, 50))))
+            .thenReturn(List.of(userId));
         when(accountErasureRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(erasure));
         when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
         when(participantRepository.findByUserIdOrderByRegisteredAtDesc(userId)).thenReturn(List.of(participant));
@@ -173,9 +184,16 @@ class AccountPrivacyServiceImplTest {
         assertThat(participant.getFirstName()).isEqualTo("Anonymous");
         assertThat(participant.getPhone()).isNull();
         assertThat(participant.getEmergencyContactPhone()).isNull();
+        assertThat(participant.getDateOfBirth()).isNull();
+        assertThat(participant.getBloodType()).isNull();
+        assertThat(participant.getNationality()).isNull();
+        assertThat(participant.getBibNumber()).isNull();
+        assertThat(participant.getRfidTag()).isNull();
+        assertThat(participant.getClubName()).isNull();
 
         verify(pushDeviceRepository).deleteByUserId(userId);
         verify(participantCredentialRepository).deleteByParticipantIdIn(List.of(participant.getId()));
+        verify(registrationAnswerRepository).deleteByParticipantIdIn(List.of(participant.getId()));
         verify(gpsLocationRepository).deleteByParticipantIdIn(List.of(participant.getId()));
         verify(notificationRepository).deleteByUserId(userId);
         verify(notificationPreferenceRepository).deleteByUserId(userId);
@@ -183,6 +201,57 @@ class AccountPrivacyServiceImplTest {
         verify(authTokenRepository).deleteByUserId(userId);
         verify(raceMediaRepository, never()).deletePersonalMediaForUser(userId);
         verify(emergencyAlertRepository).anonymizeReporterByUserId(userId);
+    }
+
+    @Test
+    void failedAccountDoesNotBlockNextReadyAccount() {
+        UUID secondId = UUID.randomUUID();
+        User first = user();
+        User second = User.builder().id(secondId).email("second@example.com")
+            .firstName("Second").lastName("Runner").build();
+        AccountErasure firstErasure = new AccountErasure();
+        firstErasure.setUserId(userId);
+        AccountErasure secondErasure = new AccountErasure();
+        secondErasure.setUserId(secondId);
+        when(accountErasureRepository.findReadyToFinalize(
+            org.mockito.ArgumentMatchers.eq(PrivacyObjectDeletionJob.Status.COMPLETED),
+            any(OffsetDateTime.class), org.mockito.ArgumentMatchers.eq(PageRequest.of(0, 50))))
+            .thenReturn(List.of(userId, secondId));
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(first));
+        when(userRepository.findByIdForUpdate(secondId)).thenReturn(Optional.of(second));
+        when(accountErasureRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(firstErasure));
+        when(accountErasureRepository.findByUserIdForUpdate(secondId)).thenReturn(Optional.of(secondErasure));
+        when(passwordEncoder.encode(any())).thenThrow(new IllegalStateException("failed"))
+            .thenReturn("newhash");
+
+        assertThat(service.finalizeReady(50)).isEqualTo(1);
+
+        assertThat(firstErasure.getFinalizedAt()).isNull();
+        assertThat(firstErasure.getFinalizationErrorCode()).isEqualTo("FINALIZATION_FAILED");
+        assertThat(firstErasure.getFinalizationNextAttemptAt()).isAfter(OffsetDateTime.now());
+        assertThat(secondErasure.getFinalizedAt()).isNotNull();
+        assertThat(secondErasure.getLegacyScrubbedAt()).isNotNull();
+    }
+
+    @Test
+    void repairsSensitiveFieldsForPreviouslyFinalizedAccount() {
+        AccountErasure erasure = new AccountErasure();
+        erasure.setUserId(userId);
+        erasure.setFinalizedAt(OffsetDateTime.now().minusDays(1));
+        Participant participant = Participant.builder().id(UUID.randomUUID())
+            .firstName("Anonymous").lastName("Runner").email("deleted@example.local")
+            .dateOfBirth(java.time.LocalDate.of(1980, 2, 2)).bloodType("AB+").build();
+        when(accountErasureRepository.findLegacyScrubDue(any(OffsetDateTime.class),
+            org.mockito.ArgumentMatchers.eq(PageRequest.of(0, 50)))).thenReturn(List.of(userId));
+        when(accountErasureRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(erasure));
+        when(participantRepository.findByUserIdOrderByRegisteredAtDesc(userId)).thenReturn(List.of(participant));
+
+        assertThat(service.repairLegacyAccounts(50)).isEqualTo(1);
+
+        assertThat(participant.getDateOfBirth()).isNull();
+        assertThat(participant.getBloodType()).isNull();
+        assertThat(erasure.getLegacyScrubbedAt()).isNotNull();
+        verify(registrationAnswerRepository).deleteByParticipantIdIn(List.of(participant.getId()));
     }
 
     @Test

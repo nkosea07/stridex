@@ -137,6 +137,17 @@ class ControllerAuthorizationMatrixTest {
     }
 
     @Test
+    void privacyOperationsControllerGuards() {
+        assertGuard(PrivacyOperationsController.class, "list", "hasRole('SUPER_ADMIN')");
+        assertGuard(PrivacyOperationsController.class, "verifyScope", "hasRole('SUPER_ADMIN')");
+    }
+
+    @Test
+    void paymentReversalAdminControllerGuards() {
+        assertGuard(PaymentReversalAdminController.class, "list", "hasRole('SUPER_ADMIN')");
+    }
+
+    @Test
     void notificationControllerGuards() {
         assertGuard(NotificationController.class, "list", "isAuthenticated()");
         assertGuard(NotificationController.class, "markRead", "isAuthenticated()");
@@ -175,12 +186,22 @@ class ControllerAuthorizationMatrixTest {
     void emergencyAlertControllerGuards() {
         assertGuard(EmergencyAlertController.class, "raise",
             "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN') or hasAuthority('CAP_ATHLETE')");
+        assertGuard(EmergencyAlertController.class, "raiseAtCheckpoint",
+            "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL', 'VOLUNTEER')");
+        assertGuard(EmergencyAlertController.class, "updateStatus",
+            "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')");
         assertGuard(EmergencyAlertController.class, "list", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')");
+    }
+
+    @Test
+    void volunteerOperationsCheckpointGuard() {
+        assertGuard(OperationsCheckpointController.class, "list", "hasRole('VOLUNTEER')");
     }
 
     @Test
     void externalRefundReconciliationIsSuperAdminOnly() {
         assertGuard(PaymentController.class, "stageExternalRefund", "hasRole('SUPER_ADMIN')");
+        assertGuard(PaymentController.class, "stageExternalRefundCompat", "hasRole('SUPER_ADMIN')");
         assertGuard(PaymentController.class, "reconcileExternalRefund", "hasRole('SUPER_ADMIN')");
     }
 

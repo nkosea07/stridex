@@ -3,6 +3,7 @@ package com.racetracker.dto.checkpoint;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Getter
@@ -11,4 +12,5 @@ public class CheckpointRecordRequest {
     private UUID participantId;
     private String participantBibNumber;
     private String method;
+    private OffsetDateTime recordedAt;
 }

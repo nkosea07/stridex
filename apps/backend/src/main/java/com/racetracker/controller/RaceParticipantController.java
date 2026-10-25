@@ -6,6 +6,7 @@ import com.racetracker.exception.ApiException;
 import com.racetracker.model.Participant;
 import com.racetracker.service.ParticipantService;
 import com.racetracker.service.AuditEventService;
+import com.racetracker.service.ExportedFile;
 import com.racetracker.security.RaceAccessGuard;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -40,17 +41,22 @@ public class RaceParticipantController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<ParticipantDto>> list(
         @PathVariable UUID raceId,
-        @RequestParam(required = false) String status
+        @RequestParam(required = false) String status,
+        Authentication authentication
     ) {
         raceAccessGuard.assertCanReadStaff(raceId);
-        return ResponseEntity.ok(participantService.listByRace(raceId, parseStatus(status)));
+        return ResponseEntity.ok(participantService.listByRace(raceId, parseStatus(status)).stream()
+            .map(participant -> redactFinancialFields(participant, authentication))
+            .toList());
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
-    public ResponseEntity<ParticipantDto> get(@PathVariable UUID raceId, @PathVariable UUID id) {
+    public ResponseEntity<ParticipantDto> get(@PathVariable UUID raceId, @PathVariable UUID id,
+                                              Authentication authentication) {
         raceAccessGuard.assertCanReadStaff(raceId);
-        return ResponseEntity.ok(participantService.getByRaceAndId(raceId, id));
+        return ResponseEntity.ok(redactFinancialFields(
+            participantService.getByRaceAndId(raceId, id), authentication));
     }
 
     @PostMapping("")
@@ -80,6 +86,18 @@ public class RaceParticipantController {
     public ResponseEntity<ParticipantDto> checkIn(@PathVariable UUID raceId, @PathVariable UUID id) {
         raceAccessGuard.assertCanPerformOperationalAction(raceId);
         return ResponseEntity.ok(participantService.checkIn(raceId, id));
+    }
+
+    @PostMapping("/qr-check-in")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
+    public ResponseEntity<ParticipantDto> qrCheckIn(@PathVariable UUID raceId,
+                                                    @Valid @RequestBody QrCheckInRequest request,
+                                                    Authentication authentication) {
+        raceAccessGuard.assertCanPerformOperationalAction(raceId);
+        ParticipantDto dto = participantService.checkInByQr(raceId, request.code());
+        auditEventService.recordForActor("PARTICIPANT_QR_CHECKED_IN", authentication.getName(),
+            "RACE_PARTICIPANT", dto.getId().toString(), "SUCCESS", Map.of("raceId", raceId.toString()));
+        return ResponseEntity.ok(dto);
     }
 
     @PostMapping("/{id}/review")
@@ -119,6 +137,16 @@ public class RaceParticipantController {
         return ResponseEntity.ok(participantService.importCsv(raceId, file));
     }
 
+    @PostMapping(value = "/import/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    public ResponseEntity<com.racetracker.dto.participant.ImportPreviewDto> previewImport(
+        @PathVariable UUID raceId,
+        @RequestPart("file") MultipartFile file
+    ) {
+        raceAccessGuard.assertCanManage(raceId);
+        return ResponseEntity.ok(participantService.previewImport(raceId, file));
+    }
+
     @GetMapping("/import-jobs")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<ImportJobDto>> listImportJobs(@PathVariable UUID raceId) {
@@ -133,17 +161,20 @@ public class RaceParticipantController {
         return ResponseEntity.ok(participantService.getImportJob(raceId, jobId));
     }
 
-    @GetMapping(value = "/export", produces = "text/csv")
+    @GetMapping("/export")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
-    public ResponseEntity<String> exportCsv(@PathVariable UUID raceId, Authentication authentication) {
+    public ResponseEntity<byte[]> exportCsv(@PathVariable UUID raceId,
+                                            @RequestParam(defaultValue = "csv") String format,
+                                            Authentication authentication) {
         raceAccessGuard.assertCanManage(raceId);
-        String content = participantService.exportCsv(raceId);
+        String normalizedFormat = format.trim().toLowerCase(Locale.ROOT);
+        ExportedFile file = participantService.export(raceId, normalizedFormat);
         auditEventService.recordForActor("PARTICIPANT_DATA_EXPORTED", authentication.getName(), "RACE", raceId.toString(),
-            "SUCCESS", java.util.Map.of("format", "csv"));
+            "SUCCESS", Map.of("format", normalizedFormat));
         return ResponseEntity.ok()
-            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=participants-" + raceId + ".csv")
-            .contentType(MediaType.parseMediaType("text/csv"))
-            .body(content);
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.filename() + "\"")
+            .contentType(MediaType.parseMediaType(file.contentType()))
+            .body(file.content());
     }
 
     @PostMapping("/register")
@@ -153,6 +184,22 @@ public class RaceParticipantController {
         @Valid @RequestBody RaceRegistrationRequest request
     ) {
         return ResponseEntity.ok(participantService.registerForRace(raceId, request));
+    }
+
+    private ParticipantDto redactFinancialFields(ParticipantDto participant, Authentication authentication) {
+        if (isFinancialRole(authentication)) {
+            return participant;
+        }
+        participant.setPaymentReference(null);
+        participant.setPaymentAmount(null);
+        participant.setPaymentVerifiedAt(null);
+        return participant;
+    }
+
+    private boolean isFinancialRole(Authentication authentication) {
+        return authentication != null && authentication.getAuthorities().stream()
+            .map(authority -> authority.getAuthority())
+            .anyMatch(authority -> authority.equals("ROLE_SUPER_ADMIN") || authority.equals("ROLE_RACE_ADMIN"));
     }
 
     private Participant.ParticipantStatus parseStatus(String status) {

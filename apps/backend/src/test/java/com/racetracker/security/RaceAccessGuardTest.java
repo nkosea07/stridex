@@ -123,6 +123,40 @@ class RaceAccessGuardTest {
     }
 
     @Test
+    void assignedOfficialCanImportTiming() {
+        when(raceRepository.findByIdForAuthorization(raceId))
+            .thenReturn(Optional.of(ownedRace("owner@example.com")));
+        when(raceStaffAssignmentRepository.existsActiveByRaceIdAndUserEmailAndStaffRole(
+            raceId, "official@example.com", User.UserRole.OFFICIAL)).thenReturn(true);
+        authenticate("official@example.com", "ROLE_OFFICIAL");
+
+        RaceAccessGuard guard = new RaceAccessGuard(raceRepository, raceStaffAssignmentRepository);
+        assertThatCode(() -> guard.assertCanImportTiming(raceId)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void unassignedOfficialCannotImportTiming() {
+        when(raceRepository.findByIdForAuthorization(raceId))
+            .thenReturn(Optional.of(ownedRace("owner@example.com")));
+        authenticate("official@example.com", "ROLE_OFFICIAL");
+
+        RaceAccessGuard guard = new RaceAccessGuard(raceRepository, raceStaffAssignmentRepository);
+        assertThatThrownBy(() -> guard.assertCanImportTiming(raceId))
+            .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void volunteerCannotImportTimingEvenWhenAssignedToRace() {
+        when(raceRepository.findByIdForAuthorization(raceId))
+            .thenReturn(Optional.of(ownedRace("owner@example.com")));
+        authenticate("volunteer@example.com", "ROLE_VOLUNTEER");
+
+        RaceAccessGuard guard = new RaceAccessGuard(raceRepository, raceStaffAssignmentRepository);
+        assertThatThrownBy(() -> guard.assertCanImportTiming(raceId))
+            .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
     void unownedRaceWithAssignedAdminsDeniesUnassignedRaceAdmin() {
         Race race = new Race();
         race.setId(raceId);

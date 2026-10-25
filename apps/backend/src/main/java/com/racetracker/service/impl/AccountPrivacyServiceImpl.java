@@ -16,6 +16,7 @@ import com.racetracker.repository.GpsLocationRepository;
 import com.racetracker.repository.NotificationPreferenceRepository;
 import com.racetracker.repository.NotificationRepository;
 import com.racetracker.repository.ParticipantCredentialRepository;
+import com.racetracker.repository.ParticipantRegistrationAnswerRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.PushDeviceRepository;
 import com.racetracker.repository.PrivacyObjectDeletionJobRepository;
@@ -26,6 +27,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -34,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class AccountPrivacyServiceImpl implements AccountPrivacyService {
 
@@ -43,6 +49,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
     private final PushDeviceRepository pushDeviceRepository;
     private final AuthTokenRepository authTokenRepository;
     private final ParticipantCredentialRepository participantCredentialRepository;
+    private final ParticipantRegistrationAnswerRepository registrationAnswerRepository;
     private final GpsLocationRepository gpsLocationRepository;
     private final NotificationPreferenceRepository notificationPreferenceRepository;
     private final AthleteFollowRepository athleteFollowRepository;
@@ -52,6 +59,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
     private final EmergencyAlertRepository emergencyAlertRepository;
     private final PasswordEncoder passwordEncoder;
     private final com.racetracker.service.AuditEventService auditEventService;
+    private final TransactionTemplate isolatedTransaction;
 
     public AccountPrivacyServiceImpl(
         UserRepository userRepository,
@@ -60,6 +68,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         PushDeviceRepository pushDeviceRepository,
         AuthTokenRepository authTokenRepository,
         ParticipantCredentialRepository participantCredentialRepository,
+        ParticipantRegistrationAnswerRepository registrationAnswerRepository,
         GpsLocationRepository gpsLocationRepository,
         NotificationPreferenceRepository notificationPreferenceRepository,
         AthleteFollowRepository athleteFollowRepository,
@@ -68,7 +77,8 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         PrivacyObjectDeletionJobRepository deletionJobRepository,
         EmergencyAlertRepository emergencyAlertRepository,
         PasswordEncoder passwordEncoder,
-        com.racetracker.service.AuditEventService auditEventService
+        com.racetracker.service.AuditEventService auditEventService,
+        PlatformTransactionManager transactionManager
     ) {
         this.userRepository = userRepository;
         this.participantRepository = participantRepository;
@@ -76,6 +86,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         this.pushDeviceRepository = pushDeviceRepository;
         this.authTokenRepository = authTokenRepository;
         this.participantCredentialRepository = participantCredentialRepository;
+        this.registrationAnswerRepository = registrationAnswerRepository;
         this.gpsLocationRepository = gpsLocationRepository;
         this.notificationPreferenceRepository = notificationPreferenceRepository;
         this.athleteFollowRepository = athleteFollowRepository;
@@ -85,6 +96,8 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         this.emergencyAlertRepository = emergencyAlertRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditEventService = auditEventService;
+        this.isolatedTransaction = new TransactionTemplate(transactionManager);
+        this.isolatedTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Override
@@ -228,22 +241,73 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         job.setNextAttemptAt(OffsetDateTime.now().plusSeconds(delaySeconds));
     }
 
-    @Transactional
     public int finalizeReady(int limit) {
         int finalized = 0;
         for (UUID userId : accountErasureRepository.findReadyToFinalize(
-            PrivacyObjectDeletionJob.Status.COMPLETED, PageRequest.of(0, limit))) {
-            User user = userRepository.findByIdForUpdate(userId).orElseThrow();
-            AccountErasure erasure = accountErasureRepository.findByUserIdForUpdate(userId).orElseThrow();
-            if (erasure.getFinalizedAt() != null || deletionJobRepository.countByUserIdAndStatusNot(
-                userId, PrivacyObjectDeletionJob.Status.COMPLETED) != 0) {
-                continue;
+            PrivacyObjectDeletionJob.Status.COMPLETED, OffsetDateTime.now(), PageRequest.of(0, limit))) {
+            try {
+                Boolean done = isolatedTransaction.execute(status -> finalizeOne(userId));
+                if (Boolean.TRUE.equals(done)) finalized++;
+            } catch (RuntimeException ex) {
+                log.error("Account erasure finalization failed; userId={}, errorType={}",
+                    userId, ex.getClass().getSimpleName());
+                recordFinalizationFailure(userId);
             }
-            anonymizeAccount(user);
-            erasure.setFinalizedAt(OffsetDateTime.now());
-            finalized++;
         }
         return finalized;
+    }
+
+    public int repairLegacyAccounts(int limit) {
+        int repaired = 0;
+        for (UUID userId : accountErasureRepository.findLegacyScrubDue(
+            OffsetDateTime.now(), PageRequest.of(0, limit))) {
+            try {
+                isolatedTransaction.executeWithoutResult(status -> {
+                    AccountErasure erasure = accountErasureRepository.findByUserIdForUpdate(userId).orElseThrow();
+                    if (erasure.getLegacyScrubbedAt() != null) return;
+                    scrubParticipants(userId);
+                    erasure.setLegacyScrubbedAt(OffsetDateTime.now());
+                    erasure.setFinalizationErrorCode(null);
+                    erasure.setFinalizationNextAttemptAt(null);
+                });
+                repaired++;
+            } catch (RuntimeException ex) {
+                log.error("Legacy account scrub failed; userId={}, errorType={}",
+                    userId, ex.getClass().getSimpleName());
+                recordFinalizationFailure(userId);
+            }
+        }
+        return repaired;
+    }
+
+    private boolean finalizeOne(UUID userId) {
+        User user = userRepository.findByIdForUpdate(userId).orElseThrow();
+        AccountErasure erasure = accountErasureRepository.findByUserIdForUpdate(userId).orElseThrow();
+        if (erasure.getFinalizedAt() != null || deletionJobRepository.countByUserIdAndStatusNot(
+            userId, PrivacyObjectDeletionJob.Status.COMPLETED) != 0) return false;
+        anonymizeAccount(user);
+        OffsetDateTime now = OffsetDateTime.now();
+        erasure.setFinalizedAt(now);
+        erasure.setLegacyScrubbedAt(now);
+        erasure.setFinalizationErrorCode(null);
+        erasure.setFinalizationNextAttemptAt(null);
+        return true;
+    }
+
+    private void recordFinalizationFailure(UUID userId) {
+        try {
+            isolatedTransaction.executeWithoutResult(status -> {
+                AccountErasure erasure = accountErasureRepository.findByUserIdForUpdate(userId).orElseThrow();
+                int attempts = erasure.getFinalizationAttempts() == null ? 1 : erasure.getFinalizationAttempts() + 1;
+                erasure.setFinalizationAttempts(attempts);
+                erasure.setFinalizationErrorCode("FINALIZATION_FAILED");
+                erasure.setFinalizationNextAttemptAt(OffsetDateTime.now().plusSeconds(
+                    Math.min(3600, 5L << Math.min(attempts, 10))));
+            });
+        } catch (RuntimeException ex) {
+            log.error("Could not persist erasure retry state; userId={}, errorType={}",
+                userId, ex.getClass().getSimpleName());
+        }
     }
 
     public record NotificationClaim(UUID userId, String email, String firstName, UUID leaseToken) {}
@@ -288,16 +352,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
     private void anonymizeAccount(User user) {
         UUID userId = user.getId();
 
-        List<Participant> participants = participantRepository.findByUserIdOrderByRegisteredAtDesc(userId);
-        List<UUID> participantIds = participants.stream().map(Participant::getId).toList();
-        for (Participant participant : participants) {
-            anonymize(participant);
-        }
-        if (!participants.isEmpty()) {
-            participantRepository.saveAll(participants);
-            participantCredentialRepository.deleteByParticipantIdIn(participantIds);
-            gpsLocationRepository.deleteByParticipantIdIn(participantIds);
-        }
+        scrubParticipants(userId);
 
         // Personal interaction and device data is removed outright.
         pushDeviceRepository.deleteByUserId(userId);
@@ -328,17 +383,43 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
             "SUCCESS", Map.of());
     }
 
+    private void scrubParticipants(UUID userId) {
+        List<Participant> participants = participantRepository.findByUserIdOrderByRegisteredAtDesc(userId);
+        List<UUID> participantIds = participants.stream().map(Participant::getId).toList();
+        for (Participant participant : participants) {
+            anonymize(participant);
+        }
+        if (!participants.isEmpty()) {
+            participantRepository.saveAll(participants);
+            registrationAnswerRepository.deleteByParticipantIdIn(participantIds);
+            participantCredentialRepository.deleteByParticipantIdIn(participantIds);
+            gpsLocationRepository.deleteByParticipantIdIn(participantIds);
+        }
+    }
+
     private void anonymize(Participant participant) {
         String anonymizedEmail = "deleted+" + participant.getId() + "@deleted.local";
         participant.setFirstName("Anonymous");
         participant.setLastName("Runner");
         participant.setEmail(anonymizedEmail);
         participant.setPhone(null);
+        participant.setDateOfBirth(null);
+        participant.setGender(null);
+        participant.setNationality(null);
+        participant.setBibNumber(null);
+        participant.setRfidTag(null);
+        participant.setClubName(null);
+        participant.setTeamName(null);
+        participant.setTeam(null);
+        participant.setShirtSize(null);
         participant.setEmergencyContactName(null);
         participant.setEmergencyContactPhone(null);
         participant.setEmergencyContactRelation(null);
         participant.setMedicalConditions(null);
         participant.setAllergies(null);
+        participant.setBloodType(null);
+        participant.setMediaPublicationConsentAt(null);
+        participant.setMediaPublicationConsentVersion(null);
         participant.setDeviceToken(null);
     }
 

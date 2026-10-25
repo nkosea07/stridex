@@ -57,6 +57,7 @@ public class PrivacyObjectDeletionWorker {
         }
 
         int finalized = privacyService.finalizeReady(50);
+        privacyService.repairLegacyAccounts(50);
         if (finalized > 0) {
             log.info("Privacy erasure finalized {} account(s)", finalized);
         }

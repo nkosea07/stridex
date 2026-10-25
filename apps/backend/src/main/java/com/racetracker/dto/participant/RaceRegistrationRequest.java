@@ -19,6 +19,14 @@ public class RaceRegistrationRequest {
 
     private Boolean waiverAccepted;
 
+    private Boolean mediaPublicationConsent;
+
+    private String bloodType;
+
+    private String medicalConditions;
+
+    private String allergies;
+
     private String shirtSize;
 
     private UUID teamId;

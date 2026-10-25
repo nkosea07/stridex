@@ -16,6 +16,15 @@ public interface RaceMediaRepository extends JpaRepository<RaceMedia, UUID> {
 
     List<RaceMedia> findByRaceIdAndStatusOrderByCreatedAtDesc(UUID raceId, RaceMedia.MediaStatus status);
 
+    @Query("""
+        select m from RaceMedia m left join m.participant p
+        where m.race.id = :raceId and m.status = com.racetracker.model.RaceMedia.MediaStatus.APPROVED
+          and ((p is not null and p.mediaPublicationConsentAt is not null)
+            or (p is null and m.nonPersonPublicationAttestedAt is not null))
+        order by m.createdAt desc
+    """)
+    List<RaceMedia> findPublicVisibleByRaceId(@Param("raceId") UUID raceId);
+
     Optional<RaceMedia> findByRaceIdAndId(UUID raceId, UUID id);
 
     long countByRaceIdAndStatus(UUID raceId, RaceMedia.MediaStatus status);

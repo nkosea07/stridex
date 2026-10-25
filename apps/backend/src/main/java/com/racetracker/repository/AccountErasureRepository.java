@@ -21,6 +21,7 @@ public interface AccountErasureRepository extends JpaRepository<AccountErasure, 
     @Query("""
         select e.userId from AccountErasure e
         where e.finalizedAt is null
+          and (e.finalizationNextAttemptAt is null or e.finalizationNextAttemptAt <= :now)
           and not exists (
               select j.id from PrivacyObjectDeletionJob j
               where j.userId = e.userId and j.status <> :completed
@@ -28,7 +29,18 @@ public interface AccountErasureRepository extends JpaRepository<AccountErasure, 
         order by e.stagedAt, e.userId
     """)
     List<UUID> findReadyToFinalize(@Param("completed") PrivacyObjectDeletionJob.Status completed,
+                                   @Param("now") OffsetDateTime now,
                                    Pageable pageable);
+
+    @Query("""
+        select e.userId from AccountErasure e
+        where e.finalizedAt is not null and e.legacyScrubbedAt is null
+          and (e.finalizationNextAttemptAt is null or e.finalizationNextAttemptAt <= :now)
+        order by e.finalizedAt, e.userId
+    """)
+    List<UUID> findLegacyScrubDue(@Param("now") OffsetDateTime now, Pageable pageable);
+
+    long countByFinalizationErrorCodeIsNotNull();
 
     @Query(value = """
         SELECT user_id FROM account_erasures

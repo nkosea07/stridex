@@ -24,5 +24,9 @@ public class PrivacyObjectDeletionMetrics {
                     OffsetDateTime.now().minusHours(1)))
             .description("Unconfirmed account erasure completion notices older than one hour")
             .register(registry);
+        Gauge.builder("privacy.erasure.finalization.failed", erasures,
+                AccountErasureRepository::countByFinalizationErrorCodeIsNotNull)
+            .description("Account erasures or legacy scrubs waiting after finalization failure")
+            .register(registry);
     }
 }

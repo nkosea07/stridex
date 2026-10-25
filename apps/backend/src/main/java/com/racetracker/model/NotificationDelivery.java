@@ -3,6 +3,7 @@ package com.racetracker.model;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -34,6 +35,16 @@ public class NotificationDelivery {
 
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
+
+    @Column(name = "provider_message_id", length = 200)
+    private String providerMessageId;
+
+    @Column(name = "provider_status", length = 40)
+    private String providerStatus;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
 
     @CreationTimestamp
     @Column(name = "created_at")

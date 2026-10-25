@@ -20,6 +20,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -39,6 +40,9 @@ class CheckpointControllerWebMvcTest {
 
     @MockBean
     private CheckpointExportService checkpointExportService;
+
+    @MockBean
+    private com.racetracker.service.TimingImportService timingImportService;
 
     @MockBean
     private RaceAccessGuard raceAccessGuard;
@@ -70,5 +74,32 @@ class CheckpointControllerWebMvcTest {
             .andExpect(status().isOk());
 
         verify(raceAccessGuard).assertCanAccessCheckpoint(raceId, checkpointId);
+    }
+
+    @Test
+    void timingImportUsesOfficialRaceGuard() throws Exception {
+        UUID raceId = UUID.randomUUID();
+        var file = new org.springframework.mock.web.MockMultipartFile(
+            "file", "timing.csv", "text/csv", "checkpointId,participantBibNumber\n".getBytes());
+
+        mockMvc.perform(multipart("/v1/races/{raceId}/checkpoints/import", raceId).file(file))
+            .andExpect(status().isOk());
+
+        verify(raceAccessGuard).assertCanImportTiming(raceId);
+        verify(timingImportService).importCsv(raceId, file);
+    }
+
+    @Test
+    void deniedTimingImportNeverReachesService() throws Exception {
+        UUID raceId = UUID.randomUUID();
+        var file = new org.springframework.mock.web.MockMultipartFile(
+            "file", "timing.csv", "text/csv", "checkpointId,participantBibNumber\n".getBytes());
+        doThrow(new AccessDeniedException("denied"))
+            .when(raceAccessGuard).assertCanImportTiming(raceId);
+
+        mockMvc.perform(multipart("/v1/races/{raceId}/checkpoints/import", raceId).file(file))
+            .andExpect(status().isForbidden());
+
+        verifyNoInteractions(timingImportService);
     }
 }

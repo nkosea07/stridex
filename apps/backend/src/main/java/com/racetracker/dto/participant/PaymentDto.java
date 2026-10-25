@@ -14,6 +14,7 @@ public class PaymentDto {
     private String provider;
     private String status;
     private BigDecimal amount;
+    private BigDecimal payableAmount;
     private String currency;
     private String reference;
     private String checkoutUrl;

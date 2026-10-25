@@ -154,6 +154,25 @@ public class RaceAccessGuard {
         throw new AccessDeniedException("You do not have access to this race");
     }
 
+    public void assertCanImportTiming(UUID raceId) {
+        Race race = raceRepository.findByIdForAuthorization(raceId)
+            .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!isAuthenticated(authentication)) {
+            throw new AccessDeniedException("You do not have access to this race");
+        }
+        if (hasRole(authentication, "ROLE_SUPER_ADMIN") || hasRole(authentication, "ROLE_RACE_ADMIN")) {
+            assertCanManage(race, authentication);
+            return;
+        }
+        if (hasRole(authentication, "ROLE_OFFICIAL")
+            && raceStaffAssignmentRepository.existsActiveByRaceIdAndUserEmailAndStaffRole(
+                raceId, authentication.getName(), User.UserRole.OFFICIAL)) {
+            return;
+        }
+        throw new AccessDeniedException("You do not have access to this race");
+    }
+
     /**
      * Allows only race-management staff to subscribe to a race's private live feed.
      * Unlike the controller guard, this method is intentionally not permissive for

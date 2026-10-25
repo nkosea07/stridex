@@ -30,11 +30,19 @@ public class NotificationDeliveryRecorder {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(UUID notificationId, NotificationDelivery.Channel channel,
                        NotificationDelivery.Status status, String errorMessage) {
+        record(notificationId, channel, status, errorMessage, null);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void record(UUID notificationId, NotificationDelivery.Channel channel,
+                       NotificationDelivery.Status status, String errorMessage, String providerMessageId) {
         NotificationDelivery delivery = NotificationDelivery.builder()
             .notification(notificationRepository.getReferenceById(notificationId))
             .channel(channel)
             .status(status)
             .errorMessage(errorMessage)
+            .providerMessageId(providerMessageId)
+            .providerStatus(providerMessageId == null ? null : "sent")
             .build();
         deliveryRepository.save(delivery);
     }

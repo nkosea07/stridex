@@ -21,6 +21,6 @@ public interface RaceService {
     RaceDto archive(UUID id);
     RaceDto restore(UUID id);
     void delete(UUID id);
-    RaceDto updateStatus(UUID id, String status);
+    RaceDto updateStatus(UUID id, String status, String reason);
     void assignAdmin(UUID raceId, UUID userId, String actorEmail);
 }
