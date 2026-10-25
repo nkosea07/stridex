@@ -2,6 +2,7 @@ export type EndpointKey =
   | 'adminMfaReset'
   | 'adminAuditEvents'
   | 'authLogin'
+  | 'authDeletionCancel'
   | 'authRegister'
   | 'authRegisterOrganizer'
   | 'authRefresh'

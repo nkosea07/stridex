@@ -91,7 +91,7 @@ export default function RegisterScreen() {
         phone: phone.trim(), 
         password,
         privacyPolicyAccepted: true,
-        privacyPolicyVersion: API_CONTRACT.legal?.privacyPolicyVersion,
+        privacyPolicyVersion: API_CONTRACT.legal.privacyPolicyVersion,
         experiences,
       });
 

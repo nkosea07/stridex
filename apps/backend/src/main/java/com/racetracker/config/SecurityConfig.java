@@ -61,6 +61,7 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/prometheus").authenticated()
                 .requestMatchers(
                     apiPrefix + "/auth/login",
+                    apiPrefix + "/auth/deletion/cancel",
                     apiPrefix + "/auth/browser/login",
                     apiPrefix + "/auth/browser/mfa/totp/enroll",
                     apiPrefix + "/auth/browser/mfa/totp/confirm",

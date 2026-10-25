@@ -105,6 +105,39 @@ describe('web API security boundaries', () => {
     expect(new Headers(request.headers).get('Authorization')).toBeNull()
   })
 
+  it('checks deletion recovery without an authenticated browser session', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ message: 'If eligible' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await authApi.cancelDeletionWithPassword('runner@example.com', 'password')
+
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toContain('/auth/deletion/cancel')
+    expect(new Headers(request.headers).get('Authorization')).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends external refund staging and reconciliation as separate operations', async () => {
+    setAccessToken('super-admin-token')
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ id: 'payment-1', status: 'COMPLETED' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await participantsApi.stageExternalRefund('race-1', 'participant-1', 'Duplicate charge')
+    await participantsApi.reconcileExternalRefund('race-1', 'participant-1', {
+      providerReference: 'CASE-1', reason: 'Duplicate charge', outcome: 'NOT_REFUNDED',
+    })
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/payment/refund/attempt')
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/payment/refund/reconcile')
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({
+      providerReference: 'CASE-1', outcome: 'NOT_REFUNDED',
+    })
+  })
+
   it('refreshes and retries authenticated capability updates after a 401', async () => {
     document.cookie = 'rt_browser_csrf=csrf-token; path=/'
     setAccessToken('expired-token')

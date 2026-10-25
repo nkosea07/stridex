@@ -11,6 +11,8 @@ public interface AccountDeletionService {
 
     DeletionStatusDto cancel(UUID userId);
 
+    void cancelWithPassword(String email, String password);
+
     DeletionStatusDto status(UUID userId);
 
     int purgeExpired();

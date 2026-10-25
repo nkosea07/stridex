@@ -15,13 +15,13 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.http.HttpStatus;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -60,6 +60,8 @@ class EmergencyAlertControllerWebMvcTest {
             .when(raceAccessGuard).assertCanManage(raceId);
 
         mockMvc.perform(post("/v1/races/{raceId}/emergency", raceId)
+                .principal(new UsernamePasswordAuthenticationToken("admin@example.com", null,
+                    java.util.List.of(new SimpleGrantedAuthority("ROLE_RACE_ADMIN"))))
                 .contentType("application/json")
                 .content("{\"latitude\":-17.8,\"longitude\":31.0,\"message\":\"Need assistance\"}"))
             .andExpect(status().isForbidden());
@@ -68,6 +70,7 @@ class EmergencyAlertControllerWebMvcTest {
     }
 
     @Test
+    @WithMockUser(username = "athlete@example.com", authorities = {"ROLE_ATHLETE", "CAP_ATHLETE"})
     void athleteCanStillRaiseAlert() throws Exception {
         UUID raceId = UUID.randomUUID();
         EmergencyAlertRequest request = new EmergencyAlertRequest();
@@ -78,12 +81,17 @@ class EmergencyAlertControllerWebMvcTest {
         alert.setId(UUID.randomUUID());
         when(emergencyAlertService.raise(eq(raceId), eq(request), eq("athlete@example.com"))).thenReturn(alert);
 
-        var response = new EmergencyAlertController(emergencyAlertService, auditEventService, raceAccessGuard)
-            .raise(raceId, request, new UsernamePasswordAuthenticationToken(
-                "athlete@example.com", null, java.util.List.of(new SimpleGrantedAuthority("ROLE_ATHLETE"))));
+        when(emergencyAlertService.raiseForAthlete(eq(raceId), any(EmergencyAlertRequest.class),
+            eq("athlete@example.com"))).thenReturn(alert);
 
-        org.assertj.core.api.Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
-        verify(raceAccessGuard).assertCanManage(raceId);
-        verify(emergencyAlertService).raise(eq(raceId), eq(request), eq("athlete@example.com"));
+        mockMvc.perform(post("/v1/races/{raceId}/emergency", raceId)
+                .principal(new UsernamePasswordAuthenticationToken("athlete@example.com", null,
+                    java.util.List.of(new SimpleGrantedAuthority("CAP_ATHLETE"))))
+                .contentType("application/json")
+                .content("{\"latitude\":-17.8,\"longitude\":31.0,\"message\":\"Need assistance\"}"))
+            .andExpect(status().isAccepted());
+
+        verify(emergencyAlertService).raiseForAthlete(eq(raceId), any(EmergencyAlertRequest.class),
+            eq("athlete@example.com"));
     }
 }

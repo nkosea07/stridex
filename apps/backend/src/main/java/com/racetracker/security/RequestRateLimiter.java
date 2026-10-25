@@ -53,6 +53,13 @@ public class RequestRateLimiter {
         ));
     }
 
+    public void checkDeletionRecovery(String email, String ipAddress) {
+        check("deletion_recovery", List.of(
+            bucket("deletion-recovery:account", hash(normalizeAccount(email)), 5, 900),
+            bucket("deletion-recovery:ip", hash(ipAddress), 20, 900)
+        ));
+    }
+
     public void checkRegistration(String ipAddress) {
         check("registration", List.of(bucket("registration:ip", hash(ipAddress), 10, 3600)));
     }

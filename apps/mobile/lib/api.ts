@@ -739,6 +739,13 @@ class ApiClient {
     return parseDeletionStatus(await this.request<unknown>(API_CONTRACT.endpoints.myDeletionCancel, { method: 'POST' }));
   }
 
+  async cancelDeletionWithPassword(email: string, password: string): Promise<void> {
+    await this.request(API_CONTRACT.endpoints.authDeletionCancel, {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
   async deleteAccount(password: string, confirmation: string): Promise<DeletionStatus> {
     return parseDeletionStatus(await this.request<unknown>(API_CONTRACT.endpoints.myAccount, {
       method: 'DELETE',

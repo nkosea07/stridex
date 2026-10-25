@@ -56,6 +56,8 @@ class OrganizerApplicationServiceTest {
         request.setFirstName("Race");
         request.setLastName("Organizer");
         request.setOrganizationName("City Run Club");
+        request.setPrivacyPolicyAccepted(true);
+        request.setPrivacyPolicyVersion("2026-10-11");
         User applicant = User.builder().email("organizer@example.com").role(User.UserRole.ATHLETE).build();
         AuthResponse response = AuthResponse.builder().requiresEmailVerification(true).user(null).build();
 
@@ -65,7 +67,9 @@ class OrganizerApplicationServiceTest {
         assertThat(service.register(request)).isSameAs(response);
 
         verify(authService).register(argThat(userRequest ->
-            !userRequest.isCreateNormalCapabilities() && userRequest.getExperiences() == null));
+            !userRequest.isCreateNormalCapabilities() && userRequest.getExperiences() == null
+                && Boolean.TRUE.equals(userRequest.getPrivacyPolicyAccepted())
+                && "2026-10-11".equals(userRequest.getPrivacyPolicyVersion())));
 
         ArgumentCaptor<OrganizerApplication> captor = ArgumentCaptor.forClass(OrganizerApplication.class);
         verify(applicationRepository).save(captor.capture());

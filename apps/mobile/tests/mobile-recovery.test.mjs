@@ -141,6 +141,21 @@ beforeEach(() => {
 })
 
 describe('mobile session recovery', () => {
+  it('cancels pending deletion without installing or sending a session', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: 'If eligible' }), {
+      status: 200,
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { api } = await import('../lib/api.ts')
+
+    await api.cancelDeletionWithPassword('runner@example.com', 'password')
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/auth/deletion/cancel')
+    expect(init.headers.Authorization).toBeUndefined()
+    expect(JSON.parse(init.body)).toEqual({ email: 'runner@example.com', password: 'password' })
+    expect(mocks.secureValues.size).toBe(0)
+  })
   it('moves legacy access credentials to SecureStore before an authenticated request', async () => {
     mocks.legacyValues.set('auth_token', 'legacy-access-token')
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({

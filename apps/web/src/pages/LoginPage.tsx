@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { isOperationsRole, isPersonalUser, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
+import { authApi } from '@/lib/api'
 
 function getSafePublicReturnPath(value: unknown) {
   if (typeof value !== 'string') return undefined
@@ -25,6 +26,7 @@ export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isRecovering, setIsRecovering] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -53,6 +55,22 @@ export function LoginPage() {
         : t('auth:errorSignIn'))
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleRecovery = async () => {
+    if (!email || !password) {
+      toast.error(t('auth:recoveryCredentialsRequired'))
+      return
+    }
+    setIsRecovering(true)
+    try {
+      await authApi.cancelDeletionWithPassword(email, password)
+      toast.success(t('auth:recoveryResult'))
+    } catch {
+      toast.error(t('auth:recoveryError'))
+    } finally {
+      setIsRecovering(false)
     }
   }
 
@@ -118,6 +136,11 @@ export function LoginPage() {
                 )}
               </Button>
             </form>
+
+            <Button type="button" variant="link" className="mt-2 w-full" disabled={isLoading || isRecovering}
+              onClick={handleRecovery}>
+              {isRecovering ? t('auth:recoveringAccount') : t('auth:cancelDeletion')}
+            </Button>
 
             <p className="mt-4 text-center text-sm text-muted-foreground">
               {t('auth:newUser')}{' '}

@@ -35,6 +35,9 @@ public class RaceMedia {
     @Column(name = "storage_key", nullable = false, columnDefinition = "TEXT")
     private String storageKey;
 
+    @Column(name = "storage_scope", columnDefinition = "TEXT")
+    private String storageScope;
+
     @Column(name = "thumbnail_key", columnDefinition = "TEXT")
     private String thumbnailKey;
 

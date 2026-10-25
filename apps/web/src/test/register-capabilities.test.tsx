@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { authApi } from '@/lib/api'
 import '@/i18n'
+import { API_CONTRACT } from '@race-tracker/contracts'
 
 vi.mock('@/lib/api', () => ({
   ApiError: class MockApiError extends Error {},
@@ -58,6 +59,8 @@ describe('RegisterPage capability onboarding', () => {
     await waitFor(() => {
       expect(registerMock).toHaveBeenCalledWith(expect.objectContaining({
         experiences: ['ATHLETE', 'SPECTATOR'],
+        privacyPolicyAccepted: true,
+        privacyPolicyVersion: API_CONTRACT.legal.privacyPolicyVersion,
       }))
     })
   })
@@ -72,7 +75,10 @@ describe('RegisterPage capability onboarding', () => {
     fireEvent.click(screen.getByRole('button', { name: /create organizer account/i }))
 
     await waitFor(() => {
-      expect(registerOrganizerMock).toHaveBeenCalledWith(expect.not.objectContaining({ experiences: expect.anything() }))
+      expect(registerOrganizerMock).toHaveBeenCalledWith(expect.objectContaining({
+        privacyPolicyAccepted: true,
+        privacyPolicyVersion: API_CONTRACT.legal.privacyPolicyVersion,
+      }))
     })
     expect(registerMock).not.toHaveBeenCalled()
   })

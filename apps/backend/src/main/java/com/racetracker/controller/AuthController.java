@@ -2,6 +2,7 @@ package com.racetracker.controller;
 
 import com.racetracker.dto.auth.*;
 import com.racetracker.service.AuthService;
+import com.racetracker.service.AccountDeletionService;
 import com.racetracker.service.OrganizerApplicationService;
 import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
 import com.racetracker.security.ClientAddressResolver;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final AccountDeletionService accountDeletionService;
     private final OrganizerApplicationService organizerApplicationService;
     private final MfaAuthenticationServiceImpl mfaAuthenticationService;
     private final RequestRateLimiter requestRateLimiter;
@@ -25,12 +27,14 @@ public class AuthController {
 
     public AuthController(
         AuthService authService,
+        AccountDeletionService accountDeletionService,
         OrganizerApplicationService organizerApplicationService,
         MfaAuthenticationServiceImpl mfaAuthenticationService,
         RequestRateLimiter requestRateLimiter,
         ClientAddressResolver clientAddressResolver
     ) {
         this.authService = authService;
+        this.accountDeletionService = accountDeletionService;
         this.organizerApplicationService = organizerApplicationService;
         this.mfaAuthenticationService = mfaAuthenticationService;
         this.requestRateLimiter = requestRateLimiter;
@@ -53,6 +57,15 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
         requestRateLimiter.checkLogin(request.getEmail(), clientAddressResolver.resolve(servletRequest));
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/deletion/cancel")
+    public ResponseEntity<ApiMessageResponse> cancelDeletion(@Valid @RequestBody CancelDeletionRequest request,
+                                                               HttpServletRequest servletRequest) {
+        requestRateLimiter.checkDeletionRecovery(request.email(), clientAddressResolver.resolve(servletRequest));
+        accountDeletionService.cancelWithPassword(request.email(), request.password());
+        return ResponseEntity.ok(new ApiMessageResponse(
+            "If the account is eligible, its deletion request has been cancelled. Please sign in."));
     }
 
     @PostMapping("/refresh")

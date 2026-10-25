@@ -161,7 +161,7 @@ public class GlobalExceptionHandler {
             .statusCode(HttpStatus.SERVICE_UNAVAILABLE.value())
             .error("Service Unavailable")
             .message(SERVICE_UNAVAILABLE_MESSAGE)
-            .code("SERVICE_UNAVAILABLE")
+            .code(ex.getCode())
             .requestId(requestId)
             .path(request.getRequestURI())
             .build();

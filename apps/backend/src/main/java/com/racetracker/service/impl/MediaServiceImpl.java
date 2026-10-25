@@ -32,6 +32,7 @@ public class MediaServiceImpl implements MediaService {
     private final MediaStorage mediaStorage;
     private final ImageThumbnailService thumbnailService;
     private final RaceTrackerProperties properties;
+    private final MediaStorageScope mediaStorageScope;
 
     public MediaServiceImpl(
         RaceMediaRepository mediaRepository,
@@ -40,7 +41,8 @@ public class MediaServiceImpl implements MediaService {
         UserRepository userRepository,
         MediaStorage mediaStorage,
         ImageThumbnailService thumbnailService,
-        RaceTrackerProperties properties
+        RaceTrackerProperties properties,
+        MediaStorageScope mediaStorageScope
     ) {
         this.mediaRepository = mediaRepository;
         this.raceRepository = raceRepository;
@@ -49,6 +51,7 @@ public class MediaServiceImpl implements MediaService {
         this.mediaStorage = mediaStorage;
         this.thumbnailService = thumbnailService;
         this.properties = properties;
+        this.mediaStorageScope = mediaStorageScope;
     }
 
     @Override
@@ -73,6 +76,7 @@ public class MediaServiceImpl implements MediaService {
             .participant(participant)
             .mediaType(mediaType)
             .storageKey(key)
+            .storageScope(mediaStorageScope.id())
             .contentType(contentType)
             .caption(caption)
             .status(RaceMedia.MediaStatus.PENDING)

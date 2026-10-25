@@ -2,6 +2,7 @@ package com.racetracker.service.impl;
 
 import com.racetracker.dto.auth.*;
 import com.racetracker.exception.ConflictException;
+import com.racetracker.exception.ApiException;
 import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.exception.TooManyRequestsException;
 import com.racetracker.exception.UnauthorizedException;
@@ -39,6 +40,7 @@ import java.util.UUID;
 public class AuthServiceImpl implements AuthService {
 
     private static final int MAX_FAILED_LOGIN_ATTEMPTS = 5;
+    private static final String CURRENT_PRIVACY_POLICY_VERSION = "2026-10-11";
     private static final int MAX_ATTEMPTS_PER_WINDOW = 10;
     private static final Duration FAILED_ATTEMPT_WINDOW = Duration.ofMinutes(15);
     private static final Duration ACCOUNT_LOCK_DURATION = Duration.ofMinutes(15);
@@ -526,10 +528,15 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private void applyPrivacyAcceptance(User user, Boolean accepted, String version) {
-        if (Boolean.TRUE.equals(accepted)) {
-            user.setPrivacyPolicyAcceptedAt(OffsetDateTime.now());
-            user.setPrivacyPolicyVersion(version);
+        if (!Boolean.TRUE.equals(accepted)) {
+            throw new ApiException("Privacy policy acceptance is required", "PRIVACY_CONSENT_REQUIRED");
         }
+        if (!CURRENT_PRIVACY_POLICY_VERSION.equals(version)) {
+            throw new ApiException("The current privacy policy version must be accepted",
+                "PRIVACY_POLICY_VERSION_MISMATCH");
+        }
+        user.setPrivacyPolicyAcceptedAt(OffsetDateTime.now());
+        user.setPrivacyPolicyVersion(CURRENT_PRIVACY_POLICY_VERSION);
     }
 
     private AuthResponse buildVerificationRequiredResponse(User user) {

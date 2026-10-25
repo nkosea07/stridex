@@ -22,6 +22,7 @@ export const API_CONTRACT = {
     adminMfaReset: '/admin/users/:userId/mfa/reset',
     adminAuditEvents: '/admin/audit-events',
     authLogin: '/auth/login',
+    authDeletionCancel: '/auth/deletion/cancel',
     authRegister: '/auth/register',
     authRegisterOrganizer: '/auth/register-organizer',
     authRefresh: '/auth/refresh',

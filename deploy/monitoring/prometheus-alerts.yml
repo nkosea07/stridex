@@ -24,6 +24,22 @@ groups:
         annotations:
           summary: "RFID ingest backlog is growing"
           description: "Queued RFID read events exceed the degraded threshold for 5 minutes."
+      - alert: PrivacyObjectCleanupOverdue
+        expr: privacy_object_cleanup_overdue_jobs > 0
+        for: 15m
+        labels:
+          severity: high
+        annotations:
+          summary: "Privacy object deletion is overdue"
+          description: "At least one private media object deletion remains unfinished more than one hour after staging. Inspect privacy_object_deletion_jobs and storage health."
+      - alert: PrivacyErasureNoticeOverdue
+        expr: privacy_erasure_notice_overdue > 0
+        for: 15m
+        labels:
+          severity: high
+        annotations:
+          summary: "Account erasure completion notice is overdue"
+          description: "At least one finalized account has no confirmed deletion notice. Check email delivery and account_erasures before clearing retained contact data."
       - alert: GpsIngestStalled
         expr: increase(tracking_ingest_location_seconds_count[10m]) == 0 and increase(tracking_live_aggregate_seconds_count[10m]) > 0
         for: 10m

@@ -11,6 +11,7 @@ import com.racetracker.repository.UserRepository;
 import com.racetracker.service.impl.ImageThumbnailService;
 import com.racetracker.service.impl.LocalMediaStorage;
 import com.racetracker.service.impl.MediaServiceImpl;
+import com.racetracker.service.impl.MediaStorageScope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,7 +49,7 @@ class MediaServiceImplTest {
         properties.getStorage().setUploadDir(tempDir.toString());
         LocalMediaStorage storage = new LocalMediaStorage(properties);
         service = new MediaServiceImpl(mediaRepository, raceRepository, participantRepository, userRepository,
-            storage, new ImageThumbnailService(), properties);
+            storage, new ImageThumbnailService(), properties, new MediaStorageScope(properties));
         lenient().when(mediaRepository.save(any(RaceMedia.class))).thenAnswer(inv -> {
             RaceMedia media = inv.getArgument(0);
             if (media.getId() == null) media.setId(UUID.randomUUID());
@@ -73,6 +74,9 @@ class MediaServiceImplTest {
         assertThat(dto.getMediaType()).isEqualTo("IMAGE");
         assertThat(dto.getUrl()).contains("/public/races/" + raceId + "/media/");
         assertThat(dto.getCaption()).isEqualTo("Finish line");
+        org.mockito.ArgumentCaptor<RaceMedia> saved = org.mockito.ArgumentCaptor.forClass(RaceMedia.class);
+        org.mockito.Mockito.verify(mediaRepository).save(saved.capture());
+        assertThat(saved.getValue().getStorageScope()).isEqualTo("local|" + tempDir.toAbsolutePath().normalize());
     }
 
     @Test

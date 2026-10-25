@@ -23,6 +23,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -78,5 +79,18 @@ class EmergencyAlertServiceImplTest {
         assertThat(dto.getMessage()).isEqualTo("Collapsed at km 12");
         verify(notificationService).notify(eq(organizer.getId()), eq(Notification.NotificationType.ALERT),
             any(), any(), any());
+    }
+
+    @Test
+    void athleteCannotRaiseAlertForAnotherRace() {
+        Race race = new Race();
+        race.setId(raceId);
+        User athlete = User.builder().id(UUID.randomUUID()).email("athlete@example.com").build();
+        when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+        when(userRepository.findByEmailIgnoreCase(athlete.getEmail())).thenReturn(Optional.of(athlete));
+
+        assertThatThrownBy(() -> service.raiseForAthlete(raceId, new EmergencyAlertRequest(), athlete.getEmail()))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        org.mockito.Mockito.verifyNoInteractions(emergencyAlertRepository);
     }
 }

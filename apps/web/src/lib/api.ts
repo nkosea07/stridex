@@ -51,6 +51,7 @@ import { API_CONTRACT } from '@race-tracker/contracts'
 const API_BASE = API_CONTRACT.web.apiBasePath
 const PUBLIC_AUTH_ENDPOINTS = new Set([
   API_CONTRACT.endpoints.authLogin,
+  API_CONTRACT.endpoints.authDeletionCancel,
   API_CONTRACT.endpoints.authRegister,
   API_CONTRACT.endpoints.authRegisterOrganizer,
   API_CONTRACT.endpoints.authOAuthGoogle,
@@ -332,7 +333,7 @@ export const authApi = {
       body: JSON.stringify(data),
     }).then(normalizeAuthResponse),
 
-  registerOrganizer: (data: { email: string; password: string; firstName: string; lastName: string; phone?: string; organizationName: string }) =>
+  registerOrganizer: (data: { email: string; password: string; firstName: string; lastName: string; phone?: string; organizationName: string; privacyPolicyAccepted: boolean; privacyPolicyVersion: string }) =>
     fetchApi<BrowserAuthResponse>(API_CONTRACT.endpoints.authRegisterOrganizer, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -364,6 +365,12 @@ export const authApi = {
   cancelDeletion: () =>
     fetchApi<DeletionStatus>(buildContractPath(API_CONTRACT.endpoints.myDeletionCancel, {}), {
       method: 'POST',
+    }),
+
+  cancelDeletionWithPassword: (email: string, password: string) =>
+    fetchApi<{ message: string }>(API_CONTRACT.endpoints.authDeletionCancel, {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
     }),
 
   exportData: () =>
