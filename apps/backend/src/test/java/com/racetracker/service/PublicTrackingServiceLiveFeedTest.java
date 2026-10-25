@@ -47,7 +47,7 @@ class PublicTrackingServiceLiveFeedTest {
         Participant first = liveParticipant(race, "A-10", "Ari", "Runner");
         Participant second = liveParticipant(race, "A-11", "Bea", "Runner");
 
-        when(races.findById(raceId)).thenReturn(Optional.of(race));
+        when(races.findByIdForPublicVisibility(raceId)).thenReturn(Optional.of(race));
         when(revisions.currentRevision(raceId)).thenReturn(4L, 5L);
         when(participants.findPublicLiveAfter(eq(raceId), eq(""), isNull(), isNull(), isNull(), any(Pageable.class)))
             .thenReturn(List.of(first, second));
@@ -56,7 +56,7 @@ class PublicTrackingServiceLiveFeedTest {
         when(checkpoints.findTopByParticipantIdAndRaceIdOrderByRecordedAtDesc(first.getId(), raceId)).thenReturn(Optional.empty());
 
         PublicTrackingServiceImpl service = new PublicTrackingServiceImpl(
-            races, participants, gps, checkpoints, revisions, checkpointNames,
+            new PublicRaceVisibility(races), participants, gps, checkpoints, revisions, checkpointNames,
             new com.racetracker.config.RaceTrackerProperties());
         var initial = service.getLiveFeed(raceId, null, null, 1);
 

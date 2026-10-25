@@ -10,6 +10,7 @@ import com.racetracker.security.ClientAddressResolver;
 import com.racetracker.security.RequestRateLimiter;
 import com.racetracker.service.ParticipantService;
 import com.racetracker.service.PublicTrackingService;
+import com.racetracker.service.PublicRaceVisibility;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -40,6 +41,9 @@ class PublicTrackingControllerWebMvcTest {
 
     @MockBean
     private ParticipantService participantService;
+
+    @MockBean
+    private PublicRaceVisibility publicRaceVisibility;
 
     @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;

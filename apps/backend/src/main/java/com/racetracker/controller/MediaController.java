@@ -4,6 +4,7 @@ import com.racetracker.dto.media.MediaDto;
 import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.AuditEventService;
 import com.racetracker.service.MediaService;
+import com.racetracker.service.PublicRaceVisibility;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,11 +22,14 @@ public class MediaController {
     private final MediaService mediaService;
     private final AuditEventService auditEventService;
     private final RaceAccessGuard raceAccessGuard;
+    private final PublicRaceVisibility publicRaceVisibility;
 
-    public MediaController(MediaService mediaService, AuditEventService auditEventService, RaceAccessGuard raceAccessGuard) {
+    public MediaController(MediaService mediaService, AuditEventService auditEventService,
+                           RaceAccessGuard raceAccessGuard, PublicRaceVisibility publicRaceVisibility) {
         this.mediaService = mediaService;
         this.auditEventService = auditEventService;
         this.raceAccessGuard = raceAccessGuard;
+        this.publicRaceVisibility = publicRaceVisibility;
     }
 
     @PostMapping(value = "/v${racetracker.api.version}/races/{raceId}/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -97,16 +101,19 @@ public class MediaController {
 
     @GetMapping("/v${racetracker.api.version}/public/races/{raceId}/media")
     public ResponseEntity<List<MediaDto>> publicList(@PathVariable UUID raceId) {
+        publicRaceVisibility.requireVisible(raceId);
         return ResponseEntity.ok(mediaService.listApproved(raceId));
     }
 
     @GetMapping("/v${racetracker.api.version}/public/races/{raceId}/media/{mediaId}/content")
     public ResponseEntity<byte[]> publicContent(@PathVariable UUID raceId, @PathVariable UUID mediaId) {
+        publicRaceVisibility.requireVisible(raceId);
         return contentResponse(mediaService.content(raceId, mediaId, true));
     }
 
     @GetMapping("/v${racetracker.api.version}/public/races/{raceId}/media/{mediaId}/thumbnail")
     public ResponseEntity<byte[]> publicThumbnail(@PathVariable UUID raceId, @PathVariable UUID mediaId) {
+        publicRaceVisibility.requireVisible(raceId);
         return contentResponse(mediaService.thumbnail(raceId, mediaId, true));
     }
 

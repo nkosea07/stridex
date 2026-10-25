@@ -33,7 +33,7 @@ class PublicTrackingServiceTrackTest {
                                                  GpsLocationRepository gps, CheckpointRecordRepository checkpoints,
                                                  RaceFeedRevisionRepository revisions) {
         return new PublicTrackingServiceImpl(
-            races, participants, gps, checkpoints, revisions, mock(LastCheckpointNameCache.class),
+            new PublicRaceVisibility(races), participants, gps, checkpoints, revisions, mock(LastCheckpointNameCache.class),
             new RaceTrackerProperties());
     }
 
@@ -69,7 +69,7 @@ class PublicTrackingServiceTrackTest {
         accepted.setFiltered(false);
         accepted.setRecordedAt(OffsetDateTime.now().plusSeconds(10));
 
-        when(races.findById(raceId)).thenReturn(Optional.of(race));
+        when(races.findByIdForPublicVisibility(raceId)).thenReturn(Optional.of(race));
         when(participants.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
         when(gps.findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participantId, raceId)).thenReturn(List.of(filtered, accepted));
 
@@ -98,7 +98,7 @@ class PublicTrackingServiceTrackTest {
         participant.setRace(race);
         participant.setIsTrackingEnabled(false);
 
-        when(races.findById(raceId)).thenReturn(Optional.of(race));
+        when(races.findByIdForPublicVisibility(raceId)).thenReturn(Optional.of(race));
         when(participants.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
 
         var response = newService(races, participants, gps, checkpoints, revisions).getAthleteTrack(raceId, participantId);
@@ -134,7 +134,7 @@ class PublicTrackingServiceTrackTest {
         record.setCheckpoint(checkpoint);
         record.setRecordedAt(start.plusMinutes(48));
 
-        when(races.findById(raceId)).thenReturn(Optional.of(race));
+        when(races.findByIdForPublicVisibility(raceId)).thenReturn(Optional.of(race));
         when(participants.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
         when(gps.findLatestByRaceIdAndParticipantIds(raceId, List.of(participantId))).thenReturn(List.of());
         when(checkpoints.findByRaceIdAndParticipantIdInOrderByRecordedAtAsc(raceId, List.of(participantId)))
@@ -169,7 +169,7 @@ class PublicTrackingServiceTrackTest {
         when(cell.getLongitude()).thenReturn(18.4);
         when(cell.getWeight()).thenReturn(12L);
 
-        when(races.findById(raceId)).thenReturn(Optional.of(race));
+        when(races.findByIdForPublicVisibility(raceId)).thenReturn(Optional.of(race));
         when(gps.heatCells(eq(raceId), any(), any(), eq(3))).thenReturn(List.of(cell));
 
         var cells = newService(races, participants, gps, checkpoints, revisions).getRaceHeatmap(raceId, null, null, null);
