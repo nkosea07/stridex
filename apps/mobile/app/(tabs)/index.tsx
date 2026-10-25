@@ -164,7 +164,23 @@ export default function HomeScreen() {
   }
 
   if (isOperationsUser) {
-    return <UnsupportedMobileState />;
+    return (
+      <View style={styles.authContainer}>
+        <Ionicons name="shield-checkmark-outline" size={80} color="#0F766E" />
+        <Text style={styles.authTitle}>{t('mobile:operations.title')}</Text>
+        <Text style={styles.authSubtitle}>{t('mobile:operations.description')}</Text>
+        <Link href="/operations" asChild>
+          <TouchableOpacity style={styles.primaryButton}>
+            <Text style={styles.primaryButtonText}>{t('mobile:operations.record')}</Text>
+          </TouchableOpacity>
+        </Link>
+        <Link href="/(tabs)/races" asChild>
+          <TouchableOpacity style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>{t('mobile:home.browseRaces')}</Text>
+          </TouchableOpacity>
+        </Link>
+      </View>
+    );
   }
 
   if (!hasAnyCapability(user, ['ATHLETE', 'SPECTATOR'])) {

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, type LinksFunction } from 'react-router'
 import { I18nextProvider } from 'react-i18next'
 import { AuthProvider } from '@/contexts/AuthContext'
@@ -12,6 +12,7 @@ import { PRODUCT } from '@/config/product'
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: appStylesHref },
   { rel: 'stylesheet', href: mapboxStylesHref },
+  { rel: 'manifest', href: '/manifest.webmanifest' },
 ]
 
 export const meta = () => [
@@ -19,6 +20,7 @@ export const meta = () => [
   { name: 'description', content: PRODUCT.description },
   { property: 'og:title', content: PRODUCT.name },
   { property: 'og:description', content: PRODUCT.description },
+  { name: 'theme-color', content: '#0f172a' },
 ]
 
 function Document({ children }: { children: ReactNode }) {
@@ -44,6 +46,12 @@ export function Layout({ children }: { children: ReactNode }) {
 }
 
 export default function Root() {
+  useEffect(() => {
+    if ('serviceWorker' in navigator && import.meta.env.PROD) {
+      void navigator.serviceWorker.register('/sw.js').catch(() => undefined)
+    }
+  }, [])
+
   return (
     <I18nextProvider i18n={i18n}>
       <ThemeProvider>

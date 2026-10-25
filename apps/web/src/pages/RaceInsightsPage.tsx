@@ -93,6 +93,7 @@ export function RaceInsightsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{summary?.anomalyCount ?? 0}</div>
+                <p className="text-xs text-muted-foreground">{summary?.dropoutRiskPercent ?? 0}% at risk</p>
               </CardContent>
             </Card>
           </div>

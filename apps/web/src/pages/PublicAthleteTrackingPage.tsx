@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { Activity, ArrowLeft, ChevronRight, Copy, Flag, MapPin, RefreshCcw, Timer } from 'lucide-react'
 import useSWR from 'swr'
@@ -79,9 +79,10 @@ export function PublicAthleteTrackingPage({
   const location = useLocation()
   const hasInitialData = initialData?.raceId === raceId && initialData?.participantId === participantId
   const returnTo = `${location.pathname}${location.search}${location.hash}`
+  const [visibilityDenied, setVisibilityDenied] = useState(false)
 
   const {
-    data: tracking = null,
+    data: swrTracking = null,
     error,
     isLoading,
     isValidating,
@@ -93,15 +94,25 @@ export function PublicAthleteTrackingPage({
       fallbackData: hasInitialData ? initialData?.tracking : undefined,
       revalidateOnMount: hasInitialData ? false : undefined,
       refreshInterval: TRACKING_POLL_INTERVAL_MS,
-      keepPreviousData: true,
+      keepPreviousData: false,
+      onSuccess: () => setVisibilityDenied(false),
     },
   )
 
+  const tracking = error || visibilityDenied ? null : swrTracking
+
   useEffect(() => {
     if (error) {
+      setVisibilityDenied(true)
+      void mutate(undefined, { revalidate: false })
       toast.error('Failed to refresh athlete tracking')
     }
-  }, [error])
+  }, [error, mutate])
+
+
+  useEffect(() => {
+    setVisibilityDenied(false)
+  }, [raceId, participantId])
 
   const recentSplits = useMemo(() => tracking?.splits.slice(-6).reverse() ?? [], [tracking])
   const paceSeries = useMemo(() => buildPaceSeries(tracking?.splits ?? []), [tracking])

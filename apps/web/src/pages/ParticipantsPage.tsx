@@ -12,9 +12,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label'
 import { ApiError, participantsApi, categoriesApi } from '@/lib/api'
 import { toast } from 'sonner'
-import type { ImportJob, Participant, ParticipantStatus, Penalty, RaceCategory } from '@/types'
+import type { ExternalRefundAttempt, ImportJob, Participant, ParticipantStatus, Payment, Penalty, RaceCategory } from '@/types'
 import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { useTranslation } from 'react-i18next'
+import { formatCurrency } from '@/lib/format'
 
 const statusColors: Record<ParticipantStatus, string> = {
   REGISTERED: 'bg-muted text-muted-foreground',
@@ -51,6 +52,10 @@ export function ParticipantsPage() {
   const [isJobsOpen, setIsJobsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const previewFileRef = useRef<File | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [preview, setPreview] = useState<import('@/types').ImportPreview | null>(null)
   const [newParticipant, setNewParticipant] = useState({
     firstName: '',
     lastName: '',
@@ -84,25 +89,58 @@ export function ParticipantsPage() {
   const [refundReference, setRefundReference] = useState('')
   const [refundOutcome, setRefundOutcome] = useState<'REFUNDED' | 'NOT_REFUNDED'>('REFUNDED')
   const [refundBusy, setRefundBusy] = useState(false)
+  const [refundLoading, setRefundLoading] = useState(false)
+  const [refundLoadError, setRefundLoadError] = useState(false)
+  const [refundEligibleIds, setRefundEligibleIds] = useState<string[]>([])
+  const [refundPayments, setRefundPayments] = useState<Payment[]>([])
+  const [refundAttempts, setRefundAttempts] = useState<ExternalRefundAttempt[]>([])
+  const [refundPaymentId, setRefundPaymentId] = useState('')
+  const [refundAttemptId, setRefundAttemptId] = useState('')
+  const refundAttempt = refundAttempts.find((attempt) => attempt.id === refundAttemptId)
 
   const closeRefundDialog = () => {
     setRefundParticipantId(null)
     setRefundReason('')
     setRefundReference('')
     setRefundOutcome('REFUNDED')
+    setRefundPayments([])
+    setRefundAttempts([])
+    setRefundPaymentId('')
+    setRefundAttemptId('')
+    setRefundLoadError(false)
   }
 
   const openRefundDialog = (participantId: string) => {
     closeRefundDialog()
     setRefundParticipantId(participantId)
+    if (!raceId) return
+    setRefundLoading(true)
+    setRefundLoadError(false)
+    void Promise.all([
+      participantsApi.eligibleRefundPayments(raceId, participantId),
+      participantsApi.listRefundAttempts(raceId, participantId),
+    ]).then(([payments, attempts]) => {
+      setRefundPayments(payments)
+      setRefundAttempts(attempts)
+      if (payments.length === 1) setRefundPaymentId(payments[0].id)
+      const pending = attempts.filter((attempt) => attempt.status === 'PENDING')
+      if (pending.length === 1) setRefundAttemptId(pending[0].id)
+    }).catch(() => {
+      setRefundLoadError(true)
+      toast.error(t('common:refundLoadFailed'))
+    }).finally(() => setRefundLoading(false))
   }
 
   const loadParticipants = async () => {
     if (!raceId) return
     setIsLoading(true)
     try {
-      const data = await participantsApi.list(raceId)
+      const [data, eligibleIds] = await Promise.all([
+        participantsApi.list(raceId),
+        user?.role === 'SUPER_ADMIN' ? participantsApi.eligibleRefundParticipantIds(raceId) : Promise.resolve([]),
+      ])
       setParticipants(data)
+      setRefundEligibleIds(eligibleIds)
     } catch {
       toast.error('Failed to load participants')
     } finally {
@@ -145,12 +183,30 @@ export function ParticipantsPage() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !raceId) return
+    previewFileRef.current = file
+    setPreviewLoading(true)
     try {
-      await participantsApi.importCsv(raceId, file)
-      toast.success(`Import started for ${file.name}. Check status in "Recent Imports".`)
+      setPreview(await participantsApi.previewImport(raceId, file))
+      setPreviewOpen(true)
+    } catch {
+      toast.error('Failed to preview import file')
+    } finally {
+      setPreviewLoading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const confirmImport = async () => {
+    if (!raceId || !previewFileRef.current) return
+    try {
+      await participantsApi.importCsv(raceId, previewFileRef.current)
+      toast.success(t('common:importStarted'))
+      setPreviewOpen(false)
+      setPreview(null)
+      previewFileRef.current = null
       void loadImportJobs()
     } catch {
-      toast.error('Failed to start CSV import')
+      toast.error(t('common:importStartFailed'))
     }
   }
 
@@ -169,14 +225,14 @@ export function ParticipantsPage() {
     }
   }
 
-  const handleExportCsv = async () => {
+  const handleExportParticipants = async (format: 'csv' | 'xlsx') => {
     if (!raceId) return
     try {
-      const blob = await participantsApi.exportCsv(raceId)
+      const blob = await participantsApi.exportParticipants(raceId, format)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `participants-${raceId}.csv`
+      a.download = `participants-${raceId}.${format}`
       a.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -252,7 +308,10 @@ export function ParticipantsPage() {
     if (!raceId || !refundParticipantId || !refundReason.trim()) return
     setRefundBusy(true)
     try {
-      await participantsApi.stageExternalRefund(raceId, refundParticipantId, refundReason.trim())
+      const attempt = await participantsApi.stageExternalRefund(raceId, refundParticipantId,
+        refundReason.trim(), refundPaymentId || undefined)
+      setRefundAttempts((existing) => [attempt, ...existing])
+      setRefundAttemptId(attempt.id)
       toast.success(t('common:refundAttemptStaged'))
     } catch (error) {
       toast.error(error instanceof ApiError && error.code === 'REFUND_ATTEMPT_ALREADY_PENDING'
@@ -263,10 +322,10 @@ export function ParticipantsPage() {
   }
 
   const handleReconcileRefund = async () => {
-    if (!raceId || !refundParticipantId || !refundReason.trim() || !refundReference.trim()) return
+    if (!raceId || !refundParticipantId || !refundAttempt || !refundReason.trim() || !refundReference.trim()) return
     setRefundBusy(true)
     try {
-      await participantsApi.reconcileExternalRefund(raceId, refundParticipantId, {
+      await participantsApi.reconcileExternalRefund(raceId, refundParticipantId, refundAttempt.id, {
         providerReference: refundReference.trim(), reason: refundReason.trim(), outcome: refundOutcome,
       })
       toast.success(t('common:refundOutcomeRecorded'))
@@ -416,9 +475,13 @@ export function ParticipantsPage() {
             <Upload className="mr-2 h-4 w-4" />
             Import CSV
           </Button>
-          <Button variant="outline" onClick={() => void handleExportCsv()}>
+          <Button variant="outline" onClick={() => void handleExportParticipants('csv')}>
             <Download className="mr-2 h-4 w-4" />
-            Export
+            {t('common:exportCsv')}
+          </Button>
+          <Button variant="outline" onClick={() => void handleExportParticipants('xlsx')}>
+            <Download className="mr-2 h-4 w-4" />
+            {t('common:exportXlsx')}
           </Button>
           <Button onClick={() => setIsAddDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
@@ -522,7 +585,7 @@ export function ParticipantsPage() {
                             <DropdownMenuSeparator />
                           </>
                         )}
-                        {user?.role === 'SUPER_ADMIN' && (p.paymentStatus === 'PAID' || p.paymentStatus === 'REFUNDED') && (
+                        {user?.role === 'SUPER_ADMIN' && p.paymentStatus === 'PAID' && refundEligibleIds.includes(p.id) && (
                           <>
                             <DropdownMenuItem onClick={() => openRefundDialog(p.id)}>
                               <RotateCcw className="mr-2 h-4 w-4" />
@@ -728,15 +791,62 @@ export function ParticipantsPage() {
             <DialogTitle>{t('common:manageExternalRefund')}</DialogTitle>
             <DialogDescription>{t('common:externalRefundInstructions')}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4" aria-busy={refundLoading}>
+            {refundLoading && <p role="status">{t('common:refundLoading')}</p>}
+            {!refundLoading && refundLoadError && (
+              <p role="alert" className="text-sm text-destructive">{t('common:refundLoadFailed')}</p>
+            )}
+            {!refundLoading && !refundLoadError && refundPayments.length === 0 && !refundAttempt && (
+              <p role="status">{t('common:refundNoEligiblePayment')}</p>
+            )}
+            {refundPayments.length > 0 && !refundAttempt && (
+              <div className="space-y-2">
+                <Label htmlFor="refund-payment">{t('common:refundPayment')}</Label>
+                <Select value={refundPaymentId} onValueChange={setRefundPaymentId}>
+                  <SelectTrigger id="refund-payment"><SelectValue placeholder={t('common:refundSelectPayment')} /></SelectTrigger>
+                  <SelectContent>
+                    {refundPayments.map((payment) => (
+                      <SelectItem key={payment.id} value={payment.id}>
+                        {formatCurrency(payment.payableAmount ?? payment.amount ?? 0, payment.currency)} · {payment.reference}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {refundAttempts.filter((attempt) => attempt.status === 'PENDING').length > 1 && (
+              <div className="space-y-2">
+                <Label htmlFor="refund-attempt">{t('common:refundAttempt')}</Label>
+                <Select value={refundAttemptId} onValueChange={setRefundAttemptId}>
+                  <SelectTrigger id="refund-attempt"><SelectValue placeholder={t('common:refundSelectAttempt')} /></SelectTrigger>
+                  <SelectContent>
+                    {refundAttempts.filter((attempt) => attempt.status === 'PENDING').map((attempt) => (
+                      <SelectItem key={attempt.id} value={attempt.id}>
+                        {formatCurrency(attempt.amount, attempt.currency ?? undefined)} · {attempt.paymentReference}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {refundAttempt && (
+              <div role="status" className="rounded-md border border-border p-3 text-sm">
+                <p>{t('common:refundAttempt')}: {refundAttempt.id}</p>
+                <p>{t('common:refundAmount')}: {formatCurrency(refundAttempt.amount, refundAttempt.currency ?? undefined)}</p>
+                <p>{t('common:refundPaymentReference')}: {refundAttempt.paymentReference}</p>
+                <p>{t('common:labels.status')}: {refundAttempt.status}</p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="refund-reason">{t('common:refundReason')}</Label>
               <Input id="refund-reason" value={refundReason} onChange={(event) => setRefundReason(event.target.value)} />
             </div>
-            {participants.find((participant) => participant.id === refundParticipantId)?.paymentStatus !== 'REFUNDED' && (
-              <Button variant="outline" disabled={refundBusy || !refundReason.trim()}
+            {!refundAttempt && refundPayments.length > 0 && (
+              <Button variant="outline" disabled={refundBusy || refundLoading || !refundReason.trim() || !refundPaymentId}
                 onClick={() => void handleStageRefund()}>{t('common:stageExternalRefund')}</Button>
             )}
+            {refundAttempt?.status === 'PENDING' && (
+              <>
             <div className="space-y-2">
               <Label htmlFor="refund-reference">{t('common:refundProviderReference')}</Label>
               <Input id="refund-reference" value={refundReference}
@@ -752,13 +862,53 @@ export function ParticipantsPage() {
                 </SelectContent>
               </Select>
             </div>
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={refundBusy} onClick={closeRefundDialog}>
               {t('common:actions.cancel')}
             </Button>
-            <Button disabled={refundBusy || !refundReason.trim() || !refundReference.trim()}
+            <Button disabled={refundBusy || refundLoading || refundAttempt?.status !== 'PENDING' || !refundReason.trim() || !refundReference.trim()}
               onClick={() => void handleReconcileRefund()}>{t('common:recordRefundOutcome')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{t('common:importPreviewTitle')}</DialogTitle>
+            <DialogDescription>
+              {preview ? t('common:importPreviewSummary', {
+                total: preview.totalRows, valid: preview.validRows, duplicates: preview.duplicateRows,
+              }) : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {previewLoading && <p role="status">{t('common:importPreviewLoading')}</p>}
+          {preview && (
+            <div className="max-h-[50vh] overflow-auto rounded-md border">
+              <Table>
+                <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Email</TableHead><TableHead>Name</TableHead><TableHead>Issues</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {preview.rows.map((row) => (
+                    <TableRow key={row.rowNumber}>
+                      <TableCell>{row.rowNumber}</TableCell>
+                      <TableCell>{row.values.email}</TableCell>
+                      <TableCell>{[row.values.firstName, row.values.lastName].filter(Boolean).join(' ')}</TableCell>
+                      <TableCell className={row.errors.length ? 'text-destructive' : 'text-muted-foreground'}>
+                        {row.errors.length ? row.errors.join('; ') : t('common:importPreviewValid')}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewOpen(false)}>{t('common:actions.cancel')}</Button>
+            <Button disabled={!preview || preview.validRows === 0} onClick={() => void confirmImport()}>
+              {t('common:importPreviewConfirm')}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

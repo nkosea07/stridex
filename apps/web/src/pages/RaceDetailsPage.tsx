@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Flag, Users, MapPin, Timer, Trophy, Calendar, Play, Pause, CheckCircle, Pencil } from 'lucide-react'
+import { Ban, Flag, Users, MapPin, Timer, Trophy, Calendar, Play, Pause, CheckCircle, Pencil } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -90,10 +90,10 @@ export function RaceDetailPage() {
     ? (byStatus.finished / participants.length) * 100
     : 0
 
-  const handleStatusChange = async (status: RaceStatus) => {
+  const handleStatusChange = async (status: RaceStatus, reason?: string) => {
     if (!raceId) return
     try {
-      await racesApi.updateStatus(raceId, status)
+      await racesApi.updateStatus(raceId, status, reason)
       toast.success('Race status updated')
       await load()
     } catch {
@@ -214,6 +214,15 @@ export function RaceDetailPage() {
                 <span className="ml-2">{action.label}</span>
               </Button>
             ))}
+          {canManageRace && race.status !== 'CANCELLED' && race.status !== 'COMPLETED' && (
+            <Button variant="outline" className="text-destructive" onClick={() => {
+              const reason = window.prompt('Cancellation reason')
+              if (reason !== null) void handleStatusChange('CANCELLED', reason)
+            }}>
+              <Ban className="mr-2 h-4 w-4" />
+              Cancel race
+            </Button>
+          )}
           {canManageRace && (
             <Button variant="outline" onClick={openEdit}>
               <Pencil className="mr-2 h-4 w-4" />
@@ -257,6 +266,12 @@ export function RaceDetailPage() {
           <div className="flex justify-between text-sm"><span className="text-muted-foreground">Official Results</span><span>{results.filter((r) => r.isOfficial).length}</span></div>
           <div className="flex justify-between text-sm"><span className="text-muted-foreground">Distance</span><span>{race.distanceKm ?? '-'} km</span></div>
           <div className="flex justify-between text-sm"><span className="text-muted-foreground">Max Participants</span><span>{race.maxParticipants ?? '-'}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Timezone</span><span>{race.timezone ?? 'UTC'}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Early bird</span><span>{race.earlyBirdFee ?? '-'} {race.currency}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Team fee</span><span>{race.teamFee ?? '-'} {race.currency}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Bib prefix</span><span>{race.bibPrefix || '-'}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Medal places</span><span>{race.medalPlaces ?? 3}</span></div>
+          {race.cancellationReason && <div className="flex justify-between text-sm"><span className="text-muted-foreground">Cancellation</span><span>{race.cancellationReason}</span></div>}
         </CardContent>
       </Card>
 

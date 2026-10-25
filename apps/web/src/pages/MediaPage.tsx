@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Upload, Check, X, Trash2, Image as ImageIcon } from 'lucide-react'
+import { Upload, Check, X, Trash2, Image as ImageIcon, ShieldCheck, ShieldX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { mediaApi } from '@/lib/api'
 import type { MediaItem } from '@/types'
 import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-warning/20 text-warning-foreground',
@@ -19,11 +21,15 @@ const statusColors: Record<string, string> = {
 export function MediaPage() {
   const { raceId } = useParams()
   const { user } = useAuth()
+  const { t } = useTranslation()
   const canModerateMedia = isAdminRole(user?.role)
   const [items, setItems] = useState<MediaItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
   const [caption, setCaption] = useState('')
+  const [attestItemId, setAttestItemId] = useState<string | null>(null)
+  const [attestReason, setAttestReason] = useState('')
+  const [isAttesting, setIsAttesting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadMedia = useCallback(async () => {
@@ -70,6 +76,33 @@ export function MediaPage() {
       await loadMedia()
     } catch {
       toast.error('Failed to update media')
+    }
+  }
+
+  const handleRevokeAttestation = async (id: string) => {
+    if (!raceId) return
+    try {
+      await mediaApi.revokeNonPerson(raceId, id)
+      toast.success(t('common:mediaAttestationRevoked'))
+      await loadMedia()
+    } catch {
+      toast.error(t('common:mediaAttestationRevokeFailed'))
+    }
+  }
+
+  const handleAttestNonPerson = async () => {
+    if (!raceId || !attestItemId || !attestReason.trim()) return
+    setIsAttesting(true)
+    try {
+      await mediaApi.attestNonPerson(raceId, attestItemId, attestReason.trim())
+      toast.success(t('common:mediaAttestNonPersonSuccess'))
+      setAttestItemId(null)
+      setAttestReason('')
+      await loadMedia()
+    } catch {
+      toast.error(t('common:mediaAttestNonPersonFailed'))
+    } finally {
+      setIsAttesting(false)
     }
   }
 
@@ -131,12 +164,21 @@ export function MediaPage() {
                 )}
               </div>
               <CardContent className="space-y-2 p-3">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <Badge className={statusColors[item.status] ?? 'bg-muted'}>{item.status}</Badge>
+                  <Badge variant={item.publiclyVisible ? 'default' : 'secondary'}>
+                    {item.publiclyVisible ? t('common:mediaPublic') : t('common:mediaPrivate')}
+                  </Badge>
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <ImageIcon className="h-3 w-3" /> {item.mediaType}
                   </span>
                 </div>
+                {item.participantId && !item.participantConsent && (
+                  <p className="text-xs text-muted-foreground">{t('common:mediaHiddenNoConsent')}</p>
+                )}
+                {!item.participantId && !item.nonPersonAttested && (
+                  <p className="text-xs text-muted-foreground">{t('common:mediaHiddenNoAttestation')}</p>
+                )}
                 {item.caption && <p className="text-sm">{item.caption}</p>}
                 <div className="flex gap-2">
                   {canModerateMedia && item.status !== 'APPROVED' && (
@@ -147,6 +189,16 @@ export function MediaPage() {
                   {canModerateMedia && item.status !== 'REJECTED' && (
                     <Button size="sm" variant="outline" onClick={() => void handleModerate(item.id, false)}>
                       <X className="mr-1 h-3 w-3" /> Reject
+                    </Button>
+                  )}
+                  {canModerateMedia && !item.participantId && item.status === 'APPROVED' && !item.nonPersonAttested && (
+                    <Button size="sm" variant="outline" onClick={() => setAttestItemId(item.id)}>
+                      <ShieldCheck className="mr-1 h-3 w-3" /> {t('common:mediaAttestNonPersonAction')}
+                    </Button>
+                  )}
+                  {canModerateMedia && item.nonPersonAttested && (
+                    <Button size="sm" variant="outline" onClick={() => void handleRevokeAttestation(item.id)}>
+                      <ShieldX className="mr-1 h-3 w-3" /> {t('common:mediaAttestationRevoke')}
                     </Button>
                   )}
                   {canModerateMedia && (
@@ -160,6 +212,25 @@ export function MediaPage() {
           ))}
         </div>
       )}
+
+      <Dialog open={Boolean(attestItemId)} onOpenChange={(open) => { if (!open) { setAttestItemId(null); setAttestReason('') } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('common:mediaAttestNonPersonTitle')}</DialogTitle>
+            <DialogDescription>{t('common:mediaAttestNonPersonDescription')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Input value={attestReason} onChange={(event) => setAttestReason(event.target.value)}
+              placeholder={t('common:mediaAttestNonPersonReason')} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAttestItemId(null)}>{t('common:actions.cancel')}</Button>
+            <Button disabled={isAttesting || !attestReason.trim()} onClick={() => void handleAttestNonPerson()}>
+              {t('common:mediaAttestNonPersonSubmit')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

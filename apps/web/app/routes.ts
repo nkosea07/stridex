@@ -15,6 +15,7 @@ export default [
     route('races/:raceId', 'routes/admin-race-detail.tsx'),
     route('races/:raceId/participants', 'routes/admin-race-participants.tsx'),
     route('races/:raceId/registration', 'routes/admin-race-registration.tsx'),
+    route('races/:raceId/setup', 'routes/admin-race-setup.tsx'),
     route('races/:raceId/categories', 'routes/admin-race-categories.tsx'),
     route('races/:raceId/teams', 'routes/admin-race-teams.tsx'),
     route('races/:raceId/live', 'routes/admin-race-live.tsx'),
@@ -26,6 +27,8 @@ export default [
     route('races/:raceId/promos', 'routes/admin-race-promos.tsx'),
     route('races/:raceId/results', 'routes/admin-race-results.tsx'),
     route('organizer-applications', 'routes/admin-organizer-applications.tsx'),
+    route('privacy-objects', 'routes/admin-privacy-objects.tsx'),
+    route('finance-reversals', 'routes/admin-finance-reversals.tsx'),
     route('settings', 'routes/admin-settings.tsx'),
   ]),
   route('app', 'routes/app-layout.tsx', [

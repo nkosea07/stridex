@@ -3,7 +3,7 @@
   "races": "Race management",
   "operations": "Race operations",
   "organizerApplications": "Organizer approvals",
-  "participants": "Race participants",
+  "participants": "Participants",
   "registration": "Registration setup",
   "categories": "Race categories",
   "teams": "Race teams",
@@ -198,7 +198,6 @@
   "age": "Age",
   "bibPrefix": "Bib prefix",
   "fee": "Fee",
-  "participants": "Participants",
   "actions": "Actions",
   "any": "ANY",
   "noCategoriesConfigured": "No categories configured.",
@@ -206,5 +205,9 @@
   "description": "Description",
   "minAge": "Min age",
   "maxAge": "Max age",
-  "maxParticipants": "Max participants"
+  "maxParticipants": "Max participants",
+  "privacyObjects": "Privacy object scopes",
+  "financeReversals": "Payment reversals",
+  "smsUnavailable": "SMS is unavailable in this release.",
+  "raceSetup": "Stages & sponsors"
 }

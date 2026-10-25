@@ -2,6 +2,10 @@ import type {
   Race, 
   Participant, 
   ImportJob,
+  ImportPreview,
+  RaceSponsor,
+  RaceStage,
+  TimingImportResult,
   Checkpoint, 
   CheckpointRecord,
   PublicAthleteSummary,
@@ -30,6 +34,9 @@ import type {
   Penalty,
   AppNotification,
   Payment,
+  ExternalRefundAttempt,
+  AdminPrivacyJob,
+  ReversalCase,
   RankingEntry,
   MediaItem,
   RaceAnalyticsSummary,
@@ -462,10 +469,10 @@ export const racesApi = {
   restore: (id: string) =>
     fetchApi<Race>(buildContractPath(API_CONTRACT.endpoints.raceRestore, { id }), { method: 'POST' }),
   
-  updateStatus: (id: string, status: Race['status']) =>
+  updateStatus: (id: string, status: Race['status'], reason?: string) =>
     fetchApi<Race>(buildContractPath(API_CONTRACT.endpoints.raceStatus, { id }), {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, reason }),
     }),
 }
 
@@ -523,15 +530,30 @@ export const participantsApi = {
   refundPayment: (raceId: string, id: string) =>
     fetchApi<Payment>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPaymentRefund, { raceId, id }), { method: 'POST' }),
 
-  stageExternalRefund: (raceId: string, id: string, reason: string) =>
-    fetchApi<Payment>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPaymentRefundAttempt, { raceId, id }), {
-      method: 'POST', body: JSON.stringify({ reason }),
+  eligibleRefundPayments: (raceId: string, id: string) =>
+    fetchApi<Payment[]>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPaymentRefundEligible, { raceId, id })),
+
+  eligibleRefundParticipantIds: (raceId: string) =>
+    fetchApi<string[]>(buildContractPath(API_CONTRACT.endpoints.raceRefundEligibleParticipants, { raceId })),
+
+  listRefundAttempts: (raceId: string, id: string) =>
+    fetchApi<ExternalRefundAttempt[]>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPaymentRefundAttempts, { raceId, id })),
+
+  getRefundAttempt: (raceId: string, id: string, attemptId: string) =>
+    fetchApi<ExternalRefundAttempt>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPaymentRefundAttemptById,
+      { raceId, id, attemptId })),
+
+  stageExternalRefund: (raceId: string, id: string, reason: string, paymentId?: string) =>
+    fetchApi<ExternalRefundAttempt>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPaymentRefundAttemptCreate,
+      { raceId, id }), {
+      method: 'POST', body: JSON.stringify({ reason, paymentId }),
     }),
 
-  reconcileExternalRefund: (raceId: string, id: string, data: {
+  reconcileExternalRefund: (raceId: string, id: string, attemptId: string, data: {
     providerReference: string; reason: string; outcome: 'REFUNDED' | 'NOT_REFUNDED'
   }) =>
-    fetchApi<Payment>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPaymentRefundReconcile, { raceId, id }), {
+    fetchApi<ExternalRefundAttempt>(buildContractPath(API_CONTRACT.endpoints.raceParticipantPaymentRefundAttemptReconcile,
+      { raceId, id, attemptId }), {
       method: 'POST', body: JSON.stringify(data),
     }),
   
@@ -544,12 +566,25 @@ export const participantsApi = {
     }, 'CSV import failed').then(res => res.json())
   },
   
-  exportCsv: (raceId: string) =>
+  exportParticipants: (raceId: string, format: 'csv' | 'xlsx' = 'csv') =>
     fetchAuthenticated(
-      buildContractPath(API_CONTRACT.endpoints.raceParticipantExport, { raceId }),
+      buildContractPath(API_CONTRACT.endpoints.raceParticipantExport, { raceId }, { format }),
       undefined,
       'Participant export failed',
     ).then(res => res.blob()),
+
+  previewImport: (raceId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return fetchApi<ImportPreview>(buildContractPath(API_CONTRACT.endpoints.raceParticipantImportPreview, { raceId }), {
+      method: 'POST', body: formData,
+    })
+  },
+
+  qrCheckIn: (raceId: string, code: string) =>
+    fetchApi<Participant>(buildContractPath(API_CONTRACT.endpoints.raceParticipantQrCheckIn, { raceId }), {
+      method: 'POST', body: JSON.stringify({ code }),
+    }),
 
   listImportJobs: (raceId: string) => fetchApi<ImportJob[]>(buildContractPath(API_CONTRACT.endpoints.raceParticipantImportJobs, { raceId })),
   
@@ -589,6 +624,12 @@ export const participantsApi = {
     }),
 
   myRegistrations: () => fetchApi<Registration[]>(API_CONTRACT.endpoints.myRegistrations),
+
+  updateMediaConsent: (participantId: string, consented: boolean) =>
+    fetchApi<{ participantId: string; consented: boolean }>(
+      buildContractPath(API_CONTRACT.endpoints.myRegistrationMediaConsent, { participantId }), {
+        method: 'PUT', body: JSON.stringify({ consented }),
+      }),
 }
 
 // Registration fields / teams API
@@ -623,6 +664,10 @@ export interface PublicRegistrationPayload {
   categoryId: string
   emergencyContact: { name?: string; phone?: string; relationship?: string }
   waiverAccepted?: boolean
+  mediaPublicationConsent?: boolean
+  bloodType?: string
+  medicalConditions?: string
+  allergies?: string
   shirtSize?: string
   teamId?: string
   clubName?: string
@@ -674,6 +719,14 @@ export const checkpointsApi = {
   listRecords: (raceId: string, checkpointId: string) =>
     fetchApi<CheckpointRecord[]>(buildContractPath(API_CONTRACT.endpoints.checkpointRecords, { raceId, checkpointId })),
 
+  importTiming: (raceId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return fetchApi<TimingImportResult>(buildContractPath(API_CONTRACT.endpoints.checkpointTimingImport, { raceId }), {
+      method: 'POST', body: formData,
+    })
+  },
+
   exportCheckpoints: (raceId: string, format: 'csv' | 'xlsx') =>
     downloadExport(buildContractPath(API_CONTRACT.endpoints.raceCheckpointExport, { raceId }, { format })),
 }
@@ -693,6 +746,34 @@ export const rfidApi = {
 }
 
 // Categories API
+export const stagesApi = {
+  list: (raceId: string) => fetchApi<RaceStage[]>(buildContractPath(API_CONTRACT.endpoints.raceStages, { raceId })),
+  create: (raceId: string, data: Partial<RaceStage>) =>
+    fetchApi<RaceStage>(buildContractPath(API_CONTRACT.endpoints.raceStages, { raceId }), {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  update: (raceId: string, stageId: string, data: Partial<RaceStage>) =>
+    fetchApi<RaceStage>(buildContractPath(API_CONTRACT.endpoints.raceStage, { raceId, stageId }), {
+      method: 'PUT', body: JSON.stringify(data),
+    }),
+  remove: (raceId: string, stageId: string) =>
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceStage, { raceId, stageId }), { method: 'DELETE' }),
+}
+
+export const sponsorsApi = {
+  list: (raceId: string) => fetchApi<RaceSponsor[]>(buildContractPath(API_CONTRACT.endpoints.raceSponsors, { raceId })),
+  create: (raceId: string, data: Partial<RaceSponsor>) =>
+    fetchApi<RaceSponsor>(buildContractPath(API_CONTRACT.endpoints.raceSponsors, { raceId }), {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  update: (raceId: string, sponsorId: string, data: Partial<RaceSponsor>) =>
+    fetchApi<RaceSponsor>(buildContractPath(API_CONTRACT.endpoints.raceSponsor, { raceId, sponsorId }), {
+      method: 'PUT', body: JSON.stringify(data),
+    }),
+  remove: (raceId: string, sponsorId: string) =>
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceSponsor, { raceId, sponsorId }), { method: 'DELETE' }),
+}
+
 export const categoriesApi = {
   list: (raceId: string) => fetchApi<RaceCategory[]>(buildContractPath(API_CONTRACT.endpoints.raceCategories, { raceId })),
   
@@ -733,6 +814,10 @@ export const resultsApi = {
   },
 
   my: () => fetchApi<RaceResult[]>(API_CONTRACT.endpoints.myResults),
+
+  myHistory: () => fetchApi<import('@/types').AthleteHistoryEntry[]>(API_CONTRACT.endpoints.myResultsHistory),
+
+  myPersonalBests: () => fetchApi<import('@/types').PersonalBest[]>(API_CONTRACT.endpoints.myPersonalBests),
   
   publish: (raceId: string) =>
     fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceResultsPublish, { raceId }), { method: 'POST' }),
@@ -869,6 +954,16 @@ export const mediaApi = {
   approve: (raceId: string, id: string) =>
     fetchApi<MediaItem>(buildContractPath(API_CONTRACT.endpoints.raceMediaApprove, { raceId, mediaId: id }), { method: 'POST' }),
 
+  attestNonPerson: (raceId: string, id: string, reason: string) =>
+    fetchApi<MediaItem>(buildContractPath(API_CONTRACT.endpoints.raceMediaAttestNonPerson, { raceId, mediaId: id }), {
+      method: 'POST', body: JSON.stringify({ reason }),
+    }),
+
+  revokeNonPerson: (raceId: string, id: string) =>
+    fetchApi<MediaItem>(buildContractPath(API_CONTRACT.endpoints.raceMediaAttestNonPerson, { raceId, mediaId: id }), {
+      method: 'DELETE',
+    }),
+
   reject: (raceId: string, id: string) =>
     fetchApi<MediaItem>(buildContractPath(API_CONTRACT.endpoints.raceMediaReject, { raceId, mediaId: id }), { method: 'POST' }),
 
@@ -882,7 +977,7 @@ export const analyticsApi = {
   registrations: (raceId: string, days = 30) =>
     fetchApi<RegistrationPoint[]>(buildContractPath(API_CONTRACT.endpoints.raceAnalyticsRegistrations, { raceId }, { days })),
 
-  exportAnalytics: (raceId: string, format: 'csv' | 'xlsx') =>
+  exportAnalytics: (raceId: string, format: 'csv' | 'xlsx' | 'pdf') =>
     downloadExport(buildContractPath(API_CONTRACT.endpoints.raceAnalyticsExport, { raceId }, { format })),
 }
 
@@ -918,6 +1013,30 @@ export const emergencyApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  list: (raceId: string) =>
+    fetchApi<EmergencyAlert[]>(buildContractPath(API_CONTRACT.endpoints.raceEmergency, { raceId })),
+
+  updateStatus: (raceId: string, alertId: string, status: 'ACKNOWLEDGED' | 'RESOLVED') =>
+    fetchApi<EmergencyAlert>(buildContractPath(API_CONTRACT.endpoints.raceEmergencyAlert, { raceId, alertId }), {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+}
+
+export const privacyAdminApi = {
+  listBlockedJobs: (scope = 'UNVERIFIED_LEGACY') =>
+    fetchApi<AdminPrivacyJob[]>(buildContractPath(API_CONTRACT.endpoints.adminPrivacyObjectDeletionJobs, {}, { scope })),
+
+  verifyScope: (jobId: string, scope: string, reason: string) =>
+    fetchApi<AdminPrivacyJob>(buildContractPath(API_CONTRACT.endpoints.adminPrivacyObjectDeletionJobScope, { jobId }), {
+      method: 'PATCH',
+      body: JSON.stringify({ scope, reason }),
+    }),
+}
+
+export const paymentReversalApi = {
+  listOpen: () => fetchApi<ReversalCase[]>(API_CONTRACT.endpoints.adminPaymentReversalCases),
 }
 
 export const promoApi = {

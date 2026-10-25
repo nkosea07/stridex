@@ -5,11 +5,13 @@ import { useTrackingStore } from '@/store/tracking';
 import { api, getNonEmptyRouteId } from '@/lib/api';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from '@/components/Map';
 import type { Checkpoint, Race } from '@/types';
+import { freshSosFix } from '@/lib/sos';
 import { HUD } from '@/components/HUD';
 import { BottomDrawer } from '@/components/BottomDrawer';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/theme';
 import { CapabilityGate } from '@/components/CapabilityGate';
+import { useTranslation } from 'react-i18next';
 
 function normalizeRaceStatus(raw?: string): Race['status'] {
   const value = String(raw || '').toLowerCase();
@@ -54,6 +56,7 @@ function TrackingScreenContent() {
   const [isSendingSos, setIsSendingSos] = useState(false);
   const [selectedRace, setSelectedRace] = useState<Race | null>(currentRace);
   const { colors } = useTheme();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
@@ -197,14 +200,22 @@ function TrackingScreenContent() {
   const sendSos = async (targetRaceId: string) => {
     setIsSendingSos(true);
     try {
-      await api.reportEmergency(targetRaceId, {
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-        message: 'Emergency SOS raised from the mobile app',
+      const sosFix = freshSosFix(useTrackingStore.getState().locations);
+      const receipt = await api.reportEmergency(targetRaceId, {
+        ...(sosFix ?? {}),
+        message: t('mobile:sos.message'),
       });
-      Alert.alert('SOS sent', 'Race organizers have been alerted with your location.');
+      const delivered = receipt?.deliveryStatus === 'DISPATCHED';
+      const locationNote = sosFix ? '' : ` ${t('mobile:sos.noLocation')}`;
+      if (delivered) {
+        Alert.alert(t('mobile:sos.deliveredTitle'), `${t('mobile:sos.deliveredBody')}${locationNote}`);
+      } else {
+        Alert.alert(t('mobile:sos.receivedTitle'),
+          `${t('mobile:sos.receivedBody')}${locationNote}\n\n${t('mobile:sos.guidance')}`);
+      }
     } catch (error) {
-      Alert.alert('SOS failed', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert(t('mobile:sos.failedTitle'),
+        error instanceof Error ? error.message : t('mobile:sos.failedBody'));
     } finally {
       setIsSendingSos(false);
     }
@@ -213,15 +224,16 @@ function TrackingScreenContent() {
   const handleSos = () => {
     const targetRaceId = routeRaceId || getNonEmptyRouteId(currentRace?.id) || getNonEmptyRouteId(selectedRace?.id);
     if (!targetRaceId) {
-      Alert.alert('No active race', 'Start tracking a race before raising an SOS.');
+      Alert.alert(t('mobile:sos.noRaceTitle'), t('mobile:sos.noRaceBody'));
       return;
     }
+    const sosFix = freshSosFix(locations);
     Alert.alert(
-      'Send emergency SOS?',
-      'This alerts race organizers with your current location.',
+      t('mobile:sos.confirmTitle'),
+      sosFix ? t('mobile:sos.confirmBodyWithLocation') : t('mobile:sos.confirmBodyWithoutLocation'),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Send SOS', style: 'destructive', onPress: () => void sendSos(targetRaceId) },
+        { text: t('common:actions.cancel'), style: 'cancel' },
+        { text: t('mobile:sos.send'), style: 'destructive', onPress: () => void sendSos(targetRaceId) },
       ],
     );
   };

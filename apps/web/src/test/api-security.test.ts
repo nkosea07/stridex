@@ -4,6 +4,8 @@ import {
   getAccessToken,
   normalizeUser,
   participantsApi,
+  paymentReversalApi,
+  privacyAdminApi,
   publicRegistrationApi,
   setAccessToken,
 } from '@/lib/api'
@@ -64,6 +66,26 @@ describe('web API security boundaries', () => {
 
     expect(await authApi.restoreBrowserSession()).toBe(false)
     expect(getAccessToken()).toBeNull()
+  })
+
+  it('resolves privacy and finance administration endpoints from the contract', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }))
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'job-1' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      }))
+
+    await privacyAdminApi.listBlockedJobs()
+    await paymentReversalApi.listOpen()
+    await privacyAdminApi.verifyScope('job-1', 'local|/verified/legacy', 'Deployment record')
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/admin/privacy/object-deletion-jobs?scope=UNVERIFIED_LEGACY')
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/admin/payments/reversal-cases')
+    expect(String(fetchMock.mock.calls[2][0])).toContain('/admin/privacy/object-deletion-jobs/job-1/scope')
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({
+      scope: 'local|/verified/legacy', reason: 'Deployment record',
+    })
   })
 
   it('does not install a refresh token after logout invalidates the session', async () => {
@@ -127,12 +149,12 @@ describe('web API security boundaries', () => {
     }))
 
     await participantsApi.stageExternalRefund('race-1', 'participant-1', 'Duplicate charge')
-    await participantsApi.reconcileExternalRefund('race-1', 'participant-1', {
+    await participantsApi.reconcileExternalRefund('race-1', 'participant-1', 'attempt-1', {
       providerReference: 'CASE-1', reason: 'Duplicate charge', outcome: 'NOT_REFUNDED',
     })
 
-    expect(String(fetchMock.mock.calls[0][0])).toContain('/payment/refund/attempt')
-    expect(String(fetchMock.mock.calls[1][0])).toContain('/payment/refund/reconcile')
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/payment/refund/attempts')
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/payment/refund/attempts/attempt-1/reconcile')
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({
       providerReference: 'CASE-1', outcome: 'NOT_REFUNDED',
     })
