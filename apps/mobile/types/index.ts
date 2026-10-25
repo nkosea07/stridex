@@ -196,6 +196,7 @@ export interface Registration {
   };
   shirtSize?: string;
   paymentStatus?: 'UNPAID' | 'PENDING' | 'PAID' | 'WAIVED' | 'REFUNDED';
+  mediaPublicationConsent?: boolean;
   teamId?: string;
   teamName?: string;
   rejectionReason?: string;
@@ -211,6 +212,10 @@ export interface RaceRegistrationRequest {
   clubName?: string;
   teamName?: string;
   answers?: { fieldId: string; value?: string }[];
+  mediaPublicationConsent?: boolean;
+  bloodType?: string;
+  medicalConditions?: string;
+  allergies?: string;
 }
 
 export type ParticipantCredentialType = 'RFID_UHF_TIMING' | 'QR_TICKET' | 'NFC_GATE' | 'BARCODE_GATEPASS';

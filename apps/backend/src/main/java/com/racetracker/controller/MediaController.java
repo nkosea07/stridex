@@ -6,6 +6,7 @@ import com.racetracker.service.AuditEventService;
 import com.racetracker.service.MediaService;
 import com.racetracker.service.PublicRaceVisibility;
 import org.springframework.http.MediaType;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -65,6 +66,31 @@ public class MediaController {
         return ResponseEntity.ok(media);
     }
 
+    public record NonPersonAttestationRequest(String reason) {}
+
+    @PostMapping("/v${racetracker.api.version}/races/{raceId}/media/{mediaId}/attest-non-person")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    public ResponseEntity<MediaDto> attestNonPerson(@PathVariable UUID raceId, @PathVariable UUID mediaId,
+                                                     @RequestBody NonPersonAttestationRequest request,
+                                                     Authentication authentication) {
+        raceAccessGuard.assertCanManage(raceId);
+        MediaDto media = mediaService.attestNonPerson(raceId, mediaId, request.reason(), authentication.getName());
+        auditEventService.recordForActor("MEDIA_PUBLICATION_ATTESTED", authentication.getName(), "RACE_MEDIA",
+            mediaId.toString(), "SUCCESS", Map.of("raceId", raceId.toString()));
+        return ResponseEntity.ok(media);
+    }
+
+    @DeleteMapping("/v${racetracker.api.version}/races/{raceId}/media/{mediaId}/attest-non-person")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    public ResponseEntity<MediaDto> revokeNonPerson(@PathVariable UUID raceId, @PathVariable UUID mediaId,
+                                                     Authentication authentication) {
+        raceAccessGuard.assertCanManage(raceId);
+        MediaDto media = mediaService.revokeNonPerson(raceId, mediaId, authentication.getName());
+        auditEventService.recordForActor("MEDIA_PUBLICATION_ATTESTATION_REVOKED", authentication.getName(),
+            "RACE_MEDIA", mediaId.toString(), "SUCCESS", Map.of("raceId", raceId.toString()));
+        return ResponseEntity.ok(media);
+    }
+
     @PostMapping("/v${racetracker.api.version}/races/{raceId}/media/{mediaId}/reject")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<MediaDto> reject(@PathVariable UUID raceId, @PathVariable UUID mediaId, Authentication authentication) {
@@ -102,7 +128,7 @@ public class MediaController {
     @GetMapping("/v${racetracker.api.version}/public/races/{raceId}/media")
     public ResponseEntity<List<MediaDto>> publicList(@PathVariable UUID raceId) {
         publicRaceVisibility.requireVisible(raceId);
-        return ResponseEntity.ok(mediaService.listApproved(raceId));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(mediaService.listApproved(raceId));
     }
 
     @GetMapping("/v${racetracker.api.version}/public/races/{raceId}/media/{mediaId}/content")
@@ -119,6 +145,7 @@ public class MediaController {
 
     private ResponseEntity<byte[]> contentResponse(MediaService.MediaContent content) {
         return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
             .contentType(MediaType.parseMediaType(content.contentType()))
             .body(content.bytes());
     }

@@ -36,6 +36,51 @@ type PageResponse<T> = {
 };
 
 export type RacePage = PageResponse<Race>;
+export type AssignedCheckpoint = { raceId: string; raceName: string; checkpointId: string; checkpointName: string };
+export type CheckpointEmergencyReceipt = { id: string; deliveryStatus: 'QUEUED' | 'DISPATCHED' | 'ESCALATION_REQUIRED' | 'LEGACY_UNVERIFIED' };
+
+export function parseAssignedCheckpointPage(value: unknown): PageResponse<AssignedCheckpoint> {
+  const page = parseRequiredRecord(value, 'Assigned checkpoints response was malformed.');
+  if (!Array.isArray(page.content)) throw new Error('Assigned checkpoints response was malformed.');
+  const number = parseFiniteInteger(page.number, 'Assigned checkpoint page number was malformed.');
+  const size = parseFiniteInteger(page.size, 'Assigned checkpoint page size was malformed.', 1);
+  const totalElements = parseFiniteInteger(page.totalElements, 'Assigned checkpoint total was malformed.');
+  const totalPages = parseFiniteInteger(page.totalPages, 'Assigned checkpoint page count was malformed.');
+  if (![number, size, totalElements, totalPages].every(Number.isSafeInteger)) {
+    throw new Error('Assigned checkpoint page metadata was malformed.');
+  }
+  const expectedPages = Math.ceil(totalElements / size);
+  const expectedContentLength = Math.min(size, Math.max(0, totalElements - number * size));
+  if (totalPages !== expectedPages || (totalPages === 0 ? number !== 0 : number >= totalPages)
+    || page.content.length !== expectedContentLength) {
+    throw new Error('Assigned checkpoint page metadata was inconsistent.');
+  }
+  return {
+    content: page.content.map((item: unknown) => {
+      const row = parseRequiredRecord(item, 'Assigned checkpoint was malformed.');
+      return {
+        raceId: parseRequiredString(row.raceId, 'Assigned checkpoint race id was missing.'),
+        raceName: parseRequiredString(row.raceName, 'Assigned checkpoint race name was missing.'),
+        checkpointId: parseRequiredString(row.checkpointId, 'Assigned checkpoint id was missing.'),
+        checkpointName: parseRequiredString(row.checkpointName, 'Assigned checkpoint name was missing.'),
+      };
+    }),
+    number,
+    size,
+    totalElements,
+    totalPages,
+  };
+}
+
+export function parseCheckpointEmergencyReceipt(value: unknown): CheckpointEmergencyReceipt {
+  const receipt = parseRequiredRecord(value, 'Incident receipt was malformed.');
+  const deliveryStatus = receipt.deliveryStatus;
+  if (deliveryStatus !== 'QUEUED' && deliveryStatus !== 'DISPATCHED'
+    && deliveryStatus !== 'ESCALATION_REQUIRED' && deliveryStatus !== 'LEGACY_UNVERIFIED') {
+    throw new Error('Incident receipt delivery status was malformed.');
+  }
+  return { id: parseRequiredString(receipt.id, 'Incident receipt id was missing.'), deliveryStatus };
+}
 
 type SessionInvalidatedHandler = () => void | Promise<void>;
 
@@ -582,6 +627,36 @@ class ApiClient {
     return parseCheckpointArray(response);
   }
 
+  async getAssignedCheckpoints(): Promise<AssignedCheckpoint[]> {
+    const rows: AssignedCheckpoint[] = [];
+    let pageNumber = 0;
+    let totalPages: number;
+    let totalElements: number | undefined;
+    do {
+      const response = await this.request<unknown>(buildContractPath(
+        API_CONTRACT.endpoints.operationsCheckpoints, {}, { page: pageNumber, size: 50 },
+      ));
+      const page = parseAssignedCheckpointPage(response);
+      if (page.number !== pageNumber) throw new Error('Assigned checkpoint page number did not match request.');
+      if (page.size !== 50 || (totalElements !== undefined && page.totalElements !== totalElements)) {
+        throw new Error('Assigned checkpoint pagination changed during loading.');
+      }
+      totalElements = page.totalElements;
+      rows.push(...page.content);
+      totalPages = page.totalPages;
+      pageNumber += 1;
+    } while (pageNumber < totalPages);
+    if (rows.length !== totalElements) throw new Error('Assigned checkpoint list was incomplete.');
+    return rows;
+  }
+
+  async reportCheckpointEmergency(raceId: string, checkpointId: string, message: string): Promise<CheckpointEmergencyReceipt> {
+    const response = await this.request<unknown>(buildContractPath(
+      API_CONTRACT.endpoints.checkpointEmergency, { raceId, checkpointId },
+    ), { method: 'POST', body: JSON.stringify({ message }) });
+    return parseCheckpointEmergencyReceipt(response);
+  }
+
   async getPublicRaceResults(raceId: string, page = 0, size = 50, revision?: number): Promise<PublicRaceResultPage> {
     const response = await this.request<unknown>(buildContractPath(
       API_CONTRACT.endpoints.publicRaceResults,
@@ -653,6 +728,13 @@ class ApiClient {
     });
   }
 
+  async updateMediaConsent(participantId: string, consented: boolean): Promise<{ participantId: string; consented: boolean }> {
+    return this.request(buildContractPath(API_CONTRACT.endpoints.myRegistrationMediaConsent, { participantId }), {
+      method: 'PUT',
+      body: JSON.stringify({ consented }),
+    });
+  }
+
   // Tracking endpoints
   async sendLocation(raceId: string, location: GpsLocation): Promise<void> {
     return this.request<void>(buildContractPath(API_CONTRACT.endpoints.trackingLocation, { raceId }), {
@@ -665,6 +747,25 @@ class ApiClient {
     return this.request<void>(buildContractPath(API_CONTRACT.endpoints.trackingLocations, { raceId }), {
       method: 'POST',
       body: JSON.stringify({ locations }),
+    });
+  }
+
+  async recordCheckpointTime(
+    raceId: string,
+    checkpointId: string,
+    participantBibNumber: string,
+    method: 'MANUAL' | 'QR_CODE' | 'RFID' = 'MANUAL',
+  ): Promise<void> {
+    return this.request<void>(buildContractPath(API_CONTRACT.endpoints.checkpointRecord, { raceId, checkpointId }), {
+      method: 'POST',
+      body: JSON.stringify({ participantBibNumber, method }),
+    });
+  }
+
+  async qrCheckIn(raceId: string, code: string): Promise<void> {
+    return this.request<void>(buildContractPath(API_CONTRACT.endpoints.raceParticipantQrCheckIn, { raceId }), {
+      method: 'POST',
+      body: JSON.stringify({ code }),
     });
   }
 
@@ -723,12 +824,14 @@ class ApiClient {
 
   async reportEmergency(
     raceId: string,
-    payload: { latitude: number; longitude: number; message?: string },
-  ): Promise<void> {
-    return this.request<void>(buildContractPath(API_CONTRACT.endpoints.raceEmergency, { raceId }), {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    payload: { latitude?: number; longitude?: number; message?: string },
+  ): Promise<{ deliveryStatus?: string }> {
+    return this.request<{ deliveryStatus?: string }>(
+      buildContractPath(API_CONTRACT.endpoints.raceEmergency, { raceId }), {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    );
   }
 
   async deletionStatus(): Promise<DeletionStatus> {

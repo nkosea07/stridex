@@ -50,7 +50,7 @@ type SessionSnapshot = {
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreference = {
   emailEnabled: true,
   pushEnabled: true,
-  smsEnabled: true,
+  smsEnabled: false,
   whatsappEnabled: true,
 }
 
@@ -464,16 +464,12 @@ export function SettingsPage() {
                   />
                 </div>
                 <Separator />
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between opacity-60">
                   <div>
                     <Label htmlFor="prefSms">{t('nav:smsChannel')}</Label>
-                    <p className="text-xs text-muted-foreground">{t('nav:textMessageAlerts')}</p>
+                    <p className="text-xs text-muted-foreground">{t('nav:smsUnavailable')}</p>
                   </div>
-                  <Switch
-                    id="prefSms"
-                    checked={notifications.smsEnabled}
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, smsEnabled: checked })}
-                  />
+                  <Switch id="prefSms" checked={false} disabled />
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">

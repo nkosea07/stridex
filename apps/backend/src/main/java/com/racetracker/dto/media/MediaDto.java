@@ -19,5 +19,8 @@ public class MediaDto {
     private Integer height;
     private String caption;
     private String status;
+    private Boolean participantConsent;
+    private Boolean nonPersonAttested;
+    private Boolean publiclyVisible;
     private OffsetDateTime createdAt;
 }

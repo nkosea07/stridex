@@ -8,6 +8,7 @@ import * as publicRaceRouteModule from '../../app/routes/public-race'
 import { mediaApi, publicTrackingApi } from '@/lib/api'
 import { PUBLIC_BROWSER_DEMO_RACE_ID } from '@/router/publicLoaders'
 import '@/i18n'
+import { SWRConfig } from 'swr'
 
 vi.mock('@/lib/api', () => ({
   publicTrackingApi: {
@@ -272,6 +273,52 @@ describe('public route loaders', () => {
     expect(getLiveFeedMock).toHaveBeenCalledWith(API_RACE_ID, { limit: 100 })
     expect(getLiveAthletesMock).not.toHaveBeenCalled()
     expect(searchAthletesMock).not.toHaveBeenCalled()
+  })
+
+  it('removes a previously visible race when refresh is denied', async () => {
+    const raceId = '123e4567-e89b-12d3-a456-426614174011'
+    getRaceHubMock.mockRejectedValue(new Error('404'))
+    getLiveFeedMock.mockResolvedValue({ items: [], nextCursor: null, refreshedAt: '' })
+    render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <MemoryRouter initialEntries={[`/race/${raceId}`]}>
+          <PublicRaceHubPage raceId={raceId} initialData={{ raceId, hub: {
+            raceId, raceName: 'Formerly Visible Race', status: 'IN_PROGRESS',
+            raceDate: '2026-05-31T06:00:00.000Z', city: 'Harare', country: 'Zimbabwe',
+            distanceKm: 42.2, leaderboard: [],
+          }, liveAthletes: [] }} />
+        </MemoryRouter>
+      </SWRConfig>,
+    )
+
+    expect(screen.getByText(/Formerly Visible Race/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /refresh/i }))
+    expect(await screen.findByText(/Public race data is not available/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Formerly Visible Race/i)).not.toBeInTheDocument()
+  })
+
+  it('removes previously visible athlete progress when refresh is denied', async () => {
+    const raceId = '123e4567-e89b-12d3-a456-426614174012'
+    const participantId = 'athlete-hidden'
+    getAthleteTrackingMock.mockRejectedValue(new Error('404'))
+    render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <MemoryRouter initialEntries={[`/race/${raceId}/athlete/${participantId}`]}>
+          <PublicAthleteTrackingPage raceId={raceId} participantId={participantId}
+            initialData={{ raceId, participantId, tracking: {
+              participantId, participantName: 'Formerly Visible Athlete', bibNumber: '101',
+              status: 'STARTED', lastCheckpoint: '10K', elapsedTime: '00:40:00',
+              averagePace: '04:00', predictedFinishTime: '2026-05-31T08:48:00.000Z',
+              distanceRemaining: 12.2, splits: [],
+            } }} />
+        </MemoryRouter>
+      </SWRConfig>,
+    )
+
+    expect(screen.getByText(/Formerly Visible Athlete/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /refresh/i }))
+    expect(await screen.findByText(/Athlete tracking is not available/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Formerly Visible Athlete/i)).not.toBeInTheDocument()
   })
 
   it('loads athlete tracking through the route loader without duplicate initial transport calls', async () => {

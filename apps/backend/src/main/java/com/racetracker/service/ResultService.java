@@ -14,6 +14,10 @@ public interface ResultService {
     RaceResultPageDto listPublishedByRacePage(UUID raceId, int page, int size, Long expectedRevision);
     RaceResultDto getByRaceAndParticipant(UUID raceId, UUID participantId);
     List<RaceResultDto> getMyResults();
+
+    List<com.racetracker.dto.result.AthleteHistoryEntryDto> getMyHistory();
+
+    List<com.racetracker.dto.result.PersonalBestDto> getMyPersonalBests();
     RaceResultPageDto getMyResultsPage(int page, int size);
     void publish(UUID raceId);
 }

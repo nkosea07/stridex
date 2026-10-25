@@ -18,4 +18,11 @@ public interface NotificationChannel {
     boolean isEnabled();
 
     void send(NotificationMessage message) throws Exception;
+
+    default String lastProviderMessageId() {
+        return null;
+    }
+
+    default void clearProviderMessageId() {
+    }
 }

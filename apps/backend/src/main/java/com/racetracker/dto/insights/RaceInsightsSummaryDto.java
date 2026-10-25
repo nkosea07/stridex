@@ -11,4 +11,6 @@ public class RaceInsightsSummaryDto {
     private double averagePaceSecondsPerKm;
     private String predictedLeaderFinishTime;
     private long anomalyCount;
+    private long atRiskParticipants;
+    private double dropoutRiskPercent;
 }

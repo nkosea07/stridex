@@ -46,6 +46,10 @@ public class EmergencyAlert {
     @Column(nullable = false, length = 20)
     private EmergencyStatus status = EmergencyStatus.ACTIVE;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_status", nullable = false, length = 24)
+    private DeliveryStatus deliveryStatus = DeliveryStatus.QUEUED;
+
     @Column(name = "acknowledged_at")
     private OffsetDateTime acknowledgedAt;
 
@@ -58,5 +62,9 @@ public class EmergencyAlert {
 
     public enum EmergencyStatus {
         ACTIVE, ACKNOWLEDGED, RESOLVED
+    }
+
+    public enum DeliveryStatus {
+        QUEUED, DISPATCHED, ESCALATION_REQUIRED, LEGACY_UNVERIFIED
     }
 }

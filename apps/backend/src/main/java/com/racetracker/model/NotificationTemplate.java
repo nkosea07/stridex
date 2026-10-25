@@ -40,6 +40,12 @@ public class NotificationTemplate {
     @Column(nullable = false)
     private Boolean enabled = true;
 
+    @Column(name = "meta_template_name", length = 160)
+    private String metaTemplateName;
+
+    @Column(name = "language_code", length = 20)
+    private String languageCode = "en_US";
+
     @CreationTimestamp
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

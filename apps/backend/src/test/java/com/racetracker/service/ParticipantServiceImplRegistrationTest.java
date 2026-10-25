@@ -66,6 +66,7 @@ class ParticipantServiceImplRegistrationTest {
     @Mock ParticipantImportProcessor importProcessor;
     @Mock CapabilityAuthorizationService capabilityAuthorizationService;
     @Mock RaceAccessGuard raceAccessGuard;
+    @Mock com.racetracker.service.impl.ParticipantIdentityService participantIdentityService;
 
     private ParticipantServiceImpl service;
     private User user;
@@ -82,7 +83,7 @@ class ParticipantServiceImplRegistrationTest {
             importJobRepository, participantMapper, importJobMapper, new RaceTrackerProperties(),
             participantCredentialService, teamRepository, registrationFieldRepository,
             registrationAnswerRepository, registrationEmailService, notificationService, importProcessor,
-            capabilityAuthorizationService, raceAccessGuard
+            capabilityAuthorizationService, raceAccessGuard, participantIdentityService
         );
 
         user = User.builder()

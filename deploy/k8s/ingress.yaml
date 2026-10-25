@@ -10,10 +10,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - racetracker.example.com
+        - REPLACE_WITH_INGRESS_HOST
       secretName: race-tracker-tls
   rules:
-    - host: racetracker.example.com
+    - host: REPLACE_WITH_INGRESS_HOST
       http:
         paths:
           - path: /api

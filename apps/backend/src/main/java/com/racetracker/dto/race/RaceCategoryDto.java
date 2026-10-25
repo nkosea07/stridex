@@ -19,5 +19,7 @@ public class RaceCategoryDto {
     private String bibPrefix;
     private Integer maxParticipants;
     private BigDecimal registrationFee;
+    private BigDecimal earlyBirdFee;
+    private BigDecimal teamFee;
     private Integer participantCount;
 }

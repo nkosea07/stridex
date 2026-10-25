@@ -135,6 +135,13 @@ public class RaceTrackerProperties {
     public static class Notifications {
         private boolean smsEnabled = false;
         private boolean whatsappEnabled = false;
+        private String whatsappPhoneNumberId;
+        private String whatsappAccessToken;
+        private String whatsappVerifyToken;
+        private String whatsappAppSecret;
+        private String whatsappApiVersion = "v23.0";
+        private String whatsappDefaultTemplate = "race_update";
+        private String whatsappLanguageCode = "en_US";
     }
 
     @Getter

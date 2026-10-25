@@ -24,7 +24,7 @@ verification, and operational ownership are all evidenced separately.
 | Race-scoped authorization | Partial | Cross-race controller and WebSocket tests | Backend |
 | Legacy race-admin remediation | Partial | Super-admin assignment endpoint, audit evidence, and operator procedure | Backend/Ops |
 | API error safety | Partial | Stable error codes, request IDs, no internal messages | Backend |
-| PostGIS/Flyway V1–V33 | Partial | Clean migration and upgrade smoke on PostGIS | Platform |
+| PostGIS/Flyway V1–V42 | Partial | Clean V1→V42 and V36→V42 upgrade smoke on PostGIS | Platform |
 | GPS retention/partitioning | Pending | Monthly partition migration, purge, restore test | Platform/DBA |
 | Redis rate limiting | Partial | Production Redis enforcement and alert evidence | Platform |
 | Contract consistency | Partial | Controller/client/contract validator passes | Backend/Web/Mobile |
@@ -35,9 +35,17 @@ verification, and operational ownership are all evidenced separately.
 | Backups and restore | Pending | Restore drill meeting RPO 15m/RTO 1h | Platform/DBA |
 | Load capacity | Pending | k6 report meeting pilot targets | Platform |
 | Documentation/runbooks | Partial | Current procedures and ownership confirmed | Product/Ops |
-| Refund reconciliation | Partial | V35 PostGIS upgrade, provider-receipt review, legacy pending-row reconciliation | Finance/Ops |
-| Account erasure | Partial | V36 PostGIS upgrade, storage-failure alert, object deletion and restore drill, confirmed completion-notice delivery | Privacy/Ops |
-| Deployment input validation | Partial | Render tests passed; production mail and storage secrets, staging/prod manifest and startup evidence required | Platform |
+| Refund reconciliation | Partial | Attempt-bound reconciliation, release-gate SQL, finance review view, provider-receipt evidence, and zero legacy partial pending rows | Finance/Ops |
+| Account erasure | Partial | Full PostGIS migration chain through V42, per-account failure isolation, audited unknown-scope remediation, storage-failure alert, object deletion and restore drill, confirmed completion-notice delivery | Privacy/Ops |
+| Participant media consent | Partial | Consent grant/revoke, anonymous listing/original/thumbnail denial, admin visibility, attestation/revocation audit evidence | Privacy/Web |
+| WhatsApp notifications | Partial | Meta Cloud API template send, signed webhook, delivery-status audit, staging delivery evidence | Backend/Ops |
+| Registration and race depth | Partial | Auto-bib/athlete code, medical fields, QR check-in, stages, sponsors, timezone, early-bird/team pricing | Backend/Web/Ops |
+| Results depth | Partial | Personal bests, qualification status, cross-race history, configurable medal places | Backend/Web |
+| Mobile operations and PWA | Partial | Mobile timing/incident mode, PWA shell, device smoke evidence, offline QR queue | Mobile/Web |
+| Deterministic insights | Partial | Dropout-risk and anomaly foundation; forecasting, injury, pacing, crowd, and LLM features remain deferred | Backend/Product |
+| Emergency SOS delivery | Partial | Durable dispatcher, live ops panel, fresh/stale/missing GPS behavior, channel-failure retry, zero-recipient escalation drill, and on-call ownership | Backend/Ops |
+| Deployment input validation | Partial | Render and fail-closed preflight tests pass; production mail/storage secrets, staging/prod manifest, and startup evidence required | Platform |
+| Pre-deployment data gates | Partial | `scripts/release-gate.sql` passes in CI/staging with zero blocked refund or media-scope rows | Finance/Privacy/Ops |
 
 ## Explicitly deferred for this release
 

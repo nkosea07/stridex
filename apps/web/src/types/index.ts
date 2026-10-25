@@ -49,6 +49,7 @@ export interface Race {
   description?: string
   raceType: RaceType
   status: RaceStatus
+  timezone?: string
   city?: string
   country?: string
   startLocationLat?: number
@@ -65,6 +66,17 @@ export interface Race {
   currency: string
   bannerImageUrl?: string
   logoUrl?: string
+  posterUrl?: string
+  earlyBirdEndsAt?: string
+  earlyBirdFee?: number
+  teamFee?: number
+  bibPrefix?: string
+  bibWidth?: number
+  medalPlaces?: number
+  bibTemplate?: string
+  bibAccentColor?: string
+  cancellationReason?: string
+  cancelledAt?: string
   isPublicRegistration: boolean
   requireMedicalClearance: boolean
   requireApproval: boolean
@@ -103,9 +115,21 @@ export interface Payment {
   provider: string
   status: string
   amount?: number
+  payableAmount?: number
   currency?: string
   reference?: string
   checkoutUrl?: string
+}
+
+export interface ExternalRefundAttempt {
+  id: string
+  paymentId: string
+  amount: number
+  currency?: string | null
+  status: 'PENDING' | 'REFUNDED' | 'NOT_REFUNDED' | 'FAILED'
+  paymentReference?: string
+  providerReference?: string
+  createdAt?: string
 }
 
 export interface RegistrationField {
@@ -146,6 +170,7 @@ export interface Registration {
   bibNumber?: string
   status: string
   registrationDate?: string
+  mediaPublicationConsent?: boolean
   emergencyContact?: { name?: string; phone?: string; relationship?: string }
   shirtSize?: string
   paymentStatus?: PaymentStatus
@@ -363,7 +388,49 @@ export interface RaceCategory {
   bibPrefix?: string
   maxParticipants?: number
   registrationFee?: number
+  earlyBirdFee?: number
+  teamFee?: number
   participantCount?: number
+}
+
+export interface RaceStage {
+  id: string
+  raceId: string
+  name: string
+  sequence: number
+  stageDate?: string
+  startTime?: string
+  distanceKm?: number
+  routeDescription?: string
+}
+
+export interface RaceSponsor {
+  id: string
+  raceId: string
+  name: string
+  logoUrl?: string
+  websiteUrl?: string
+  tier?: string
+  displayOrder: number
+}
+
+export interface ImportPreviewRow {
+  rowNumber: number
+  values: Record<string, string | null>
+  errors: string[]
+}
+
+export interface ImportPreview {
+  totalRows: number
+  validRows: number
+  duplicateRows: number
+  rows: ImportPreviewRow[]
+}
+
+export interface TimingImportResult {
+  totalRows: number
+  imported: number
+  errors: { rowNumber: number; message: string }[]
 }
 
 export interface RaceResult {
@@ -380,6 +447,7 @@ export interface RaceResult {
   ageGroup?: string
   ageGroupPosition?: number
   medal?: string | null
+  qualificationStatus?: string | null
   averagePace?: string
   averageSpeed?: number
   isOfficial: boolean
@@ -396,6 +464,28 @@ export interface RaceResultPage {
   totalElements: number
   totalPages: number
   revision: number
+}
+
+export interface AthleteHistoryEntry {
+  raceId: string
+  raceName: string
+  raceDate?: string
+  distanceKm?: number
+  chipTime?: string
+  overallPosition?: number
+  categoryPosition?: number
+  official: boolean
+  disqualified: boolean
+  medal?: string | null
+  qualificationStatus?: string | null
+}
+
+export interface PersonalBest {
+  distanceKm?: number
+  chipTime?: string
+  raceId: string
+  raceName: string
+  resultCount: number
 }
 
 export interface RankingEntry {
@@ -418,7 +508,36 @@ export interface MediaItem {
   height?: number | null
   caption?: string | null
   status: string
+  participantConsent?: boolean
+  nonPersonAttested?: boolean
+  publiclyVisible?: boolean
   createdAt?: string
+}
+
+export interface AdminPrivacyJob {
+  id: string
+  userId: string
+  storageKey: string
+  storageScope: string
+  status: string
+  attempts: number
+  nextAttemptAt?: string
+  createdAt?: string
+}
+
+export interface ReversalCase {
+  paymentId: string
+  raceId?: string | null
+  raceName?: string | null
+  participantId?: string | null
+  participantName?: string | null
+  provider?: string | null
+  providerReference: string
+  amount?: number | null
+  currency?: string | null
+  paymentStatus?: string | null
+  observedAt?: string
+  pendingRefundAttemptId?: string | null
 }
 
 export interface RaceAnalyticsSummary {
@@ -501,6 +620,17 @@ export interface PublicRaceHub {
   distanceKm?: number
   bannerImageUrl?: string
   logoUrl?: string
+  posterUrl?: string
+  earlyBirdEndsAt?: string
+  earlyBirdFee?: number
+  teamFee?: number
+  bibPrefix?: string
+  bibWidth?: number
+  medalPlaces?: number
+  bibTemplate?: string
+  bibAccentColor?: string
+  cancellationReason?: string
+  cancelledAt?: string
   resultsPublished?: boolean
   registrationOpens?: string | null
   registrationCloses?: string | null
@@ -588,6 +718,7 @@ export interface EmergencyAlert {
   longitude?: number | null
   message?: string | null
   status: string
+  deliveryStatus?: string | null
   createdAt?: string
 }
 
@@ -639,6 +770,8 @@ export interface RaceInsightsSummary {
   averagePaceSecondsPerKm: number
   predictedLeaderFinishTime?: string | null
   anomalyCount: number
+  atRiskParticipants: number
+  dropoutRiskPercent: number
 }
 
 export interface ParticipantAnomaly {

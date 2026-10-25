@@ -14,6 +14,7 @@ import { checkpointsApi, routeApi } from '@/lib/api'
 import { toast } from 'sonner'
 import type { Checkpoint, CheckpointType, CheckpointRecord } from '@/types'
 import { isAdminRole, useAuth } from '@/contexts/AuthContext'
+import { useTranslation } from 'react-i18next'
 
 const checkpointTypeColors: Record<CheckpointType, string> = {
   START: 'bg-primary/20 text-primary',
@@ -26,6 +27,7 @@ const checkpointTypeColors: Record<CheckpointType, string> = {
 export function CheckpointsPage() {
   const { raceId } = useParams()
   const { user } = useAuth()
+  const { t } = useTranslation()
   const canManageRaceConfiguration = isAdminRole(user?.role)
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([])
   const [search, setSearch] = useState('')
@@ -43,6 +45,23 @@ export function CheckpointsPage() {
   const [correctionForm, setCorrectionForm] = useState({ adjustedRecordedAt: '', reason: '' })
   const [correcting, setCorrecting] = useState(false)
   const gpxInputRef = useRef<HTMLInputElement>(null)
+  const timingInputRef = useRef<HTMLInputElement>(null)
+
+  const handleImportTiming = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !raceId) return
+    try {
+      const result = await checkpointsApi.importTiming(raceId, file)
+      toast.success(t('common:timingImportResult', { imported: result.imported, total: result.totalRows }))
+      if (result.errors.length > 0) {
+        toast.error(t('common:timingImportErrors', { count: result.errors.length }))
+      }
+    } catch {
+      toast.error(t('common:timingImportFailed'))
+    } finally {
+      if (timingInputRef.current) timingInputRef.current.value = ''
+    }
+  }
 
   const handleImportGpx = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -238,6 +257,12 @@ export function CheckpointsPage() {
                 <Upload className="mr-2 h-4 w-4" />
                 Import GPX
               </Button>
+              <Button variant="outline" onClick={() => timingInputRef.current?.click()}>
+                <Upload className="mr-2 h-4 w-4" />
+                {t('common:importTiming')}
+              </Button>
+              <input ref={timingInputRef} type="file" accept=".csv,text/csv" className="hidden"
+                onChange={(e) => void handleImportTiming(e)} />
               <input
                 ref={gpxInputRef}
                 type="file"

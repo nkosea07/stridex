@@ -18,5 +18,6 @@ public class EmergencyAlertDto {
     private BigDecimal longitude;
     private String message;
     private String status;
+    private String deliveryStatus;
     private OffsetDateTime createdAt;
 }

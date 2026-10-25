@@ -14,4 +14,6 @@ public interface ParticipantRegistrationAnswerRepository extends JpaRepository<P
     Optional<ParticipantRegistrationAnswer> findByParticipantIdAndFieldId(UUID participantId, UUID fieldId);
 
     void deleteByParticipantId(UUID participantId);
+
+    void deleteByParticipantIdIn(List<UUID> participantIds);
 }

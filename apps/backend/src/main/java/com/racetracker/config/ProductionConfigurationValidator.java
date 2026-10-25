@@ -96,6 +96,17 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
         if (pushEnabled && (pushServiceAccountJson == null || pushServiceAccountJson.isBlank())) {
             throw new IllegalStateException("Production push notifications require FCM_SERVICE_ACCOUNT_JSON");
         }
+        RaceTrackerProperties.Notifications notifications = raceTrackerProperties.getNotifications();
+        if (notifications != null && notifications.isSmsEnabled()) {
+            throw new IllegalStateException("SMS notifications are disabled in this release; set SMS_ENABLED=false");
+        }
+        if (notifications != null && notifications.isWhatsappEnabled()
+            && (isBlank(notifications.getWhatsappPhoneNumberId())
+                || isBlank(notifications.getWhatsappAccessToken())
+                || isBlank(notifications.getWhatsappAppSecret())
+                || isBlank(notifications.getWhatsappVerifyToken()))) {
+            throw new IllegalStateException("WhatsApp requires phone number id, access token, app secret, and verify token");
+        }
 
         if (corsProperties.getAllowedOrigins().isEmpty() || corsProperties.getAllowedOrigins().stream().anyMatch(this::isUnsafeOrigin)) {
             throw new IllegalStateException("Production CORS must use explicit HTTPS origins and must not include localhost or wildcard origins");
@@ -168,6 +179,10 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
         String normalized = value.trim().toLowerCase(java.util.Locale.ROOT);
         return normalized.startsWith("change_me") || normalized.equals("changeme")
             || normalized.contains("${") || normalized.startsWith("your-");
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private boolean isUnsafeOrigin(String origin) {

@@ -112,16 +112,23 @@ public class NotificationServiceImpl implements NotificationService {
                                            String fallbackTitle, String fallbackMessage, Map<String, String> data) {
         String title = fallbackTitle;
         String message = fallbackMessage;
+        Map<String, String> payload = data == null ? new java.util.LinkedHashMap<>() : new java.util.LinkedHashMap<>(data);
         try {
             var resolved = notificationTemplateService.resolve(templateCode, null);
             if (resolved.isPresent()) {
                 title = resolved.get().subject();
                 message = resolved.get().body();
+                if (resolved.get().metaTemplateName() != null && !resolved.get().metaTemplateName().isBlank()) {
+                    payload.put("whatsappTemplate", resolved.get().metaTemplateName());
+                }
+                if (resolved.get().languageCode() != null && !resolved.get().languageCode().isBlank()) {
+                    payload.put("whatsappLanguage", resolved.get().languageCode());
+                }
             }
         } catch (RuntimeException ex) {
             log.warn("Failed to resolve notification template {}: {}", templateCode, ex.getMessage());
         }
-        return notify(userId, type, title, message, data);
+        return notify(userId, type, title, message, payload);
     }
 
     @Override

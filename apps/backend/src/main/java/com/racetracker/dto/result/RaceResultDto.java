@@ -25,6 +25,7 @@ public class RaceResultDto {
     private String ageGroup;
     private Integer ageGroupPosition;
     private String medal;
+    private String qualificationStatus;
     private String averagePace;
     private Double averageSpeed;
     @JsonProperty("isOfficial")

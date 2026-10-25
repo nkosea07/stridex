@@ -17,6 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ThemeSelect } from '@/components/theme/ThemeSelect'
+import { Banknote, ShieldAlert } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,7 +50,11 @@ export function DashboardLayout() {
       ? mainNavItems
       : [{ to: '/admin/races', icon: Flag, labelKey: 'nav:operations' }]),
     ...(user?.role === 'SUPER_ADMIN'
-      ? [{ to: '/admin/organizer-applications', icon: ClipboardList, labelKey: 'nav:organizerApplications' }]
+      ? [
+          { to: '/admin/organizer-applications', icon: ClipboardList, labelKey: 'nav:organizerApplications' },
+          { to: '/admin/privacy-objects', icon: ShieldAlert, labelKey: 'nav:privacyObjects' },
+          { to: '/admin/finance-reversals', icon: Banknote, labelKey: 'nav:financeReversals' },
+        ]
       : []),
   ]
   const visibleRaceNavItems = getRaceNavigationForRole(user?.role)

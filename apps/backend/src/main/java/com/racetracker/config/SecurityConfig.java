@@ -83,6 +83,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, apiPrefix + "/rfid/read-events").permitAll()
                 .requestMatchers(HttpMethod.POST, apiPrefix + "/rfid/readers/heartbeat").permitAll()
                 .requestMatchers(HttpMethod.POST, apiPrefix + "/payments/callback/**").permitAll()
+                .requestMatchers(HttpMethod.GET, apiPrefix + "/webhooks/whatsapp").permitAll()
+                .requestMatchers(HttpMethod.POST, apiPrefix + "/webhooks/whatsapp").permitAll()
                 .requestMatchers(HttpMethod.GET, apiPrefix + "/public/races/**").permitAll()
                 .requestMatchers("/ws-tracking", "/ws-tracking/**").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()

@@ -13,4 +13,6 @@ public interface EmergencyAlertService {
     EmergencyAlertDto raiseForAthlete(UUID raceId, EmergencyAlertRequest request, String actorEmail);
 
     List<EmergencyAlertDto> list(UUID raceId);
+
+    EmergencyAlertDto updateStatus(UUID raceId, UUID alertId, String status, String actorEmail);
 }

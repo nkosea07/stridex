@@ -50,6 +50,12 @@ public class RaceCategory {
     @Column(name = "registration_fee", precision = 10, scale = 2)
     private BigDecimal registrationFee;
 
+    @Column(name = "early_bird_fee", precision = 10, scale = 2)
+    private BigDecimal earlyBirdFee;
+
+    @Column(name = "team_fee", precision = 10, scale = 2)
+    private BigDecimal teamFee;
+
     @CreationTimestamp
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

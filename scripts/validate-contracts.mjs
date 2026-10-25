@@ -377,6 +377,16 @@ assert(
   read(backendAuthServicePath).includes(`CURRENT_PRIVACY_POLICY_VERSION = "${contract.legal.privacyPolicyVersion}"`),
   'Backend registration privacy policy version must match contract.legal.privacyPolicyVersion.',
 );
+const mediaConsentServicePath = path.join(root, 'apps/backend/src/main/java/com/racetracker/service/MediaConsentService.java');
+assert(
+  contract.legal.mediaPublicationConsentVersion === 'MEDIA_PUBLICATION_V1',
+  'contract.legal.mediaPublicationConsentVersion must be a supported media consent version.',
+);
+assert(
+  read(mediaConsentServicePath).includes(
+    `CURRENT_MEDIA_PUBLICATION_CONSENT_VERSION = "${contract.legal.mediaPublicationConsentVersion}"`),
+  'Backend media consent version must match contract.legal.mediaPublicationConsentVersion.',
+);
 
 assert(
   contract.i18n && typeof contract.i18n.defaultLocale === 'string' && contract.i18n.defaultLocale.length > 0,

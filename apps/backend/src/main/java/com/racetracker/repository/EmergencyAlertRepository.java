@@ -15,6 +15,15 @@ public interface EmergencyAlertRepository extends JpaRepository<EmergencyAlert, 
 
     List<EmergencyAlert> findByRaceIdAndStatusOrderByCreatedAtDesc(UUID raceId, EmergencyAlert.EmergencyStatus status);
 
+    long countByDeliveryStatus(EmergencyAlert.DeliveryStatus deliveryStatus);
+
+    @Query("""
+        select count(a) from EmergencyAlert a
+        where a.deliveryStatus = :deliveryStatus and a.status <> :excludedStatus
+        """)
+    long countByDeliveryStatusAndStatusNot(@Param("deliveryStatus") EmergencyAlert.DeliveryStatus deliveryStatus,
+                                           @Param("excludedStatus") EmergencyAlert.EmergencyStatus excludedStatus);
+
     @Modifying
     @Query("update EmergencyAlert a set a.reportedBy = null where a.reportedBy.id = :userId")
     int anonymizeReporterByUserId(@Param("userId") UUID userId);

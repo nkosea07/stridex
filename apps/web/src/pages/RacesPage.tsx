@@ -99,6 +99,17 @@ export function RacesPage() {
     raceDate: '',
     distanceKm: '',
     maxParticipants: '',
+    timezone: 'UTC',
+    registrationFee: '',
+    earlyBirdFee: '',
+    earlyBirdEndsAt: '',
+    teamFee: '',
+    bibPrefix: '',
+    bibWidth: '4',
+    medalPlaces: '3',
+    posterUrl: '',
+    bibTemplate: 'CLASSIC',
+    bibAccentColor: '#0F766E',
   })
 
   const loadRaces = async () => {
@@ -146,6 +157,17 @@ export function RacesPage() {
         raceDate: newRace.raceDate,
         distanceKm: newRace.distanceKm ? Number(newRace.distanceKm) : undefined,
         maxParticipants: newRace.maxParticipants ? Number(newRace.maxParticipants) : undefined,
+        timezone: newRace.timezone || 'UTC',
+        registrationFee: newRace.registrationFee ? Number(newRace.registrationFee) : undefined,
+        earlyBirdFee: newRace.earlyBirdFee ? Number(newRace.earlyBirdFee) : undefined,
+        earlyBirdEndsAt: newRace.earlyBirdEndsAt ? new Date(newRace.earlyBirdEndsAt).toISOString() : undefined,
+        teamFee: newRace.teamFee ? Number(newRace.teamFee) : undefined,
+        bibPrefix: newRace.bibPrefix || undefined,
+        bibWidth: newRace.bibWidth ? Number(newRace.bibWidth) : undefined,
+        medalPlaces: newRace.medalPlaces ? Number(newRace.medalPlaces) : undefined,
+        posterUrl: newRace.posterUrl || undefined,
+        bibTemplate: newRace.bibTemplate || undefined,
+        bibAccentColor: newRace.bibAccentColor || undefined,
       })
       toast.success('Race created')
       setIsCreateDialogOpen(false)
@@ -158,6 +180,17 @@ export function RacesPage() {
         raceDate: '',
         distanceKm: '',
         maxParticipants: '',
+        timezone: 'UTC',
+        registrationFee: '',
+        earlyBirdFee: '',
+        earlyBirdEndsAt: '',
+        teamFee: '',
+        bibPrefix: '',
+        bibWidth: '4',
+        medalPlaces: '3',
+        posterUrl: '',
+        bibTemplate: 'CLASSIC',
+        bibAccentColor: '#0F766E',
       })
       await loadRaces()
     } catch {
@@ -466,6 +499,31 @@ export function RacesPage() {
                 <Label>Max Participants</Label>
                 <Input type="number" value={newRace.maxParticipants} onChange={(e) => setNewRace((v) => ({ ...v, maxParticipants: e.target.value }))} />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Timezone</Label>
+                <Input value={newRace.timezone} onChange={(e) => setNewRace((v) => ({ ...v, timezone: e.target.value }))} placeholder="Africa/Johannesburg" />
+              </div>
+              <div>
+                <Label>Poster URL</Label>
+                <Input value={newRace.posterUrl} onChange={(e) => setNewRace((v) => ({ ...v, posterUrl: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label>Registration Fee</Label><Input type="number" value={newRace.registrationFee} onChange={(e) => setNewRace((v) => ({ ...v, registrationFee: e.target.value }))} /></div>
+              <div><Label>Early Bird Fee</Label><Input type="number" value={newRace.earlyBirdFee} onChange={(e) => setNewRace((v) => ({ ...v, earlyBirdFee: e.target.value }))} /></div>
+              <div><Label>Team Fee</Label><Input type="number" value={newRace.teamFee} onChange={(e) => setNewRace((v) => ({ ...v, teamFee: e.target.value }))} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Early Bird Ends</Label><Input type="datetime-local" value={newRace.earlyBirdEndsAt} onChange={(e) => setNewRace((v) => ({ ...v, earlyBirdEndsAt: e.target.value }))} /></div>
+              <div><Label>Bib Prefix</Label><Input value={newRace.bibPrefix} onChange={(e) => setNewRace((v) => ({ ...v, bibPrefix: e.target.value }))} /></div>
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              <div><Label>Bib Width</Label><Input type="number" value={newRace.bibWidth} onChange={(e) => setNewRace((v) => ({ ...v, bibWidth: e.target.value }))} /></div>
+              <div><Label>Medal Places</Label><Input type="number" value={newRace.medalPlaces} onChange={(e) => setNewRace((v) => ({ ...v, medalPlaces: e.target.value }))} /></div>
+              <div><Label>Bib Template</Label><Input value={newRace.bibTemplate} onChange={(e) => setNewRace((v) => ({ ...v, bibTemplate: e.target.value }))} /></div>
+              <div><Label>Bib Color</Label><Input type="color" value={newRace.bibAccentColor} onChange={(e) => setNewRace((v) => ({ ...v, bibAccentColor: e.target.value }))} /></div>
             </div>
           </div>
           <DialogFooter>

@@ -4,22 +4,22 @@ import com.racetracker.config.RaceTrackerProperties;
 import com.racetracker.model.NotificationDelivery;
 import com.racetracker.notification.NotificationMessage;
 import com.racetracker.service.NotificationChannel;
-import lombok.extern.slf4j.Slf4j;
+import com.racetracker.service.impl.WhatsAppCloudClient;
 import org.springframework.stereotype.Component;
 
-/**
- * WhatsApp adapter placeholder. No provider is wired yet; enabling it without a provider fails
- * the delivery (recorded as FAILED) rather than reporting a false success. The channel stays
- * behind a config flag until a provider is chosen.
- */
-@Slf4j
+import java.util.List;
+import java.util.Map;
+
 @Component
 public class WhatsAppNotificationChannel implements NotificationChannel {
 
     private final RaceTrackerProperties properties;
+    private final WhatsAppCloudClient client;
+    private final ThreadLocal<String> lastProviderMessageId = new ThreadLocal<>();
 
-    public WhatsAppNotificationChannel(RaceTrackerProperties properties) {
+    public WhatsAppNotificationChannel(RaceTrackerProperties properties, WhatsAppCloudClient client) {
         this.properties = properties;
+        this.client = client;
     }
 
     @Override
@@ -34,6 +34,25 @@ public class WhatsAppNotificationChannel implements NotificationChannel {
 
     @Override
     public void send(NotificationMessage message) {
-        throw new com.racetracker.exception.ApiException("No WhatsApp provider is configured");
+        RaceTrackerProperties.Notifications notifications = properties.getNotifications();
+        Map<String, String> data = message.data() == null ? Map.of() : message.data();
+        String template = valueOr(data.get("whatsappTemplate"), notifications.getWhatsappDefaultTemplate());
+        String language = valueOr(data.get("whatsappLanguage"), notifications.getWhatsappLanguageCode());
+        lastProviderMessageId.set(client.sendTemplate(message.recipientPhone(), template, language,
+            List.of(valueOr(message.title(), ""), valueOr(message.body(), ""))));
+    }
+
+    @Override
+    public String lastProviderMessageId() {
+        return lastProviderMessageId.get();
+    }
+
+    @Override
+    public void clearProviderMessageId() {
+        lastProviderMessageId.remove();
+    }
+
+    private String valueOr(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 }

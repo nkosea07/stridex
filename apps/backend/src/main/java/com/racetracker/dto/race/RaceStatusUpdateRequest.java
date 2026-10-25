@@ -9,4 +9,6 @@ import lombok.Setter;
 public class RaceStatusUpdateRequest {
     @NotBlank
     private String status;
+
+    private String reason;
 }

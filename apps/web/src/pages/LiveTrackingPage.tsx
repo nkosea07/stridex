@@ -15,6 +15,7 @@ import { AnalyticsTray } from '@/components/dashboard/AnalyticsTray'
 import { AeroPanel } from '@/components/dashboard/AeroPanel'
 import { FreshnessIndicator } from '@/components/dashboard/FreshnessIndicator'
 import { SecurityAuditor } from '@/components/dashboard/SecurityAuditor'
+import { EmergencyAlertsPanel } from '@/components/dashboard/EmergencyAlertsPanel'
 
 const MAPBOX_TOKEN = getMapAccessToken()
 type LiveTrackingViewModel = LiveTrackingData & { lastSeen?: number }
@@ -157,6 +158,7 @@ export function LiveTrackingPage() {
       />
 
       <div className="flex-1 relative h-full w-full">
+        {raceId && <EmergencyAlertsPanel raceId={raceId} />}
         {/* SYNC HUD */}
         <div className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-background/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 shadow-lg">
           <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]" />

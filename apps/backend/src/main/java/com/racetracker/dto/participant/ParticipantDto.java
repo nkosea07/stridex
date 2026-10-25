@@ -21,6 +21,8 @@ public class ParticipantDto {
     private LocalDate dateOfBirth;
     private String gender;
     private String nationality;
+    private String athleteCode;
+
     private String bibNumber;
     private String rfidTag;
     private String status;

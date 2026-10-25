@@ -62,6 +62,12 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
         if (request.getEnabled() != null) {
             template.setEnabled(request.getEnabled());
         }
+        if (request.getMetaTemplateName() != null) {
+            template.setMetaTemplateName(request.getMetaTemplateName());
+        }
+        if (request.getLanguageCode() != null) {
+            template.setLanguageCode(request.getLanguageCode());
+        }
         return toDto(repository.save(template));
     }
 
@@ -80,7 +86,8 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
             return Optional.empty();
         }
         return repository.findByCodeAndLocaleAndEnabledTrue(code, normalizeLocale(locale))
-            .map(template -> new ResolvedTemplate(template.getSubject(), template.getBody()));
+            .map(template -> new ResolvedTemplate(template.getSubject(), template.getBody(),
+                template.getMetaTemplateName(), template.getLanguageCode()));
     }
 
     private String normalizeLocale(String locale) {
@@ -103,6 +110,8 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
         dto.setSubject(template.getSubject());
         dto.setBody(template.getBody());
         dto.setEnabled(template.getEnabled());
+        dto.setMetaTemplateName(template.getMetaTemplateName());
+        dto.setLanguageCode(template.getLanguageCode());
         dto.setUpdatedAt(template.getUpdatedAt());
         return dto;
     }

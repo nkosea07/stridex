@@ -43,4 +43,12 @@ public interface RaceResultRepository extends JpaRepository<RaceResult, UUID> {
           and (:userId is null or rr.participant.user.id = :userId)
     """)
     long countPageByRace(@Param("raceId") UUID raceId, @Param("userId") UUID userId);
+
+    @EntityGraph(attributePaths = {"participant", "race", "category"})
+    @Query("""
+        select rr from RaceResult rr
+        where rr.participant.user.id = :userId
+        order by rr.race.raceDate desc, rr.race.id desc
+    """)
+    List<RaceResult> findAllByUserId(@Param("userId") UUID userId);
 }

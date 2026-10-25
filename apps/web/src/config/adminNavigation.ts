@@ -30,6 +30,7 @@ export const INSIGHTS_ROLES = ['SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL'] as const
 export const raceNavigationItems: readonly RaceNavigationItem[] = [
   { to: 'participants', icon: Users, labelKey: 'nav:participants', roles: RACE_OPERATION_ROLES },
   { to: 'registration', icon: ClipboardList, labelKey: 'nav:registration', roles: RACE_ADMIN_ROLES },
+  { to: 'setup', icon: Sparkles, labelKey: 'nav:raceSetup', roles: RACE_ADMIN_ROLES },
   { to: 'categories', icon: Layers, labelKey: 'nav:categories', roles: RACE_OPERATION_ROLES },
   { to: 'teams', icon: UsersRound, labelKey: 'nav:teams', roles: RACE_OPERATION_ROLES },
   { to: 'live', icon: MapPin, labelKey: 'nav:liveTracking', roles: RACE_OPERATION_ROLES },

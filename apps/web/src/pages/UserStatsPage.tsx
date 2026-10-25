@@ -7,13 +7,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import type { FavoriteAthlete, RaceResult } from '@/types'
+import type { AthleteHistoryEntry, FavoriteAthlete, PersonalBest, RaceResult } from '@/types'
 import { getPreferredCapability, useAuth } from '@/contexts/AuthContext'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Switch } from '@/components/ui/switch'
 
 type MyRegistration = {
+  id: string
   raceId: string
   status: string
+  mediaPublicationConsent?: boolean
 }
 
 type SessionSnapshot = {
@@ -34,9 +37,12 @@ export function UserStatsPage() {
   const [registrations, setRegistrations] = useState<MyRegistration[]>([])
   const [results, setResults] = useState<RaceResult[]>([])
   const [favorites, setFavorites] = useState<FavoriteAthlete[]>([])
+  const [history, setHistory] = useState<AthleteHistoryEntry[]>([])
+  const [personalBests, setPersonalBests] = useState<PersonalBest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [hasLoadError, setHasLoadError] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+  const [savingMediaConsentId, setSavingMediaConsentId] = useState<string | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -48,19 +54,25 @@ export function UserStatsPage() {
     setRegistrations([])
     setResults([])
     setFavorites([])
+    setHistory([])
+    setPersonalBests([])
     setHasLoadError(false)
     const load = async () => {
       setIsLoading(true)
       try {
-        const [myRegistrations, myResults, myFavorites] = await Promise.all([
+        const [myRegistrations, myResults, myFavorites, myHistory, myBests] = await Promise.all([
           isAthleteMode ? participantsApi.myRegistrations() : Promise.resolve<MyRegistration[]>([]),
           isAthleteMode ? resultsApi.my() : Promise.resolve<RaceResult[]>([]),
           isSpectatorMode ? favoritesApi.list() : Promise.resolve<FavoriteAthlete[]>([]),
+          isAthleteMode ? resultsApi.myHistory() : Promise.resolve<AthleteHistoryEntry[]>([]),
+          isAthleteMode ? resultsApi.myPersonalBests() : Promise.resolve<PersonalBest[]>([]),
         ])
         if (!mounted || !isCurrentSession()) return
         setRegistrations(myRegistrations)
         setResults(myResults)
         setFavorites(myFavorites)
+        setHistory(myHistory)
+        setPersonalBests(myBests)
       } catch {
         if (!mounted || !isCurrentSession()) return
         setHasLoadError(true)
@@ -102,6 +114,24 @@ export function UserStatsPage() {
     }
   }
 
+  const handleMediaConsent = async (registration: MyRegistration, consented: boolean) => {
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => sessionRef.current.userId === requestSession.userId
+      && getSessionGeneration() === requestSession.generation
+    setSavingMediaConsentId(registration.id)
+    try {
+      await participantsApi.updateMediaConsent(registration.id, consented)
+      if (!isCurrentSession()) return
+      setRegistrations((current) => current.map((item) => item.id === registration.id
+        ? { ...item, mediaPublicationConsent: consented } : item))
+      toast.success(t('common:mediaPublicationSaved'))
+    } catch {
+      if (isCurrentSession()) toast.error(t('common:mediaPublicationFailed'))
+    } finally {
+      if (isCurrentSession()) setSavingMediaConsentId(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -110,6 +140,53 @@ export function UserStatsPage() {
           {t(isSpectatorMode ? 'nav:followingDescription' : 'nav:myPerformanceDescription')}
         </p>
       </div>
+
+      {isAthleteMode && registrations.length > 0 && <Card>
+        <CardHeader><CardTitle className="text-base">{t('common:mediaPublicationManage')}</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {registrations.map((registration) => (
+            <div key={registration.id} className="flex items-center justify-between gap-4 rounded-xl border border-border p-3">
+              <Link className="text-sm font-medium underline-offset-2 hover:underline" to={`/race/${registration.raceId}`}>
+                {t('nav:race')} · {registration.raceId}
+              </Link>
+              <Switch checked={Boolean(registration.mediaPublicationConsent)}
+                disabled={savingMediaConsentId === registration.id}
+                aria-label={t('common:mediaPublicationManage')}
+                onCheckedChange={(value) => void handleMediaConsent(registration, value)} />
+            </div>
+          ))}
+        </CardContent>
+      </Card>}
+
+      {isAthleteMode && <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle className="text-base">{t('common:personalBests')}</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {personalBests.length === 0 ? <p className="text-sm text-muted-foreground">{t('common:noPersonalBests')}</p> : personalBests.map((best) => (
+              <div key={`${best.raceId}-${best.distanceKm}`} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                <span>{best.distanceKm ? `${best.distanceKm} km` : t('common:race')}</span>
+                <span className="font-mono">{best.chipTime ?? '—'}</span>
+                <span className="text-xs text-muted-foreground">{best.raceName}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-base">{t('common:raceHistory')}</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {history.length === 0 ? <p className="text-sm text-muted-foreground">{t('common:noRaceHistory')}</p> : history.slice(0, 8).map((entry) => (
+              <div key={entry.raceId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm">
+                <span>{entry.raceName}</span>
+                <span className="font-mono">{entry.chipTime ?? '—'}</span>
+                <Badge variant={entry.qualificationStatus === 'QUALIFIED' ? 'default' : 'secondary'}>
+                  {entry.qualificationStatus ?? '—'}
+                </Badge>
+                {entry.medal ? <Badge variant="outline">{entry.medal}</Badge> : null}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>}
 
       {hasLoadError && (
         <Alert variant="destructive">

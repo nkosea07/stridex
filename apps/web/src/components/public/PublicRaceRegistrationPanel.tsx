@@ -52,10 +52,14 @@ export function PublicRaceRegistrationPanel({ raceId, hub, returnTo }: PublicRac
     contactName: '',
     contactPhone: '',
     contactRelationship: '',
+    bloodType: '',
+    medicalConditions: '',
+    allergies: '',
     shirtSize: '',
     clubName: '',
     teamName: '',
     waiverAccepted: false,
+    mediaPublicationConsent: false,
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submittedStatus, setSubmittedStatus] = useState<string | null>(null)
@@ -110,6 +114,10 @@ export function PublicRaceRegistrationPanel({ raceId, hub, returnTo }: PublicRac
           relationship: form.contactRelationship,
         },
         waiverAccepted: form.waiverAccepted,
+        mediaPublicationConsent: form.mediaPublicationConsent,
+        bloodType: form.bloodType || undefined,
+        medicalConditions: form.medicalConditions || undefined,
+        allergies: form.allergies || undefined,
         shirtSize: form.shirtSize || undefined,
         clubName: form.clubName || undefined,
         teamName: form.teamName || undefined,
@@ -198,6 +206,21 @@ export function PublicRaceRegistrationPanel({ raceId, hub, returnTo }: PublicRac
 
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1">
+              <Label htmlFor="reg-blood">{t('register:registrationBloodType')}</Label>
+              <Input id="reg-blood" className={inputClass} value={form.bloodType} onChange={(e) => setForm((v) => ({ ...v, bloodType: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="reg-medical">{t('register:registrationMedicalConditions')}</Label>
+              <Input id="reg-medical" className={inputClass} value={form.medicalConditions} onChange={(e) => setForm((v) => ({ ...v, medicalConditions: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="reg-allergies">{t('register:registrationAllergies')}</Label>
+              <Input id="reg-allergies" className={inputClass} value={form.allergies} onChange={(e) => setForm((v) => ({ ...v, allergies: e.target.value }))} />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1">
               <Label htmlFor="reg-contact-name">{t('register:registrationEmergencyContact')}</Label>
               <Input id="reg-contact-name" className={inputClass} value={form.contactName} onChange={(e) => setForm((v) => ({ ...v, contactName: e.target.value }))} required />
             </div>
@@ -279,6 +302,12 @@ export function PublicRaceRegistrationPanel({ raceId, hub, returnTo }: PublicRac
               </label>
             </div>
           )}
+
+          <label className="flex items-center gap-2 rounded-2xl border border-slate-200 p-4 text-sm text-slate-800">
+            <input type="checkbox" checked={form.mediaPublicationConsent}
+              onChange={(event) => setForm((value) => ({ ...value, mediaPublicationConsent: event.target.checked }))} />
+            {t('common:mediaPublicationConsent')}
+          </label>
 
           <Button type="submit" disabled={isSubmitting} className="rounded-full bg-slate-950 px-6 text-xs font-bold uppercase tracking-[0.18em] text-cyan-100 hover:bg-slate-800">
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

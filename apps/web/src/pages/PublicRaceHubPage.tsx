@@ -35,6 +35,7 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
     ? { hub: initialData.hub, items: initialData.liveAthletes }
     : undefined
   const swrKey = raceId && !isBrowserDemo ? ['public-race-hub', raceId] : null
+  const [visibilityDenied, setVisibilityDenied] = useState(false)
 
   const {
     data: swrData,
@@ -57,12 +58,14 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
       revalidateOnFocus: !isBrowserDemo,
       revalidateOnReconnect: !isBrowserDemo,
       refreshInterval: isBrowserDemo ? 0 : HUB_POLL_INTERVAL_MS,
-      keepPreviousData: !isBrowserDemo,
+      keepPreviousData: false,
+      onSuccess: () => setVisibilityDenied(false),
     },
   )
 
-  const live = isBrowserDemo ? fallbackData : swrData
   const error = isBrowserDemo ? undefined : swrError
+  const unavailable = Boolean(error) || visibilityDenied
+  const live = isBrowserDemo ? fallbackData : unavailable ? undefined : swrData
   const isLoading = isBrowserDemo ? false : swrIsLoading
   const isValidating = isBrowserDemo ? false : swrIsValidating
   const hub = live?.hub ?? null
@@ -72,14 +75,18 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
   const [athletes, setAthletes] = useState<PublicAthleteSummary[]>(initialData?.liveAthletes ?? [])
   const [isSearching, setIsSearching] = useState(false)
   const trimmedQuery = query.trim()
-  const displayedAthletes = isBrowserDemo ? [] : athletes
+  const displayedAthletes = isBrowserDemo || unavailable ? [] : athletes
   const returnTo = `${location.pathname}${location.search}${location.hash}`
 
   useEffect(() => {
     if (error) {
+      setVisibilityDenied(true)
+      setAthletes([])
+      void mutate(undefined, { revalidate: false })
       toast.error('Failed to refresh public race data')
     }
-  }, [error])
+  }, [error, mutate])
+
 
   useEffect(() => {
     if (!raceId || isBrowserDemo || isLoading) return
@@ -95,11 +102,12 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
           setIsSearching(true)
           const rows = await publicTrackingApi.searchAthletes(raceId, trimmedQuery)
 
-          if (!cancelled) {
+          if (!cancelled && !unavailable) {
             setAthletes(rows)
           }
         } catch {
           if (!cancelled) {
+            setAthletes([])
             toast.error('Failed to refresh athlete results')
           }
         } finally {
@@ -114,7 +122,11 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [isBrowserDemo, isLoading, raceId, trimmedQuery])
+  }, [unavailable, isBrowserDemo, isLoading, raceId, trimmedQuery])
+
+  useEffect(() => {
+    setVisibilityDenied(false)
+  }, [raceId])
 
   useEffect(() => {
     setQuery('')
@@ -123,9 +135,9 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
   }, [raceId])
 
   useEffect(() => {
-    if (!raceId || isBrowserDemo || trimmedQuery || isLoading) return
+    if (!raceId || isBrowserDemo || trimmedQuery || isLoading || unavailable) return
     setAthletes(liveAthletes)
-  }, [isBrowserDemo, isLoading, liveAthletes, raceId, trimmedQuery])
+  }, [unavailable, isBrowserDemo, isLoading, liveAthletes, raceId, trimmedQuery])
 
   const leaderboard = useMemo(() => hub?.leaderboard ?? [], [hub])
 

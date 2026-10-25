@@ -94,5 +94,8 @@
   "fieldTypeSelect": "Select",
   "fieldTypeCheckbox": "Checkbox",
   "fieldOptionsCommaSeparated": "Options (comma separated)",
-  "fieldOptionsPlaceholder": "S, M, L, XL"
+  "fieldOptionsPlaceholder": "S, M, L, XL",
+  "registrationBloodType": "Blood type",
+  "registrationMedicalConditions": "Medical conditions",
+  "registrationAllergies": "Allergies"
 }

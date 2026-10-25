@@ -16,5 +16,7 @@ public class NotificationTemplateDto {
     private String subject;
     private String body;
     private Boolean enabled;
+    private String metaTemplateName;
+    private String languageCode;
     private OffsetDateTime updatedAt;
 }

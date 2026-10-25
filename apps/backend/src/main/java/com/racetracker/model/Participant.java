@@ -61,6 +61,9 @@ public class Participant {
     private String nationality;
 
     // Race Info
+    @Column(name = "athlete_code", nullable = false, unique = true, length = 24)
+    private String athleteCode;
+
     @Column(name = "bib_number", unique = true)
     private String bibNumber;
 
@@ -118,6 +121,12 @@ public class Participant {
 
     @Column(name = "waiver_version")
     private String waiverVersion;
+
+    @Column(name = "media_publication_consent_at")
+    private OffsetDateTime mediaPublicationConsentAt;
+
+    @Column(name = "media_publication_consent_version", length = 40)
+    private String mediaPublicationConsentVersion;
 
     @Column(name = "approved_at")
     private OffsetDateTime approvedAt;

@@ -1,4 +1,14 @@
 export type EndpointKey =
+  | 'myPersonalBests'
+  | 'myResultsHistory'
+  | 'whatsAppWebhook'
+  | 'checkpointTimingImport'
+  | 'raceParticipantImportPreview'
+  | 'raceParticipantQrCheckIn'
+  | 'raceSponsor'
+  | 'raceSponsors'
+  | 'raceStage'
+  | 'raceStages'
   | 'adminMfaReset'
   | 'adminAuditEvents'
   | 'authLogin'
@@ -55,6 +65,8 @@ export type EndpointKey =
   | 'raceCheckpoints'
   | 'raceCheckpointById'
   | 'checkpointRecord'
+  | 'operationsCheckpoints'
+  | 'checkpointEmergency'
   | 'publicRaceHub'
   | 'publicRaceLive'
   | 'publicRaceLiveFeed'
@@ -66,6 +78,8 @@ export type EndpointKey =
   | 'raceCountryRankings'
   | 'raceMedia'
   | 'raceMediaApprove'
+  | 'raceMediaAttestNonPerson'
+  | 'myRegistrationMediaConsent'
   | 'raceMediaReject'
   | 'raceMediaDelete'
   | 'publicRaceMedia'
@@ -81,6 +95,10 @@ export type EndpointKey =
   | 'raceTeams'
   | 'raceParticipantReview'
   | 'raceEmergency'
+  | 'raceEmergencyAlert'
+  | 'adminPrivacyObjectDeletionJobs'
+  | 'adminPrivacyObjectDeletionJobScope'
+  | 'adminPaymentReversalCases'
   | 'raceRoute'
   | 'raceRouteGpx'
   | 'publicRaceRoute'
@@ -99,6 +117,12 @@ export type EndpointKey =
   | 'racePromoCodeDelete'
   | 'raceParticipantPaymentRefund'
   | 'raceParticipantPaymentRefundAttempt'
+  | 'raceParticipantPaymentRefundEligible'
+  | 'raceRefundEligibleParticipants'
+  | 'raceParticipantPaymentRefundAttempts'
+  | 'raceParticipantPaymentRefundAttemptCreate'
+  | 'raceParticipantPaymentRefundAttemptById'
+  | 'raceParticipantPaymentRefundAttemptReconcile'
   | 'raceParticipantPaymentRefundReconcile'
   | 'raceParticipantPenalties'
   | 'raceParticipantPenaltyDelete'
@@ -149,6 +173,7 @@ export interface ApiContract {
   legal: {
     privacyPolicyVersion: string;
     privacyPolicyPath: string;
+    mediaPublicationConsentVersion: string;
   };
   i18n: {
     defaultLocale: string;

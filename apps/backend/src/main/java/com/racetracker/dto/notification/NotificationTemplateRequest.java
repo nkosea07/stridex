@@ -22,4 +22,8 @@ public class NotificationTemplateRequest {
     private String body;
 
     private Boolean enabled = true;
+
+    private String metaTemplateName;
+
+    private String languageCode = "en_US";
 }

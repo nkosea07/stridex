@@ -4,6 +4,7 @@ import com.racetracker.config.RaceTrackerProperties;
 import com.racetracker.dto.media.MediaDto;
 import com.racetracker.model.Race;
 import com.racetracker.model.RaceMedia;
+import com.racetracker.model.Participant;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceMediaRepository;
 import com.racetracker.repository.RaceRepository;
@@ -20,11 +21,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
@@ -94,6 +98,52 @@ class MediaServiceImplTest {
         media.setId(UUID.randomUUID());
         when(mediaRepository.findByRaceIdAndId(raceId, media.getId())).thenReturn(Optional.of(media));
 
+        assertThatThrownBy(() -> service.content(raceId, media.getId(), true))
+            .isInstanceOf(com.racetracker.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    void approvedParticipantMediaRequiresCurrentConsentForOriginalAndThumbnail() throws Exception {
+        Participant participant = new Participant();
+        RaceMedia media = RaceMedia.builder().race(race()).participant(participant).storageKey("x.jpg")
+            .thumbnailKey("x-thumb.jpg").status(RaceMedia.MediaStatus.APPROVED).build();
+        media.setId(UUID.randomUUID());
+        Files.write(tempDir.resolve("x.jpg"), new byte[]{1});
+        Files.write(tempDir.resolve("x-thumb.jpg"), new byte[]{2});
+        when(mediaRepository.findByRaceIdAndId(raceId, media.getId())).thenReturn(Optional.of(media));
+
+        assertThatThrownBy(() -> service.content(raceId, media.getId(), true))
+            .isInstanceOf(com.racetracker.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.thumbnail(raceId, media.getId(), true))
+            .isInstanceOf(com.racetracker.exception.ResourceNotFoundException.class);
+
+        participant.setMediaPublicationConsentAt(OffsetDateTime.now());
+        assertThatCode(() -> service.content(raceId, media.getId(), true)).doesNotThrowAnyException();
+        assertThatCode(() -> service.thumbnail(raceId, media.getId(), true)).doesNotThrowAnyException();
+        participant.setMediaPublicationConsentAt(null);
+        assertThatThrownBy(() -> service.content(raceId, media.getId(), true))
+            .isInstanceOf(com.racetracker.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    void approvedUntaggedMediaRequiresExplicitAttestation() {
+        RaceMedia media = RaceMedia.builder().race(race()).storageKey("x.jpg")
+            .status(RaceMedia.MediaStatus.APPROVED).build();
+        media.setId(UUID.randomUUID());
+        when(mediaRepository.findByRaceIdAndId(raceId, media.getId())).thenReturn(Optional.of(media));
+
+        assertThatThrownBy(() -> service.content(raceId, media.getId(), true))
+            .isInstanceOf(com.racetracker.exception.ResourceNotFoundException.class);
+        MediaDto attested = service.attestNonPerson(raceId, media.getId(), "Finish gantry without people", null);
+        assertThat(media.getNonPersonPublicationAttestedAt()).isNotNull();
+        assertThat(media.getNonPersonPublicationReason()).isEqualTo("Finish gantry without people");
+        assertThat(attested.getNonPersonAttested()).isTrue();
+        assertThat(attested.getPubliclyVisible()).isTrue();
+
+        MediaDto revoked = service.revokeNonPerson(raceId, media.getId(), null);
+        assertThat(revoked.getNonPersonAttested()).isFalse();
+        assertThat(revoked.getPubliclyVisible()).isFalse();
+        assertThat(media.getNonPersonPublicationAttestedAt()).isNull();
         assertThatThrownBy(() -> service.content(raceId, media.getId(), true))
             .isInstanceOf(com.racetracker.exception.ResourceNotFoundException.class);
     }

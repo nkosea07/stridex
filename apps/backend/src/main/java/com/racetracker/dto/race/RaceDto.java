@@ -18,6 +18,7 @@ public class RaceDto {
     private String description;
     private String raceType;
     private String status;
+    private String timezone;
     private String city;
     private String country;
     private BigDecimal startLocationLat;
@@ -34,6 +35,18 @@ public class RaceDto {
     private String currency;
     private String bannerImageUrl;
     private String logoUrl;
+    private String posterUrl;
+    private OffsetDateTime earlyBirdEndsAt;
+    private BigDecimal earlyBirdFee;
+    private BigDecimal teamFee;
+    private String bibPrefix;
+    private Integer nextBibSequence;
+    private Integer bibWidth;
+    private Integer medalPlaces;
+    private String bibTemplate;
+    private String bibAccentColor;
+    private String cancellationReason;
+    private OffsetDateTime cancelledAt;
     private Boolean isPublicRegistration;
     private Boolean requireMedicalClearance;
     private Boolean requireApproval;

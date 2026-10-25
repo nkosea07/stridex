@@ -16,11 +16,17 @@ public interface ParticipantService {
     void delete(UUID raceId, UUID participantId);
     ParticipantDto checkIn(UUID raceId, UUID participantId);
 
+    ParticipantDto checkInByQr(UUID raceId, String code);
+
     ImportJobDto importCsv(UUID raceId, MultipartFile file);
+
+    com.racetracker.dto.participant.ImportPreviewDto previewImport(UUID raceId, MultipartFile file);
     ImportJobDto getImportJob(UUID raceId, UUID jobId);
     List<ImportJobDto> listImportJobs(UUID raceId);
 
     String exportCsv(UUID raceId);
+
+    com.racetracker.service.ExportedFile export(UUID raceId, String format);
 
     RegistrationDto registerForRace(UUID raceId, RaceRegistrationRequest request);
     List<RegistrationDto> getMyRegistrations();

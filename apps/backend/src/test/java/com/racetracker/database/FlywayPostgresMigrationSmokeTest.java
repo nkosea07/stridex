@@ -70,4 +70,68 @@ class FlywayPostgresMigrationSmokeTest {
             }
         }
     }
+
+    @Test
+    @EnabledIfEnvironmentVariable(named = "FLYWAY_TEST_URL", matches = ".+")
+    void upgradesFromV36ToCurrentVersion() throws Exception {
+        String url = System.getenv("FLYWAY_TEST_URL");
+        String username = System.getenv().getOrDefault("FLYWAY_TEST_USERNAME", "");
+        String password = System.getenv().getOrDefault("FLYWAY_TEST_PASSWORD", "");
+
+        Flyway baseline = Flyway.configure()
+            .dataSource(url, username, password)
+            .locations("classpath:db/migration")
+            .validateOnMigrate(true)
+            .cleanDisabled(false)
+            .target("36")
+            .load();
+        baseline.clean();
+        assertThat(baseline.migrate().success).isTrue();
+        assertThat(baseline.info().current().getVersion().getVersion()).isEqualTo("36");
+
+        String legacyAlertId = java.util.UUID.randomUUID().toString();
+        String raceId = java.util.UUID.randomUUID().toString();
+        try (var connection = DriverManager.getConnection(url, username, password);
+             Statement statement = connection.createStatement()) {
+            statement.execute("INSERT INTO races (id, name, race_type, race_date) VALUES ('"
+                + raceId + "', 'Legacy SOS', 'MARATHON', CURRENT_DATE)");
+            statement.execute("INSERT INTO emergency_alerts (id, race_id, message) VALUES ('"
+                + legacyAlertId + "', '" + raceId + "', 'Legacy alert')");
+        }
+
+        Flyway upgrade = Flyway.configure()
+            .dataSource(url, username, password)
+            .locations("classpath:db/migration")
+            .validateOnMigrate(true)
+            .load();
+        assertThat(upgrade.migrate().success).isTrue();
+        upgrade.validate();
+
+        String expectedHead = java.util.Arrays.stream(upgrade.info().all())
+            .map(MigrationInfo::getVersion)
+            .filter(Objects::nonNull)
+            .map(version -> version.getVersion())
+            .max(Comparator.comparingInt(Integer::parseInt))
+            .orElseThrow();
+        assertThat(upgrade.info().current().getVersion().getVersion()).isEqualTo(expectedHead);
+        assertThat(Integer.parseInt(expectedHead)).isGreaterThanOrEqualTo(41);
+
+        try (var connection = DriverManager.getConnection(url, username, password);
+             Statement statement = connection.createStatement()) {
+            try (ResultSet legacy = statement.executeQuery(
+                "SELECT delivery_status FROM emergency_alerts WHERE id = '" + legacyAlertId + "'")) {
+                assertThat(legacy.next()).isTrue();
+                assertThat(legacy.getString(1)).isEqualTo("LEGACY_UNVERIFIED");
+            }
+            statement.execute("INSERT INTO emergency_alerts (race_id, message) VALUES ('"
+                + raceId + "', 'New alert')");
+            try (ResultSet created = statement.executeQuery("""
+                SELECT delivery_status FROM emergency_alerts
+                WHERE message = 'New alert'
+                """)) {
+                assertThat(created.next()).isTrue();
+                assertThat(created.getString(1)).isEqualTo("QUEUED");
+            }
+        }
+    }
 }

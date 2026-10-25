@@ -33,17 +33,21 @@ final class TabularExportWriter {
         }
     }
 
-    static byte[] xlsx(String sheetName, List<String[]> rows) {
-        java.util.Map<String, List<String[]>> sheets = new java.util.LinkedHashMap<>();
+    static byte[] xlsx(String sheetName, Iterable<String[]> rows) {
+        java.util.Map<String, Iterable<String[]>> sheets = new java.util.LinkedHashMap<>();
         sheets.put(sheetName, rows);
-        return xlsx(sheets);
+        return writeXlsx(sheets);
     }
 
     static byte[] xlsx(java.util.Map<String, List<String[]>> sheets) {
+        return writeXlsx(sheets);
+    }
+
+    private static byte[] writeXlsx(java.util.Map<String, ? extends Iterable<String[]>> sheets) {
         try (SXSSFWorkbook workbook = new SXSSFWorkbook(STREAMING_WINDOW);
              ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             workbook.setCompressTempFiles(true);
-            for (java.util.Map.Entry<String, List<String[]>> entry : sheets.entrySet()) {
+            for (java.util.Map.Entry<String, ? extends Iterable<String[]>> entry : sheets.entrySet()) {
                 Sheet sheet = workbook.createSheet(entry.getKey());
                 int rowIndex = 0;
                 for (String[] values : entry.getValue()) {

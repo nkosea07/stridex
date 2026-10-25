@@ -6,6 +6,7 @@ import com.racetracker.security.JwtAuthenticationFilter;
 import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.AuditEventService;
 import com.racetracker.service.EmergencyAlertService;
+import com.racetracker.service.CheckpointEmergencyService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -51,6 +52,74 @@ class EmergencyAlertControllerWebMvcTest {
 
     @MockBean
     private RaceAccessGuard raceAccessGuard;
+
+    @MockBean
+    private CheckpointEmergencyService checkpointEmergencyService;
+
+    @Test
+    @WithMockUser(username = "volunteer@example.com", roles = "VOLUNTEER")
+    void checkpointVolunteerRaisesDurableAlert() throws Exception {
+        UUID raceId = UUID.randomUUID();
+        UUID checkpointId = UUID.randomUUID();
+        EmergencyAlertDto alert = new EmergencyAlertDto();
+        alert.setId(UUID.randomUUID());
+        alert.setDeliveryStatus("QUEUED");
+        when(checkpointEmergencyService.raise(eq(raceId), eq(checkpointId),
+            any(EmergencyAlertRequest.class), eq("volunteer@example.com"))).thenReturn(alert);
+
+        mockMvc.perform(post("/v1/races/{raceId}/checkpoints/{checkpointId}/emergency", raceId, checkpointId)
+                .principal(new UsernamePasswordAuthenticationToken("volunteer@example.com", null,
+                    java.util.List.of(new SimpleGrantedAuthority("ROLE_VOLUNTEER"))))
+                .contentType("application/json").content("{\"message\":\"Need assistance\"}"))
+            .andExpect(status().isAccepted())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.deliveryStatus")
+                .value("QUEUED"));
+
+        verify(checkpointEmergencyService).raise(eq(raceId), eq(checkpointId),
+            any(EmergencyAlertRequest.class), eq("volunteer@example.com"));
+    }
+
+    @Test
+    @WithMockUser(username = "volunteer@example.com", roles = "VOLUNTEER")
+    void mismatchedCheckpointDoesNotRaiseOrAudit() throws Exception {
+        UUID raceId = UUID.randomUUID();
+        UUID checkpointId = UUID.randomUUID();
+        doThrow(new com.racetracker.exception.ResourceNotFoundException("Checkpoint not found"))
+            .when(checkpointEmergencyService).raise(eq(raceId), eq(checkpointId),
+                any(EmergencyAlertRequest.class), eq("volunteer@example.com"));
+        mockMvc.perform(post("/v1/races/{raceId}/checkpoints/{checkpointId}/emergency", raceId, checkpointId)
+                .principal(new UsernamePasswordAuthenticationToken("volunteer@example.com", null))
+                .contentType("application/json").content("{}"))
+            .andExpect(status().isNotFound());
+        verifyNoInteractions(emergencyAlertService, auditEventService, raceAccessGuard);
+    }
+
+    @Test
+    @WithMockUser(username = "volunteer@example.com", roles = "VOLUNTEER")
+    void deniedCheckpointDoesNotRaiseOrAudit() throws Exception {
+        UUID raceId = UUID.randomUUID();
+        UUID checkpointId = UUID.randomUUID();
+        doThrow(new AccessDeniedException("denied")).when(checkpointEmergencyService)
+            .raise(eq(raceId), eq(checkpointId), any(EmergencyAlertRequest.class), eq("volunteer@example.com"));
+        mockMvc.perform(post("/v1/races/{raceId}/checkpoints/{checkpointId}/emergency", raceId, checkpointId)
+                .principal(new UsernamePasswordAuthenticationToken("volunteer@example.com", null))
+                .contentType("application/json").content("{}"))
+            .andExpect(status().isForbidden());
+        verifyNoInteractions(emergencyAlertService, auditEventService);
+    }
+
+    @Test
+    void auditFailureDoesNotReturnAccepted() throws Exception {
+        UUID raceId = UUID.randomUUID();
+        UUID checkpointId = UUID.randomUUID();
+        doThrow(new IllegalStateException("audit failed")).when(checkpointEmergencyService)
+            .raise(eq(raceId), eq(checkpointId), any(EmergencyAlertRequest.class), eq("volunteer@example.com"));
+        mockMvc.perform(post("/v1/races/{raceId}/checkpoints/{checkpointId}/emergency", raceId, checkpointId)
+                .principal(new UsernamePasswordAuthenticationToken("volunteer@example.com", null))
+                .contentType("application/json").content("{}"))
+            .andExpect(status().is5xxServerError());
+    }
+
 
     @Test
     @WithMockUser(username = "admin@example.com", roles = "RACE_ADMIN")

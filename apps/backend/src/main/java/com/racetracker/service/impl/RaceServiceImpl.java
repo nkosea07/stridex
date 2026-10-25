@@ -264,7 +264,7 @@ public class RaceServiceImpl implements RaceService {
 
     @Override
     @Transactional
-    public RaceDto updateStatus(UUID id, String status) {
+    public RaceDto updateStatus(UUID id, String status, String reason) {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
         raceAccessGuard.assertCanManage(race);
@@ -280,6 +280,10 @@ public class RaceServiceImpl implements RaceService {
         }
 
         race.setStatus(target);
+        if (target == Race.RaceStatus.CANCELLED) {
+            race.setCancellationReason(reason == null || reason.isBlank() ? null : reason.trim());
+            race.setCancelledAt(OffsetDateTime.now());
+        }
         Race saved = raceRepository.save(race);
         return raceMapper.toDto(saved);
     }
@@ -357,6 +361,16 @@ public class RaceServiceImpl implements RaceService {
         copy.setCurrency(source.getCurrency());
         copy.setBannerImageUrl(source.getBannerImageUrl());
         copy.setLogoUrl(source.getLogoUrl());
+        copy.setPosterUrl(source.getPosterUrl());
+        copy.setTimezone(source.getTimezone());
+        copy.setEarlyBirdEndsAt(source.getEarlyBirdEndsAt());
+        copy.setEarlyBirdFee(source.getEarlyBirdFee());
+        copy.setTeamFee(source.getTeamFee());
+        copy.setBibPrefix(source.getBibPrefix());
+        copy.setBibWidth(source.getBibWidth());
+        copy.setMedalPlaces(source.getMedalPlaces());
+        copy.setBibTemplate(source.getBibTemplate());
+        copy.setBibAccentColor(source.getBibAccentColor());
         copy.setIsPublicRegistration(source.getIsPublicRegistration());
         copy.setRequireMedicalClearance(source.getRequireMedicalClearance());
         copy.setRequireApproval(source.getRequireApproval());
@@ -416,6 +430,8 @@ public class RaceServiceImpl implements RaceService {
             .bibPrefix(source.getBibPrefix())
             .maxParticipants(source.getMaxParticipants())
             .registrationFee(source.getRegistrationFee())
+            .earlyBirdFee(source.getEarlyBirdFee())
+            .teamFee(source.getTeamFee())
             .build();
     }
 
@@ -451,6 +467,7 @@ public class RaceServiceImpl implements RaceService {
         race.setName(request.getName());
         race.setDescription(request.getDescription());
         race.setRaceType(parseRaceType(request.getRaceType()));
+        race.setTimezone(request.getTimezone() == null || request.getTimezone().isBlank() ? "UTC" : request.getTimezone());
         race.setCity(request.getCity());
         race.setCountry(request.getCountry());
         race.setStartLocationLat(request.getStartLocationLat());
@@ -467,6 +484,15 @@ public class RaceServiceImpl implements RaceService {
         race.setCurrency(request.getCurrency() == null ? "USD" : request.getCurrency());
         race.setBannerImageUrl(request.getBannerImageUrl());
         race.setLogoUrl(request.getLogoUrl());
+        race.setPosterUrl(request.getPosterUrl());
+        race.setEarlyBirdEndsAt(request.getEarlyBirdEndsAt());
+        race.setEarlyBirdFee(request.getEarlyBirdFee());
+        race.setTeamFee(request.getTeamFee());
+        race.setBibPrefix(request.getBibPrefix());
+        race.setBibWidth(request.getBibWidth() == null ? 4 : request.getBibWidth());
+        race.setMedalPlaces(request.getMedalPlaces() == null ? 3 : request.getMedalPlaces());
+        race.setBibTemplate(request.getBibTemplate() == null ? "CLASSIC" : request.getBibTemplate());
+        race.setBibAccentColor(request.getBibAccentColor());
         race.setIsPublicRegistration(request.getIsPublicRegistration() != null ? request.getIsPublicRegistration() : true);
         race.setRequireMedicalClearance(request.getRequireMedicalClearance() != null ? request.getRequireMedicalClearance() : false);
         race.setRequireApproval(request.getRequireApproval() != null ? request.getRequireApproval() : false);
@@ -484,6 +510,7 @@ public class RaceServiceImpl implements RaceService {
         if (request.getName() != null) race.setName(request.getName());
         if (request.getDescription() != null) race.setDescription(request.getDescription());
         if (request.getRaceType() != null) race.setRaceType(parseRaceType(request.getRaceType()));
+        if (request.getTimezone() != null) race.setTimezone(request.getTimezone());
         if (request.getCity() != null) race.setCity(request.getCity());
         if (request.getCountry() != null) race.setCountry(request.getCountry());
         if (request.getStartLocationLat() != null) race.setStartLocationLat(request.getStartLocationLat());
@@ -500,6 +527,15 @@ public class RaceServiceImpl implements RaceService {
         if (request.getCurrency() != null) race.setCurrency(request.getCurrency());
         if (request.getBannerImageUrl() != null) race.setBannerImageUrl(request.getBannerImageUrl());
         if (request.getLogoUrl() != null) race.setLogoUrl(request.getLogoUrl());
+        if (request.getPosterUrl() != null) race.setPosterUrl(request.getPosterUrl());
+        if (request.getEarlyBirdEndsAt() != null) race.setEarlyBirdEndsAt(request.getEarlyBirdEndsAt());
+        if (request.getEarlyBirdFee() != null) race.setEarlyBirdFee(request.getEarlyBirdFee());
+        if (request.getTeamFee() != null) race.setTeamFee(request.getTeamFee());
+        if (request.getBibPrefix() != null) race.setBibPrefix(request.getBibPrefix());
+        if (request.getBibWidth() != null) race.setBibWidth(request.getBibWidth());
+        if (request.getMedalPlaces() != null) race.setMedalPlaces(request.getMedalPlaces());
+        if (request.getBibTemplate() != null) race.setBibTemplate(request.getBibTemplate());
+        if (request.getBibAccentColor() != null) race.setBibAccentColor(request.getBibAccentColor());
         if (request.getIsPublicRegistration() != null) race.setIsPublicRegistration(request.getIsPublicRegistration());
         if (request.getRequireMedicalClearance() != null) race.setRequireMedicalClearance(request.getRequireMedicalClearance());
         if (request.getRequireApproval() != null) race.setRequireApproval(request.getRequireApproval());
@@ -524,6 +560,8 @@ public class RaceServiceImpl implements RaceService {
             .bibPrefix(request.getBibPrefix())
             .maxParticipants(request.getMaxParticipants())
             .registrationFee(request.getRegistrationFee())
+            .earlyBirdFee(request.getEarlyBirdFee())
+            .teamFee(request.getTeamFee())
             .build();
     }
 

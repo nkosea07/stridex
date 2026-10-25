@@ -19,6 +19,6 @@ public interface NotificationTemplateService {
 
     Optional<ResolvedTemplate> resolve(String code, String locale);
 
-    record ResolvedTemplate(String subject, String body) {
+    record ResolvedTemplate(String subject, String body, String metaTemplateName, String languageCode) {
     }
 }

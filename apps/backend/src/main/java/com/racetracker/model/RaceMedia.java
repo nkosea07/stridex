@@ -64,6 +64,15 @@ public class RaceMedia {
     @Column(name = "moderated_at")
     private OffsetDateTime moderatedAt;
 
+    @Column(name = "non_person_publication_attested_at")
+    private OffsetDateTime nonPersonPublicationAttestedAt;
+
+    @Column(name = "non_person_publication_attested_by")
+    private UUID nonPersonPublicationAttestedBy;
+
+    @Column(name = "non_person_publication_reason", columnDefinition = "TEXT")
+    private String nonPersonPublicationReason;
+
     @CreationTimestamp
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

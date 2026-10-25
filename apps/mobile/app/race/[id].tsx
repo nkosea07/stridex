@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { CapabilityGate } from '@/components/CapabilityGate';
 import { RequestErrorState } from '@/components/RequestErrorState';
 import { formatCurrency, formatDate, formatDistanceKm, formatNumber, statusTranslationKey } from '@/lib/format';
-import type { PublicRaceResult, RegistrationField } from '@/types';
+import type { PublicRaceResult, Registration, RegistrationField } from '@/types';
 
 const DEFAULT_BANNER = 'https://images.unsplash.com/photo-1513593771513-7b58b6c4af38?w=800';
 
@@ -76,11 +76,43 @@ function RaceDetailScreenContent() {
   const [registrationFields, setRegistrationFields] = useState<RegistrationField[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [contact, setContact] = useState({ name: '', phone: '', relationship: 'Self' });
+  const [medical, setMedical] = useState({ bloodType: '', medicalConditions: '', allergies: '' });
   const [shirtSize, setShirtSize] = useState('');
   const [teamName, setTeamName] = useState('');
   const [clubName, setClubName] = useState('');
   const [waiverAccepted, setWaiverAccepted] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [mediaPublicationConsent, setMediaPublicationConsent] = useState(false);
+  const [myRegistration, setMyRegistration] = useState<Registration | null>(null);
+  const [savingMediaConsent, setSavingMediaConsent] = useState(false);
+
+  useEffect(() => {
+    if (!routeId || !canRegister) {
+      setMyRegistration(null);
+      return;
+    }
+    let active = true;
+    void api.getMyRaces().then((registrations) => {
+      if (active) setMyRegistration(registrations.find((item) => item.raceId === routeId) ?? null);
+    }).catch(() => {
+      if (active) setMyRegistration(null);
+    });
+    return () => { active = false; };
+  }, [routeId, canRegister]);
+
+  const updateMediaConsent = async (consented: boolean) => {
+    if (!myRegistration || savingMediaConsent) return;
+    setSavingMediaConsent(true);
+    try {
+      await api.updateMediaConsent(myRegistration.id, consented);
+      setMyRegistration({ ...myRegistration, mediaPublicationConsent: consented });
+      Alert.alert(t('common:mediaPublicationManage'), t('common:mediaPublicationSaved'));
+    } catch {
+      Alert.alert(t('common:mediaPublicationManage'), t('common:mediaPublicationFailed'));
+    } finally {
+      setSavingMediaConsent(false);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!routeId) {
@@ -230,6 +262,7 @@ function RaceDetailScreenContent() {
     }
 
     setSelectedCategoryId(String(firstCategory.id));
+    setMediaPublicationConsent(false);
     setContact({
       name: user ? `${user.firstName} ${user.lastName}`.trim() : '',
       phone: user?.phone || '',
@@ -267,12 +300,17 @@ function RaceDetailScreenContent() {
           relationship: contact.relationship,
         },
         waiverAccepted,
+        mediaPublicationConsent,
+        bloodType: medical.bloodType || undefined,
+        medicalConditions: medical.medicalConditions || undefined,
+        allergies: medical.allergies || undefined,
         shirtSize: shirtSize || undefined,
         teamName: teamName || undefined,
         clubName: clubName || undefined,
         answers: registrationFields.map((field) => ({ fieldId: field.id, value: answers[field.id] })),
       });
       setIsRegisterOpen(false);
+      setMyRegistration(registration);
       const status = registration.status;
       Alert.alert(
         'Registration submitted',
@@ -513,6 +551,17 @@ function RaceDetailScreenContent() {
       </ScrollView>
 
       <View style={styles.registerContainer}>
+        {canRegister && myRegistration && (
+          <View style={styles.switchRow}>
+            <Switch
+              value={myRegistration.mediaPublicationConsent === true}
+              onValueChange={(value) => void updateMediaConsent(value)}
+              disabled={savingMediaConsent}
+              accessibilityLabel={t('common:mediaPublicationManage')}
+            />
+            <Text style={styles.registrationNotice}>{t('common:mediaPublicationManage')}</Text>
+          </View>
+        )}
         {canRegister ? (
           <TouchableOpacity style={styles.registerButton} onPress={openRegistration} disabled={isRegistering} accessibilityRole="button" accessibilityLabel={t('mobile:race.registerNow')} accessibilityState={{ busy: isRegistering, disabled: isRegistering }}>
             <Text style={styles.registerButtonText}>{isRegistering ? t('mobile:race.registering') : t('mobile:race.registerNow')}</Text>
@@ -572,6 +621,19 @@ function RaceDetailScreenContent() {
                 placeholder="e.g. Spouse"
                 placeholderTextColor="#9CA3AF"
               />
+
+              <Text style={styles.fieldLabel}>Blood type (optional)</Text>
+              <TextInput style={styles.input} value={medical.bloodType}
+                onChangeText={(value) => setMedical((current) => ({ ...current, bloodType: value }))}
+                placeholder="e.g. O+" placeholderTextColor="#9CA3AF" />
+              <Text style={styles.fieldLabel}>Medical conditions (optional)</Text>
+              <TextInput style={styles.input} value={medical.medicalConditions}
+                onChangeText={(value) => setMedical((current) => ({ ...current, medicalConditions: value }))}
+                placeholder="Conditions staff should know" placeholderTextColor="#9CA3AF" />
+              <Text style={styles.fieldLabel}>Allergies (optional)</Text>
+              <TextInput style={styles.input} value={medical.allergies}
+                onChangeText={(value) => setMedical((current) => ({ ...current, allergies: value }))}
+                placeholder="Allergies" placeholderTextColor="#9CA3AF" />
 
               <Text style={styles.fieldLabel}>Shirt size (optional)</Text>
               <TextInput
@@ -635,6 +697,12 @@ function RaceDetailScreenContent() {
                   )}
                 </View>
               ))}
+
+              <View style={styles.switchRow}>
+                <Switch value={mediaPublicationConsent} onValueChange={setMediaPublicationConsent}
+                  accessibilityLabel={t('common:mediaPublicationConsent')} />
+                <Text style={styles.waiverLabel}>{t('common:mediaPublicationConsent')}</Text>
+              </View>
 
               {race?.requireWaiver && (
                 <View style={styles.waiverBox}>

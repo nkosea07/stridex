@@ -102,9 +102,10 @@ public class RaceController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<RaceDto> updateStatus(@PathVariable UUID id, @Valid @RequestBody RaceStatusUpdateRequest request, Authentication authentication) {
         raceAccessGuard.assertCanManage(id);
-        RaceDto updated = raceService.updateStatus(id, request.getStatus());
+        RaceDto updated = raceService.updateStatus(id, request.getStatus(), request.getReason());
         auditEventService.recordForActor("RACE_STATUS_CHANGED", authentication.getName(), "RACE", id.toString(),
-            "SUCCESS", java.util.Map.of("status", request.getStatus()));
+            "SUCCESS", java.util.Map.of("status", request.getStatus(), "reason",
+                request.getReason() == null ? "" : request.getReason()));
         return ResponseEntity.ok(updated);
     }
 

@@ -5,6 +5,7 @@ import com.racetracker.dto.participant.*;
 import com.racetracker.exception.ApiException;
 import com.racetracker.exception.ConflictException;
 import com.racetracker.exception.ResourceNotFoundException;
+import com.racetracker.exception.ServiceUnavailableException;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.mapper.ImportJobMapper;
 import com.racetracker.mapper.ParticipantMapper;
@@ -21,6 +22,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -44,9 +46,12 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.stream.Stream;
 
 @Service
 public class ParticipantServiceImpl implements ParticipantService {
+
+    private static final int MAX_PARTICIPANT_EXPORT_ROWS = 10_000;
 
     private static final EnumSet<Participant.ParticipantStatus> OCCUPYING_STATUSES = EnumSet.of(
         Participant.ParticipantStatus.REGISTERED,
@@ -74,6 +79,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     private final ParticipantImportProcessor importProcessor;
     private final CapabilityAuthorizationService capabilityAuthorizationService;
     private final RaceAccessGuard raceAccessGuard;
+    private final ParticipantIdentityService participantIdentityService;
 
     public ParticipantServiceImpl(
         ParticipantRepository participantRepository,
@@ -92,7 +98,8 @@ public class ParticipantServiceImpl implements ParticipantService {
         com.racetracker.service.NotificationService notificationService,
         ParticipantImportProcessor importProcessor,
         CapabilityAuthorizationService capabilityAuthorizationService,
-        RaceAccessGuard raceAccessGuard
+        RaceAccessGuard raceAccessGuard,
+        ParticipantIdentityService participantIdentityService
     ) {
         this.participantRepository = participantRepository;
         this.raceRepository = raceRepository;
@@ -111,6 +118,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         this.importProcessor = importProcessor;
         this.capabilityAuthorizationService = capabilityAuthorizationService;
         this.raceAccessGuard = raceAccessGuard;
+        this.participantIdentityService = participantIdentityService;
     }
 
     @Override
@@ -166,6 +174,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         if (participant.getPaymentStatus() == null) {
             participant.setPaymentStatus(defaultPaymentStatus(race));
         }
+        participantIdentityService.assign(participant);
 
         Participant saved = participantRepository.save(participant);
         participantCredentialService.syncParticipantCredentials(saved, request.getRfidTag(), request.getCredentials());
@@ -212,6 +221,41 @@ public class ParticipantServiceImpl implements ParticipantService {
         notifyParticipant(saved, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
             "registration.checked_in", "Check-in confirmed", "You are checked in for " + raceName(saved) + ".");
         return toStaffAwareDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public ParticipantDto checkInByQr(UUID raceId, String code) {
+        if (code == null || code.isBlank()) {
+            throw new ApiException("A check-in QR code is required", "QR_CHECK_IN_CODE_REQUIRED");
+        }
+        String normalized = code.trim();
+        String prefix = "AMS-PARTICIPANT-";
+        if (normalized.startsWith(prefix)) {
+            normalized = normalized.substring(prefix.length());
+        }
+        UUID participantId;
+        try {
+            participantId = UUID.fromString(normalized);
+        } catch (IllegalArgumentException ex) {
+            throw new ApiException("Invalid check-in QR code", "QR_CHECK_IN_CODE_INVALID");
+        }
+        return checkIn(raceId, participantId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.racetracker.dto.participant.ImportPreviewDto previewImport(UUID raceId, MultipartFile file) {
+        raceAccessGuard.assertCanManage(raceId);
+        if (file == null || file.isEmpty()) {
+            throw new ApiException("An import file is required");
+        }
+        try {
+            return importProcessor.preview(file.getInputStream(),
+                file.getOriginalFilename() == null ? "import.csv" : file.getOriginalFilename(), raceId);
+        } catch (IOException ex) {
+            throw new ApiException("Could not read import file");
+        }
     }
 
     @Override
@@ -271,23 +315,80 @@ public class ParticipantServiceImpl implements ParticipantService {
 
     @Override
     @Transactional(readOnly = true)
+    public com.racetracker.service.ExportedFile export(UUID raceId, String format) {
+        raceAccessGuard.assertCanManage(raceId);
+        String normalized = format == null ? "csv" : format.trim().toLowerCase(Locale.ROOT);
+        if (!normalized.equals("csv") && !normalized.equals("xlsx")) {
+            throw new ApiException("Unsupported export format: " + format);
+        }
+        List<ParticipantExportRow> participants = participantsForExport(raceId);
+        try {
+            if (normalized.equals("csv")) {
+                return new com.racetracker.service.ExportedFile(
+                    writeLegacyCsv(participants).getBytes(StandardCharsets.UTF_8), "text/csv",
+                    "participants-" + raceId + ".csv");
+            }
+            Iterable<String[]> rows = () -> Stream.concat(
+                Stream.<String[]>of(new String[]{"id", "firstName", "lastName", "email", "phone", "bibNumber",
+                    "status", "gender", "nationality", "registeredAt"}),
+                participants.stream().map(this::toExportRow)).iterator();
+            return new com.racetracker.service.ExportedFile(TabularExportWriter.xlsx("Participants", rows),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "participants-" + raceId + ".xlsx");
+        } catch (RuntimeException ex) {
+            throw new ServiceUnavailableException("Participant export generation failed", "EXPORT_GENERATION_FAILED", ex);
+        }
+    }
+
+    private String[] toExportRow(ParticipantExportRow participant) {
+        return new String[]{
+            participant.id() == null ? null : participant.id().toString(), participant.firstName(),
+            participant.lastName(), participant.email(), participant.phone(), participant.bibNumber(),
+            participant.status() == null ? null : participant.status().name(),
+            participant.gender() == null ? null : participant.gender().name(), participant.nationality(),
+            participant.registeredAt() == null ? null : participant.registeredAt().toString()
+        };
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public String exportCsv(UUID raceId) {
         raceAccessGuard.assertCanManage(raceId);
-        List<Participant> participants = participantRepository.findByRaceIdOrderByRegisteredAtDesc(raceId);
+        List<ParticipantExportRow> participants = participantsForExport(raceId);
+        try {
+            return writeLegacyCsv(participants);
+        } catch (RuntimeException ex) {
+            throw new ServiceUnavailableException("Participant export generation failed", "EXPORT_GENERATION_FAILED", ex);
+        }
+    }
+
+    private List<ParticipantExportRow> participantsForExport(UUID raceId) {
+        if (participantRepository.countByRaceId(raceId) > MAX_PARTICIPANT_EXPORT_ROWS) {
+            throw new ApiException("Participant export exceeds pilot limit", "EXPORT_TOO_LARGE");
+        }
+        List<ParticipantExportRow> participants = participantRepository.findExportRowsByRaceId(
+            raceId, PageRequest.of(0, MAX_PARTICIPANT_EXPORT_ROWS + 1));
+        if (participants.size() > MAX_PARTICIPANT_EXPORT_ROWS) {
+            throw new ApiException("Participant export exceeds pilot limit", "EXPORT_TOO_LARGE");
+        }
+        return participants;
+    }
+
+    private String writeLegacyCsv(List<ParticipantExportRow> participants) {
         StringWriter out = new StringWriter();
         out.append("id,firstName,lastName,email,phone,bibNumber,status,gender,nationality,registeredAt\n");
 
-        for (Participant p : participants) {
-            out.append(csv(p.getId())).append(',')
-                .append(csv(p.getFirstName())).append(',')
-                .append(csv(p.getLastName())).append(',')
-                .append(csv(p.getEmail())).append(',')
-                .append(csv(p.getPhone())).append(',')
-                .append(csv(p.getBibNumber())).append(',')
-                .append(csv(p.getStatus() != null ? p.getStatus().name() : null)).append(',')
-                .append(csv(p.getGender() != null ? p.getGender().name() : null)).append(',')
-                .append(csv(p.getNationality())).append(',')
-                .append(csv(p.getRegisteredAt()))
+        for (ParticipantExportRow p : participants) {
+            out.append(csv(p.id())).append(',')
+                .append(csv(p.firstName())).append(',')
+                .append(csv(p.lastName())).append(',')
+                .append(csv(p.email())).append(',')
+                .append(csv(p.phone())).append(',')
+                .append(csv(p.bibNumber())).append(',')
+                .append(csv(p.status() != null ? p.status().name() : null)).append(',')
+                .append(csv(p.gender() != null ? p.gender().name() : null)).append(',')
+                .append(csv(p.nationality())).append(',')
+                .append(csv(p.registeredAt()))
                 .append('\n');
         }
 
@@ -343,6 +444,14 @@ public class ParticipantServiceImpl implements ParticipantService {
         participant.setStatus(status);
         participant.setRegistrationSource("PUBLIC_PORTAL");
         participant.setRegisteredAt(OffsetDateTime.now());
+        if (Boolean.TRUE.equals(request.getMediaPublicationConsent())) {
+            participant.setMediaPublicationConsentAt(OffsetDateTime.now());
+            participant.setMediaPublicationConsentVersion(
+                com.racetracker.service.MediaConsentService.CURRENT_MEDIA_PUBLICATION_CONSENT_VERSION);
+        }
+        participant.setBloodType(request.getBloodType());
+        participant.setMedicalConditions(request.getMedicalConditions());
+        participant.setAllergies(request.getAllergies());
         participant.setEmergencyContactName(request.getEmergencyContact().getName());
         participant.setEmergencyContactPhone(request.getEmergencyContact().getPhone());
         participant.setEmergencyContactRelation(request.getEmergencyContact().getRelationship());
@@ -358,6 +467,7 @@ public class ParticipantServiceImpl implements ParticipantService {
             participant.setWaiverVersion(race.getWaiverVersion());
         }
         participant.setTeam(resolveRegistrationTeam(race, user, request));
+        participantIdentityService.assign(participant);
 
         Participant saved = participantRepository.save(participant);
         saveAnswers(saved, answers);
@@ -468,6 +578,9 @@ public class ParticipantServiceImpl implements ParticipantService {
         raceAccessGuard.assertCanManage(raceId);
         Participant participant = participantRepository.findByRaceIdAndIdForUpdate(raceId, participantId)
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
+        if (participant.getPaymentStatus() == Participant.PaymentStatus.REFUNDED) {
+            throw new ConflictException("Refunded registration payment cannot be manually changed", "REFUND_STATE_CONFLICT");
+        }
         Participant.PaymentStatus status;
         try {
             status = Participant.PaymentStatus.valueOf(request.getStatus().trim().toUpperCase(Locale.ROOT));
@@ -901,9 +1014,11 @@ public class ParticipantServiceImpl implements ParticipantService {
         dto.setRaceId(participant.getRace() != null ? participant.getRace().getId() : null);
         dto.setUserId(participant.getUser() != null ? participant.getUser().getId() : null);
         dto.setCategoryId(participant.getCategory() != null ? participant.getCategory().getId() : null);
+        dto.setAthleteCode(participant.getAthleteCode());
         dto.setBibNumber(participant.getBibNumber());
         dto.setStatus(mapRegistrationStatus(participant.getStatus()));
         dto.setRegistrationDate(participant.getRegisteredAt());
+        dto.setMediaPublicationConsent(participant.getMediaPublicationConsentAt() != null);
         dto.setShirtSize(participant.getShirtSize());
         dto.setPaymentStatus(participant.getPaymentStatus() != null ? participant.getPaymentStatus().name() : null);
         dto.setPaymentAmount(participant.getPaymentAmount());

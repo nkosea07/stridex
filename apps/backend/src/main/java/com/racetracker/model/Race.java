@@ -31,6 +31,9 @@ public class Race {
     @Column(nullable = false)
     private String name;
 
+    @Column(nullable = false, length = 64)
+    private String timezone = "UTC";
+
     @Column(columnDefinition = "TEXT")
     private String description;
 
@@ -93,6 +96,9 @@ public class Race {
     @Column(name = "logo_url")
     private String logoUrl;
 
+    @Column(name = "poster_url", columnDefinition = "TEXT")
+    private String posterUrl;
+
     // Settings
     @Column(name = "is_public_registration")
     private Boolean isPublicRegistration = true;
@@ -123,6 +129,39 @@ public class Race {
 
     @Column(name = "archived_at")
     private OffsetDateTime archivedAt;
+
+    @Column(name = "cancellation_reason", columnDefinition = "TEXT")
+    private String cancellationReason;
+
+    @Column(name = "cancelled_at")
+    private OffsetDateTime cancelledAt;
+
+    @Column(name = "early_bird_ends_at")
+    private OffsetDateTime earlyBirdEndsAt;
+
+    @Column(name = "early_bird_fee", precision = 10, scale = 2)
+    private BigDecimal earlyBirdFee;
+
+    @Column(name = "team_fee", precision = 10, scale = 2)
+    private BigDecimal teamFee;
+
+    @Column(name = "bib_prefix", length = 12)
+    private String bibPrefix;
+
+    @Column(name = "next_bib_sequence", nullable = false)
+    private Integer nextBibSequence = 1;
+
+    @Column(name = "bib_width", nullable = false)
+    private Integer bibWidth = 4;
+
+    @Column(name = "medal_places", nullable = false)
+    private Integer medalPlaces = 3;
+
+    @Column(name = "bib_template", nullable = false, length = 40)
+    private String bibTemplate = "CLASSIC";
+
+    @Column(name = "bib_accent_color", length = 12)
+    private String bibAccentColor;
 
     // Ownership
     @ManyToOne(fetch = FetchType.LAZY)

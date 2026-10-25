@@ -26,6 +26,18 @@ public class AccountErasure {
     @Column(name = "finalized_at")
     private OffsetDateTime finalizedAt;
 
+    @Column(name = "finalization_attempts", nullable = false)
+    private Integer finalizationAttempts = 0;
+
+    @Column(name = "finalization_next_attempt_at")
+    private OffsetDateTime finalizationNextAttemptAt;
+
+    @Column(name = "finalization_error_code", length = 60)
+    private String finalizationErrorCode;
+
+    @Column(name = "legacy_scrubbed_at")
+    private OffsetDateTime legacyScrubbedAt;
+
     @Column(name = "notification_email")
     private String notificationEmail;
 
