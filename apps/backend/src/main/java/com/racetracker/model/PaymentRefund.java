@@ -55,6 +55,6 @@ public class PaymentRefund {
     private OffsetDateTime completedAt;
 
     public enum RefundStatus {
-        PENDING, REFUNDED, FAILED
+        PENDING, REFUNDED, NOT_REFUNDED, FAILED
     }
 }

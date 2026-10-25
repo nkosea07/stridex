@@ -1,4 +1,18 @@
 {
+  "manageExternalRefund": "Manage external refund",
+  "externalRefundInstructions": "Stage the full refund first. Complete or verify it with the provider outside this platform, then record the provider receipt or case reference and the confirmed outcome. This platform will not send a refund request.",
+  "refundReason": "Reason",
+  "stageExternalRefund": "Stage external refund",
+  "refundProviderReference": "Provider receipt or case reference",
+  "refundOutcome": "Verified outcome",
+  "refundConfirmed": "Refund completed",
+  "refundNotCompleted": "Refund not completed",
+  "recordRefundOutcome": "Record verified outcome",
+  "refundAttemptStaged": "Refund attempt staged. Complete or verify it with the provider before recording an outcome.",
+  "refundAttemptAlreadyPending": "A refund attempt is already pending. Check its provider status before taking another action.",
+  "refundStageFailed": "Could not stage the refund attempt.",
+  "refundOutcomeRecorded": "Refund outcome recorded.",
+  "refundReconcileFailed": "Could not record the refund outcome. Check the reference and pending attempt.",
   "appName": "Race Tracker",
   "language": "Language",
   "actions": {

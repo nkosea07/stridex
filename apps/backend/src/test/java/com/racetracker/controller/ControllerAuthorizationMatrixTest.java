@@ -173,8 +173,15 @@ class ControllerAuthorizationMatrixTest {
 
     @Test
     void emergencyAlertControllerGuards() {
-        assertGuard(EmergencyAlertController.class, "raise", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')");
+        assertGuard(EmergencyAlertController.class, "raise",
+            "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN') or hasAuthority('CAP_ATHLETE')");
         assertGuard(EmergencyAlertController.class, "list", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')");
+    }
+
+    @Test
+    void externalRefundReconciliationIsSuperAdminOnly() {
+        assertGuard(PaymentController.class, "stageExternalRefund", "hasRole('SUPER_ADMIN')");
+        assertGuard(PaymentController.class, "reconcileExternalRefund", "hasRole('SUPER_ADMIN')");
     }
 
     @Test

@@ -56,24 +56,6 @@ public class PesepayClient {
         );
     }
 
-    public String refund(String referenceNumber, double amount, String currency, String reason) {
-        RaceTrackerProperties.Payments payments = properties.getPayments();
-        validateConfigured(payments);
-
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("referenceNumber", referenceNumber);
-        body.put("amountDetails", Map.of("amount", amount, "currencyCode", currency));
-        if (reason != null && !reason.isBlank()) {
-            body.put("reason", reason);
-        }
-
-        String path = isBlank(payments.getRefundPath()) ? "/payments/refund" : payments.getRefundPath();
-        JsonNode response = post(payments, path, body);
-        JsonNode payload = decryptPayload(payments, response);
-        String refundRef = text(payload, "referenceNumber");
-        return refundRef != null ? refundRef : text(payload, "transactionStatus");
-    }
-
     public String checkStatus(String referenceNumber) {        RaceTrackerProperties.Payments payments = properties.getPayments();
         validateConfigured(payments);
 

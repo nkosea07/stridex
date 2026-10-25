@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.racetracker.config.RaceTrackerProperties;
 import com.racetracker.dto.participant.PaymentDto;
 import com.racetracker.exception.ApiException;
+import com.racetracker.exception.ConflictException;
 import com.racetracker.exception.ResourceNotFoundException;
+import com.racetracker.exception.ServiceUnavailableException;
 import com.racetracker.model.Participant;
 import com.racetracker.model.Payment;
 import com.racetracker.model.PaymentRefund;
@@ -13,12 +15,14 @@ import com.racetracker.model.Race;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.PaymentRepository;
 import com.racetracker.repository.UserRepository;
-import com.racetracker.service.PaymentProvider;
 import com.racetracker.service.PaymentService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -37,9 +41,9 @@ public class PaymentServiceImpl implements PaymentService {
     private final ObjectMapper objectMapper;
     private final com.racetracker.service.PromoCodeService promoCodeService;
     private final com.racetracker.service.NotificationService notificationService;
-    private final java.util.List<com.racetracker.service.PaymentProvider> paymentProviders;
     private final com.racetracker.repository.PaymentRefundRepository paymentRefundRepository;
     private final UserRepository userRepository;
+    private final TransactionTemplate transactionTemplate;
 
     public PaymentServiceImpl(
         PaymentRepository paymentRepository,
@@ -49,9 +53,9 @@ public class PaymentServiceImpl implements PaymentService {
         ObjectMapper objectMapper,
         com.racetracker.service.PromoCodeService promoCodeService,
         com.racetracker.service.NotificationService notificationService,
-        java.util.List<com.racetracker.service.PaymentProvider> paymentProviders,
         com.racetracker.repository.PaymentRefundRepository paymentRefundRepository,
-        UserRepository userRepository
+        UserRepository userRepository,
+        PlatformTransactionManager transactionManager
     ) {
         this.paymentRepository = paymentRepository;
         this.participantRepository = participantRepository;
@@ -60,9 +64,9 @@ public class PaymentServiceImpl implements PaymentService {
         this.objectMapper = objectMapper;
         this.promoCodeService = promoCodeService;
         this.notificationService = notificationService;
-        this.paymentProviders = paymentProviders;
         this.paymentRefundRepository = paymentRefundRepository;
         this.userRepository = userRepository;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Override
@@ -139,32 +143,35 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public PaymentDto refund(UUID raceId, UUID participantId, BigDecimal amount, String reason, String actorEmail) {
+        throw new ServiceUnavailableException("Automated refunds are unavailable",
+            "REFUND_AUTOMATION_UNAVAILABLE");
+    }
+
+    @Override
+    @Transactional
+    public PaymentDto stageExternalRefund(UUID raceId, UUID participantId, String reason, String actorEmail) {
+        if (reason == null || reason.isBlank()) {
+            throw new ApiException("A refund reason is required", "REFUND_REASON_REQUIRED");
+        }
         Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
-        Payment payment = paymentRepository
-            .findFirstByParticipantIdOrderByCreatedAtDesc(participantId)
-            .orElseThrow(() -> new ApiException("No payment found to refund"));
-
-        if (payment.getStatus() == Payment.PaymentStatus.REFUNDED) {
-            return toDto(payment);
-        }
+        Payment payment = lockLatestPayment(participantId);
         if (payment.getStatus() != Payment.PaymentStatus.COMPLETED) {
-            throw new ApiException("No completed payment found to refund");
+            throw new ConflictException("No completed payment found to refund", "REFUND_PAYMENT_NOT_COMPLETED");
         }
         if (paymentRefundRepository
             .findFirstByPaymentIdAndStatus(payment.getId(), PaymentRefund.RefundStatus.REFUNDED)
             .isPresent()) {
-            return toDto(payment);
+            throw new ConflictException("Payment was already refunded", "REFUND_ALREADY_COMPLETED");
         }
-
-        PaymentProvider provider = providerFor(payment.getProvider());
-        BigDecimal refundAmount = amount != null ? amount : payableAmount(payment);
+        if (paymentRefundRepository.findFirstByPaymentIdAndStatus(payment.getId(), PaymentRefund.RefundStatus.PENDING)
+            .isPresent()) {
+            throw new ConflictException("A refund attempt is already pending", "REFUND_ATTEMPT_ALREADY_PENDING");
+        }
+        BigDecimal refundAmount = payableAmount(payment);
         if (refundAmount == null || refundAmount.signum() <= 0) {
-            throw new ApiException("Refund amount must be positive");
+            throw new ConflictException("Refund amount must be positive", "REFUND_AMOUNT_INVALID");
         }
-
-        // Record the attempt before calling the provider so a crash mid-call is auditable and a
-        // retry can be recognised rather than triggering a second provider refund.
         PaymentRefund refund = PaymentRefund.builder()
             .payment(payment)
             .amount(refundAmount)
@@ -175,38 +182,73 @@ public class PaymentServiceImpl implements PaymentService {
             .build();
         paymentRefundRepository.save(refund);
 
-        String providerRef;
-        try {
-            providerRef = provider.refund(payment, refundAmount, reason);
-        } catch (RuntimeException ex) {
-            refund.setStatus(PaymentRefund.RefundStatus.FAILED);
-            refund.setErrorMessage(ex.getMessage());
-            paymentRefundRepository.save(refund);
-            throw ex instanceof ApiException apiException
-                ? apiException : new ApiException("Provider refund failed: " + ex.getMessage());
-        }
-
-        refund.setStatus(PaymentRefund.RefundStatus.REFUNDED);
-        refund.setProviderRef(providerRef);
-        refund.setCompletedAt(OffsetDateTime.now());
-        paymentRefundRepository.save(refund);
-
-        payment.setStatus(Payment.PaymentStatus.REFUNDED);
-        paymentRepository.save(payment);
-        participant.setPaymentStatus(Participant.PaymentStatus.REFUNDED);
-        participantRepository.save(participant);
-
-        notifyPayment(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
-            "payment.refunded", "Refund processed", "Your payment for " + raceName(participant) + " has been refunded.");
-
         return toDto(payment);
     }
 
-    private PaymentProvider providerFor(String providerKey) {
-        return paymentProviders.stream()
-            .filter(provider -> provider.key().equalsIgnoreCase(providerKey))
-            .findFirst()
-            .orElseThrow(() -> new ApiException("No refund provider configured for " + providerKey));
+    @Override
+    @Transactional
+    public PaymentDto reconcileExternalRefund(UUID raceId, UUID participantId, String providerReference,
+                                              String reason, boolean refunded, String actorEmail) {
+        if (providerReference == null || providerReference.isBlank() || reason == null || reason.isBlank()) {
+            throw new ApiException("A provider receipt or case reference and reason are required",
+                "REFUND_EVIDENCE_REQUIRED");
+        }
+        String reference = providerReference.trim();
+        Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
+            .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
+        Payment payment = lockLatestPayment(participantId);
+        PaymentRefund.RefundStatus outcome = refunded
+            ? PaymentRefund.RefundStatus.REFUNDED : PaymentRefund.RefundStatus.NOT_REFUNDED;
+        PaymentRefund attempt = paymentRefundRepository
+            .findFirstByPaymentIdAndStatus(payment.getId(), PaymentRefund.RefundStatus.PENDING)
+            .orElse(null);
+        PaymentRefund prior = paymentRefundRepository.findByProviderRef(reference).orElse(null);
+        if (prior != null) {
+            if (attempt != null) {
+                throw new ConflictException("Reference belongs to an earlier refund attempt", "REFUND_REFERENCE_CONFLICT");
+            }
+            if (prior.getPayment().getId().equals(payment.getId()) && prior.getStatus() == outcome
+                && reason.trim().equals(prior.getReason())) {
+                return toDto(payment);
+            }
+            throw new ConflictException("Refund reference has a conflicting outcome", "REFUND_REFERENCE_CONFLICT");
+        }
+        if (attempt == null) {
+            throw new ConflictException("No pending refund attempt", "REFUND_ATTEMPT_REQUIRED");
+        }
+        if (payment.getStatus() != Payment.PaymentStatus.COMPLETED
+            && !(refunded && payment.getStatus() == Payment.PaymentStatus.REFUNDED)) {
+            throw new ConflictException("Payment is not completed", "REFUND_PAYMENT_NOT_COMPLETED");
+        }
+        if (attempt.getAmount().compareTo(payableAmount(payment)) != 0) {
+            throw new ConflictException("Pending refund amount is not the full payable amount", "REFUND_AMOUNT_MISMATCH");
+        }
+        attempt.setStatus(outcome);
+        attempt.setProviderRef(reference);
+        attempt.setReason(reason.trim());
+        attempt.setCompletedAt(OffsetDateTime.now());
+        try {
+            paymentRefundRepository.saveAndFlush(attempt);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ConflictException("Refund reference has a conflicting outcome", "REFUND_REFERENCE_CONFLICT");
+        }
+
+        if (refunded) {
+            payment.setStatus(Payment.PaymentStatus.REFUNDED);
+            paymentRepository.save(payment);
+            participant.setPaymentStatus(Participant.PaymentStatus.REFUNDED);
+            participantRepository.save(participant);
+            notifyPayment(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
+                "payment.refunded", "Refund processed", "Your payment for " + raceName(participant) + " has been refunded.");
+        }
+        return toDto(payment);
+    }
+
+    private Payment lockLatestPayment(UUID participantId) {
+        UUID paymentId = paymentRepository.findFirstByParticipantIdOrderByCreatedAtDesc(participantId)
+            .orElseThrow(() -> new ConflictException("No payment found", "REFUND_PAYMENT_NOT_FOUND")).getId();
+        return paymentRepository.findByIdForUpdate(paymentId)
+            .orElseThrow(() -> new ConflictException("No payment found", "REFUND_PAYMENT_NOT_FOUND"));
     }
 
     private BigDecimal payableAmount(Payment payment) {
@@ -225,7 +267,6 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    @Transactional
     public void handlePesepayCallback(String authorizationHeader, String rawBody) {
         RaceTrackerProperties.Payments payments = properties.getPayments();
         if (isBlank(payments.getIntegrationKey()) || !payments.getIntegrationKey().equals(authorizationHeader)) {
@@ -248,18 +289,34 @@ public class PaymentServiceImpl implements PaymentService {
             // Not a payment we originated; acknowledge silently.
             return;
         }
-        if (payment.getStatus() == Payment.PaymentStatus.COMPLETED) {
+        if (payment.getStatus() == Payment.PaymentStatus.REFUNDED) {
             return;
         }
 
         String status = pesepayClient.checkStatus(referenceNumber);
-        applyStatus(payment, status);
+        UUID paymentId = payment.getId();
+        transactionTemplate.executeWithoutResult(transaction -> {
+            Payment locked = paymentRepository.findByIdForUpdate(paymentId).orElse(null);
+            if (locked == null || !PROVIDER.equals(locked.getProvider())
+                || !referenceNumber.equals(locked.getProviderRef())
+                || locked.getStatus() == Payment.PaymentStatus.REFUNDED) {
+                return;
+            }
+            if (locked.getStatus() == Payment.PaymentStatus.COMPLETED
+                && !"REVERSED".equalsIgnoreCase(status == null ? "" : status.trim())) {
+                return;
+            }
+            applyStatus(locked, status);
+        });
     }
 
     private void applyStatus(Payment payment, String transactionStatus) {
         String normalized = transactionStatus == null ? "" : transactionStatus.trim().toUpperCase();
         switch (normalized) {
             case "SUCCESS" -> {
+                if (payment.getStatus() == Payment.PaymentStatus.COMPLETED) {
+                    return;
+                }
                 payment.setStatus(Payment.PaymentStatus.COMPLETED);
                 payment.setCompletedAt(OffsetDateTime.now());
                 paymentRepository.save(payment);
@@ -294,6 +351,9 @@ public class PaymentServiceImpl implements PaymentService {
             case "REVERSED" -> {
                 payment.setStatus(Payment.PaymentStatus.REFUNDED);
                 paymentRepository.save(payment);
+                Participant participant = payment.getParticipant();
+                participant.setPaymentStatus(Participant.PaymentStatus.REFUNDED);
+                participantRepository.save(participant);
             }
             default -> log.info("Pesepay transaction {} still pending with status {}", payment.getProviderRef(), normalized);
         }

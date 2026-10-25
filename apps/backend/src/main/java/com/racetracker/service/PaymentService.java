@@ -12,4 +12,9 @@ public interface PaymentService {
     void handlePesepayCallback(String authorizationHeader, String rawBody);
 
     PaymentDto refund(UUID raceId, UUID participantId, BigDecimal amount, String reason, String actorEmail);
+
+    PaymentDto stageExternalRefund(UUID raceId, UUID participantId, String reason, String actorEmail);
+
+    PaymentDto reconcileExternalRefund(UUID raceId, UUID participantId, String providerReference,
+                                       String reason, boolean refunded, String actorEmail);
 }

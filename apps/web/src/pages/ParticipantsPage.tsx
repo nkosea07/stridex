@@ -8,12 +8,13 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { participantsApi, categoriesApi } from '@/lib/api'
+import { ApiError, participantsApi, categoriesApi } from '@/lib/api'
 import { toast } from 'sonner'
 import type { ImportJob, Participant, ParticipantStatus, Penalty, RaceCategory } from '@/types'
 import { isAdminRole, useAuth } from '@/contexts/AuthContext'
+import { useTranslation } from 'react-i18next'
 
 const statusColors: Record<ParticipantStatus, string> = {
   REGISTERED: 'bg-muted text-muted-foreground',
@@ -40,6 +41,7 @@ const paymentColors: Record<string, string> = {
 export function ParticipantsPage() {
   const { raceId } = useParams()
   const { user } = useAuth()
+  const { t } = useTranslation()
   const canManageAdminActions = isAdminRole(user?.role)
   const [participants, setParticipants] = useState<Participant[]>([])
   const [importJobs, setImportJobs] = useState<ImportJob[]>([])
@@ -77,6 +79,23 @@ export function ParticipantsPage() {
   const [penaltySeconds, setPenaltySeconds] = useState('')
   const [penaltyReason, setPenaltyReason] = useState('')
   const [penaltyBusy, setPenaltyBusy] = useState(false)
+  const [refundParticipantId, setRefundParticipantId] = useState<string | null>(null)
+  const [refundReason, setRefundReason] = useState('')
+  const [refundReference, setRefundReference] = useState('')
+  const [refundOutcome, setRefundOutcome] = useState<'REFUNDED' | 'NOT_REFUNDED'>('REFUNDED')
+  const [refundBusy, setRefundBusy] = useState(false)
+
+  const closeRefundDialog = () => {
+    setRefundParticipantId(null)
+    setRefundReason('')
+    setRefundReference('')
+    setRefundOutcome('REFUNDED')
+  }
+
+  const openRefundDialog = (participantId: string) => {
+    closeRefundDialog()
+    setRefundParticipantId(participantId)
+  }
 
   const loadParticipants = async () => {
     if (!raceId) return
@@ -229,14 +248,34 @@ export function ParticipantsPage() {
     }
   }
 
-  const handleRefundPayment = async (participantId: string) => {
-    if (!raceId) return
+  const handleStageRefund = async () => {
+    if (!raceId || !refundParticipantId || !refundReason.trim()) return
+    setRefundBusy(true)
     try {
-      await participantsApi.refundPayment(raceId, participantId)
-      toast.success('Payment marked as refunded')
-      await loadParticipants()
+      await participantsApi.stageExternalRefund(raceId, refundParticipantId, refundReason.trim())
+      toast.success(t('common:refundAttemptStaged'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to refund payment')
+      toast.error(error instanceof ApiError && error.code === 'REFUND_ATTEMPT_ALREADY_PENDING'
+        ? t('common:refundAttemptAlreadyPending') : t('common:refundStageFailed'))
+    } finally {
+      setRefundBusy(false)
+    }
+  }
+
+  const handleReconcileRefund = async () => {
+    if (!raceId || !refundParticipantId || !refundReason.trim() || !refundReference.trim()) return
+    setRefundBusy(true)
+    try {
+      await participantsApi.reconcileExternalRefund(raceId, refundParticipantId, {
+        providerReference: refundReference.trim(), reason: refundReason.trim(), outcome: refundOutcome,
+      })
+      toast.success(t('common:refundOutcomeRecorded'))
+      closeRefundDialog()
+      await loadParticipants()
+    } catch {
+      toast.error(t('common:refundReconcileFailed'))
+    } finally {
+      setRefundBusy(false)
     }
   }
 
@@ -483,11 +522,11 @@ export function ParticipantsPage() {
                             <DropdownMenuSeparator />
                           </>
                         )}
-                        {canManageAdminActions && p.paymentStatus === 'PAID' && (
+                        {user?.role === 'SUPER_ADMIN' && (p.paymentStatus === 'PAID' || p.paymentStatus === 'REFUNDED') && (
                           <>
-                            <DropdownMenuItem onClick={() => void handleRefundPayment(p.id)}>
+                            <DropdownMenuItem onClick={() => openRefundDialog(p.id)}>
                               <RotateCcw className="mr-2 h-4 w-4" />
-                              Refund Payment
+                              {t('common:manageExternalRefund')}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                           </>
@@ -677,6 +716,49 @@ export function ParticipantsPage() {
             {canManageAdminActions && (
               <Button onClick={() => void handleAddPenalty()} disabled={penaltyBusy}>{penaltyBusy ? 'Adding…' : 'Add penalty'}</Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={refundParticipantId !== null} onOpenChange={(open) => {
+        if (!open && !refundBusy) closeRefundDialog()
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('common:manageExternalRefund')}</DialogTitle>
+            <DialogDescription>{t('common:externalRefundInstructions')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="refund-reason">{t('common:refundReason')}</Label>
+              <Input id="refund-reason" value={refundReason} onChange={(event) => setRefundReason(event.target.value)} />
+            </div>
+            {participants.find((participant) => participant.id === refundParticipantId)?.paymentStatus !== 'REFUNDED' && (
+              <Button variant="outline" disabled={refundBusy || !refundReason.trim()}
+                onClick={() => void handleStageRefund()}>{t('common:stageExternalRefund')}</Button>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="refund-reference">{t('common:refundProviderReference')}</Label>
+              <Input id="refund-reference" value={refundReference}
+                onChange={(event) => setRefundReference(event.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="refund-outcome">{t('common:refundOutcome')}</Label>
+              <Select value={refundOutcome} onValueChange={(value) => setRefundOutcome(value as 'REFUNDED' | 'NOT_REFUNDED')}>
+                <SelectTrigger id="refund-outcome"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="REFUNDED">{t('common:refundConfirmed')}</SelectItem>
+                  <SelectItem value="NOT_REFUNDED">{t('common:refundNotCompleted')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={refundBusy} onClick={closeRefundDialog}>
+              {t('common:actions.cancel')}
+            </Button>
+            <Button disabled={refundBusy || !refundReason.trim() || !refundReference.trim()}
+              onClick={() => void handleReconcileRefund()}>{t('common:recordRefundOutcome')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

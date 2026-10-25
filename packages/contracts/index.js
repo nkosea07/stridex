@@ -118,6 +118,8 @@ export const API_CONTRACT = {
     racePromoCodeActive: '/races/:raceId/promo-codes/:promoId/active',
     racePromoCodeDelete: '/races/:raceId/promo-codes/:promoId',
     raceParticipantPaymentRefund: '/races/:raceId/participants/:id/payment/refund',
+    raceParticipantPaymentRefundAttempt: '/races/:raceId/participants/:id/payment/refund/attempt',
+    raceParticipantPaymentRefundReconcile: '/races/:raceId/participants/:id/payment/refund/reconcile',
     raceParticipantPenalties: '/races/:raceId/participants/:id/penalties',
     raceParticipantPenaltyDelete: '/races/:raceId/participants/:id/penalties/:penaltyId',
     raceResults: '/races/:raceId/results',

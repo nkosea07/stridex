@@ -51,6 +51,17 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void refundUnavailableResponseExposesStableCodeWithoutInternalDetail() {
+        ResponseEntity<ErrorResponse> response = handler.handleServiceUnavailable(
+            new ServiceUnavailableException("Provider internals", "REFUND_AUTOMATION_UNAVAILABLE"),
+            request("/api/v1/races/r/participants/p/payment/refund"));
+
+        assertNotNull(response.getBody());
+        assertEquals("REFUND_AUTOMATION_UNAVAILABLE", response.getBody().getCode());
+        assertFalse(response.getBody().getMessage().contains("Provider internals"));
+    }
+
+    @Test
     void apiExceptionResponseUsesGenericMessageAndCorrelationFields() {
         String internalMessage = "Storage provider credentials: access-key=secret";
         MDC.put("requestId", "request-789");

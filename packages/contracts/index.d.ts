@@ -98,6 +98,8 @@ export type EndpointKey =
   | 'racePromoCodeActive'
   | 'racePromoCodeDelete'
   | 'raceParticipantPaymentRefund'
+  | 'raceParticipantPaymentRefundAttempt'
+  | 'raceParticipantPaymentRefundReconcile'
   | 'raceParticipantPenalties'
   | 'raceParticipantPenaltyDelete'
   | 'raceResults'
