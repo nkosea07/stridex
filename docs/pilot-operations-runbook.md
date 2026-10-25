@@ -19,6 +19,8 @@ timestamps, artifact checksums, and outcome for each rehearsal before pilot appr
    a DBA has recorded and approved a structural diff against `V1__baseline.sql`.
 5. Confirm global RFID simulation is disabled in production and any simulated
    race has explicit pilot authorization.
+6. For the GitHub deployment environment, set `AWS_S3_BUCKET` to the selected real bucket and `FRONTEND_URL` to the public HTTPS origin. Set `MAIL_ENABLED=true` for production with verified `MAIL_HOST`, `MAIL_PORT`, `MAIL_FROM`, and secret `MAIL_USERNAME`/`MAIL_PASSWORD`; staging may use `false`. The workflow rejects missing/placeholder inputs before applying manifests and starts the backend with the `prod` profile. Record the rendered ConfigMap validation result; do not apply `deploy/k8s/config.yaml` directly.
+7. Before V35, reconcile legacy `PENDING` refund attempts and duplicate non-null provider references against provider records. Automated refunds remain disabled. A super admin must stage each new full refund, perform or verify the external provider action, and record its receipt/case reference and outcome; never infer success from a local pending row.
 
 ## Backup and restore rehearsal
 
@@ -60,6 +62,15 @@ the source database during rehearsal.
   decryption cannot be proven.
 - For reader-key exposure, revoke the reader, record the audit event, issue a new
   key, and validate ingest with a non-production race before resuming timing.
+
+## Privacy object cleanup
+
+- An overdue `privacy_object_cleanup_overdue_jobs` gauge above zero means an account cannot be marked fully erased. Alert the privacy/ops owner and inspect `privacy_object_deletion_jobs` for `status <> 'COMPLETED'`, `attempts`, `next_attempt_at`, and `lease_until`; restrict access because storage keys are private data.
+- Confirm the selected storage provider and credentials, then let the idempotent worker retry. Do not manually mark a job complete unless an operator has verified the object is absent in the selected bucket and recorded the evidence. Do not send a completion notice or mark the account deleted while any object job is unfinished.
+- After restoration or worker restart, verify expired leases become claimable, missing objects finish safely, and the overdue gauge returns to zero. Record affected account IDs and remediation in the incident log without copying object keys into public tickets.
+- A storage provider, endpoint, bucket, or local root change leaves older jobs pending until the original location is restored or a verified migration is performed. Do not acknowledge a job deleted in a different storage scope.
+- Media uploaded before V36 has no stored upload scope. Its erasure jobs use `UNVERIFIED_LEGACY` and cannot complete automatically; an authorized operator must verify the original object location from deployment history and storage evidence before recording the correct job scope. Never default legacy jobs to the currently configured bucket.
+- A `privacy_erasure_notice_overdue` alert means the completion notice has not been accepted by the mail provider. The worker retains the address and retries; mail-disabled deployments must not be considered notice-delivery complete.
 
 ## RFID race-day recovery
 

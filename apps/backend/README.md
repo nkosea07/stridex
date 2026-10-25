@@ -54,6 +54,7 @@ Database requirements:
 - Flyway does not automatically baseline non-empty databases. Before adopting it on an existing environment, take a verified backup, compare the full schema with `V1__baseline.sql` plus the intended upgrades, and manually record the matching Flyway baseline version. Do not baseline based only on table names or apply the old date-named SQL scripts blindly; their deployment history is not tracked here.
 - `V3__organizer_applications_and_rfid_scale.sql` checks for duplicate `(reader_id, source_event_id)` groups before creating the idempotency index. Reconcile duplicates from its diagnostic output without deleting/merging timing records, then rerun.
 - `gps_locations` partitioning is intentionally deferred to a dedicated migration on `recorded_at` so existing JPA/API behavior stays stable.
+- `V35__refund_reconciliation.sql` adds full-refund reconciliation constraints; `V36__privacy_object_erasure.sql` adds durable object cleanup jobs. Validate both on an isolated PostGIS database before deployment. Reconcile existing pending refund attempts and duplicate provider references before applying V35.
 
 For a clean local database, start the PostGIS service with `docker compose up -d db redis`, then run the backend. Flyway applies the clean baseline and forward migrations. Do not run `database/schema.sql` separately.
 
@@ -85,10 +86,21 @@ For the current cross-surface status, use `docs/PENDING_WORK.md`.
 
 ### Auth
 - `POST /api/v1/auth/register`
+- `POST /api/v1/auth/register-organizer`
 - `POST /api/v1/auth/login`
+- `POST /api/v1/auth/deletion/cancel` accepts email and password for a signed-out account during its deletion grace period. The response is generic and issues no session.
 - `POST /api/v1/auth/refresh`
 - `GET /api/v1/auth/me`
 - `PUT /api/v1/auth/profile`
+
+Both registration paths require `privacyPolicyAccepted=true` and the current `privacyPolicyVersion` from `packages/contracts/contract.json`. Older v1 clients that omit either field receive a stable 400 error and must be updated.
+
+### External refunds and privacy erasure
+
+- `POST /api/v1/races/{raceId}/participants/{participantId}/payment/refund` returns `REFUND_AUTOMATION_UNAVAILABLE`; it does not call the payment provider.
+- A super admin stages a full-payable refund attempt at `POST .../payment/refund/attempt` with a reason, completes or verifies the action outside the platform, then records `REFUNDED` or `NOT_REFUNDED` at `POST .../payment/refund/reconcile` with a provider receipt/case reference and reason. The server computes the amount and locks the payment; the UI does not perform a one-click refund.
+- Due account deletion first removes media metadata and persists original/thumbnail deletion jobs. The cleanup worker retries private storage deletion and only then finalizes account anonymization and sends the completion notice. Monitor `privacy_object_cleanup_overdue_jobs` and follow `docs/pilot-operations-runbook.md` for failures.
+- Anonymous race-scoped routes, tracking, results, registration fields, and media return 404 unless public registration is enabled, the race is non-draft, and it is unarchived.
 
 ### Races
 - `GET /api/v1/races`

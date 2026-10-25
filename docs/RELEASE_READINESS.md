@@ -1,6 +1,6 @@
 # Production-Ready Pilot Release Readiness
 
-**Last reviewed:** 2026-10-12  
+**Last reviewed:** 2026-10-25
 **Target:** 5,000 participants, 10,000 concurrent spectators, 100 RFID reads/second  
 **GPS detail retention:** 90 days  
 **Production identity:** Verified-email password authentication; OAuth disabled  
@@ -35,6 +35,9 @@ verification, and operational ownership are all evidenced separately.
 | Backups and restore | Pending | Restore drill meeting RPO 15m/RTO 1h | Platform/DBA |
 | Load capacity | Pending | k6 report meeting pilot targets | Platform |
 | Documentation/runbooks | Partial | Current procedures and ownership confirmed | Product/Ops |
+| Refund reconciliation | Partial | V35 PostGIS upgrade, provider-receipt review, legacy pending-row reconciliation | Finance/Ops |
+| Account erasure | Partial | V36 PostGIS upgrade, storage-failure alert, object deletion and restore drill, confirmed completion-notice delivery | Privacy/Ops |
+| Deployment input validation | Partial | Render tests passed; production mail and storage secrets, staging/prod manifest and startup evidence required | Platform |
 
 ## Explicitly deferred for this release
 
