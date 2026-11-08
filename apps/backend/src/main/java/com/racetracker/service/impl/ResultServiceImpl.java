@@ -26,6 +26,7 @@ import com.racetracker.repository.RaceResultRevisionRepository;
 import com.racetracker.security.CapabilityAuthorizationService;
 import com.racetracker.model.UserCapabilityType;
 import org.springframework.data.domain.PageRequest;
+import com.racetracker.service.CheckpointCutoff;
 import com.racetracker.service.ResultService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -463,21 +464,20 @@ public class ResultServiceImpl implements ResultService {
         dto.setDisqualificationReason(dto.isDisqualified() ? "Disqualified" : null);
         dto.setPenaltySeconds(penaltySeconds);
 
-        OffsetDateTime start = resolveStart(participant, records);
+        OffsetDateTime start = CheckpointCutoff.resolveStart(participant, records);
+        OffsetDateTime gunStart = CheckpointCutoff.scheduledStart(race);
         OffsetDateTime finish = resolveFinish(records);
 
         dto.setStartTime(start != null ? start.toString() : null);
         dto.setFinishTime(finish != null ? finish.toString() : null);
 
-        Duration rawDuration = (start != null && finish != null && !finish.isBefore(start))
-            ? Duration.between(start, finish)
-            : null;
-        Duration duration = rawDuration != null ? rawDuration.plusSeconds(penaltySeconds) : null;
+        Duration duration = elapsedWithPenalty(start, finish, penaltySeconds);
+        Duration gunDuration = elapsedWithPenalty(gunStart, finish, penaltySeconds);
 
         String durationStr = formatDuration(duration);
         dto.setTotalTime(durationStr);
-        dto.setGunTime(durationStr);
         dto.setChipTime(durationStr);
+        dto.setGunTime(gunDuration != null ? formatDuration(gunDuration) : durationStr);
 
         if (duration != null && race.getDistanceKm() != null && race.getDistanceKm().doubleValue() > 0) {
             double hours = duration.toSeconds() / 3600.0;
@@ -511,21 +511,14 @@ public class ResultServiceImpl implements ResultService {
     }
 
     private OffsetDateTime effectiveTime(CheckpointRecord record) {
-        return record.getAdjustedRecordedAt() != null ? record.getAdjustedRecordedAt() : record.getRecordedAt();
+        return CheckpointCutoff.effectiveTime(record);
     }
 
-    private OffsetDateTime resolveStart(Participant participant, List<CheckpointRecord> records) {
-        if (participant.getCheckedInAt() != null) {
-            return participant.getCheckedInAt();
+    private Duration elapsedWithPenalty(OffsetDateTime start, OffsetDateTime finish, int penaltySeconds) {
+        if (start == null || finish == null || finish.isBefore(start)) {
+            return null;
         }
-
-        for (CheckpointRecord record : records) {
-            if (record.getCheckpoint() != null && record.getCheckpoint().getCheckpointType() == Checkpoint.CheckpointType.START) {
-                return effectiveTime(record);
-            }
-        }
-
-        return participant.getRegisteredAt();
+        return Duration.between(start, finish).plusSeconds(penaltySeconds);
     }
 
     private OffsetDateTime resolveFinish(List<CheckpointRecord> records) {

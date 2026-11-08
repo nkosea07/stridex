@@ -19,10 +19,10 @@ import {
 import { initializeAuth } from '@/store/auth';
 import { useTrackingStore } from '@/store/tracking';
 import { addNotificationResponseListener } from '@/lib/notifications';
-import { I18nextProvider } from 'react-i18next';
+import { I18nextProvider, useTranslation } from 'react-i18next';
 import i18n, { initI18n } from '@/lib/i18n';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { ThemeProvider, useTheme } from '@/contexts/theme';
 
 // Keep splash screen visible while loading resources
@@ -82,6 +82,19 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const { colors, resolvedTheme } = useTheme();
+  const { t } = useTranslation();
+  const trackingStopNotice = useTrackingStore((state) => state.trackingStopNotice);
+
+  useEffect(() => {
+    if (!trackingStopNotice) return;
+    const body = trackingStopNotice.reason === 'not_registered'
+      ? t('mobile:trackingStop.notRegistered')
+      : t('mobile:trackingStop.notPermitted');
+    Alert.alert(t('mobile:trackingStop.title'), body, [{
+      text: t('mobile:trackingStop.ok'),
+      onPress: () => void useTrackingStore.getState().acknowledgeTrackingStop(),
+    }], { cancelable: false });
+  }, [trackingStopNotice, t]);
 
   useEffect(() => {
     const subscription = addNotificationResponseListener(() => {

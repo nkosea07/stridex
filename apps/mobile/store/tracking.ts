@@ -11,6 +11,8 @@ import {
   DEFAULT_OPTIONS,
   BATTERY_SAVER_OPTIONS,
   getActiveTrackingSession,
+  subscribeTrackingStopped,
+  takeTrackingStopNotice,
   type LocationRow,
 } from '@/lib/tracking-service';
 import type { Race, GpsLocation, CheckpointRecord, LiveStats, TrackingState } from '@/types';
@@ -101,9 +103,21 @@ export const useTrackingStore = create<ExtendedTrackingState>((set, get) => ({
   foregroundSubscription: null,
   startTime: null,
   syncInterval: null,
+  trackingStopNotice: null,
+
+  acknowledgeTrackingStop: async () => {
+    set({ trackingStopNotice: null });
+    await takeTrackingStopNotice().catch((error) => {
+      console.warn('Failed to acknowledge tracking stop notice:', error);
+    });
+  },
 
   recoverActiveTrackingSession: async () => {
     await initDb();
+    const pendingNotice = await takeTrackingStopNotice().catch(() => null);
+    if (pendingNotice) {
+      set({ trackingStopNotice: pendingNotice });
+    }
     const activeSession = await getActiveTrackingSession();
     if (!activeSession) return;
 
@@ -271,13 +285,27 @@ export const useTrackingStore = create<ExtendedTrackingState>((set, get) => ({
     set({ locations: newLocations, liveStats });
   },
 
-  recordCheckpoint: (record: CheckpointRecord) => {
-    const { checkpointRecords, currentRace } = get();
-    set({ checkpointRecords: [...checkpointRecords, record] });
-
-    if (currentRace?.id) {
-      api.recordCheckpoint(currentRace.id, record.checkpointId, record.method as 'qr_code' | 'gps')
-        .catch(console.error);
+  recordCheckpoint: async (record: CheckpointRecord) => {
+    const { currentRace } = get();
+    if (!currentRace?.id) {
+      throw new Error('No active race');
     }
+    await api.recordCheckpoint(currentRace.id, record.checkpointId, record.method as 'qr_code' | 'gps');
+    set({ checkpointRecords: [...get().checkpointRecords, record] });
   },
 }));
+
+subscribeTrackingStopped((notice) => {
+  const { foregroundSubscription, syncInterval, currentRace } = useTrackingStore.getState();
+  if (currentRace?.id && currentRace.id !== notice.raceId) return;
+  foregroundSubscription?.remove();
+  if (syncInterval) clearInterval(syncInterval);
+  useTrackingStore.setState({
+    isTracking: false,
+    currentRace: null,
+    foregroundSubscription: null,
+    startTime: null,
+    syncInterval: null,
+    trackingStopNotice: notice,
+  });
+});

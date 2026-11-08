@@ -1,7 +1,7 @@
 # Race Tracker Platform
 
 Monorepo for race/marathon tracking: live GPS, RFID checkpoint timing, results, and web/mobile surfaces.
-Per-app docs: `apps/backend/README.md`, `apps/mobile/README.md`, `apps/rfid-gateway/README.md`, `docs/` (`DEVELOPMENT_GUIDE.md` is partly stale — trust configs/scripts over it).
+Per-app docs: `apps/backend/README.md`, `apps/mobile/README.md`, `apps/rfid-gateway/README.md`, `docs/`. In `DEVELOPMENT_GUIDE.md` only the setup, integration, deployment, and quick-start sections are current; its implementation-task sections are historical design notes.
 
 ## Layout & boundaries
 
@@ -54,7 +54,7 @@ CI runs the JS job on Node 22; the local floor is Node 20.19 (`.node-version`).
 
 ## Environment & deployment
 
-- Backend DB vars are `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USERNAME`/`DB_PASSWORD` — not `DATABASE_URL` (`DEVELOPMENT_GUIDE.md` still shows old names and a stale JWT secret).
+- Backend DB vars are `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USERNAME`/`DB_PASSWORD` — not `DATABASE_URL`.
 - Web build-time config: `VITE_API_URL`, `VITE_MAPBOX_TOKEN`. Mobile: `EXPO_PUBLIC_*` only — never put server secrets in client variables.
 - Pilot: `compose.pilot.yml` with `.env.pilot` copied from `.env.pilot.example`. Production requires a non-default `JWT_SECRET`, HTTPS `FRONTEND_URL`, secure cookies, and `RFID_SIMULATION_ENABLED=false`. MFA is not required for the current release; legacy MFA endpoints remain only for compatibility.
 - Ops/procedure references: `docs/pilot-operations-runbook.md`, `docs/rfid-race-pilot-runbook.md`. Never commit populated `.env` files (gitignored; `apps/backend/.env` is local-only and untracked).

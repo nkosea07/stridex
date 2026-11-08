@@ -62,7 +62,7 @@ class RfidReadEventProcessorTest {
             participantCredentialService,
             rfidIngestMetrics,
             liveSummaryCacheInvalidator,
-            spectatorAlertService
+            new CheckpointProgression(spectatorAlertService)
         );
     }
 
@@ -151,5 +151,30 @@ class RfidReadEventProcessorTest {
     }
 
     private record Fixture(RfidReader reader, RfidReadEvent event) {
+    }
+
+    @Test
+    void failedProcessingBacksOffThenMarksTheEventErrorAfterTheAttemptLimit() {
+        UUID eventId = UUID.randomUUID();
+        RfidReadEvent event = new RfidReadEvent();
+        event.setId(eventId);
+        event.setStatus(RfidReadEvent.RfidReadEventStatus.RECEIVED);
+        event.setProcessingAttempts(0);
+        org.mockito.Mockito.when(rfidReadEventRepository.findById(eventId)).thenReturn(java.util.Optional.of(event));
+
+        boolean exhausted = service.recordProcessingFailure(eventId, new IllegalStateException("db"));
+
+        org.assertj.core.api.Assertions.assertThat(exhausted).isFalse();
+        org.assertj.core.api.Assertions.assertThat(event.getProcessingAttempts()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(event.getNextAttemptAt()).isAfter(java.time.OffsetDateTime.now());
+        org.assertj.core.api.Assertions.assertThat(event.getStatus()).isEqualTo(RfidReadEvent.RfidReadEventStatus.RECEIVED);
+
+        event.setProcessingAttempts(7);
+        exhausted = service.recordProcessingFailure(eventId, new IllegalStateException("db"));
+
+        org.assertj.core.api.Assertions.assertThat(exhausted).isTrue();
+        org.assertj.core.api.Assertions.assertThat(event.getStatus()).isEqualTo(RfidReadEvent.RfidReadEventStatus.ERROR);
+        org.assertj.core.api.Assertions.assertThat(event.getNextAttemptAt()).isNull();
+        org.assertj.core.api.Assertions.assertThat(event.getErrorMessage()).contains("8 attempts").contains("IllegalStateException");
     }
 }

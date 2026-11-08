@@ -463,11 +463,20 @@ public class RaceServiceImpl implements RaceService {
             .build();
     }
 
+    private String normalizeTimezone(String timezone) {
+        String value = timezone.trim();
+        try {
+            return java.time.ZoneId.of(value).getId();
+        } catch (java.time.DateTimeException ex) {
+            throw new ApiException("Race timezone must be a valid IANA time zone", "INVALID_TIMEZONE");
+        }
+    }
+
     private void applyCommonFields(RaceCreateRequest request, Race race) {
         race.setName(request.getName());
         race.setDescription(request.getDescription());
         race.setRaceType(parseRaceType(request.getRaceType()));
-        race.setTimezone(request.getTimezone() == null || request.getTimezone().isBlank() ? "UTC" : request.getTimezone());
+        race.setTimezone(request.getTimezone() == null || request.getTimezone().isBlank() ? "UTC" : normalizeTimezone(request.getTimezone()));
         race.setCity(request.getCity());
         race.setCountry(request.getCountry());
         race.setStartLocationLat(request.getStartLocationLat());
@@ -510,7 +519,7 @@ public class RaceServiceImpl implements RaceService {
         if (request.getName() != null) race.setName(request.getName());
         if (request.getDescription() != null) race.setDescription(request.getDescription());
         if (request.getRaceType() != null) race.setRaceType(parseRaceType(request.getRaceType()));
-        if (request.getTimezone() != null) race.setTimezone(request.getTimezone());
+        if (request.getTimezone() != null) race.setTimezone(normalizeTimezone(request.getTimezone()));
         if (request.getCity() != null) race.setCity(request.getCity());
         if (request.getCountry() != null) race.setCountry(request.getCountry());
         if (request.getStartLocationLat() != null) race.setStartLocationLat(request.getStartLocationLat());

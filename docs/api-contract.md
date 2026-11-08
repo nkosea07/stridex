@@ -5,13 +5,23 @@ This repository uses a shared contract package to keep backend, web, and mobile 
 ## Source Of Truth
 
 - Contract config: `packages/contracts/contract.json`
-- Shared runtime constants: `packages/contracts/index.js` (`@race-tracker/contracts`)
+- Shared runtime constants: `packages/contracts/index.js` and types in `index.d.ts`
+  (`@race-tracker/contracts`)
+
+`contract.json` holds the API version, the web/mobile base paths, the WebSocket path
+(`web.wsTrackingPath`, currently `/api/ws-tracking`), legal/consent versions, i18n locales,
+and every REST endpoint template under `endpoints` (route parameters use `:name`).
 
 ## Consumers
 
-- Web API client uses `API_CONTRACT.web.apiBasePath`.
-- Mobile API client uses `getVersionedApiBase(API_ROOT)`.
-- Backend auth allowlist in `SecurityConfig` builds routes from `racetracker.api.version`.
+- Web (`apps/web/src/lib/api.ts`) uses `API_CONTRACT.web.apiBasePath` and resolves every path
+  from `API_CONTRACT.endpoints` with `buildContractPath`.
+- Mobile (`apps/mobile/lib/api.ts`) uses `getVersionedApiBase(API_ROOT)` and the same endpoint keys.
+- Backend controllers map `/v${racetracker.api.version}/...`; `SecurityConfig` builds its anonymous
+  allowlist from the same version.
+
+Neither client may contain a hardcoded `/api/vN` path or an endpoint string that is not declared
+in the contract.
 
 ## Validation
 
@@ -23,42 +33,44 @@ pnpm contracts:validate
 
 This checks:
 
-- `racetracker.api.version` in backend matches contract `apiVersion`.
-- Backend security routes are not hardcoded to `/v1`.
-- Backend public spectator allowlist uses the versioned `apiPrefix`.
-- Web/mobile API clients import and use `@race-tracker/contracts`.
-- Shared contract package values are synchronized with `contract.json`.
-- Public endpoint keys stay aligned across `contract.json`, `index.js`, and `index.d.ts`.
+- `racetracker.api.version` in the backend matches contract `apiVersion`.
+- Backend security routes are not hardcoded to `/v1`, and the public spectator allowlist uses the
+  versioned prefix.
+- Every backend controller route shape is declared in `contract.endpoints`, and every contract
+  endpoint is served by a controller (drift in either direction fails).
+- Web and mobile import `@race-tracker/contracts`, reference only declared endpoint keys, and use
+  no undeclared literal paths.
+- `index.js` and `index.d.ts` stay synchronized with `contract.json`.
 
-## Public Spectator Endpoint Keys
+CI runs this before the web build.
 
-The shared contract publishes these anonymous spectator paths:
+## Public Spectator Endpoints
 
-- Current consumer: the public spectator web experience.
-- Future consumers may reuse these keys if they expose the same anonymous spectator surface.
-- Responses on these endpoints must remain limited to spectator-safe, public-safe fields only.
+Anonymous `GET` routes under `/public/races/**` (for example `publicRaceHub`,
+`publicRaceLive`, `publicRaceLiveFeed`, `publicRaceSearch`, `publicAthleteTracking`,
+`publicAthleteTrack`, `publicRaceHeatmap`, `publicRaceResults`, `publicRaceMedia`,
+`publicRaceRoute`) serve the spectator web experience.
 
-- `publicRaceHub`: `/public/races/:raceId/hub`
-- `publicRaceLive`: `/public/races/:raceId/tracking/live`
-- `publicRaceSearch`: `/public/races/:raceId/tracking/search`
-- `publicAthleteTracking`: `/public/races/:raceId/tracking/athletes/:participantId`
+Responses must stay spectator-safe: no emails, phone numbers, emergency or medical data,
+device tokens, internal notes, or audit fields. Per-athlete GPS tracks honor the participant's
+tracking setting, and the public heatmap excludes tracking-disabled participants and is limited
+to coarse (≤ 4 decimal place) cells.
 
 ## RFID Bridge Endpoints
 
-The RFID bridge endpoints are backend-owned and not currently published in the shared web/mobile contract package because they are not consumed by the public web or mobile apps.
+Reader administration and device ingest are declared in the contract:
 
-- Admin reader management uses normal JWT/operator authorization:
-- `POST /api/v1/races/{raceId}/rfid/readers`
-- `GET /api/v1/races/{raceId}/rfid/readers`
-- `PATCH /api/v1/races/{raceId}/rfid/readers/{readerId}/revoke`
-- Device ingest uses `X-RFID-Reader-Key`:
-- `POST /api/v1/rfid/read-events`
+- Admin (JWT, race-scoped): `raceRfidReaders` (`/races/:raceId/rfid/readers`),
+  `raceRfidOverview`, `raceRfidReaderRevoke`.
+- Device ingest (`X-RFID-Reader-Key` header): `rfidReadEvents` (`/rfid/read-events`, at most
+  200 reads per request) and `rfidReaderHeartbeat` (`/rfid/readers/heartbeat`).
 
-If web/mobile clients later manage readers or display reader health, add these paths to `packages/contracts` before wiring those clients.
+A reader API key is returned once at creation and stored only as a SHA-256 hash.
 
-## Changing API Version
+## Changing API Version Or Paths
 
-1. Update `packages/contracts/contract.json` (`apiVersion`, paths if needed).
-2. Update backend `racetracker.api.version` in `apps/backend/src/main/resources/application.yml`.
-3. Run `pnpm contracts:validate`.
-4. Run app builds/tests.
+1. Update `packages/contracts/contract.json` (`apiVersion`, endpoint templates).
+2. Mirror the change in `packages/contracts/index.js` and `index.d.ts`.
+3. Update backend `racetracker.api.version` in `apps/backend/src/main/resources/application.yml`
+   and the affected controllers.
+4. Update both clients, then run `pnpm contracts:validate` and the app builds/tests.

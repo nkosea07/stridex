@@ -12,7 +12,7 @@ import com.racetracker.service.GpsDriftFilter;
 import com.racetracker.service.CheckpointCutoff;
 import com.racetracker.service.LastCheckpointNameCache;
 import com.racetracker.service.LiveSummaryCacheInvalidator;
-import com.racetracker.service.SpectatorAlertService;
+import com.racetracker.service.CheckpointProgression;
 import com.racetracker.service.TrackingService;
 import com.racetracker.security.CapabilityAuthorizationService;
 import com.racetracker.websocket.TrackingLivePublisher;
@@ -46,7 +46,7 @@ public class TrackingServiceImpl implements TrackingService {
     private final GpsDriftFilter gpsDriftFilter;
     private final LiveSummaryCacheInvalidator liveSummaryCacheInvalidator;
     private final LastCheckpointNameCache lastCheckpointNameCache;
-    private final SpectatorAlertService spectatorAlertService;
+    private final CheckpointProgression checkpointProgression;
     private final CapabilityAuthorizationService capabilityAuthorizationService;
 
     public TrackingServiceImpl(
@@ -61,7 +61,7 @@ public class TrackingServiceImpl implements TrackingService {
         GpsDriftFilter gpsDriftFilter,
         LiveSummaryCacheInvalidator liveSummaryCacheInvalidator,
         LastCheckpointNameCache lastCheckpointNameCache,
-        SpectatorAlertService spectatorAlertService,
+        CheckpointProgression checkpointProgression,
         CapabilityAuthorizationService capabilityAuthorizationService
     ) {
         this.raceRepository = raceRepository;
@@ -75,7 +75,7 @@ public class TrackingServiceImpl implements TrackingService {
         this.gpsDriftFilter = gpsDriftFilter;
         this.liveSummaryCacheInvalidator = liveSummaryCacheInvalidator;
         this.lastCheckpointNameCache = lastCheckpointNameCache;
-        this.spectatorAlertService = spectatorAlertService;
+        this.checkpointProgression = checkpointProgression;
         this.capabilityAuthorizationService = capabilityAuthorizationService;
     }
 
@@ -85,8 +85,10 @@ public class TrackingServiceImpl implements TrackingService {
     public void recordLocation(UUID raceId, GpsLocationRequest request) {
         capabilityAuthorizationService.require(com.racetracker.model.UserCapabilityType.ATHLETE);
         Participant participant = resolveCurrentParticipant(raceId);
-        GpsLocation latest = saveLocation(participant, request);
-        trackingLivePublisher.publishLocationUpdate(raceId, buildLiveTrackingResponse(participant, latest, raceId));
+        GpsLocation saved = saveLocation(participant, request);
+        if (!Boolean.TRUE.equals(saved.getFiltered())) {
+            trackingLivePublisher.publishLocationUpdate(raceId, buildLiveTrackingResponse(participant, saved, raceId));
+        }
     }
 
     @Override
@@ -101,7 +103,7 @@ public class TrackingServiceImpl implements TrackingService {
 
         BigDecimal batchDistance = BigDecimal.ZERO;
         GpsLocation lastAccepted = gpsLocationRepository
-            .findTopByParticipantIdAndRaceIdOrderByRecordedAtDesc(participant.getId(), raceId)
+            .findTopByParticipantIdAndRaceIdAndFilteredFalseOrderByRecordedAtDesc(participant.getId(), raceId)
             .orElse(null);
 
         for (GpsLocationRequest item : request.getLocations()) {
@@ -139,6 +141,9 @@ public class TrackingServiceImpl implements TrackingService {
         }
 
         Participant participant = resolveCurrentParticipant(raceId);
+        if (!CheckpointProgression.isTimeableEntrant(participant.getStatus())) {
+            throw new ConflictException("Your registration has not been accepted for this race", "PARTICIPANT_NOT_ENTERED");
+        }
         Checkpoint checkpoint = checkpointRepository.findByRaceIdAndId(raceId, request.getCheckpointId())
             .orElseThrow(() -> new ResourceNotFoundException("Checkpoint not found"));
 
@@ -146,7 +151,7 @@ public class TrackingServiceImpl implements TrackingService {
             throw new ConflictException("Checkpoint already recorded");
         }
 
-        OffsetDateTime recordedAt = parseTimestamp(request.getTimestamp());
+        OffsetDateTime recordedAt = OffsetDateTime.now();
         boolean cutoffMissed = evaluateCutoff(checkpoint, participant, raceId, recordedAt);
 
         CheckpointRecord record = new CheckpointRecord();
@@ -163,28 +168,8 @@ public class TrackingServiceImpl implements TrackingService {
         
         liveSummaryCacheInvalidator.evictLastCheckpointAfterCommit(participant.getId(), raceId);
 
-        Participant.ParticipantStatus previousStatus = participant.getStatus();
-        if (cutoffMissed) {
-            participant.setStatus(Participant.ParticipantStatus.DNF);
-        } else if (checkpoint.getCheckpointType() == Checkpoint.CheckpointType.FINISH) {
-            participant.setStatus(Participant.ParticipantStatus.FINISHED);
-        } else if (participant.getStatus() == Participant.ParticipantStatus.REGISTERED
-            || participant.getStatus() == Participant.ParticipantStatus.CONFIRMED
-            || participant.getStatus() == Participant.ParticipantStatus.CHECKED_IN) {
-            participant.setStatus(Participant.ParticipantStatus.STARTED);
-        }
+        checkpointProgression.apply(participant, checkpoint, cutoffMissed);
         participantRepository.save(participant);
-
-        spectatorAlertService.onCheckpoint(participant, checkpoint);
-        if (!cutoffMissed
-            && participant.getStatus() == Participant.ParticipantStatus.FINISHED
-            && previousStatus != Participant.ParticipantStatus.FINISHED) {
-            spectatorAlertService.onFinished(participant);
-        } else if (!cutoffMissed
-            && participant.getStatus() == Participant.ParticipantStatus.STARTED
-            && previousStatus != Participant.ParticipantStatus.STARTED) {
-            spectatorAlertService.onStarted(participant);
-        }
     }
 
     private boolean evaluateCutoff(Checkpoint checkpoint, Participant participant, UUID raceId, OffsetDateTime recordedAt) {
@@ -206,7 +191,8 @@ public class TrackingServiceImpl implements TrackingService {
         List<LiveTrackingResponse> results = new ArrayList<>();
 
         for (Participant p : participants) {
-            Optional<GpsLocation> latest = gpsLocationRepository.findTopByParticipantIdAndRaceIdOrderByRecordedAtDesc(p.getId(), raceId);
+            Optional<GpsLocation> latest = gpsLocationRepository
+                .findTopByParticipantIdAndRaceIdAndFilteredFalseOrderByRecordedAtDesc(p.getId(), raceId);
             if (latest.isPresent()) {
                 results.add(buildLiveTrackingResponse(p, latest.get(), raceId));
             }
@@ -244,7 +230,8 @@ public class TrackingServiceImpl implements TrackingService {
 
         row.setLastCheckpoint(lastCheckpointNameCache.getName(participant.getId(), raceId));
 
-        OffsetDateTime start = participant.getCheckedInAt() != null ? participant.getCheckedInAt() : participant.getRegisteredAt();
+        List<CheckpointRecord> records = checkpointRecordRepository.findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participant.getId(), raceId);
+        OffsetDateTime start = CheckpointCutoff.resolveStart(participant, records);
         Duration elapsed = null;
         if (start != null && latest.getRecordedAt() != null && latest.getRecordedAt().isAfter(start)) {
             elapsed = Duration.between(start, latest.getRecordedAt());
@@ -274,8 +261,6 @@ public class TrackingServiceImpl implements TrackingService {
             }
         }
 
-        // Add splits
-        List<CheckpointRecord> records = checkpointRecordRepository.findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participant.getId(), raceId);
         row.setSplits(records.stream().map(r -> {
             Integer distanceMeters = r.getCheckpoint() != null && r.getCheckpoint().getDistanceFromStartKm() != null
                 ? r.getCheckpoint().getDistanceFromStartKm().multiply(BigDecimal.valueOf(1000))
@@ -284,8 +269,9 @@ public class TrackingServiceImpl implements TrackingService {
             String timeStr = "---";
             Long durationSeconds = null;
             Long paceSecondsPerKm = null;
-            if (start != null && r.getRecordedAt() != null) {
-                Duration duration = Duration.between(start, r.getRecordedAt());
+            OffsetDateTime effective = CheckpointCutoff.effectiveTime(r);
+            if (start != null && effective != null && !effective.isBefore(start)) {
+                Duration duration = Duration.between(start, effective);
                 durationSeconds = duration.getSeconds();
                 timeStr = formatDuration(duration);
                 if (distanceMeters != null && distanceMeters > 0) {
@@ -359,7 +345,7 @@ public class TrackingServiceImpl implements TrackingService {
     }
 
     private GpsLocation saveLocation(Participant participant, GpsLocationRequest request) {
-        Optional<GpsLocation> prev = gpsLocationRepository.findTopByParticipantIdAndRaceIdOrderByRecordedAtDesc(
+        Optional<GpsLocation> prev = gpsLocationRepository.findTopByParticipantIdAndRaceIdAndFilteredFalseOrderByRecordedAtDesc(
             participant.getId(),
             participant.getRace().getId()
         );

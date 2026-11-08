@@ -1,4 +1,7 @@
 import http from 'node:http';
+import { GatewayValidationError } from './payload.mjs';
+
+const MAX_BODY_BYTES = 5 * 1024 * 1024;
 
 function sendJson(response, statusCode, body) {
   response.writeHead(statusCode, { 'Content-Type': 'application/json' });
@@ -7,11 +10,20 @@ function sendJson(response, statusCode, body) {
 
 async function readJson(request) {
   const chunks = [];
+  let size = 0;
   for await (const chunk of request) {
+    size += chunk.length;
+    if (size > MAX_BODY_BYTES) {
+      throw new GatewayValidationError('Request body is too large');
+    }
     chunks.push(chunk);
   }
   const raw = Buffer.concat(chunks).toString('utf8');
-  return raw ? JSON.parse(raw) : {};
+  try {
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new GatewayValidationError('Request body must be valid JSON');
+  }
 }
 
 export function createServer({ gatewayService, logger = console }) {
@@ -34,6 +46,11 @@ export function createServer({ gatewayService, logger = console }) {
         return;
       }
 
+      if (request.method === 'POST' && request.url === '/failed/requeue') {
+        sendJson(response, 200, await gatewayService.requeueRejected());
+        return;
+      }
+
       if (request.method === 'POST' && request.url === '/heartbeat') {
         const result = await gatewayService.heartbeat();
         sendJson(response, result.ok ? 200 : 502, result);
@@ -43,9 +60,11 @@ export function createServer({ gatewayService, logger = console }) {
       sendJson(response, 404, { message: 'Not found' });
     } catch (error) {
       logger.error('Gateway request failed', error);
-      sendJson(response, 400, {
-        message: error instanceof Error ? error.message : 'Request failed'
-      });
+      if (error instanceof GatewayValidationError) {
+        sendJson(response, 400, { message: error.message });
+        return;
+      }
+      sendJson(response, 500, { message: 'Gateway request failed' });
     }
   });
 }

@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -76,26 +77,19 @@ class AuthServiceImplRefreshTokenTest {
     }
 
     @Test
-    void refreshToken_rotatesStoredRefreshToken() {
+    void refreshToken_rotatesStoredRefreshTokenWithinItsSessionFamily() {
         User user = baseUser();
         String refreshToken = "refresh-token";
         String rotatedRefreshToken = "rotated-refresh-token";
-
-        AuthToken storedToken = AuthToken.builder()
-            .id(UUID.randomUUID())
-            .user(user)
-            .token(refreshToken)
-            .tokenType(AuthToken.TokenType.REFRESH)
-            .expiresAt(OffsetDateTime.now().plusMinutes(30))
-            .build();
+        UUID familyId = UUID.randomUUID();
+        AuthToken storedToken = storedToken(user, refreshToken, familyId, null);
 
         when(jwtService.hasTokenType(refreshToken, JwtService.TOKEN_TYPE_REFRESH)).thenReturn(true);
-        when(authTokenRepository.findByTokenAndTokenTypeAndConsumedAtIsNull(refreshToken, AuthToken.TokenType.REFRESH))
+        when(authTokenRepository.findByTokenAndTokenType(refreshToken, AuthToken.TokenType.REFRESH))
             .thenReturn(Optional.of(storedToken));
-        when(authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(user.getId(), AuthToken.TokenType.REFRESH))
-            .thenReturn(List.of());
         when(jwtService.isTokenValid(eq(refreshToken), any(org.springframework.security.core.userdetails.UserDetails.class)))
             .thenReturn(true);
+        when(authTokenRepository.consumeIfActive(eq(storedToken.getId()), any(OffsetDateTime.class))).thenReturn(1);
         when(jwtService.generateAccessToken(user)).thenReturn("access-token");
         when(jwtService.generateRefreshToken(user)).thenReturn(rotatedRefreshToken);
         when(jwtService.extractExpiration(rotatedRefreshToken)).thenReturn(OffsetDateTime.now().plusDays(7));
@@ -105,12 +99,63 @@ class AuthServiceImplRefreshTokenTest {
 
         assertEquals("access-token", response.getToken());
         assertEquals(rotatedRefreshToken, response.getRefreshToken());
-        verify(authTokenRepository).save(storedToken);
         verify(authTokenRepository).save(argThat(token ->
             token.getTokenType() == AuthToken.TokenType.REFRESH
                 && rotatedRefreshToken.equals(token.getToken())
                 && user.equals(token.getUser())
+                && familyId.equals(token.getFamilyId())
         ));
+        verify(authTokenRepository, never()).findByUserIdAndTokenTypeAndConsumedAtIsNull(any(), any());
+    }
+
+    @Test
+    void refreshToken_rejectsTheLoserOfAConcurrentRotation() {
+        User user = baseUser();
+        String refreshToken = "refresh-token";
+        AuthToken storedToken = storedToken(user, refreshToken, UUID.randomUUID(), null);
+
+        when(jwtService.hasTokenType(refreshToken, JwtService.TOKEN_TYPE_REFRESH)).thenReturn(true);
+        when(authTokenRepository.findByTokenAndTokenType(refreshToken, AuthToken.TokenType.REFRESH))
+            .thenReturn(Optional.of(storedToken));
+        when(jwtService.isTokenValid(eq(refreshToken), any(org.springframework.security.core.userdetails.UserDetails.class)))
+            .thenReturn(true);
+        when(authTokenRepository.consumeIfActive(eq(storedToken.getId()), any(OffsetDateTime.class))).thenReturn(0);
+
+        assertThrows(UnauthorizedException.class, () -> authService.refreshToken(refreshToken));
+        verify(jwtService, never()).generateRefreshToken(any(User.class));
+    }
+
+    @Test
+    void refreshToken_reuseShortlyAfterRotationIsRejectedWithoutRevokingTheSession() {
+        String refreshToken = "refresh-token";
+        AuthToken storedToken = storedToken(baseUser(), refreshToken, UUID.randomUUID(), OffsetDateTime.now().minusSeconds(5));
+
+        when(jwtService.hasTokenType(refreshToken, JwtService.TOKEN_TYPE_REFRESH)).thenReturn(true);
+        when(authTokenRepository.findByTokenAndTokenType(refreshToken, AuthToken.TokenType.REFRESH))
+            .thenReturn(Optional.of(storedToken));
+
+        assertThrows(UnauthorizedException.class, () -> authService.refreshToken(refreshToken));
+        verify(authTokenRepository, never()).revokeFamily(any(), any(), any());
+        verifyNoInteractions(auditEventService);
+    }
+
+    @Test
+    void refreshToken_laterReuseRevokesOnlyThatSessionFamilyAndIsAudited() {
+        String refreshToken = "refresh-token";
+        UUID familyId = UUID.randomUUID();
+        AuthToken storedToken = storedToken(baseUser(), refreshToken, familyId, OffsetDateTime.now().minusMinutes(10));
+
+        when(jwtService.hasTokenType(refreshToken, JwtService.TOKEN_TYPE_REFRESH)).thenReturn(true);
+        when(authTokenRepository.findByTokenAndTokenType(refreshToken, AuthToken.TokenType.REFRESH))
+            .thenReturn(Optional.of(storedToken));
+        when(authTokenRepository.revokeFamily(eq(familyId), eq(AuthToken.TokenType.REFRESH), any(OffsetDateTime.class)))
+            .thenReturn(1);
+
+        assertThrows(UnauthorizedException.class, () -> authService.refreshToken(refreshToken));
+        verify(authTokenRepository).revokeFamily(eq(familyId), eq(AuthToken.TokenType.REFRESH), any(OffsetDateTime.class));
+        verify(authTokenRepository, never()).findByUserIdAndTokenTypeAndConsumedAtIsNull(any(), any());
+        verify(auditEventService).record(eq("REFRESH_TOKEN_REUSE"), any(), eq("AUTH_TOKEN_FAMILY"), eq(familyId.toString()),
+            eq("DENIED"), any());
     }
 
     @Test
@@ -118,11 +163,32 @@ class AuthServiceImplRefreshTokenTest {
         String refreshToken = "refresh-token";
 
         when(jwtService.hasTokenType(refreshToken, JwtService.TOKEN_TYPE_REFRESH)).thenReturn(true);
-        when(authTokenRepository.findByTokenAndTokenTypeAndConsumedAtIsNull(refreshToken, AuthToken.TokenType.REFRESH))
+        when(authTokenRepository.findByTokenAndTokenType(refreshToken, AuthToken.TokenType.REFRESH))
             .thenReturn(Optional.empty());
 
         assertThrows(UnauthorizedException.class, () -> authService.refreshToken(refreshToken));
         verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void refreshTokenKeepsReuseRevocationWhenRejecting() throws NoSuchMethodException {
+        org.springframework.transaction.annotation.Transactional transactional = AuthServiceImpl.class
+            .getMethod("refreshToken", String.class)
+            .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+
+        org.assertj.core.api.Assertions.assertThat(transactional.noRollbackFor()).contains(UnauthorizedException.class);
+    }
+
+    private AuthToken storedToken(User user, String token, UUID familyId, OffsetDateTime consumedAt) {
+        return AuthToken.builder()
+            .id(UUID.randomUUID())
+            .user(user)
+            .token(token)
+            .tokenType(AuthToken.TokenType.REFRESH)
+            .expiresAt(OffsetDateTime.now().plusMinutes(30))
+            .consumedAt(consumedAt)
+            .familyId(familyId)
+            .build();
     }
 
     private User baseUser() {

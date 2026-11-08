@@ -304,7 +304,7 @@ def preflight(manifest_dir):
     if not isinstance(secret, dict) or not isinstance(secret.get("data"), dict):
         raise DeploymentError("race-tracker-secrets has no data")
     secret_data = secret["data"]
-    required = ["DB_USERNAME", "DB_PASSWORD", "JWT_SECRET", *validate_storage(config)]
+    required = ["DB_USERNAME", "DB_PASSWORD", "JWT_SECRET", "REDIS_PASSWORD", *validate_storage(config)]
     if config.get("MAIL_ENABLED") == "true":
         required.extend(("MAIL_USERNAME", "MAIL_PASSWORD"))
     for key in required:

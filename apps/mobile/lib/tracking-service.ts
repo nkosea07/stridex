@@ -2,7 +2,7 @@ import * as Location from 'expo-location';
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import { openDatabaseAsync, type TrackingDatabase } from './db';
-import { api } from './api';
+import { api, ApiRequestError } from './api';
 
 export const LOCATION_TRACKING_TASK = 'LOCATION_TRACKING_TASK';
 export const LOCATION_SYNC_TASK = 'LOCATION_SYNC_TASK';
@@ -46,8 +46,38 @@ export type TrackingSessionRow = {
   raceId: string;
   startedAt: string;
   batterySaver: number;
-  status: 'active' | 'stopped';
+  status: 'active' | 'stopped' | 'rejected';
+  stopReason: TrackingStopReason | null;
   updatedAt: string;
+};
+
+export type TrackingStopReason = 'not_registered' | 'not_permitted';
+
+export type TrackingStopNotice = { raceId: string; reason: TrackingStopReason };
+
+const LOCAL_HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+const SYNC_PENDING = 0;
+const SYNC_SENT = 1;
+const SYNC_REJECTED = 2;
+
+type SyncFailureDisposition = 'retry' | 'reject' | TrackingStopReason;
+
+export const classifySyncFailure = (error: unknown): SyncFailureDisposition => {
+  if (!(error instanceof ApiRequestError) || error.isNetworkError || error.status === undefined) return 'retry';
+  if (error.status === 404) return 'not_registered';
+  if (error.status === 403) return 'not_permitted';
+  if (error.status === 400 || error.status === 413 || error.status === 422) return 'reject';
+  return 'retry';
+};
+
+const stopListeners = new Set<(notice: TrackingStopNotice) => void>();
+
+export const subscribeTrackingStopped = (listener: (notice: TrackingStopNotice) => void) => {
+  stopListeners.add(listener);
+  return () => {
+    stopListeners.delete(listener);
+  };
 };
 
 type TrackingCleanupStateRow = {
@@ -107,6 +137,7 @@ export const initDb = async () => {
   await addColumnIfMissing(db, 'ALTER TABLE locations ADD COLUMN syncAttempts INTEGER NOT NULL DEFAULT 0;');
   await addColumnIfMissing(db, 'ALTER TABLE locations ADD COLUMN lastSyncError TEXT;');
   await addColumnIfMissing(db, 'ALTER TABLE locations ADD COLUMN updatedAt TEXT;');
+  await addColumnIfMissing(db, 'ALTER TABLE tracking_sessions ADD COLUMN stopReason TEXT;');
   await db.execAsync(`
     DELETE FROM locations
       WHERE id NOT IN (
@@ -123,6 +154,13 @@ export const initDb = async () => {
   await db.runAsync(
     `INSERT OR IGNORE INTO tracking_cleanup_state (id, quarantined, updatedAt) VALUES (1, 0, ?)`,
     [new Date().toISOString()],
+  );
+  await db.runAsync(
+    `DELETE FROM locations
+      WHERE synced IN (?, ?)
+        AND timestamp < ?
+        AND raceId NOT IN (SELECT raceId FROM tracking_sessions WHERE status = 'active')`,
+    [SYNC_SENT, SYNC_REJECTED, new Date(Date.now() - LOCAL_HISTORY_RETENTION_MS).toISOString()],
   );
   const cleanupState = await db.getFirstAsync<TrackingCleanupStateRow>(
     'SELECT quarantined FROM tracking_cleanup_state WHERE id = 1',
@@ -217,12 +255,13 @@ const saveActiveTrackingSession = async (raceId: string, batterySaver: boolean) 
   const database = await initDb();
   const now = new Date().toISOString();
   await database.runAsync(
-    `INSERT INTO tracking_sessions (raceId, startedAt, batterySaver, status, updatedAt)
-     VALUES (?, ?, ?, 'active', ?)
+    `INSERT INTO tracking_sessions (raceId, startedAt, batterySaver, status, stopReason, updatedAt)
+     VALUES (?, ?, ?, 'active', NULL, ?)
      ON CONFLICT(raceId) DO UPDATE SET
        startedAt = excluded.startedAt,
        batterySaver = excluded.batterySaver,
        status = 'active',
+       stopReason = NULL,
        updatedAt = excluded.updatedAt`,
     [raceId, now, batterySaver ? 1 : 0, now]
   );
@@ -243,6 +282,45 @@ const markTrackingSessionStopped = async (raceId?: string | null) => {
     "UPDATE tracking_sessions SET status = 'stopped', updatedAt = ? WHERE status = 'active'",
     [now]
   );
+};
+
+const markTrackingSessionRejected = async (raceId: string, reason: TrackingStopReason) => {
+  const database = await initDb();
+  await database.runAsync(
+    "UPDATE tracking_sessions SET status = 'rejected', stopReason = ?, updatedAt = ? WHERE raceId = ?",
+    [reason, new Date().toISOString(), raceId]
+  );
+};
+
+/**
+ * Returns and acknowledges the most recent session the server refused, so the athlete is told
+ * once even when tracking was stopped by a background task while the app was closed.
+ */
+export const takeTrackingStopNotice = async (): Promise<TrackingStopNotice | null> => {
+  const database = await initDb();
+  const rejected = await database.getFirstAsync<TrackingSessionRow>(
+    "SELECT * FROM tracking_sessions WHERE status = 'rejected' ORDER BY updatedAt DESC LIMIT 1"
+  );
+  if (!rejected?.stopReason) return null;
+  await database.runAsync(
+    "UPDATE tracking_sessions SET status = 'stopped', updatedAt = ? WHERE raceId = ?",
+    [new Date().toISOString(), rejected.raceId]
+  );
+  return { raceId: rejected.raceId, reason: rejected.stopReason };
+};
+
+const stopRejectedTracking = async (raceId: string, reason: TrackingStopReason) => {
+  try {
+    if (activeRaceId === raceId || (await getActiveRaceId()) === raceId) {
+      await stopBackgroundTracking();
+    }
+  } catch (error) {
+    console.warn('Failed to stop tracking after the server refused location uploads:', error);
+  }
+  await markTrackingSessionRejected(raceId, reason);
+  for (const listener of stopListeners) {
+    listener({ raceId, reason });
+  }
 };
 
 export const getActiveTrackingSession = async (): Promise<TrackingSessionRow | null> => {
@@ -319,14 +397,26 @@ export const unregisterLocationSyncTask = async () => {
   }
 };
 
-export const syncPendingLocations = async (raceId: string) => {
+const syncInFlight = new Map<string, Promise<void>>();
+
+export const syncPendingLocations = (raceId: string): Promise<void> => {
+  const existing = syncInFlight.get(raceId);
+  if (existing) return existing;
+  const run = syncPendingLocationsOnce(raceId).finally(() => {
+    syncInFlight.delete(raceId);
+  });
+  syncInFlight.set(raceId, run);
+  return run;
+};
+
+const syncPendingLocationsOnce = async (raceId: string) => {
   if (trackingQuarantined) return;
 
   const database = await initDb();
   if (trackingQuarantined) return;
   const pending = await database.getAllAsync<LocationRow>(
-    'SELECT * FROM locations WHERE raceId = ? AND synced = 0 ORDER BY timestamp ASC LIMIT 100',
-    [raceId]
+    'SELECT * FROM locations WHERE raceId = ? AND synced = ? ORDER BY timestamp ASC LIMIT 100',
+    [raceId, SYNC_PENDING]
   );
 
   if (pending.length === 0) return;
@@ -364,7 +454,7 @@ export const syncPendingLocations = async (raceId: string) => {
 
   if (filtered.length === 0) {
     // These points are intentionally compacted locally as redundant, so they do not need network delivery.
-    await updateLocationRowsById(database, pendingIds, 'synced = 1, updatedAt = ?', [new Date().toISOString()]);
+    await updateLocationRowsById(database, pendingIds, 'synced = ?, updatedAt = ?', [SYNC_SENT, new Date().toISOString()]);
     return;
   }
 
@@ -381,18 +471,33 @@ export const syncPendingLocations = async (raceId: string) => {
     }));
 
     await api.sendLocationsBatch(raceId, batch);
-    await updateLocationRowsById(database, pendingIds, 'synced = 1, lastSyncError = NULL, updatedAt = ?', [
+    await updateLocationRowsById(database, pendingIds, 'synced = ?, lastSyncError = NULL, updatedAt = ?', [
+      SYNC_SENT,
       new Date().toISOString(),
     ]);
   } catch (err) {
     console.warn('Failed to sync locations in background:', err);
     const message = err instanceof Error ? err.message : String(err);
+    const disposition = classifySyncFailure(err);
+    if (disposition === 'retry') {
+      await updateLocationRowsById(
+        database,
+        pendingIds,
+        'syncAttempts = syncAttempts + 1, lastSyncError = ?, updatedAt = ?',
+        [message, new Date().toISOString()]
+      );
+      return;
+    }
+
     await updateLocationRowsById(
       database,
       pendingIds,
-      'syncAttempts = syncAttempts + 1, lastSyncError = ?, updatedAt = ?',
-      [message, new Date().toISOString()]
+      'synced = ?, syncAttempts = syncAttempts + 1, lastSyncError = ?, updatedAt = ?',
+      [SYNC_REJECTED, message, new Date().toISOString()]
     );
+    if (disposition !== 'reject') {
+      await stopRejectedTracking(raceId, disposition);
+    }
   }
 };
 

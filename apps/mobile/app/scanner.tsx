@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions } from 'rea
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useTrackingStore } from '@/store/tracking';
 import { CapabilityGate } from '@/components/CapabilityGate';
@@ -22,6 +23,7 @@ function ScannerScreenContent() {
   const [scanned, setScanned] = useState(false);
   const [flashOn, setFlashOn] = useState(false);
   const { recordCheckpoint, currentRace } = useTrackingStore();
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!permission?.granted) {
@@ -29,40 +31,35 @@ function ScannerScreenContent() {
     }
   }, [permission, requestPermission]);
 
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+  const handleBarCodeScanned = async ({ data }: { type: string; data: string }) => {
     if (scanned) return;
     setScanned(true);
 
-    // Parse QR code data (expected format: checkpoint_id:race_id)
-    try {
-      const [checkpointId, raceId] = data.split(':');
-      
-      if (currentRace && currentRace.id === raceId) {
-        recordCheckpoint({
-          id: `${Date.now()}`,
-          checkpointId,
-          timestamp: new Date().toISOString(),
-          method: 'qr_code',
-        });
+    const [checkpointId, raceId] = typeof data === 'string' ? data.split(':') : [];
+    if (!checkpointId || !raceId) {
+      Alert.alert(t('mobile:scanner.invalidTitle'), t('mobile:scanner.unreadable'),
+        [{ text: t('mobile:scanner.tryAgain'), onPress: () => setScanned(false) }]);
+      return;
+    }
+    if (!currentRace || currentRace.id !== raceId) {
+      Alert.alert(t('mobile:scanner.invalidTitle'), t('mobile:scanner.wrongRace'),
+        [{ text: t('mobile:scanner.tryAgain'), onPress: () => setScanned(false) }]);
+      return;
+    }
 
-        Alert.alert(
-          'Checkpoint Recorded!',
-          `Successfully scanned checkpoint ${checkpointId}`,
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
-      } else {
-        Alert.alert(
-          'Invalid QR Code',
-          'This checkpoint is not part of your current race.',
-          [{ text: 'Try Again', onPress: () => setScanned(false) }]
-        );
-      }
-    } catch {
-      Alert.alert(
-        'Invalid QR Code',
-        'Unable to read checkpoint data.',
-        [{ text: 'Try Again', onPress: () => setScanned(false) }]
-      );
+    try {
+      await recordCheckpoint({
+        id: `${Date.now()}`,
+        checkpointId,
+        timestamp: new Date().toISOString(),
+        method: 'qr_code',
+      });
+      Alert.alert(t('mobile:scanner.recordedTitle'), t('mobile:scanner.recordedBody'),
+        [{ text: t('mobile:scanner.ok'), onPress: () => router.back() }]);
+    } catch (error) {
+      Alert.alert(t('mobile:scanner.failedTitle'),
+        error instanceof Error && error.message ? error.message : t('mobile:scanner.failedBody'),
+        [{ text: t('mobile:scanner.tryAgain'), onPress: () => setScanned(false) }]);
     }
   };
 

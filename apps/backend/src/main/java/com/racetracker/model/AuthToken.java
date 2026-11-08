@@ -40,6 +40,9 @@ public class AuthToken {
     @Column(name = "consumed_at")
     private OffsetDateTime consumedAt;
 
+    @Column(name = "family_id")
+    private UUID familyId;
+
     @CreationTimestamp
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

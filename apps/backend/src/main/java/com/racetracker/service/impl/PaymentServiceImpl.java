@@ -78,9 +78,32 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    @Transactional
     public PaymentDto startCheckout(UUID raceId, UUID participantId, String promoCode,
                                     String actorEmail, boolean athleteSelfService) {
+        CheckoutDraft draft = transactionTemplate.execute(status ->
+            stageCheckout(raceId, participantId, promoCode, actorEmail, athleteSelfService));
+        RaceTrackerProperties.Payments payments = properties.getPayments();
+
+        PesepayClient.InitiateResult result;
+        try {
+            result = pesepayClient.initiate(
+                draft.payable().doubleValue(),
+                draft.currency(),
+                "Race registration - " + draft.raceName(),
+                payments.getResultUrl(),
+                payments.getReturnUrl(),
+                draft.merchantReference()
+            );
+        } catch (RuntimeException ex) {
+            transactionTemplate.executeWithoutResult(status -> markCheckoutFailed(draft.paymentId()));
+            throw ex;
+        }
+
+        return transactionTemplate.execute(status -> recordCheckoutStarted(raceId, participantId, draft.paymentId(), result));
+    }
+
+    private CheckoutDraft stageCheckout(UUID raceId, UUID participantId, String promoCode,
+                                        String actorEmail, boolean athleteSelfService) {
         Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
         if (athleteSelfService && (participant.getUser() == null
@@ -91,6 +114,12 @@ public class PaymentServiceImpl implements PaymentService {
         }
         if (participant.getPaymentStatus() == Participant.PaymentStatus.REFUNDED) {
             throw new ConflictException("Refunded registrations cannot start another checkout", "REFUND_STATE_CONFLICT");
+        }
+        if (participant.getPaymentStatus() == Participant.PaymentStatus.PAID) {
+            throw new ConflictException("This registration has already been paid", "PAYMENT_ALREADY_COMPLETED");
+        }
+        if (participant.getPaymentStatus() == Participant.PaymentStatus.WAIVED) {
+            throw new ConflictException("The registration fee for this participant was waived", "PAYMENT_WAIVED");
         }
         RaceTrackerProperties.Payments payments = properties.getPayments();
         if (isBlank(payments.getResultUrl()) || isBlank(payments.getReturnUrl())) {
@@ -112,10 +141,9 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         String currency = !isBlank(race.getCurrency()) ? race.getCurrency() : payments.getCurrency();
-
         String merchantReference = "RACE-" + raceId + "-P-" + participantId + "-" + UUID.randomUUID().toString().substring(0, 8);
 
-        Payment payment = Payment.builder()
+        Payment payment = paymentRepository.save(Payment.builder()
             .race(race)
             .participant(participant)
             .provider(PROVIDER)
@@ -125,28 +153,39 @@ public class PaymentServiceImpl implements PaymentService {
             .promoCode(applied != null ? applied.code() : null)
             .currency(currency)
             .status(Payment.PaymentStatus.PENDING)
-            .build();
-        payment = paymentRepository.save(payment);
+            .build());
 
-        PesepayClient.InitiateResult result = pesepayClient.initiate(
-            payable.doubleValue(),
-            currency,
-            "Race registration - " + race.getName(),
-            payments.getResultUrl(),
-            payments.getReturnUrl(),
-            merchantReference
-        );
+        return new CheckoutDraft(payment.getId(), payable, currency, race.getName(), merchantReference);
+    }
 
+    private PaymentDto recordCheckoutStarted(UUID raceId, UUID participantId, UUID paymentId,
+                                             PesepayClient.InitiateResult result) {
+        Payment payment = paymentRepository.findById(paymentId)
+            .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
         payment.setProviderRef(result.referenceNumber());
         payment.setCheckoutUrl(result.redirectUrl());
         payment = paymentRepository.save(payment);
 
-        if (participant.getPaymentStatus() == Participant.PaymentStatus.UNPAID) {
-            participant.setPaymentStatus(Participant.PaymentStatus.PENDING);
-            participantRepository.save(participant);
-        }
-
+        participantRepository.findByRaceIdAndId(raceId, participantId).ifPresent(participant -> {
+            if (participant.getPaymentStatus() == Participant.PaymentStatus.UNPAID) {
+                participant.setPaymentStatus(Participant.PaymentStatus.PENDING);
+                participantRepository.save(participant);
+            }
+        });
         return toDto(payment);
+    }
+
+    private void markCheckoutFailed(UUID paymentId) {
+        paymentRepository.findById(paymentId).ifPresent(payment -> {
+            if (payment.getStatus() == Payment.PaymentStatus.PENDING && payment.getProviderRef() == null) {
+                payment.setStatus(Payment.PaymentStatus.FAILED);
+                paymentRepository.save(payment);
+            }
+        });
+    }
+
+    private record CheckoutDraft(UUID paymentId, BigDecimal payable, String currency, String raceName,
+                                 String merchantReference) {
     }
 
     @Override
@@ -397,7 +436,10 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     public void handlePesepayCallback(String authorizationHeader, String rawBody) {
         RaceTrackerProperties.Payments payments = properties.getPayments();
-        if (isBlank(payments.getIntegrationKey()) || !payments.getIntegrationKey().equals(authorizationHeader)) {
+        if (isBlank(payments.getIntegrationKey()) || authorizationHeader == null
+            || !java.security.MessageDigest.isEqual(
+                payments.getIntegrationKey().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                authorizationHeader.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
             throw new ApiException("Invalid payment callback authorization");
         }
 

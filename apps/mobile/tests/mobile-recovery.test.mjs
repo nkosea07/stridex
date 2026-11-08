@@ -91,21 +91,24 @@ function createLocation(id, raceId, timestamp) {
 function connectPersistentQueue(rows) {
   mocks.database.execAsync.mockResolvedValue(undefined)
   mocks.database.getAllAsync.mockImplementation(async (_query, parameters) =>
-    rows.filter((row) => row.raceId === parameters[0] && row.synced === 0).slice(0, 100),
+    rows.filter((row) => row.raceId === parameters[0] && row.synced === (parameters[1] ?? 0)).slice(0, 100),
   )
   mocks.database.runAsync.mockImplementation(async (query, parameters) => {
-    if (query.includes('SET synced = 1')) {
-      for (const id of parameters.slice(1)) {
+    const match = /^UPDATE locations SET ([\s\S]*) WHERE id IN/.exec(query.trim())
+    if (match) {
+      let parameterIndex = 0
+      const assignments = match[1].split(',').map((assignment) => {
+        const [field, expression] = assignment.split('=').map((part) => part.trim())
+        if (expression === '?') return { field, value: parameters[parameterIndex++] }
+        return { field, expression }
+      })
+      for (const id of parameters.slice(parameterIndex)) {
         const row = rows.find((candidate) => candidate.id === id)
-        if (row) row.synced = 1
-      }
-    }
-    if (query.includes('syncAttempts = syncAttempts + 1')) {
-      for (const id of parameters.slice(2)) {
-        const row = rows.find((candidate) => candidate.id === id)
-        if (row) {
-          row.syncAttempts += 1
-          row.lastSyncError = parameters[0]
+        if (!row) continue
+        for (const { field, value, expression } of assignments) {
+          if (field === 'syncAttempts' && expression === 'syncAttempts + 1') row.syncAttempts += 1
+          else if (expression === 'NULL') row[field] = null
+          else if (expression === undefined) row[field] = value
         }
       }
     }
@@ -339,7 +342,7 @@ describe('offline location queue', () => {
 
     await syncPendingLocations('race-a')
 
-    expect(mocks.database.getAllAsync).toHaveBeenCalledWith(expect.stringContaining('raceId = ?'), ['race-a'])
+    expect(mocks.database.getAllAsync).toHaveBeenCalledWith(expect.stringContaining('raceId = ?'), ['race-a', 0])
     expect(rows[0].synced).toBe(0)
     expect(rows[0].syncAttempts).toBe(1)
     expect(rows[0].lastSyncError).toBe('offline')
@@ -363,7 +366,89 @@ describe('offline location queue', () => {
     await tracking.syncPendingLocations('race-b')
 
     expect(mocks.sendLocationsBatch).toHaveBeenCalledTimes(1)
-    expect(mocks.database.getAllAsync).toHaveBeenCalledWith(expect.stringContaining('raceId = ?'), ['race-b'])
+    expect(mocks.database.getAllAsync).toHaveBeenCalledWith(expect.stringContaining('raceId = ?'), ['race-b', 0])
+  })
+})
+
+describe('location upload failures', () => {
+  async function loadTracking(rows, error) {
+    connectPersistentQueue(rows)
+    const { api, ApiRequestError } = await import('../lib/api.ts')
+    mocks.sendLocationsBatch.mockRejectedValue(error(ApiRequestError))
+    vi.spyOn(api, 'sendLocationsBatch').mockImplementation(mocks.sendLocationsBatch)
+    return import('../lib/tracking-service.ts')
+  }
+
+  it('sets aside a batch the server permanently rejects so newer points can upload', async () => {
+    const rows = [
+      createLocation(31, 'race-c', '2026-10-05T10:00:00.000Z'),
+      createLocation(32, 'race-c', '2026-10-05T10:05:00.000Z'),
+    ]
+    const tracking = await loadTracking(rows, (ApiRequestError) => new ApiRequestError('Invalid timestamp format', 400))
+
+    await tracking.syncPendingLocations('race-c')
+
+    expect(rows.map((row) => row.synced)).toEqual([2, 2])
+    expect(rows[0].lastSyncError).toBe('Invalid timestamp format')
+
+    rows.push(createLocation(33, 'race-c', '2026-10-05T10:10:00.000Z'))
+    mocks.sendLocationsBatch.mockReset()
+    mocks.sendLocationsBatch.mockResolvedValue(undefined)
+    await tracking.syncPendingLocations('race-c')
+
+    expect(mocks.sendLocationsBatch).toHaveBeenCalledTimes(1)
+    expect(mocks.sendLocationsBatch.mock.calls[0][1]).toHaveLength(1)
+    expect(rows[2].synced).toBe(1)
+  })
+
+  it('keeps points queued for retry on server errors and rate limits', async () => {
+    const rows = [createLocation(41, 'race-d', '2026-10-05T10:00:00.000Z')]
+    const tracking = await loadTracking(rows, (ApiRequestError) => new ApiRequestError('busy', 503))
+
+    await tracking.syncPendingLocations('race-d')
+
+    expect(rows[0].synced).toBe(0)
+    expect(rows[0].syncAttempts).toBe(1)
+    expect(tracking.classifySyncFailure(new (await import('../lib/api.ts')).ApiRequestError('slow down', 429))).toBe('retry')
+  })
+
+  it('stops tracking and records why when the athlete is no longer registered', async () => {
+    const rows = [createLocation(51, 'race-e', '2026-10-05T10:00:00.000Z')]
+    mocks.hasStartedLocationUpdates.mockResolvedValue(true)
+    mocks.isTaskRegistered.mockResolvedValue(false)
+    const tracking = await loadTracking(rows, (ApiRequestError) => new ApiRequestError('You are not registered for this race', 404))
+    mocks.database.getFirstAsync.mockResolvedValue({ raceId: 'race-e', status: 'active', stopReason: null, quarantined: 0 })
+    const notices = []
+    tracking.subscribeTrackingStopped((notice) => notices.push(notice))
+
+    await tracking.syncPendingLocations('race-e')
+
+    expect(rows[0].synced).toBe(2)
+    expect(mocks.stopLocationUpdates).toHaveBeenCalledOnce()
+    expect(notices).toEqual([{ raceId: 'race-e', reason: 'not_registered' }])
+    expect(mocks.database.runAsync.mock.calls.some(([sql, params]) => (
+      String(sql).includes("status = 'rejected'") && params[0] === 'not_registered' && params[2] === 'race-e'
+    ))).toBe(true)
+  })
+})
+
+describe('local location history retention', () => {
+  it('prunes only uploaded or rejected points older than a week outside active sessions', async () => {
+    connectPersistentQueue([])
+    mocks.database.getFirstAsync.mockResolvedValue({ quarantined: 0 })
+    const { initDb } = await import('../lib/tracking-service.ts')
+
+    await initDb()
+
+    const prune = mocks.database.runAsync.mock.calls.find(([sql]) => String(sql).includes('DELETE FROM locations'))
+    expect(prune).toBeDefined()
+    const [sql, params] = prune
+    expect(sql).toContain('synced IN (?, ?)')
+    expect(sql).toContain("status = 'active'")
+    expect(params.slice(0, 2)).toEqual([1, 2])
+    const cutoffAgeMs = Date.now() - Date.parse(params[2])
+    expect(cutoffAgeMs).toBeGreaterThan(6.9 * 24 * 60 * 60 * 1000)
+    expect(cutoffAgeMs).toBeLessThan(7.1 * 24 * 60 * 60 * 1000)
   })
 })
 

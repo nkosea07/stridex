@@ -3,12 +3,14 @@ package com.racetracker.service.impl;
 import com.racetracker.dto.insights.ParticipantAnomalyDto;
 import com.racetracker.dto.insights.RaceInsightsSummaryDto;
 import com.racetracker.exception.ResourceNotFoundException;
+import com.racetracker.model.CheckpointRecord;
 import com.racetracker.model.Participant;
 import com.racetracker.model.Race;
 import com.racetracker.repository.CheckpointRecordRepository;
 import com.racetracker.repository.GpsLocationRepository;
 import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.RaceRepository;
+import com.racetracker.service.CheckpointCutoff;
 import com.racetracker.service.RaceInsightsService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,12 +61,21 @@ public class RaceInsightsServiceImpl implements RaceInsightsService {
         int paceSamples = 0;
         OffsetDateTime predictedLeader = null;
 
+        List<UUID> starterIds = participants.stream()
+            .filter(participant -> participant.getStatus() == Participant.ParticipantStatus.STARTED)
+            .map(Participant::getId)
+            .toList();
+        Map<UUID, List<CheckpointRecord>> recordsByParticipant = starterIds.isEmpty()
+            ? Map.of()
+            : checkpointRecordRepository.findByRaceIdAndParticipantIdInOrderByRecordedAtAsc(raceId, starterIds).stream()
+                .collect(java.util.stream.Collectors.groupingBy(record -> record.getParticipant().getId()));
+
         for (Participant participant : participants) {
             if (participant.getStatus() != Participant.ParticipantStatus.STARTED) {
                 continue;
             }
-            OffsetDateTime start = participant.getCheckedInAt() != null
-                ? participant.getCheckedInAt() : participant.getRegisteredAt();
+            OffsetDateTime start = CheckpointCutoff.resolveStart(
+                participant, recordsByParticipant.getOrDefault(participant.getId(), List.of()));
             BigDecimal distance = participant.getTotalDistance() != null
                 ? participant.getTotalDistance() : BigDecimal.ZERO;
             if (start == null || distance.signum() <= 0) {

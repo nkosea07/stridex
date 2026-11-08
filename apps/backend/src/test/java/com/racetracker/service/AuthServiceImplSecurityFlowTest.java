@@ -123,16 +123,41 @@ class AuthServiceImplSecurityFlowTest {
     }
 
     @Test
-    void login_rejectsUnverifiedUserBeforeIssuingSession() {
+    void login_revealsPendingVerificationOnlyAfterTheCorrectPassword() {
         LoginRequest request = new LoginRequest();
         request.setEmail("athlete@example.com");
         request.setPassword("password123");
 
         User user = baseUser();
         user.setEmailVerified(false);
+        user.setPasswordHash("hashed");
         when(userRepository.findByEmailIgnoreCase("athlete@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
 
-        assertThrows(UnauthorizedException.class, () -> authService.login(request));
+        UnauthorizedException error = assertThrows(UnauthorizedException.class, () -> authService.login(request));
+
+        assertThat(error.getCode()).isEqualTo("EMAIL_VERIFICATION_REQUIRED");
+        verifyNoInteractions(authenticationManager);
+        verify(authTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void login_unverifiedAccountWithWrongPasswordLooksLikeAnyFailedLogin() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("athlete@example.com");
+        request.setPassword("wrong-password");
+
+        User user = baseUser();
+        user.setEmailVerified(false);
+        user.setPasswordHash("hashed");
+        when(userRepository.findByEmailIgnoreCase("athlete@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong-password", "hashed")).thenReturn(false);
+
+        UnauthorizedException error = assertThrows(UnauthorizedException.class, () -> authService.login(request));
+
+        assertThat(error.getCode()).isEqualTo("UNAUTHORIZED");
+        assertThat(error.getMessage()).isEqualTo("Invalid credentials");
+        assertThat(user.getFailedLoginAttempts()).isEqualTo(1);
         verifyNoInteractions(authenticationManager);
     }
 
@@ -146,8 +171,6 @@ class AuthServiceImplSecurityFlowTest {
         user.setEmail("admin@example.com");
         when(userRepository.findByEmailIgnoreCase("admin@example.com")).thenReturn(Optional.of(user));
         when(userMapper.toDto(user)).thenReturn(new com.racetracker.dto.auth.UserDto());
-        when(authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(user.getId(), AuthToken.TokenType.REFRESH))
-            .thenReturn(List.of());
         when(jwtService.generateAccessToken(user)).thenReturn("access-token");
         when(jwtService.generateRefreshToken(user)).thenReturn("refresh-token");
         when(jwtService.extractExpiration("refresh-token")).thenReturn(OffsetDateTime.now().plusDays(7));
@@ -159,6 +182,18 @@ class AuthServiceImplSecurityFlowTest {
         assertThat(response.getMfaRequired()).isNull();
         assertThat(response.getMfaChallengeToken()).isNull();
         verifyNoInteractions(mfaAuthenticationService);
+        verify(authTokenRepository, never())
+            .findByUserIdAndTokenTypeAndConsumedAtIsNull(user.getId(), AuthToken.TokenType.REFRESH);
+    }
+
+    @Test
+    void loginDoesNotRollBackFailedAttemptTracking() throws NoSuchMethodException {
+        org.springframework.transaction.annotation.Transactional transactional = com.racetracker.service.impl.AuthServiceImpl.class
+            .getMethod("login", LoginRequest.class)
+            .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+
+        assertThat(transactional).isNotNull();
+        assertThat(transactional.noRollbackFor()).contains(UnauthorizedException.class);
     }
 
     @Test

@@ -11,11 +11,13 @@ export class FileBatchStore {
     this.rootDir = rootDir;
     this.pendingDir = path.join(rootDir, 'pending');
     this.processingDir = path.join(rootDir, 'processing');
+    this.failedDir = path.join(rootDir, 'failed');
   }
 
   async init() {
     await fs.mkdir(this.pendingDir, { recursive: true });
     await fs.mkdir(this.processingDir, { recursive: true });
+    await fs.mkdir(this.failedDir, { recursive: true });
     await this.recoverProcessing();
   }
 
@@ -71,13 +73,34 @@ export class FileBatchStore {
     await fs.rename(from, to);
   }
 
+  async reject(filename) {
+    await fs.rename(path.join(this.processingDir, filename), path.join(this.failedDir, filename));
+  }
+
+  async listFailed() {
+    const names = await fs.readdir(this.failedDir);
+    return names.filter((name) => name.endsWith('.json')).sort();
+  }
+
+  async countFailedFiles() {
+    return (await this.listFailed()).length;
+  }
+
+  async requeueFailed() {
+    const names = await this.listFailed();
+    for (const name of names) {
+      await fs.rename(path.join(this.failedDir, name), path.join(this.pendingDir, name));
+    }
+    return names.length;
+  }
+
   async readFromDir(dir, filename) {
     const raw = await fs.readFile(path.join(dir, filename), 'utf8');
     return JSON.parse(raw);
   }
 
   async recoverProcessing() {
-    const names = await fs.readdir(this.processingDir);
+    const names = (await fs.readdir(this.processingDir)).filter((name) => name.endsWith('.json'));
     await Promise.all(
       names.map((name) =>
         fs.rename(path.join(this.processingDir, name), path.join(this.pendingDir, name))

@@ -38,7 +38,7 @@ Identity configuration:
 
 Common database variables:
 - `DB_HOST` (default `localhost`)
-- `DB_PORT` (default `5432`)
+- `DB_PORT` (default `5432`; the local Docker Compose PostGIS in `apps/backend/.env` uses host port `5435`)
 - `DB_NAME` (default `race_tracker`)
 - `DB_USERNAME` (default `race_admin`)
 - `DB_PASSWORD` (default `localdevpassword` for local Docker Compose only)
@@ -90,6 +90,14 @@ For the current cross-surface status, use `docs/PENDING_WORK.md`.
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/deletion/cancel` accepts email and password for a signed-out account during its deletion grace period. The response is generic and issues no session.
 - `POST /api/v1/auth/refresh`
+
+Sessions are per device: signing in creates a refresh-token family, and each refresh atomically
+consumes the presented token and issues the next one in the same family, so only one of two
+concurrent refreshes succeeds. A rotated token presented again within 30 seconds (two browser tabs
+refreshing at once) gets a plain 401; later reuse revokes that device's family and writes a
+`REFRESH_TOKEN_REUSE` audit event. Other devices stay signed in; password reset and account
+deletion revoke every session. Login returns `EMAIL_VERIFICATION_REQUIRED` only when the password
+is correct; any wrong password returns the same generic `Invalid credentials` response.
 - `GET /api/v1/auth/me`
 - `PUT /api/v1/auth/profile`
 
@@ -97,6 +105,7 @@ Both registration paths require `privacyPolicyAccepted=true` and the current `pr
 
 ### External refunds and privacy erasure
 
+- Checkout validates the registration and stages a `PENDING` payment, calls Pesepay with no database transaction open, then records the provider reference; a provider failure marks the staged payment `FAILED` and returns `PAYMENT_PROVIDER_UNAVAILABLE` (HTTP 503) without exposing provider error text. Production rejects a sandbox or non-HTTPS `PESEPAY_BASE_URL` when payments are enabled.
 - `POST /api/v1/races/{raceId}/participants/{participantId}/payment/refund` returns `REFUND_AUTOMATION_UNAVAILABLE`; it does not call the payment provider.
 - A super admin stages a full-payable refund attempt at `POST .../payment/refund/attempts` with a reason and an optional completed `paymentId`, completes or verifies the action outside the platform, then records `REFUNDED` or `NOT_REFUNDED` at `POST .../payment/refund/attempts/{attemptId}/reconcile` with a provider receipt/case reference and reason. `GET .../payment/refund/attempts` and `GET .../payment/refund/attempts/{attemptId}` expose attempt status. The legacy `POST .../payment/refund/attempt` and `.../payment/refund/reconcile` routes remain as v1 compatibility wrappers that require one unambiguous payment or pending attempt. The server computes the amount and locks the payment; the UI does not perform a one-click refund.
 - Provider `REVERSED` callbacks create an open `payment_reversal_cases` row and leave the payment completed pending finance verification. Super admins review them at `GET /api/v1/admin/payments/reversal-cases`; the metric is `payments_reversal_review_open`. Partial legacy refund attempts cannot be reconciled as full refunds (`REFUND_AMOUNT_MISMATCH`).
@@ -111,6 +120,13 @@ Both registration paths require `privacyPolicyAccepted=true` and the current `pr
 - `POST /api/v1/races`
 - `PUT /api/v1/races/{id}`
 - `PATCH /api/v1/races/{id}/status`
+
+In-progress races are closed automatically (and still-running participants marked DNF) only after
+the latest scheduled start (race start, or the last stage's start) plus the course time limit plus
+a grace period, evaluated in the race timezone. The time limit is the longest checkpoint cutoff,
+otherwise `RACE_DEFAULT_TIME_LIMIT_HOURS` (default 24); the grace is
+`RACE_COMPLETION_GRACE_MINUTES` (default 60). A race without a start time is never closed before
+its local day has ended. Officials can still complete a race manually through the status endpoint.
 - `DELETE /api/v1/races/{id}`
 
 ### Emergency SOS
@@ -144,7 +160,12 @@ Participant CSV and XLSX exports are capped at 10,000 participants per race for 
 - `DELETE /api/v1/races/{raceId}/checkpoints/{checkpointId}`
 - `POST /api/v1/races/{raceId}/checkpoints/{checkpointId}/record`
 
-Live checkpoint submissions use the server receipt time and reject a client-supplied `recordedAt` with `CHECKPOINT_TIMESTAMP_NOT_ALLOWED`. Authorized race admins and assigned officials may import historical timing CSV rows at `POST /api/v1/races/{raceId}/checkpoints/import`; volunteers cannot use that import route.
+Timing records are refused (`PARTICIPANT_NOT_ENTERED`, HTTP 409; RFID events marked `ERROR`) for
+pending-approval, waitlisted, and rejected registrations. When an official corrects a checkpoint
+time, every cutoff for that participant is re-evaluated from the corrected start: a newly missed
+cutoff marks them DNF, and a DNF caused only by a cutoff that no longer applies is reversed.
+
+Live checkpoint submissions use the server receipt time and reject a client-supplied `recordedAt` with `CHECKPOINT_TIMESTAMP_NOT_ALLOWED`. The athlete self-scan route (`POST /api/v1/tracking/{raceId}/checkpoint`) also records the server receipt time and ignores any client timestamp. Authorized race admins and assigned officials may import historical timing CSV rows at `POST /api/v1/races/{raceId}/checkpoints/import`; volunteers cannot use that import route.
 
 ### RFID / Bib Timing Bridge
 - `POST /api/v1/races/{raceId}/rfid/readers`
@@ -154,6 +175,8 @@ Live checkpoint submissions use the server receipt time and reject a client-supp
 - `POST /api/v1/rfid/readers/heartbeat`
 
 Reader management routes require operator authentication. Creating a reader returns the plaintext `apiKey` only once; the database stores only its SHA-256 hash. Timing bridges call `POST /api/v1/rfid/read-events` and `POST /api/v1/rfid/readers/heartbeat` with `X-RFID-Reader-Key`.
+
+RFID events whose normalization throws are retried with backoff (5 s doubling to 5 min) and marked `ERROR` after 8 attempts, so a failing event cannot crowd newer reads out of the recovery sweep.
 
 RFID reads are stored immediately as raw `rfid_read_events` with a queued `RECEIVED` status, published to Redis Streams, and normalized asynchronously into official `checkpoint_records` with `recordMethod=RFID`. Participant matching now resolves through `participant_credentials`, with the legacy participant `rfidTag` field kept for backward compatibility and auto-synced to `RFID_UHF_TIMING` credentials. Reader heartbeat updates expose gateway status, backlog, firmware/model metadata, hardware profile metadata, and last-processed timestamps so demo compact-UHF readers and Impinj event-grade readers stay visible through the same inventory surface.
 
@@ -175,6 +198,15 @@ Anonymous access is expected for `GET` requests under `/api/v1/public/races/**` 
 Public payloads must stay spectator-safe. Include only race summary, leaderboard, split, and athlete tracking fields needed for public viewing, and do not return email addresses, phone numbers, emergency contacts, medical notes, device tokens, internal notes, or other admin-only audit data.
 
 ### Results
+
+Timing start is the participant's earliest START checkpoint record (chip start), otherwise the
+race's scheduled gun start (`raceDate` + `startTime` in the race `timezone`). Registration and
+desk check-in instants are never used as a start. Chip time is measured from that start; gun
+time from the scheduled start. Every timing path (RFID, staff manual/QR, timing import, athlete
+self-scan) applies the same status transition: a crossing starts a registered/checked-in
+participant, a FINISH crossing marks them finished, a missed cutoff marks them DNF, and
+FINISHED/DNF/DNS/DISQUALIFIED decisions are never overwritten by a later read.
+
 - `GET /api/v1/races/{raceId}/results`
 - `GET /api/v1/races/{raceId}/results/{participantId}`
 - `GET /api/v1/results/my`
@@ -186,32 +218,20 @@ Public payloads must stay spectator-safe. Include only race summary, leaderboard
 - `PUT /api/v1/notifications/{id}/read`
 
 ## WebSocket (Live Tracking)
-Endpoint:
-- `ws://<host>/ws-tracking`
 
-Client subscribe message:
-```json
-{ "type": "SUBSCRIBE", "raceId": "<race-uuid>" }
-```
+STOMP endpoint (also exposed with a SockJS fallback):
+- `ws://<host>/api/ws-tracking` (the contract value `web.wsTrackingPath`)
 
-Server location update message:
-```json
-{
-  "type": "LOCATION_UPDATE",
-  "raceId": "<race-uuid>",
-  "data": {
-    "participantId": "<uuid>",
-    "bibNumber": "A-102",
-    "participantName": "Runner Name",
-    "latitude": -33.9249,
-    "longitude": 18.4241,
-    "speed": 12.5,
-    "lastCheckpoint": "CP-2",
-    "elapsedTime": "00:42:10",
-    "status": "STARTED"
-  }
-}
-```
+The STOMP `CONNECT` frame must carry `Authorization: Bearer <access-token>`; unauthenticated
+connections are rejected. Subscriptions are authorized per destination:
+
+- `/topic/race.{raceId}` — live location updates for race staff only (super admins, the race's
+  admins, and officials/volunteers assigned to that race). Spectators use the public REST feed.
+- `/topic/user.{userId}` — the authenticated user's own alerts; other users' topics are rejected.
+
+Each race-topic message is a `LiveTrackingResponse` (participant id, bib, name, smoothed
+latitude/longitude, speed, status, last checkpoint, elapsed time, pace, splits). Only GPS points
+accepted by the drift filter are broadcast.
 
 ## API Documentation
 Swagger UI:

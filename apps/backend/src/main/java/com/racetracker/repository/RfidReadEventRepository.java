@@ -24,7 +24,16 @@ public interface RfidReadEventRepository extends JpaRepository<RfidReadEvent, UU
         UUID id
     );
 
-    List<RfidReadEvent> findTop100ByStatusOrderByReceivedAtAsc(RfidReadEvent.RfidReadEventStatus status);
+    @Query("""
+        select e.id from RfidReadEvent e
+        where e.status = com.racetracker.model.RfidReadEvent.RfidReadEventStatus.RECEIVED
+          and e.receivedAt <= :settledBefore
+          and (e.nextAttemptAt is null or e.nextAttemptAt <= :now)
+        order by e.receivedAt asc
+        """)
+    List<UUID> findRecoverableReceivedIds(@Param("settledBefore") OffsetDateTime settledBefore,
+                                         @Param("now") OffsetDateTime now,
+                                         org.springframework.data.domain.Pageable pageable);
 
     long countByStatus(RfidReadEvent.RfidReadEventStatus status);
 

@@ -18,6 +18,7 @@ import com.racetracker.repository.UserRepository;
 import com.racetracker.security.RaceAccessGuard;
 import com.racetracker.service.CheckpointService;
 import com.racetracker.service.CheckpointCutoff;
+import com.racetracker.service.CheckpointProgression;
 import com.racetracker.service.LiveSummaryCacheInvalidator;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -41,6 +42,7 @@ public class CheckpointServiceImpl implements CheckpointService {
     private final CheckpointMapper checkpointMapper;
     private final LiveSummaryCacheInvalidator liveSummaryCacheInvalidator;
     private final RaceAccessGuard raceAccessGuard;
+    private final CheckpointProgression checkpointProgression;
 
     public CheckpointServiceImpl(
         CheckpointRepository checkpointRepository,
@@ -50,7 +52,8 @@ public class CheckpointServiceImpl implements CheckpointService {
         UserRepository userRepository,
         CheckpointMapper checkpointMapper,
         LiveSummaryCacheInvalidator liveSummaryCacheInvalidator,
-        RaceAccessGuard raceAccessGuard
+        RaceAccessGuard raceAccessGuard,
+        CheckpointProgression checkpointProgression
     ) {
         this.checkpointRepository = checkpointRepository;
         this.checkpointRecordRepository = checkpointRecordRepository;
@@ -60,6 +63,7 @@ public class CheckpointServiceImpl implements CheckpointService {
         this.checkpointMapper = checkpointMapper;
         this.liveSummaryCacheInvalidator = liveSummaryCacheInvalidator;
         this.raceAccessGuard = raceAccessGuard;
+        this.checkpointProgression = checkpointProgression;
     }
 
     @Override
@@ -148,6 +152,9 @@ public class CheckpointServiceImpl implements CheckpointService {
                                            OffsetDateTime recordedAt) {
         Checkpoint checkpoint = getCheckpoint(raceId, checkpointId);
         Participant participant = resolveParticipant(raceId, request);
+        if (!CheckpointProgression.isTimeableEntrant(participant.getStatus())) {
+            throw new ConflictException("Participant is not an accepted entrant for this race", "PARTICIPANT_NOT_ENTERED");
+        }
 
         if (checkpointRecordRepository.findByParticipantIdAndCheckpointId(participant.getId(), checkpoint.getId()).isPresent()) {
             throw new ConflictException("Checkpoint already recorded for this participant");
@@ -166,10 +173,8 @@ public class CheckpointServiceImpl implements CheckpointService {
         record.setIsCutoffMissed(cutoffMissed);
 
         CheckpointRecord saved = checkpointRecordRepository.save(record);
-        if (cutoffMissed) {
-            participant.setStatus(Participant.ParticipantStatus.DNF);
-            participantRepository.save(participant);
-        }
+        checkpointProgression.apply(participant, checkpoint, cutoffMissed);
+        participantRepository.save(participant);
         liveSummaryCacheInvalidator.evictLastCheckpointAfterCommit(participant.getId(), raceId);
         return checkpointMapper.toRecordDto(saved);
     }
@@ -206,8 +211,37 @@ public class CheckpointServiceImpl implements CheckpointService {
         record.setAdjustedAt(OffsetDateTime.now());
 
         CheckpointRecord saved = checkpointRecordRepository.save(record);
+        reevaluateCutoffs(saved.getParticipant(), raceId);
         liveSummaryCacheInvalidator.evictLastCheckpointAfterCommit(saved.getParticipant().getId(), raceId);
         return checkpointMapper.toRecordDto(saved);
+    }
+
+    private void reevaluateCutoffs(Participant participant, UUID raceId) {
+        List<CheckpointRecord> records = checkpointRecordRepository
+            .findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participant.getId(), raceId);
+        OffsetDateTime start = CheckpointCutoff.resolveStart(participant, records);
+        boolean previouslyMissed = false;
+        boolean nowMissed = false;
+        boolean hasFinishRecord = false;
+        for (CheckpointRecord existing : records) {
+            Checkpoint checkpoint = existing.getCheckpoint();
+            boolean wasMissed = Boolean.TRUE.equals(existing.getIsCutoffMissed());
+            boolean missed = checkpoint != null
+                && CheckpointCutoff.isMissed(checkpoint.getCutoffTime(), start, CheckpointCutoff.effectiveTime(existing));
+            previouslyMissed |= wasMissed;
+            nowMissed |= missed;
+            hasFinishRecord |= checkpoint != null && checkpoint.getCheckpointType() == Checkpoint.CheckpointType.FINISH;
+            if (missed != wasMissed) {
+                existing.setIsCutoffMissed(missed);
+                checkpointRecordRepository.save(existing);
+            }
+        }
+        Participant.ParticipantStatus next = CheckpointProgression.statusAfterCutoffReevaluation(
+            participant.getStatus(), previouslyMissed, nowMissed, hasFinishRecord);
+        if (next != participant.getStatus()) {
+            participant.setStatus(next);
+            participantRepository.save(participant);
+        }
     }
 
     private boolean evaluateCutoff(Checkpoint checkpoint, Participant participant, UUID raceId, OffsetDateTime recordedAt) {

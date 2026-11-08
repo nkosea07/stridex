@@ -4,12 +4,11 @@ This runbook covers the first production RFID pilot using the shared backend, `r
 
 ## 1. Backend Preparation
 
-Apply the RFID scale migration before registering readers:
-
-```bash
-cd apps/backend
-psql "$DATABASE_URL" -f database/migrations/2026-06-02-rfid-scale-foundation.sql
-```
+The RFID schema (readers, raw read events, participant credentials, idempotency index) is
+created by the backend's Flyway migrations when it starts. Do not apply the legacy scripts in
+`apps/backend/database/migrations/` by hand; Flyway (`src/main/resources/db/migration`) is the
+only schema source. Confirm the backend started cleanly on the current migration head before
+registering readers.
 
 Required platform behavior:
 - participant timing identity resolves through `participant_credentials`
@@ -42,15 +41,24 @@ Persist the returned plaintext `apiKey` in the local edge environment. The backe
 
 The gateway remains the shared transport layer for both demo and production.
 
+`RFID_BACKEND_BASE_URL` is the backend origin only (scheme, host, port). The gateway appends
+`/api/v1/rfid/...` itself, so do not include `/api` in the value.
+
+The production backend rejects `SIMULATED` reads (`RFID_SIMULATION_ENABLED=false`). Run the
+gateway with `RFID_GATEWAY_MODE=hardware` and real reader serial/profile/model values against
+a pilot or production backend; simulation mode is for a local development backend only.
+
 ### Production Impinj profile
 
 ```bash
-export RFID_BACKEND_BASE_URL=http://localhost:8080/api
+export RFID_BACKEND_BASE_URL=http://localhost:8081
 export RFID_BACKEND_READER_KEY=<reader-api-key>
 export RFID_GATEWAY_NAME=finish-gateway-1
 export RFID_GATEWAY_HARDWARE_MODEL=Impinj-R700
 export RFID_GATEWAY_HARDWARE_PROFILE=IMPINJ_EVENT_GRADE
 export RFID_GATEWAY_READER_CLASS=FIXED_4_PORT
+export RFID_GATEWAY_MODE=hardware
+export RFID_GATEWAY_READER_SERIAL=<reader-serial>
 export RFID_GATEWAY_RETRY_INITIAL_DELAY_MS=1000
 export RFID_GATEWAY_RETRY_MAX_DELAY_MS=10000
 pnpm --filter rfid-gateway start
@@ -59,12 +67,14 @@ pnpm --filter rfid-gateway start
 ### Demo bridge profile
 
 ```bash
-export RFID_BACKEND_BASE_URL=http://localhost:8080/api
+export RFID_BACKEND_BASE_URL=http://localhost:8081
 export RFID_BACKEND_READER_KEY=<reader-api-key>
 export RFID_GATEWAY_NAME=demo-gateway-1
 export RFID_GATEWAY_HARDWARE_MODEL=compact-fixed-uhf
 export RFID_GATEWAY_HARDWARE_PROFILE=DEMO_COMPACT_UHF
 export RFID_GATEWAY_READER_CLASS=FIXED_COMPACT_2_PORT
+export RFID_GATEWAY_MODE=hardware
+export RFID_GATEWAY_READER_SERIAL=<reader-serial>
 pnpm --filter rfid-gateway start
 ```
 
@@ -76,6 +86,11 @@ Interpretation:
 - `pendingReads > 0` for a sustained period means backend delivery lag or reader overrun.
 - `flushFailureCount > 0` means backend read delivery is failing.
 - `heartbeatFailureCount > 0` means reader health is not reaching the backend even if local reads are still being queued.
+- `failedFiles > 0` means the backend permanently rejected one or more batches (HTTP 4xx other than
+  auth/rate-limit, for example simulated reads against a production backend). Those batches are kept
+  in the `failed/` spool directory so later reads keep flowing. Read `lastFlushError`, fix the cause,
+  then call `POST /failed/requeue` to move them back to the pending queue. Never delete spool files
+  during a race.
 
 ## 4. Impinj Adapter Configuration
 
@@ -152,3 +167,8 @@ Content-Type: application/json
 - `gatewayStatus=DEGRADED` with rising backlog: transport path is alive but not keeping up.
 - frequent duplicate rate spikes: likely read-zone overlap or repeated reader replay.
 - unknown credential rate spikes: participant credential assignment gap or wrong race-scoped reader usage.
+- read events in `ERROR` with "Processing failed after N attempts": the backend could not normalize the
+  read (it retried with backoff, about 5 s doubling to 5 min, up to 8 attempts). Fix the cause, then
+  review those events; they are not retried automatically.
+- read events in `ERROR` with "Participant is not an accepted entrant": the tag belongs to a waitlisted,
+  pending-approval, or rejected registration, so no checkpoint record was created.

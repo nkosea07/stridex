@@ -170,14 +170,19 @@ async function refreshBrowserSession(expectedGeneration = browserSessionGenerati
   const refreshGeneration = expectedGeneration
   setAccessToken(null)
   const promise = (async () => {
+    const requestRefresh = (csrfToken: string) => fetch(`${API_BASE}${API_CONTRACT.endpoints.authBrowserRefresh}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'X-CSRF-Token': decodeURIComponent(csrfToken) },
+    })
     const csrfToken = getCookie('rt_browser_csrf')
     if (!csrfToken) return false
     try {
-      const response = await fetch(`${API_BASE}${API_CONTRACT.endpoints.authBrowserRefresh}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'X-CSRF-Token': decodeURIComponent(csrfToken) },
-      })
+      let response = await requestRefresh(csrfToken)
+      const rotatedCsrfToken = getCookie('rt_browser_csrf')
+      if (response.status === 401 && rotatedCsrfToken && rotatedCsrfToken !== csrfToken) {
+        response = await requestRefresh(rotatedCsrfToken)
+      }
       if (!response.ok) return false
       const session = await response.json() as BrowserAuthResponse
       if (!session.token || refreshGeneration !== browserSessionGeneration) return false
@@ -1057,43 +1062,73 @@ export const promoApi = {
 
 import { Client } from '@stomp/stompjs'
 
-// STOMP client management
-let stompClient: Client | null = null
+const ACCESS_TOKEN_REFRESH_SKEW_MS = 30_000
 
-export function connectLiveTracking(raceId: string, onMessage: (data: LiveTrackingData) => void) {
+function decodeBase64Url(value: string) {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, String.fromCharCode(0x2f))
+  return atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='))
+}
+
+function accessTokenExpiresAt(token: string): number | null {
+  const payload = token.split('.')[1]
+  if (!payload) return null
+  try {
+    const json = JSON.parse(decodeBase64Url(payload)) as { exp?: unknown }
+    return typeof json.exp === 'number' ? json.exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+
+async function resolveSocketAccessToken(): Promise<string | null> {
+  const current = accessToken
+  const expiresAt = current ? accessTokenExpiresAt(current) : null
+  if (current && (expiresAt === null || expiresAt - ACCESS_TOKEN_REFRESH_SKEW_MS > Date.now())) {
+    return current
+  }
+  return (await refreshBrowserSession()) ? accessToken : null
+}
+
+function liveSocketUrl() {
   const envUrl = (import.meta.env.VITE_WS_URL as string | undefined)?.trim()
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   // Served by the backend at the API context path and proxied by the web server.
-  const wsUrl = envUrl || `${protocol}//${window.location.host}${API_CONTRACT.web.wsTrackingPath}`
-  
-  const token = accessToken
-  
-  stompClient = new Client({
-    brokerURL: wsUrl,
-    connectHeaders: {
-      Authorization: `Bearer ${token}`,
-    },
+  return envUrl || `${protocol}//${window.location.host}${API_CONTRACT.web.wsTrackingPath}`
+}
+
+function connectAuthenticatedTopic<T>(destination: string, onMessage: (data: T) => void) {
+  const client = new Client({
+    brokerURL: liveSocketUrl(),
     reconnectDelay: 5000,
     heartbeatIncoming: 4000,
     heartbeatOutgoing: 4000,
   })
 
-  stompClient.onConnect = () => {
-    stompClient?.subscribe(`/topic/race.${raceId}`, (message) => {
-      if (message.body) {
-        onMessage(JSON.parse(message.body))
+  client.beforeConnect = async () => {
+    const token = await resolveSocketAccessToken()
+    client.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {}
+  }
+
+  client.onConnect = () => {
+    client.subscribe(destination, (message) => {
+      if (!message.body) return
+      try {
+        onMessage(JSON.parse(message.body) as T)
+      } catch {
+        return
       }
     })
   }
 
-  stompClient.activate()
-  
+  client.activate()
+
   return () => {
-    if (stompClient) {
-      stompClient.deactivate()
-      stompClient = null
-    }
+    void client.deactivate()
   }
+}
+
+export function connectLiveTracking(raceId: string, onMessage: (data: LiveTrackingData) => void) {
+  return connectAuthenticatedTopic<LiveTrackingData>(`/topic/race.${raceId}`, onMessage)
 }
 
 export interface UserAlertPayload {
@@ -1102,35 +1137,6 @@ export interface UserAlertPayload {
   type?: string
 }
 
-let userAlertClient: Client | null = null
-
 export function connectUserAlerts(userId: string, onMessage: (data: UserAlertPayload) => void) {
-  const envUrl = (import.meta.env.VITE_WS_URL as string | undefined)?.trim()
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = envUrl || `${protocol}//${window.location.host}${API_CONTRACT.web.wsTrackingPath}`
-
-  userAlertClient = new Client({
-    brokerURL: wsUrl,
-    connectHeaders: { Authorization: `Bearer ${accessToken}` },
-    reconnectDelay: 5000,
-    heartbeatIncoming: 4000,
-    heartbeatOutgoing: 4000,
-  })
-
-  userAlertClient.onConnect = () => {
-    userAlertClient?.subscribe(`/topic/user.${userId}`, (message) => {
-      if (message.body) {
-        onMessage(JSON.parse(message.body))
-      }
-    })
-  }
-
-  userAlertClient.activate()
-
-  return () => {
-    if (userAlertClient) {
-      userAlertClient.deactivate()
-      userAlertClient = null
-    }
-  }
+  return connectAuthenticatedTopic<UserAlertPayload>(`/topic/user.${userId}`, onMessage)
 }

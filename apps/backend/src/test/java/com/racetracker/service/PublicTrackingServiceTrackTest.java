@@ -121,10 +121,12 @@ class PublicTrackingServiceTrackTest {
         race.setStatus(Race.RaceStatus.IN_PROGRESS);
 
         OffsetDateTime start = OffsetDateTime.parse("2026-06-02T06:00:00Z");
+        race.setTimezone("UTC");
+        race.setRaceDate(start.toLocalDate());
+        race.setStartTime(start.toLocalTime());
         Participant participant = new Participant();
         participant.setId(participantId);
         participant.setRace(race);
-        participant.setCheckedInAt(start);
 
         Checkpoint checkpoint = new Checkpoint();
         checkpoint.setName("10K");

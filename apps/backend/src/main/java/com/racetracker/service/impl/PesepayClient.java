@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.racetracker.config.RaceTrackerProperties;
 import com.racetracker.exception.ApiException;
+import com.racetracker.exception.ServiceUnavailableException;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -23,6 +24,8 @@ import java.util.Map;
  */
 @Component
 public class PesepayClient {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PesepayClient.class);
 
     private final RaceTrackerProperties properties;
     private final ObjectMapper objectMapper;
@@ -72,7 +75,8 @@ public class PesepayClient {
         } catch (ApiException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new ApiException("Pesepay status check failed: " + ex.getMessage());
+            log.warn("Pesepay status check failed; errorType={}", ex.getClass().getSimpleName(), ex);
+            throw new ServiceUnavailableException("The payment provider is unavailable", "PAYMENT_PROVIDER_UNAVAILABLE", ex);
         }
     }
 
@@ -92,20 +96,23 @@ public class PesepayClient {
         } catch (ApiException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new ApiException("Pesepay request failed: " + ex.getMessage());
+            log.warn("Pesepay request failed; path={}, errorType={}", path, ex.getClass().getSimpleName(), ex);
+            throw new ServiceUnavailableException("The payment provider is unavailable", "PAYMENT_PROVIDER_UNAVAILABLE", ex);
         }
     }
 
     private JsonNode decryptPayload(RaceTrackerProperties.Payments payments, JsonNode response) {
         JsonNode payloadNode = response.get("payload");
         if (payloadNode == null || payloadNode.isNull()) {
-            throw new ApiException("Pesepay response did not contain a payload");
+            log.warn("Pesepay response did not contain a payload");
+            throw new ServiceUnavailableException("The payment provider returned an invalid response", "PAYMENT_PROVIDER_INVALID_RESPONSE");
         }
         try {
             String json = decrypt(payloadNode.asText(), payments.getEncryptionKey());
             return objectMapper.readTree(json);
         } catch (Exception ex) {
-            throw new ApiException("Failed to decrypt Pesepay response: " + ex.getMessage());
+            log.warn("Pesepay response could not be decrypted; errorType={}", ex.getClass().getSimpleName());
+            throw new ServiceUnavailableException("The payment provider returned an invalid response", "PAYMENT_PROVIDER_INVALID_RESPONSE", ex);
         }
     }
 

@@ -116,8 +116,13 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     @Query(value = """
         WITH target_races AS (
-            SELECT r.id, r.race_date
+            SELECT r.id, r.race_date,
+                   CASE
+                       WHEN r.race_date IS NULL OR r.start_time IS NULL THEN NULL
+                       ELSE (r.race_date + r.start_time) AT TIME ZONE coalesce(tz.name, 'UTC')
+                   END AS scheduled_start
             FROM races r
+            LEFT JOIN pg_timezone_names tz ON tz.name = r.timezone
             WHERE (:raceId IS NULL OR r.id = :raceId)
               AND (:publishedOnly = false OR r.results_published_at IS NOT NULL)
               AND (:userId IS NULL OR EXISTS (
@@ -139,7 +144,7 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
         ), base AS (
             SELECT p.id AS participant_id, p.race_id, p.user_id, p.category_id, p.bib_number,
                    p.status::text AS status, p.gender::text AS gender,
-                   coalesce(p.checked_in_at, ct.start_checkpoint_at, p.registered_at) AS start_time,
+                   coalesce(ct.start_checkpoint_at, tr.scheduled_start) AS start_time,
                    ct.finish_at,
                    coalesce(pen.penalty_seconds, 0) AS penalty_seconds,
                    CASE

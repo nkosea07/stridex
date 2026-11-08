@@ -195,5 +195,22 @@
     "loadError": "Could not load race operations. Reopen this screen to retry.",
     "empty": "No races are available for your operations role.",
     "noCheckpoints": "No checkpoints are available for this race."
+  },
+  "scanner": {
+    "recordedTitle": "Checkpoint recorded",
+    "recordedBody": "Your checkpoint crossing was recorded.",
+    "failedTitle": "Checkpoint not recorded",
+    "failedBody": "The checkpoint could not be recorded. Check your connection and try again.",
+    "invalidTitle": "Invalid QR code",
+    "wrongRace": "This checkpoint is not part of your current race.",
+    "unreadable": "Unable to read checkpoint data.",
+    "ok": "OK",
+    "tryAgain": "Try again"
+  },
+  "trackingStop": {
+    "title": "Tracking stopped",
+    "notRegistered": "Your location could not be shared because you are no longer registered for this race. Contact the race organizer if this is unexpected.",
+    "notPermitted": "Your location could not be shared because your account is not allowed to track this race. Contact the race organizer if this is unexpected.",
+    "ok": "OK"
   }
 }

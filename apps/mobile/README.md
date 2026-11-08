@@ -113,6 +113,8 @@ The app tracks GPS location during races:
 
 GPS points are written to a local SQLite queue. Each point has idempotency metadata, retry counts, last error details, and sync status. Failed network delivery does not delete or mark unsent points as synced; points remain queued for the next foreground sync interval, live background-location callback, or opportunistic background sync task.
 
+Upload failures are classified. Network errors, timeouts, rate limits (429), and server errors (5xx) keep the points queued for retry; an expired access token is refreshed once by the API client. A 400/413/422 means the server will never accept that batch, so its points are marked rejected (`synced = 2`, error kept) and newer points continue to upload. A 403 or 404 (no athlete access, or no longer registered for the race) also stops tracking, records the reason on the session row, and shows the athlete a one-time explanation, including when the stop happened in a background task while the app was closed. Only one upload per race runs at a time. Uploaded and rejected points older than seven days are pruned from the device when no active session uses them; points still awaiting upload are never pruned.
+
 The active race session is also stored locally. When the app starts, it attempts to recover the active race, battery-saver mode, start time, and local path before the splash screen is hidden. If recovery fails, queued GPS points are kept for later retry.
 
 `expo-background-task` is only a catch-up worker. iOS and Android decide when it runs, so it must not be treated as immediate race timing infrastructure. Live tracking still depends on Expo Location background updates and foreground sync while the app is open.

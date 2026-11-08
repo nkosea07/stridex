@@ -77,7 +77,7 @@ public interface RaceRepository extends JpaRepository<Race, UUID> {
 
     long countByStatusIn(Collection<Race.RaceStatus> statuses);
 
-    List<Race> findByStatusAndRaceDateBefore(Race.RaceStatus status, LocalDate raceDate);
+    List<Race> findByStatusAndRaceDateLessThanEqual(Race.RaceStatus status, LocalDate raceDate);
 
     long countByRaceDateBetween(LocalDate from, LocalDate to);
 

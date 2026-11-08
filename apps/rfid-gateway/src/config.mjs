@@ -1,5 +1,7 @@
 import path from 'node:path';
 
+const MAX_BACKEND_BATCH_SIZE = 200;
+
 function required(name) {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -18,6 +20,14 @@ function optionalInt(name, fallback) {
     throw new Error(`${name} must be a non-negative integer`);
   }
   return parsed;
+}
+
+function optionalBoundedInt(name, fallback, min, max) {
+  const value = optionalInt(name, fallback);
+  if (value < min || value > max) {
+    throw new Error(`${name} must be between ${min} and ${max}`);
+  }
+  return value;
 }
 
 function optionalString(name, fallback = '') {
@@ -55,11 +65,11 @@ export function loadConfig() {
     hardwareProfile,
     readerClass,
     readerSerial,
-    batchSize: optionalInt('RFID_GATEWAY_BATCH_SIZE', 200),
-    heartbeatIntervalMs: optionalInt('RFID_GATEWAY_HEARTBEAT_INTERVAL_MS', 15000),
-    flushIntervalMs: optionalInt('RFID_GATEWAY_FLUSH_INTERVAL_MS', 1000),
-    requestTimeoutMs: optionalInt('RFID_GATEWAY_REQUEST_TIMEOUT_MS', 10000),
-    retryInitialDelayMs: optionalInt('RFID_GATEWAY_RETRY_INITIAL_DELAY_MS', 1000),
-    retryMaxDelayMs: optionalInt('RFID_GATEWAY_RETRY_MAX_DELAY_MS', 10000)
+    batchSize: optionalBoundedInt('RFID_GATEWAY_BATCH_SIZE', MAX_BACKEND_BATCH_SIZE, 1, MAX_BACKEND_BATCH_SIZE),
+    heartbeatIntervalMs: optionalBoundedInt('RFID_GATEWAY_HEARTBEAT_INTERVAL_MS', 15000, 1000, 3600000),
+    flushIntervalMs: optionalBoundedInt('RFID_GATEWAY_FLUSH_INTERVAL_MS', 1000, 100, 3600000),
+    requestTimeoutMs: optionalBoundedInt('RFID_GATEWAY_REQUEST_TIMEOUT_MS', 10000, 1000, 600000),
+    retryInitialDelayMs: optionalBoundedInt('RFID_GATEWAY_RETRY_INITIAL_DELAY_MS', 1000, 100, 3600000),
+    retryMaxDelayMs: optionalBoundedInt('RFID_GATEWAY_RETRY_MAX_DELAY_MS', 10000, 100, 3600000)
   };
 }

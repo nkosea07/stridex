@@ -62,16 +62,6 @@ public class RfidIngestServiceImpl implements RfidIngestService {
         RfidReadEventBatchResponse response = new RfidReadEventBatchResponse();
         List<RfidReadEventRequest> reads = request.getReads();
         for (RfidReadEventRequest read : reads) {
-            if (reader.getStatus() != RfidReader.RfidReaderStatus.ACTIVE) {
-                RfidReadEvent event = saveBaseEvent(reader, read, RfidReadEvent.RfidReadEventStatus.INVALID_READER);
-                event.setErrorMessage("RFID reader is revoked");
-                RfidReadEvent saved = rfidReadEventRepository.save(event);
-                RfidReadEventResultDto result = result(read, saved.getStatus().name(), null, null, "RFID reader is revoked");
-                response.getResults().add(result);
-                incrementCount(response, result.getStatus());
-                continue;
-            }
-
             String sourceEventId = read.getSourceEventId() == null ? null : read.getSourceEventId().trim();
             if (sourceEventId != null && !sourceEventId.isBlank()) {
                 Optional<RfidReadEvent> existing = rfidReadEventRepository.findByReaderIdAndSourceEventId(
@@ -90,6 +80,16 @@ public class RfidIngestServiceImpl implements RfidIngestService {
                     incrementCount(response, result.getStatus());
                     continue;
                 }
+            }
+
+            if (reader.getStatus() != RfidReader.RfidReaderStatus.ACTIVE) {
+                RfidReadEvent event = saveBaseEvent(reader, read, RfidReadEvent.RfidReadEventStatus.INVALID_READER);
+                event.setErrorMessage("RFID reader is revoked");
+                RfidReadEvent saved = rfidReadEventRepository.save(event);
+                RfidReadEventResultDto result = result(read, saved.getStatus().name(), null, null, "RFID reader is revoked");
+                response.getResults().add(result);
+                incrementCount(response, result.getStatus());
+                continue;
             }
 
             RfidReadEvent event = saveBaseEvent(reader, read, RfidReadEvent.RfidReadEventStatus.RECEIVED);

@@ -1,6 +1,19 @@
 # Race Tracker Platform - Development Guide
 
-This guide provides detailed instructions and prompts to help you complete the remaining implementation tasks, particularly the Spring Boot backend.
+This guide began as the set of design prompts used to build the platform. The backend, web, and
+mobile apps are now implemented, so the **Backend Implementation Tasks**, **API Contract
+Reference**, **Authentication Implementation**, and **Testing Strategy** sections are historical
+design notes, not a description of current behavior.
+
+For current behavior use:
+
+- `AGENTS.md` — layout, toolchain, setup, and the verify commands CI runs.
+- `apps/backend/README.md`, `apps/mobile/README.md`, `apps/rfid-gateway/README.md` — per-app behavior.
+- `packages/contracts/contract.json` and `docs/api-contract.md` — every API path.
+- `docs/architecture.md` — runtime flows (timing, RFID, notifications, results).
+
+The **Database Setup**, **Real-Time Tracking**, **Integration Points**, **Deployment**, and
+**Quick Start** sections below are kept current.
 
 ---
 
@@ -692,14 +705,15 @@ RFID scaling and organizer schema changes are included in the versioned Flyway m
 ### Initial Setup Commands
 
 ```bash
-# Start PostgreSQL with Docker
+# Start local PostGIS (host port 5435) and Redis (6379)
 cd apps/backend
-docker-compose up -d
+docker compose up -d db redis
 
-# Or connect to existing PostgreSQL
-export DATABASE_URL=postgresql://user:password@localhost:5432/racetracker
+# Configure the backend with DB_HOST/DB_PORT/DB_NAME/DB_USERNAME/DB_PASSWORD in apps/backend/.env
+# (local-only, untracked). The backend does not read DATABASE_URL.
 
-# Start the backend; Flyway applies versioned migrations before Hibernate validates the schema.
+# Start the backend on port 8081 (context path /api); Flyway applies versioned migrations
+# before Hibernate validates the schema. Never run database/schema.sql to bootstrap.
 mvn spring-boot:run
 ```
 
@@ -801,45 +815,18 @@ public class AuthService {
    - Sync when connection restored
    - Include sequence numbers for ordering
 
-### WebSocket Message Protocol
+### Live Location Transport
 
-```typescript
-// Client -> Server: Location Update
-{
-  "type": "LOCATION_UPDATE",
-  "payload": {
-    "participantId": 123,
-    "raceId": 1,
-    "locations": [
-      {
-        "latitude": -33.9249,
-        "longitude": 18.4241,
-        "altitude": 15.5,
-        "speed": 3.2,
-        "accuracy": 5,
-        "timestamp": "2024-01-15T06:15:30Z"
-      }
-    ]
-  }
-}
+Athletes upload GPS over REST, not WebSocket: `POST /api/v1/tracking/{raceId}/locations` with up
+to 500 points per batch (the app sends at most 100). The server filters drift, stores every point,
+and broadcasts only accepted points.
 
-// Server -> Client: Broadcast to subscribers
-{
-  "type": "PARTICIPANT_LOCATION",
-  "payload": {
-    "participantId": 123,
-    "bibNumber": "A1234",
-    "name": "John Runner",
-    "latitude": -33.9249,
-    "longitude": 18.4241,
-    "distance": 5234,
-    "pace": "5:30",
-    "rank": 45,
-    "lastCheckpoint": "5K Mark",
-    "timestamp": "2024-01-15T06:15:30Z"
-  }
-}
-```
+Staff dashboards receive live updates over STOMP at `/api/ws-tracking` (contract
+`web.wsTrackingPath`). The `CONNECT` frame must carry `Authorization: Bearer <access-token>`.
+Race staff subscribe to `/topic/race.{raceId}`; a signed-in user may subscribe to their own
+`/topic/user.{userId}` alerts. Each race message is a `LiveTrackingResponse` (participant, bib,
+smoothed position, speed, status, last checkpoint, elapsed time, pace, splits). Spectators use the
+anonymous REST feeds under `/api/v1/public/races/**` instead of the socket.
 
 ---
 
@@ -847,22 +834,22 @@ public class AuthService {
 
 ### Web App -> Backend
 
-The web app is pre-configured to call `VITE_API_URL` (default: `http://localhost:8080/api/v1`).
+The web client calls the contract's relative base path `/api/v1` (`API_CONTRACT.web.apiBasePath`).
+In development, Vite proxies `/api` (including WebSockets) to `http://127.0.0.1:8081`; in the
+container image the web server proxies it to the backend. Optional build-time variables in
+`apps/web/.env`:
 
-Update `apps/web/.env`:
 ```
-VITE_API_URL=http://localhost:8080/api/v1
-VITE_WS_URL=ws://localhost:8080/ws
 VITE_MAPBOX_TOKEN=your_mapbox_token
+VITE_WS_URL=wss://race.example.com/api/ws-tracking   # only when the socket is on another origin
 ```
 
 ### Mobile App -> Backend
 
-Update `apps/mobile/lib/api.ts`:
-```typescript
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
-const WS_URL = process.env.EXPO_PUBLIC_WS_URL || 'ws://localhost:8080/ws';
-```
+The mobile client reads `EXPO_PUBLIC_API_URL` (the API root including `/api`, default
+`http://localhost:8081/api` from the contract) and appends the versioned path itself. Use your
+machine's LAN address instead of `localhost` on a physical device. Only `EXPO_PUBLIC_*` values
+reach the app; never put server secrets in them.
 
 ### CORS Configuration
 
@@ -939,26 +926,35 @@ class RaceControllerIntegrationTest {
 
 ### Environment Variables
 
-```bash
-# Database
-DATABASE_URL=postgresql://user:pass@host:5432/racetracker
-DATABASE_POOL_SIZE=20
+Copy `.env.pilot.example` to `.env.pilot` for the Compose pilot (or load it into the
+`race-tracker-secrets` Kubernetes secret). Never commit a populated file. The core backend
+variables are:
 
-# JWT
-JWT_SECRET='7uZwPYOey3oFwOojL/qWbYeq/3Scq6RMIEtXZzIZO5Uygj6toRS29z8o6pQslC18ZfaibKtKhCD2Q/agm0YmCQ=='
-JWT_ACCESS_EXPIRY=900000      # 15 minutes
-JWT_REFRESH_EXPIRY=604800000  # 7 days
+```bash
+# Database (the backend does not read DATABASE_URL)
+DB_HOST=db.internal
+DB_PORT=5432
+DB_NAME=race_tracker
+DB_USERNAME=CHANGE_ME
+DB_PASSWORD=CHANGE_ME
+
+# Redis
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=CHANGE_ME
+
+# Auth: generate a fresh random value of at least 32 characters per environment,
+# e.g. `openssl rand -base64 48`. Production rejects placeholders.
+JWT_SECRET=CHANGE_ME
 
 # Server
-SERVER_PORT=8080
-CORS_ALLOWED_ORIGINS=https://admin.yourrace.com,https://yourrace.com
-
-# Redis (optional)
-REDIS_URL=redis://localhost:6379
-
-# Monitoring
-SENTRY_DSN=your-sentry-dsn
+SERVER_PORT=8081
+FRONTEND_URL=https://race.example.com
 ```
+
+Access and refresh token lifetimes (15 minutes / 7 days) are set in `application.yml`. Mail,
+storage, push, payments, WhatsApp, and RFID settings are listed in `.env.pilot.example`; the
+production profile validates them at startup.
 
 ### Production Checklist
 
@@ -978,20 +974,23 @@ SENTRY_DSN=your-sentry-dsn
 ## Quick Start Commands
 
 ```bash
-# 1. Start database
-cd apps/backend
-docker-compose up -d
+# 1. Install workspace dependencies (Node 20.19+, pnpm 10)
+pnpm install
 
-# 2. Run backend (after implementing)
+# 2. Start local PostGIS and Redis
+cd apps/backend && docker compose up -d db redis
+
+# 3. Run the backend (Java 17, port 8081)
 mvn spring-boot:run
 
-# 3. Run web app
-cd apps/web
-pnpm install
-pnpm dev
+# 4. Run the web app (port 5173; proxies /api to 8081)
+pnpm --filter web dev
 
-# 4. Run mobile app
+# 5. Run the mobile app
 pnpm --filter race-tracker-mobile start
+
+# Or run db + backend + web together
+pnpm dev:stack
 ```
 
 ---

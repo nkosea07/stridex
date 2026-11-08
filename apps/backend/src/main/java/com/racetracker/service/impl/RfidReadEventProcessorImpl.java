@@ -12,6 +12,7 @@ import com.racetracker.repository.RfidReadEventRepository;
 import com.racetracker.repository.RfidReaderRepository;
 import com.racetracker.service.ParticipantCredentialService;
 import com.racetracker.service.CheckpointCutoff;
+import com.racetracker.service.CheckpointProgression;
 import com.racetracker.service.LiveSummaryCacheInvalidator;
 import com.racetracker.service.RfidReadEventProcessor;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,10 @@ import java.util.UUID;
 @Service
 public class RfidReadEventProcessorImpl implements RfidReadEventProcessor {
 
+    static final int MAX_PROCESSING_ATTEMPTS = 8;
+    private static final java.time.Duration INITIAL_BACKOFF = java.time.Duration.ofSeconds(5);
+    private static final java.time.Duration MAX_BACKOFF = java.time.Duration.ofMinutes(5);
+
     private final RfidReadEventRepository rfidReadEventRepository;
     private final CheckpointRecordRepository checkpointRecordRepository;
     private final ParticipantRepository participantRepository;
@@ -32,7 +37,7 @@ public class RfidReadEventProcessorImpl implements RfidReadEventProcessor {
     private final ParticipantCredentialService participantCredentialService;
     private final RfidIngestMetrics rfidIngestMetrics;
     private final LiveSummaryCacheInvalidator liveSummaryCacheInvalidator;
-    private final com.racetracker.service.SpectatorAlertService spectatorAlertService;
+    private final CheckpointProgression checkpointProgression;
 
     public RfidReadEventProcessorImpl(
         RfidReadEventRepository rfidReadEventRepository,
@@ -42,7 +47,7 @@ public class RfidReadEventProcessorImpl implements RfidReadEventProcessor {
         ParticipantCredentialService participantCredentialService,
         RfidIngestMetrics rfidIngestMetrics,
         LiveSummaryCacheInvalidator liveSummaryCacheInvalidator,
-        com.racetracker.service.SpectatorAlertService spectatorAlertService
+        CheckpointProgression checkpointProgression
     ) {
         this.rfidReadEventRepository = rfidReadEventRepository;
         this.checkpointRecordRepository = checkpointRecordRepository;
@@ -51,7 +56,7 @@ public class RfidReadEventProcessorImpl implements RfidReadEventProcessor {
         this.participantCredentialService = participantCredentialService;
         this.rfidIngestMetrics = rfidIngestMetrics;
         this.liveSummaryCacheInvalidator = liveSummaryCacheInvalidator;
-        this.spectatorAlertService = spectatorAlertService;
+        this.checkpointProgression = checkpointProgression;
     }
 
     @Override
@@ -101,6 +106,14 @@ public class RfidReadEventProcessorImpl implements RfidReadEventProcessor {
             return;
         }
 
+        if (!CheckpointProgression.isTimeableEntrant(participant.getStatus())) {
+            markEvent(event, RfidReadEvent.RfidReadEventStatus.ERROR, participant, null,
+                "Participant is not an accepted entrant for this race");
+            rfidIngestMetrics.incrementError();
+            markReaderProcessed(reader);
+            return;
+        }
+
         Optional<CheckpointRecord> existingRecord = checkpointRecordRepository.findByParticipantIdAndCheckpointId(
             participant.getId(),
             reader.getCheckpoint().getId()
@@ -126,18 +139,35 @@ public class RfidReadEventProcessorImpl implements RfidReadEventProcessor {
         CheckpointRecord savedRecord = checkpointRecordRepository.save(record);
         liveSummaryCacheInvalidator.evictLastCheckpointAfterCommit(participant.getId(), reader.getRace().getId());
 
-        updateParticipantStatusForCheckpoint(participant, reader.getCheckpoint(), cutoffMissed);
+        checkpointProgression.apply(participant, reader.getCheckpoint(), cutoffMissed);
         participantRepository.save(participant);
-
-        spectatorAlertService.onCheckpoint(participant, reader.getCheckpoint());
-        if (!cutoffMissed && participant.getStatus() == Participant.ParticipantStatus.FINISHED) {
-            spectatorAlertService.onFinished(participant);
-        } else if (!cutoffMissed && participant.getStatus() == Participant.ParticipantStatus.STARTED) {
-            spectatorAlertService.onStarted(participant);
-        }
 
         markReaderProcessed(reader);
         markEvent(event, RfidReadEvent.RfidReadEventStatus.ACCEPTED, participant, savedRecord, null);
+    }
+
+    @Override
+    @Transactional
+    public boolean recordProcessingFailure(UUID eventId, Exception failure) {
+        RfidReadEvent event = rfidReadEventRepository.findById(eventId).orElse(null);
+        if (event == null || event.getStatus() != RfidReadEvent.RfidReadEventStatus.RECEIVED) {
+            return false;
+        }
+        int attempts = (event.getProcessingAttempts() == null ? 0 : event.getProcessingAttempts()) + 1;
+        event.setProcessingAttempts(attempts);
+        String failureType = failure == null ? "UnknownError" : failure.getClass().getSimpleName();
+        if (attempts >= MAX_PROCESSING_ATTEMPTS) {
+            event.setStatus(RfidReadEvent.RfidReadEventStatus.ERROR);
+            event.setNextAttemptAt(null);
+            event.setErrorMessage("Processing failed after " + attempts + " attempts (" + failureType + ")");
+            rfidReadEventRepository.save(event);
+            return true;
+        }
+        long backoffSeconds = Math.min(MAX_BACKOFF.toSeconds(), INITIAL_BACKOFF.toSeconds() << Math.min(attempts - 1, 10));
+        event.setNextAttemptAt(OffsetDateTime.now().plusSeconds(backoffSeconds));
+        event.setErrorMessage("Processing attempt " + attempts + " failed (" + failureType + ")");
+        rfidReadEventRepository.save(event);
+        return false;
     }
 
     private void markEvent(
@@ -152,22 +182,6 @@ public class RfidReadEventProcessorImpl implements RfidReadEventProcessor {
         event.setCheckpointRecord(checkpointRecord);
         event.setErrorMessage(errorMessage);
         rfidReadEventRepository.save(event);
-    }
-
-    private void updateParticipantStatusForCheckpoint(Participant participant, Checkpoint checkpoint, boolean cutoffMissed) {
-        if (cutoffMissed) {
-            participant.setStatus(Participant.ParticipantStatus.DNF);
-            return;
-        }
-        if (checkpoint.getCheckpointType() == Checkpoint.CheckpointType.FINISH) {
-            participant.setStatus(Participant.ParticipantStatus.FINISHED);
-            return;
-        }
-        if (participant.getStatus() == Participant.ParticipantStatus.REGISTERED
-            || participant.getStatus() == Participant.ParticipantStatus.CONFIRMED
-            || participant.getStatus() == Participant.ParticipantStatus.CHECKED_IN) {
-            participant.setStatus(Participant.ParticipantStatus.STARTED);
-        }
     }
 
     private boolean evaluateCutoff(Checkpoint checkpoint, Participant participant, UUID raceId, OffsetDateTime recordedAt) {

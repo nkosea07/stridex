@@ -14,7 +14,7 @@ timestamps, artifact checksums, and outcome for each rehearsal before pilot appr
    original HTTPS origin correctly for Secure refresh cookies and origin checks.
 3. Take a database backup and verify its checksum before applying migrations.
 4. Compare the live schema with the exact V1 baseline and all migrations through
-   the repository migration head (currently V42). Never run `baseline` or `repair` as a way to bypass a
+   the repository migration head (currently V44). Never run `baseline` or `repair` as a way to bypass a
    schema mismatch. Existing databases may be baselined at version 1 only after
    a DBA has recorded and approved a structural diff against `V1__baseline.sql`.
 5. Confirm global RFID simulation is disabled in production and any simulated
@@ -59,8 +59,9 @@ the source database during rehearsal.
 - Deploy compatible application images only after backup verification.
 - Run forward-only Flyway migrations; do not use destructive down scripts.
 - For an application rollback, deploy the prior image only if it is compatible
-  with the expanded schema. V37–V41 are additive; a prior image must tolerate the
-  new columns and tables. Otherwise restore the verified backup into an isolated
+  with the expanded schema. V37–V41, V43 (nullable `auth_tokens.family_id`), and V44 (RFID
+  processing attempt columns with defaults) are additive; a prior image must tolerate the new columns and tables. Refresh tokens issued
+  by a prior image have no session family and are treated as single-token sessions. Otherwise restore the verified backup into an isolated
   database, validate it, and perform the approved cutover.
 - Preserve the failed image digest, application logs, migration history, and
   correlated audit/request IDs for incident analysis.

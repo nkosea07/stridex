@@ -46,6 +46,7 @@ public class AuthServiceImpl implements AuthService {
     private static final Duration ACCOUNT_LOCK_DURATION = Duration.ofMinutes(15);
     private static final Duration PASSWORD_RESET_TOKEN_TTL = Duration.ofHours(1);
     private static final Duration EMAIL_VERIFICATION_TOKEN_TTL = Duration.ofHours(24);
+    private static final Duration REFRESH_REUSE_GRACE = Duration.ofSeconds(30);
     private static final Set<Participant.ParticipantStatus> ACTIVE_REGISTRATION_STATUSES = Set.of(
         Participant.ParticipantStatus.REGISTERED,
         Participant.ParticipantStatus.CONFIRMED,
@@ -139,7 +140,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = UnauthorizedException.class)
     public AuthResponse login(LoginRequest request) {
         String normalizedEmail = normalizeEmail(request.getEmail());
 
@@ -147,7 +148,9 @@ public class AuthServiceImpl implements AuthService {
         if (user != null) {
             ensureAccountNotLocked(user);
             ensureRateLimitNotExceeded(user);
-            ensureEmailVerified(user);
+            if (Boolean.TRUE.equals(user.getIsActive()) && !Boolean.TRUE.equals(user.getEmailVerified())) {
+                rejectUnverifiedLogin(user, request.getPassword());
+            }
         }
 
         try {
@@ -173,25 +176,27 @@ public class AuthServiceImpl implements AuthService {
         resetFailedLoginState(user);
         auditEventService.record("LOGIN", user.getId(), "USER", user.getId().toString(),
             "SUCCESS", java.util.Map.of("method", "password"));
-        return buildAuthenticatedResponse(user, false);
+        return buildAuthenticatedResponse(user, false, UUID.randomUUID());
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = UnauthorizedException.class)
     public AuthResponse refreshToken(String refreshToken) {
         if (!jwtService.hasTokenType(refreshToken, JwtService.TOKEN_TYPE_REFRESH)) {
             throw new UnauthorizedException("Invalid refresh token");
         }
 
-        AuthToken storedToken = authTokenRepository.findByTokenAndTokenTypeAndConsumedAtIsNull(
-                refreshToken,
-                AuthToken.TokenType.REFRESH
-            )
+        AuthToken storedToken = authTokenRepository.findByTokenAndTokenType(refreshToken, AuthToken.TokenType.REFRESH)
             .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
+        OffsetDateTime now = OffsetDateTime.now();
 
-        if (storedToken.getExpiresAt().isBefore(OffsetDateTime.now())) {
-            storedToken.setConsumedAt(OffsetDateTime.now());
-            authTokenRepository.save(storedToken);
+        if (storedToken.getConsumedAt() != null) {
+            handleConsumedRefreshTokenPresented(storedToken, now);
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+
+        if (storedToken.getExpiresAt().isBefore(now)) {
+            authTokenRepository.consumeIfActive(storedToken.getId(), now);
             throw new UnauthorizedException("Invalid refresh token");
         }
 
@@ -211,9 +216,29 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException("Invalid refresh token");
         }
 
-        storedToken.setConsumedAt(OffsetDateTime.now());
-        authTokenRepository.save(storedToken);
-        return buildAuthenticatedResponse(user, false);
+        if (authTokenRepository.consumeIfActive(storedToken.getId(), now) != 1) {
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+        UUID familyId = storedToken.getFamilyId() != null ? storedToken.getFamilyId() : UUID.randomUUID();
+        return buildAuthenticatedResponse(user, false, familyId);
+    }
+
+    /**
+     * A rotated token presented again shortly after rotation is a benign race (two tabs refreshing
+     * at once). Later reuse indicates a copied token, so every active token in that device's
+     * session family is revoked; the user's other devices are unaffected.
+     */
+    private void handleConsumedRefreshTokenPresented(AuthToken storedToken, OffsetDateTime now) {
+        if (storedToken.getConsumedAt().plus(REFRESH_REUSE_GRACE).isAfter(now)) {
+            return;
+        }
+        int revoked = storedToken.getFamilyId() == null
+            ? 0
+            : authTokenRepository.revokeFamily(storedToken.getFamilyId(), AuthToken.TokenType.REFRESH, now);
+        UUID userId = storedToken.getUser() != null ? storedToken.getUser().getId() : null;
+        auditEventService.record("REFRESH_TOKEN_REUSE", userId, "AUTH_TOKEN_FAMILY",
+            storedToken.getFamilyId() != null ? storedToken.getFamilyId().toString() : storedToken.getId().toString(),
+            "DENIED", java.util.Map.of("revokedTokens", revoked));
     }
 
     @Override
@@ -227,7 +252,7 @@ public class AuthServiceImpl implements AuthService {
         }
         auditEventService.recordInCurrentTransaction("PRIVILEGED_LOGIN", user.getId(), "USER", user.getId().toString(),
             "SUCCESS", java.util.Map.of("method", "mfa"));
-        return buildAuthenticatedResponse(user, true);
+        return buildAuthenticatedResponse(user, true, UUID.randomUUID());
     }
 
     @Override
@@ -374,12 +399,13 @@ public class AuthServiceImpl implements AuthService {
             .build();
     }
 
-    private AuthToken createRefreshToken(User user, String refreshToken) {
+    private AuthToken createRefreshToken(User user, String refreshToken, UUID familyId) {
         return AuthToken.builder()
             .user(user)
             .token(refreshToken)
             .tokenType(AuthToken.TokenType.REFRESH)
             .expiresAt(jwtService.extractExpiration(refreshToken))
+            .familyId(familyId)
             .build();
     }
 
@@ -414,10 +440,16 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    private void ensureEmailVerified(User user) {
-        if (!Boolean.TRUE.equals(user.getEmailVerified())) {
-            throw new UnauthorizedException("Email verification required", "EMAIL_VERIFICATION_REQUIRED");
+    /**
+     * Reveals that verification is pending only to a caller who proved the password, so login
+     * responses cannot be used to discover unverified accounts.
+     */
+    private void rejectUnverifiedLogin(User user, String password) {
+        if (password == null || user.getPasswordHash() == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
+            recordFailedLogin(user);
+            throw new UnauthorizedException("Invalid credentials");
         }
+        throw new UnauthorizedException("Email verification required", "EMAIL_VERIFICATION_REQUIRED");
     }
 
     private void ensureUserCanReceiveSession(User user) {
@@ -551,12 +583,11 @@ public class AuthServiceImpl implements AuthService {
             .build();
     }
 
-    private AuthResponse buildAuthenticatedResponse(User user, boolean mfaVerified) {
-        invalidateOutstandingTokens(user.getId(), AuthToken.TokenType.REFRESH);
+    private AuthResponse buildAuthenticatedResponse(User user, boolean mfaVerified, UUID familyId) {
         String refreshToken = mfaVerified
             ? jwtService.generateRefreshToken(user, true)
             : jwtService.generateRefreshToken(user);
-        authTokenRepository.save(createRefreshToken(user, refreshToken));
+        authTokenRepository.save(createRefreshToken(user, refreshToken, familyId));
 
         UserDto dto = userMapper.toDto(user);
         return AuthResponse.builder()

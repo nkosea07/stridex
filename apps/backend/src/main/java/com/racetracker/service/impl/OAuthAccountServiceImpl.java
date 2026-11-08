@@ -19,8 +19,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -102,21 +100,12 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
     }
 
     private AuthResponse issueSession(User user) {
-        List<AuthToken> active = authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(
-            user.getId(), AuthToken.TokenType.REFRESH);
-        OffsetDateTime now = OffsetDateTime.now();
-        for (AuthToken token : active) {
-            token.setConsumedAt(now);
-        }
-        if (!active.isEmpty()) {
-            authTokenRepository.saveAll(active);
-        }
-
         String refreshToken = jwtService.generateRefreshToken(user);
         authTokenRepository.save(AuthToken.builder()
             .user(user)
             .token(refreshToken)
             .tokenType(AuthToken.TokenType.REFRESH)
+            .familyId(UUID.randomUUID())
             .expiresAt(jwtService.extractExpiration(refreshToken))
             .build());
 

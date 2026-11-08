@@ -27,6 +27,11 @@ server-side: role gates via `@PreAuthorize`, per-race ownership via `RaceAccessG
   `NotificationDispatcher`, which fans out to `NotificationChannel` adapters (push/email/
   sms/whatsapp) after commit, honoring `notification_preferences`, and writes a
   `notification_deliveries` audit row per channel.
+- **Timing**: RFID (`RfidReadEventProcessorImpl`), staff manual/QR and timing import
+  (`CheckpointServiceImpl`), and athlete self-scan (`TrackingServiceImpl`) all record with
+  server or reader time and apply one status transition (`CheckpointProgression`). The timing
+  start is the earliest START checkpoint record, else the scheduled gun start in the race
+  timezone (`CheckpointCutoff`); desk check-in and registration times are never a start.
 - **Results**: `ResultServiceImpl.publish` snapshots computed results into `race_results`;
   published reads serve the snapshot under a revision guard, falling back to compute.
 - **Imports**: `ParticipantServiceImpl.importCsv` stores the upload and hands off to

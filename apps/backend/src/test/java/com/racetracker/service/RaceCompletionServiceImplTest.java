@@ -1,8 +1,11 @@
 package com.racetracker.service;
 
+import com.racetracker.model.Checkpoint;
 import com.racetracker.model.Participant;
 import com.racetracker.model.Race;
+import com.racetracker.repository.CheckpointRepository;
 import com.racetracker.repository.ParticipantRepository;
+import com.racetracker.repository.RaceStageRepository;
 import com.racetracker.repository.RaceRepository;
 import com.racetracker.service.impl.RaceCompletionServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,7 +14,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,13 +34,16 @@ class RaceCompletionServiceImplTest {
 
     @Mock private RaceRepository raceRepository;
     @Mock private ParticipantRepository participantRepository;
+    @Mock private CheckpointRepository checkpointRepository;
+    @Mock private RaceStageRepository raceStageRepository;
 
     private RaceCompletionServiceImpl service;
     private final UUID raceId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        service = new RaceCompletionServiceImpl(raceRepository, participantRepository);
+        service = new RaceCompletionServiceImpl(raceRepository, participantRepository,
+            checkpointRepository, raceStageRepository, 24, 60);
     }
 
     @Test
@@ -76,18 +85,42 @@ class RaceCompletionServiceImplTest {
     }
 
     @Test
-    void autoCompleteDueRaces_completesEveryDueRace() {
-        Race due = new Race();
-        due.setId(raceId);
-        due.setStatus(Race.RaceStatus.IN_PROGRESS);
-        when(raceRepository.findByStatusAndRaceDateBefore(Race.RaceStatus.IN_PROGRESS, LocalDate.now()))
-            .thenReturn(List.of(due));
+    void autoCompleteDueRaces_closesOnlyRacesPastTheirTimeLimit() {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        Race finished = inProgressRace(raceId, now.minusHours(8));
+        UUID runningId = UUID.randomUUID();
+        Race stillRunning = inProgressRace(runningId, now.minusHours(3));
+
+        when(raceRepository.findByStatusAndRaceDateLessThanEqual(eq(Race.RaceStatus.IN_PROGRESS), any(LocalDate.class)))
+            .thenReturn(List.of(finished, stillRunning));
+        when(raceStageRepository.findByRaceIdOrderBySequenceAsc(any())).thenReturn(List.of());
+        when(checkpointRepository.findByRaceIdOrderByOrderIndexAsc(any())).thenReturn(List.of(finishWithCutoff(Duration.ofHours(6))));
         when(participantRepository.findByRaceIdAndStatusOrderByRegisteredAtAsc(
             eq(raceId), eq(Participant.ParticipantStatus.STARTED))).thenReturn(List.of());
 
         int completed = service.autoCompleteDueRaces();
 
         assertThat(completed).isEqualTo(1);
-        assertThat(due.getStatus()).isEqualTo(Race.RaceStatus.COMPLETED);
+        assertThat(finished.getStatus()).isEqualTo(Race.RaceStatus.COMPLETED);
+        assertThat(stillRunning.getStatus()).isEqualTo(Race.RaceStatus.IN_PROGRESS);
+        verify(participantRepository, never())
+            .findByRaceIdAndStatusOrderByRegisteredAtAsc(runningId, Participant.ParticipantStatus.STARTED);
+    }
+
+    private Race inProgressRace(UUID id, OffsetDateTime scheduledStartUtc) {
+        Race race = new Race();
+        race.setId(id);
+        race.setStatus(Race.RaceStatus.IN_PROGRESS);
+        race.setTimezone("UTC");
+        race.setRaceDate(scheduledStartUtc.toLocalDate());
+        race.setStartTime(scheduledStartUtc.toLocalTime());
+        return race;
+    }
+
+    private Checkpoint finishWithCutoff(Duration cutoff) {
+        Checkpoint checkpoint = new Checkpoint();
+        checkpoint.setCheckpointType(Checkpoint.CheckpointType.FINISH);
+        checkpoint.setCutoffTime(cutoff);
+        return checkpoint;
     }
 }

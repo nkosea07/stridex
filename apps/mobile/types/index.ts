@@ -326,11 +326,13 @@ export interface TrackingState {
   startTracking: (race: Race) => Promise<void>;
   stopTracking: () => void;
   addLocation: (location: GpsLocation) => void;
-  recordCheckpoint: (record: CheckpointRecord) => void;
+  recordCheckpoint: (record: CheckpointRecord) => Promise<void>;
   setBatterySaver: (enabled: boolean) => void;
   clearTrackingData: () => Promise<void>;
   rehydrateFromLocalDb: (raceId: string) => Promise<void>;
   recoverActiveTrackingSession: () => Promise<void>;
+  trackingStopNotice: { raceId: string; reason: 'not_registered' | 'not_permitted' } | null;
+  acknowledgeTrackingStop: () => Promise<void>;
 }
 
 export interface DeletionStatus {
