@@ -147,6 +147,17 @@ SOS alerts are persisted before durable staff notification jobs are staged. Coor
 - `POST /api/v1/races/{raceId}/participants/import`
 - `GET /api/v1/races/{raceId}/participants/export`
 
+Imports accept `.csv`, `.xlsx`, or `.xls` (15 MB). The upload is stored with its job in the
+database (`import_job_sources`, removed when the job finishes or permanently fails), so any backend
+instance can process or resume it; processing starts after the request commits. Jobs created
+before V49 still read their original local file. Headers match case-insensitively and ignore a UTF-8
+byte-order mark (`First Name`, `first_name`, and `firstName` are equivalent). Each row is validated
+the same way in preview and import (required names and email, email format, ISO `dateOfBirth`,
+`gender`, `status`, `isTrackingEnabled`, `categoryId`, field lengths) and duplicates are detected
+by email, bib number, and RFID tag within the race. Skipped rows are recorded with a reason on the
+job (`rowErrors`, first 200). Bib numbers and RFID tags are unique per race, not across races;
+manual create/update returns `BIB_NUMBER_IN_USE` or `RFID_TAG_IN_USE` (409) on a clash.
+
 Participant CSV and XLSX exports are capped at 10,000 participants per race for the pilot. Larger exports return `EXPORT_TOO_LARGE` (HTTP 400); export generation failures return `EXPORT_GENERATION_FAILED` (HTTP 503).
 - `POST /api/v1/races/{raceId}/register`
 - `GET /api/v1/participants/my-registrations`

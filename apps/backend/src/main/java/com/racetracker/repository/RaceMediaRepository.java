@@ -29,11 +29,19 @@ public interface RaceMediaRepository extends JpaRepository<RaceMedia, UUID> {
 
     long countByRaceIdAndStatus(UUID raceId, RaceMedia.MediaStatus status);
 
+    /**
+     * Media depicting the user (linked to one of their participant records) is personal data
+     * and is removed. Event media the user uploaded as staff is not, so it is kept and only the
+     * uploader reference is cleared ({@link #detachUploader}).
+     */
     @Modifying
     @Query("""
         delete from RaceMedia m
-        where m.uploadedBy = :userId
-           or m.participant.id in (select p.id from Participant p where p.user.id = :userId)
+        where m.participant.id in (select p.id from Participant p where p.user.id = :userId)
     """)
     int deletePersonalMediaForUser(@Param("userId") UUID userId);
+
+    @Modifying
+    @Query("update RaceMedia m set m.uploadedBy = null where m.uploadedBy = :userId")
+    int detachUploader(@Param("userId") UUID userId);
 }

@@ -70,6 +70,8 @@ public class MediaServiceImpl implements MediaService {
         RaceMedia.MediaType mediaType = contentType.toLowerCase(java.util.Locale.ROOT).startsWith("video/")
             ? RaceMedia.MediaType.VIDEO : RaceMedia.MediaType.IMAGE;
         String key = mediaStorage.store(file, raceId.toString());
+        java.util.List<String> storedKeys = new java.util.ArrayList<>(java.util.List.of(key));
+        afterRollback(() -> storedKeys.forEach(this::deleteQuietly));
 
         RaceMedia.RaceMediaBuilder builder = RaceMedia.builder()
             .race(race)
@@ -83,16 +85,18 @@ public class MediaServiceImpl implements MediaService {
             .uploadedBy(resolveUserId(actorEmail));
 
         if (mediaType == RaceMedia.MediaType.IMAGE) {
-            applyThumbnail(builder, file, raceId);
+            applyThumbnail(builder, file, raceId, storedKeys);
         }
 
         return toDto(mediaRepository.save(builder.build()));
     }
 
-    private void applyThumbnail(RaceMedia.RaceMediaBuilder builder, MultipartFile file, UUID raceId) {
+    private void applyThumbnail(RaceMedia.RaceMediaBuilder builder, MultipartFile file, UUID raceId,
+                                java.util.List<String> storedKeys) {
         try {
             thumbnailService.generate(file.getBytes()).ifPresent(thumbnail -> {
                 String thumbnailKey = mediaStorage.storeBytes(thumbnail.bytes(), ".jpg", raceId.toString());
+                storedKeys.add(thumbnailKey);
                 builder.thumbnailKey(thumbnailKey);
                 builder.width(thumbnail.originalWidth());
                 builder.height(thumbnail.originalHeight());
@@ -163,9 +167,51 @@ public class MediaServiceImpl implements MediaService {
     public void delete(UUID raceId, UUID mediaId) {
         RaceMedia media = mediaRepository.findByRaceIdAndId(raceId, mediaId)
             .orElseThrow(() -> new ResourceNotFoundException("Media not found"));
-        mediaStorage.delete(media.getStorageKey());
-        mediaStorage.delete(media.getThumbnailKey());
+        String storageKey = media.getStorageKey();
+        String thumbnailKey = media.getThumbnailKey();
         mediaRepository.delete(media);
+        afterCommit(() -> {
+            deleteQuietly(storageKey);
+            deleteQuietly(thumbnailKey);
+        });
+    }
+
+    private void deleteQuietly(String key) {
+        try {
+            mediaStorage.delete(key);
+        } catch (RuntimeException ex) {
+            org.slf4j.LoggerFactory.getLogger(MediaServiceImpl.class)
+                .error("Media object could not be deleted; manual cleanup required; errorType={}", ex.getClass().getSimpleName());
+        }
+    }
+
+    private void afterCommit(Runnable action) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+    }
+
+    private void afterRollback(Runnable action) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    if (status != STATUS_COMMITTED) {
+                        action.run();
+                    }
+                }
+            });
     }
 
     @Override

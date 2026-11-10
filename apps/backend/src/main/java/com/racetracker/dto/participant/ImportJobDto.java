@@ -15,6 +15,10 @@ public class ImportJobDto {
     private Integer successCount;
     private Integer errorCount;
     private String errorMessage;
+    private java.util.List<RowError> rowErrors = new java.util.ArrayList<>();
+
+    public record RowError(int row, String reason) {
+    }
     private OffsetDateTime createdAt;
     private OffsetDateTime startedAt;
     private OffsetDateTime completedAt;

@@ -28,6 +28,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ParticipantImportRowServiceTest {
 
+    @Mock com.racetracker.repository.RaceRepository raceRepository;
     @Mock ImportJobRepository jobRepository;
     @Mock ParticipantRepository participantRepository;
     @Mock ParticipantCredentialService credentialService;
@@ -42,7 +43,7 @@ class ParticipantImportRowServiceTest {
     @BeforeEach
     void setUp() {
         service = new ParticipantImportRowService(jobRepository, participantRepository, credentialService,
-            identityService);
+            identityService, raceRepository);
         race = new Race();
         race.setId(UUID.randomUUID());
         job = new ImportJob();
@@ -55,6 +56,18 @@ class ParticipantImportRowServiceTest {
         participant.setRace(race);
         participant.setEmail("runner@example.com");
         participant.setRfidTag("TAG-1");
+        org.mockito.Mockito.lenient().when(raceRepository.findByIdForUpdate(race.getId()))
+            .thenReturn(java.util.Optional.of(race));
+    }
+
+    @Test
+    void skippedRowsRecordTheirReasonUpToTheCap() {
+        String errors = null;
+        for (int row = 1; row <= ParticipantImportRowService.MAX_RECORDED_ROW_ERRORS + 5; row++) {
+            errors = ParticipantImportRowService.appendRowError(errors, row, "Invalid email");
+        }
+        assertThat(errors).startsWith("[{\"row\":1,\"reason\":\"Invalid email\"}");
+        assertThat(errors.split("\"row\"").length - 1).isEqualTo(ParticipantImportRowService.MAX_RECORDED_ROW_ERRORS);
     }
 
     @Test
@@ -88,7 +101,7 @@ class ParticipantImportRowServiceTest {
         verify(participantRepository, never()).save(any());
         verify(jobRepository, never()).save(any());
 
-        service.skipRow(jobId, 1, 1);
+        service.skipRow(jobId, 1, 1, "Invalid email");
         assertThat(job.getProcessedRows()).isEqualTo(1);
         assertThat(job.getErrorCount()).isEqualTo(1);
         verify(jobRepository).save(job);

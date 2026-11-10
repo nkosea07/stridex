@@ -82,7 +82,12 @@
     "resolve": "Resolve",
     "resolvedToast": "SOS alert resolved.",
     "acknowledgedToast": "SOS alert acknowledged.",
-    "updateFailed": "Could not update the SOS alert."
+    "updateFailed": "Could not update the SOS alert.",
+    "coordinates": "Location: {{latitude}}, {{longitude}}",
+    "openMap": "Open in map",
+    "resolveConfirmTitle": "Resolve this SOS alert?",
+    "resolveConfirmBody": "Resolving stops any staff notifications still waiting to be sent. Only resolve once the athlete has been reached.",
+    "alreadyResolved": "This SOS alert was already resolved."
   },
   "privacyOps": {
     "title": "Legacy media scope remediation",
@@ -143,5 +148,11 @@
   "addSponsor": "Add sponsor",
   "setupLoadFailed": "Could not load race setup.",
   "setupSaveFailed": "Could not save race setup.",
-  "setupDeleteFailed": "Could not delete the item."
+  "setupDeleteFailed": "Could not delete the item.",
+  "importRowErrorsSummary": "{{count}} skipped row(s) — show reasons",
+  "importRowError": "Row {{row}}: {{reason}}",
+  "importRowErrorsTruncated": "Only the first {{count}} skipped rows are listed.",
+  "importCompleted": "Import finished: {{success}} added, {{skipped}} skipped.",
+  "importFailed": "The import failed. Open the import history for details.",
+  "importSubmitting": "Starting import…"
 }

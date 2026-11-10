@@ -111,7 +111,7 @@ public class RaceCategoryServiceImpl implements RaceCategoryService {
         dto.setBibPrefix(category.getBibPrefix());
         dto.setMaxParticipants(category.getMaxParticipants());
         dto.setRegistrationFee(category.getRegistrationFee());
-        dto.setParticipantCount(category.getParticipants() != null ? category.getParticipants().size() : 0);
+        dto.setParticipantCount(category.getParticipantTotal() != null ? category.getParticipantTotal().intValue() : 0);
         return dto;
     }
 }

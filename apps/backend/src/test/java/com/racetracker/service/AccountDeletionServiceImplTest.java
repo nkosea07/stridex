@@ -30,6 +30,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AccountDeletionServiceImplTest {
 
+    @Mock com.racetracker.repository.PushDeviceRepository pushDeviceRepository;
     @Mock UserRepository userRepository;
     @Mock AuthTokenRepository authTokenRepository;
     @Mock PasswordEncoder passwordEncoder;
@@ -44,7 +45,7 @@ class AccountDeletionServiceImplTest {
     void setUp() {
         RaceTrackerProperties properties = new RaceTrackerProperties();
         properties.getPrivacy().setDeletionGraceDays(30);
-        service = new AccountDeletionServiceImpl(userRepository, authTokenRepository, passwordEncoder,
+        service = new AccountDeletionServiceImpl(userRepository, authTokenRepository, pushDeviceRepository, passwordEncoder,
             auditEventService, accountPrivacyService, properties, authEmailService);
     }
 
@@ -63,7 +64,7 @@ class AccountDeletionServiceImplTest {
     @Test
     void requestSchedulesDeletionAndDeactivates() {
         User user = user();
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("pw", "hash")).thenReturn(true);
 
         DeletionStatusDto status = service.request(userId, request("pw", "DELETE"));
@@ -73,12 +74,13 @@ class AccountDeletionServiceImplTest {
         assertThat(user.getIsActive()).isFalse();
         verify(userRepository).save(user);
         verify(authTokenRepository).deleteByUserId(userId);
+        verify(pushDeviceRepository).deleteByUserId(userId);
         verify(authEmailService).sendAccountDeletionScheduled(user, user.getDeletionScheduledFor());
     }
 
     @Test
     void requestRejectsWrongPassword() {
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user()));
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user()));
         when(passwordEncoder.matches("nope", "hash")).thenReturn(false);
 
         assertThatThrownBy(() -> service.request(userId, request("nope", "DELETE")))
@@ -87,7 +89,7 @@ class AccountDeletionServiceImplTest {
 
     @Test
     void requestRequiresConfirmationPhrase() {
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user()));
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user()));
         when(passwordEncoder.matches("pw", "hash")).thenReturn(true);
 
         assertThatThrownBy(() -> service.request(userId, request("pw", "yes")))

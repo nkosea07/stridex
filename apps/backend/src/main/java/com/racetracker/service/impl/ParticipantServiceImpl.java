@@ -42,7 +42,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -50,6 +49,8 @@ import java.util.stream.Stream;
 
 @Service
 public class ParticipantServiceImpl implements ParticipantService {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ParticipantServiceImpl.class);
 
     private static final int MAX_PARTICIPANT_EXPORT_ROWS = 10_000;
 
@@ -77,6 +78,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     private final RegistrationEmailService registrationEmailService;
     private final com.racetracker.service.NotificationService notificationService;
     private final ParticipantImportProcessor importProcessor;
+    private final ImportSourceStore importSourceStore;
     private final CapabilityAuthorizationService capabilityAuthorizationService;
     private final RaceAccessGuard raceAccessGuard;
     private final ParticipantIdentityService participantIdentityService;
@@ -99,7 +101,8 @@ public class ParticipantServiceImpl implements ParticipantService {
         ParticipantImportProcessor importProcessor,
         CapabilityAuthorizationService capabilityAuthorizationService,
         RaceAccessGuard raceAccessGuard,
-        ParticipantIdentityService participantIdentityService
+        ParticipantIdentityService participantIdentityService,
+        ImportSourceStore importSourceStore
     ) {
         this.participantRepository = participantRepository;
         this.raceRepository = raceRepository;
@@ -119,6 +122,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         this.capabilityAuthorizationService = capabilityAuthorizationService;
         this.raceAccessGuard = raceAccessGuard;
         this.participantIdentityService = participantIdentityService;
+        this.importSourceStore = importSourceStore;
     }
 
     @Override
@@ -163,6 +167,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         Race race = getRace(raceId);
         Participant participant = new Participant();
         participant.setRace(race);
+        assertIdentifiersAvailable(raceId, null, request.getBibNumber(), request.getRfidTag());
         applyCreateFields(participant, request);
 
         if (participant.getStatus() == null) {
@@ -185,6 +190,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Transactional
     public ParticipantDto update(UUID raceId, UUID participantId, ParticipantUpdateRequest request) {
         raceAccessGuard.assertCanManage(raceId);
+        assertIdentifiersAvailable(raceId, participantId, request.getBibNumber(), request.getRfidTag());
         Participant participant = getParticipant(raceId, participantId);
         applyUpdateFields(participant, request);
 
@@ -248,11 +254,12 @@ public class ParticipantServiceImpl implements ParticipantService {
     public com.racetracker.dto.participant.ImportPreviewDto previewImport(UUID raceId, MultipartFile file) {
         raceAccessGuard.assertCanManage(raceId);
         if (file == null || file.isEmpty()) {
-            throw new ApiException("An import file is required");
+            throw new ApiException("An import file is required", "IMPORT_FILE_REQUIRED");
         }
+        String fileName = sanitizedImportFileName(file.getOriginalFilename());
+        importExtension(fileName);
         try {
-            return importProcessor.preview(file.getInputStream(),
-                file.getOriginalFilename() == null ? "import.csv" : file.getOriginalFilename(), raceId);
+            return importProcessor.preview(file.getInputStream(), fileName, raceId);
         } catch (IOException ex) {
             throw new ApiException("Could not read import file");
         }
@@ -265,32 +272,61 @@ public class ParticipantServiceImpl implements ParticipantService {
         Race race = getRace(raceId);
         User user = resolveCurrentUser();
 
-        String originalFilename = file.getOriginalFilename();
-        String storageName = UUID.randomUUID() + "-" + originalFilename;
-        Path uploadPath = Paths.get(raceTrackerProperties.getStorage().getUploadDir());
-
+        if (file == null || file.isEmpty()) {
+            throw new ApiException("An import file is required", "IMPORT_FILE_REQUIRED");
+        }
+        String originalFilename = sanitizedImportFileName(file.getOriginalFilename());
+        importExtension(originalFilename);
+        byte[] content;
         try {
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
-            }
-            Files.copy(file.getInputStream(), uploadPath.resolve(storageName), StandardCopyOption.REPLACE_EXISTING);
+            content = file.getBytes();
         } catch (IOException e) {
-            throw new ApiException("Failed to store upload file: " + e.getMessage());
+            log.warn("Failed to read participant import upload; raceId={}, errorType={}", raceId, e.getClass().getSimpleName());
+            throw new ApiException("The import file could not be read", "IMPORT_FILE_UNREADABLE");
         }
 
-        ImportJob job = ImportJob.builder()
+        ImportJob job = importJobRepository.save(ImportJob.builder()
             .race(race)
             .createdBy(user)
             .fileName(originalFilename)
-            .sourcePath(uploadPath.resolve(storageName).toString())
             .status(ImportJob.JobStatus.PENDING)
-            .build();
+            .build());
+        importSourceStore.save(job.getId(), content);
 
-        job = importJobRepository.save(job);
-
-        importProcessor.process(job.getId());
+        UUID jobId = job.getId();
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        importProcessor.process(jobId);
+                    }
+                });
+        } else {
+            importProcessor.process(jobId);
+        }
 
         return importJobMapper.toDto(job);
+    }
+
+    private static final java.util.Set<String> IMPORT_EXTENSIONS = java.util.Set.of(".csv", ".xlsx", ".xls");
+
+    private String sanitizedImportFileName(String original) {
+        String name = original == null ? "" : original.replace('\\', '/');
+        name = name.substring(name.lastIndexOf('/') + 1).replaceAll("[\\p{Cntrl}]", "").trim();
+        if (name.isEmpty()) {
+            name = "import.csv";
+        }
+        return name.length() > 255 ? name.substring(name.length() - 255) : name;
+    }
+
+    private String importExtension(String fileName) {
+        int dot = fileName.lastIndexOf('.');
+        String extension = dot < 0 ? "" : fileName.substring(dot).toLowerCase(java.util.Locale.ROOT);
+        if (!IMPORT_EXTENSIONS.contains(extension)) {
+            throw new ApiException("Import files must be .csv, .xlsx, or .xls", "IMPORT_FILE_TYPE_UNSUPPORTED");
+        }
+        return extension;
     }
 
     @Override
@@ -955,6 +991,25 @@ public class ParticipantServiceImpl implements ParticipantService {
             ? participant.getRace().getName() : "your race";
     }
 
+    private void assertIdentifiersAvailable(UUID raceId, UUID participantId, String requestedBib, String requestedTag) {
+        String bib = blankToNull(requestedBib);
+        if (bib != null && (participantId == null
+            ? participantRepository.existsByRaceIdAndBibNumber(raceId, bib)
+            : participantRepository.existsByRaceIdAndBibNumberAndIdNot(raceId, bib, participantId))) {
+            throw new ConflictException("This bib number is already assigned in this race", "BIB_NUMBER_IN_USE");
+        }
+        String tag = blankToNull(requestedTag);
+        if (tag != null && (participantId == null
+            ? participantRepository.existsByRaceIdAndRfidTag(raceId, tag)
+            : participantRepository.existsByRaceIdAndRfidTagAndIdNot(raceId, tag, participantId))) {
+            throw new ConflictException("This RFID tag is already assigned in this race", "RFID_TAG_IN_USE");
+        }
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
     private void applyCreateFields(Participant participant, ParticipantCreateRequest request) {
         participant.setCategory(resolveCategoryNullable(participant.getRace().getId(), request.getCategoryId()));
         participant.setFirstName(request.getFirstName().trim());
@@ -964,8 +1019,8 @@ public class ParticipantServiceImpl implements ParticipantService {
         participant.setDateOfBirth(request.getDateOfBirth());
         participant.setGender(parseGenderNullable(request.getGender()));
         participant.setNationality(request.getNationality());
-        participant.setBibNumber(request.getBibNumber());
-        participant.setRfidTag(request.getRfidTag());
+        participant.setBibNumber(blankToNull(request.getBibNumber()));
+        participant.setRfidTag(blankToNull(request.getRfidTag()));
         participant.setEmergencyContactName(request.getEmergencyContactName());
         participant.setEmergencyContactPhone(request.getEmergencyContactPhone());
         participant.setEmergencyContactRelation(request.getEmergencyContactRelation());
@@ -987,8 +1042,8 @@ public class ParticipantServiceImpl implements ParticipantService {
         if (request.getDateOfBirth() != null) participant.setDateOfBirth(request.getDateOfBirth());
         if (request.getGender() != null) participant.setGender(parseGenderNullable(request.getGender()));
         if (request.getNationality() != null) participant.setNationality(request.getNationality());
-        if (request.getBibNumber() != null) participant.setBibNumber(request.getBibNumber());
-        if (request.getRfidTag() != null) participant.setRfidTag(request.getRfidTag());
+        if (request.getBibNumber() != null) participant.setBibNumber(blankToNull(request.getBibNumber()));
+        if (request.getRfidTag() != null) participant.setRfidTag(blankToNull(request.getRfidTag()));
         if (request.getStatus() != null) {
             Participant.ParticipantStatus newStatus = parseStatus(request.getStatus());
             participant.setStatus(newStatus);

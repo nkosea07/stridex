@@ -74,6 +74,8 @@ public class NotificationDispatcher {
                 channel.send(message);
                 safeRecord(notificationId, channel.channel(), NotificationDelivery.Status.SENT, null,
                     channel.lastProviderMessageId());
+            } catch (com.racetracker.notification.RecipientUnreachableException ex) {
+                safeRecord(notificationId, channel.channel(), NotificationDelivery.Status.SKIPPED, ex.getMessage(), null);
             } catch (Exception ex) {
                 log.warn("Notification channel {} failed for user {}: {}",
                     channel.channel(), message.userId(), ex.getMessage());

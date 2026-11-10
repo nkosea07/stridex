@@ -13,6 +13,8 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     @EntityGraph(attributePaths = {"user"})
     List<Notification> findByUserIdOrderByCreatedAtDesc(UUID userId);
 
+    List<Notification> findTop200ByUserIdOrderByCreatedAtDesc(UUID userId);
+
     @EntityGraph(attributePaths = {"user"})
     Optional<Notification> findByIdAndUserId(UUID id, UUID userId);
 
@@ -21,4 +23,10 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     long countByUserId(UUID userId);
 
     void deleteByUserId(UUID userId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query(
+        "delete from Notification n where n.subjectParticipantId in :participantIds")
+    int deleteBySubjectParticipantIds(@org.springframework.data.repository.query.Param("participantIds")
+                                      java.util.Collection<UUID> participantIds);
 }

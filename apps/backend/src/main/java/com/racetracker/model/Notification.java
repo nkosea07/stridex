@@ -43,6 +43,9 @@ public class Notification {
     @Column(name = "data", columnDefinition = "TEXT")
     private String data;
 
+    @Column(name = "subject_participant_id")
+    private UUID subjectParticipantId;
+
     @CreationTimestamp
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

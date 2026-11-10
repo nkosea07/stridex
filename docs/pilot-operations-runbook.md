@@ -14,7 +14,7 @@ timestamps, artifact checksums, and outcome for each rehearsal before pilot appr
    original HTTPS origin correctly for Secure refresh cookies and origin checks.
 3. Take a database backup and verify its checksum before applying migrations.
 4. Compare the live schema with the exact V1 baseline and all migrations through
-   the repository migration head (currently V44). Never run `baseline` or `repair` as a way to bypass a
+   the repository migration head (currently V49). Never run `baseline` or `repair` as a way to bypass a
    schema mismatch. Existing databases may be baselined at version 1 only after
    a DBA has recorded and approved a structural diff against `V1__baseline.sql`.
 5. Confirm global RFID simulation is disabled in production and any simulated
@@ -59,8 +59,13 @@ the source database during rehearsal.
 - Deploy compatible application images only after backup verification.
 - Run forward-only Flyway migrations; do not use destructive down scripts.
 - For an application rollback, deploy the prior image only if it is compatible
-  with the expanded schema. V37–V41, V43 (nullable `auth_tokens.family_id`), and V44 (RFID
-  processing attempt columns with defaults) are additive; a prior image must tolerate the new columns and tables. Refresh tokens issued
+  with the expanded schema. V37–V41, V43 (nullable `auth_tokens.family_id`), V44 (RFID
+  processing attempt columns with defaults), V45 (adds the `SKIPPED` SOS job status), and V46
+  (nullable `import_jobs.row_errors`) are additive. V47 narrows bib-number and RFID-tag
+  uniqueness from all races to each race; a prior image still runs, but it keeps rejecting
+  numbers that another race already uses. V48 (nullable `notifications.subject_participant_id`,
+  backfilled from notification data) and V49 (new `import_job_sources` table) are additive; a
+  prior image ignores the new column and still writes imports to local disk; a prior image must tolerate the new columns and tables. Refresh tokens issued
   by a prior image have no session family and are treated as single-token sessions. Otherwise restore the verified backup into an isolated
   database, validate it, and perform the approved cutover.
 - Preserve the failed image digest, application logs, migration history, and
@@ -92,7 +97,9 @@ the source database during rehearsal.
 
 ## Emergency SOS escalation
 
-- An alert is `QUEUED` until at least one staff notification is dispatched, `DISPATCHED` once a channel succeeds, and `ESCALATION_REQUIRED` when there are no eligible recipients or every job exhausts its attempts.
+- An alert is `QUEUED` while staff notifications are being attempted. It becomes `DISPATCHED` only when an external provider (push, email, or WhatsApp) accepted at least one staff notification and no delivery job exhausted its retries. An in-app notification alone does not count, because nobody may be looking at the console. Otherwise it becomes `ESCALATION_REQUIRED` (no eligible recipients, no external provider acceptance, or any job exhausting its attempts).
+- Staff without a registered device, email address, or phone for a channel are recorded as `SKIPPED` for that channel, not as delivered. Staff whose account was deactivated, is pending deletion, or was erased after the alert was raised are also skipped. If no channel can reach anyone, the alert escalates.
+- An athlete pressing SOS again within 10 minutes of an unresolved alert updates that alert's location instead of creating a new alert and re-notifying staff. A resolved alert cannot be reopened; a new SOS creates a new alert.
 - Alert on `emergency.notification.overdue` (pending more than two minutes), `emergency.notification.exhausted`, and `emergency.alert.escalation.required`. The race-day on-call operator owns escalation.
 - On escalation, contact assigned operational staff and the race director through the documented out-of-band phone tree. Record who was contacted and when. The race live-tracking console shows active SOS alerts for super admins, race admins, and officials. Do not mark the alert resolved until staff acknowledge it.
 - Staff acknowledge or resolve from the live-tracking SOS panel, or through `PATCH /api/v1/races/{raceId}/emergency/{alertId}` with `{"status":"ACKNOWLEDGED"}` or `{"status":"RESOLVED"}`. Resolving cancels pending notification jobs and removes the alert from the escalation and delivery gauges. Historical alerts marked `LEGACY_UNVERIFIED` are excluded from critical escalation counts but remain visible for review.

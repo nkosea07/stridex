@@ -568,7 +568,7 @@ export const participantsApi = {
     return fetchAuthenticated(buildContractPath(API_CONTRACT.endpoints.raceParticipantImport, { raceId }), {
       method: 'POST',
       body: formData,
-    }, 'CSV import failed').then(res => res.json())
+    }, 'CSV import failed').then(res => res.json() as Promise<ImportJob>)
   },
   
   exportParticipants: (raceId: string, format: 'csv' | 'xlsx' = 'csv') =>

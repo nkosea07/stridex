@@ -50,6 +50,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ParticipantServiceImplRegistrationTest {
 
+    @Mock com.racetracker.service.impl.ImportSourceStore importSourceStore;
     @Mock ParticipantRepository participantRepository;
     @Mock RaceRepository raceRepository;
     @Mock RaceCategoryRepository raceCategoryRepository;
@@ -83,7 +84,7 @@ class ParticipantServiceImplRegistrationTest {
             importJobRepository, participantMapper, importJobMapper, new RaceTrackerProperties(),
             participantCredentialService, teamRepository, registrationFieldRepository,
             registrationAnswerRepository, registrationEmailService, notificationService, importProcessor,
-            capabilityAuthorizationService, raceAccessGuard, participantIdentityService
+            capabilityAuthorizationService, raceAccessGuard, participantIdentityService, importSourceStore
         );
 
         user = User.builder()
@@ -516,5 +517,65 @@ class ParticipantServiceImplRegistrationTest {
         assertThatThrownBy(() -> service.reviewRegistration(raceId, participant.getId(), approval, email))
             .isInstanceOf(ApiException.class)
             .hasMessageContaining("cannot be reviewed");
+    }
+
+    @Test
+    void importUploadIsStoredWithTheJobNotOnLocalDisk(@org.junit.jupiter.api.io.TempDir java.nio.file.Path uploads) throws Exception {
+        RaceTrackerProperties properties = new RaceTrackerProperties();
+        properties.getStorage().setUploadDir(uploads.toString());
+        ParticipantServiceImpl uploadService = new ParticipantServiceImpl(
+            participantRepository, raceRepository, raceCategoryRepository, userRepository,
+            importJobRepository, participantMapper, importJobMapper, properties,
+            participantCredentialService, teamRepository, registrationFieldRepository,
+            registrationAnswerRepository, registrationEmailService, notificationService, importProcessor,
+            capabilityAuthorizationService, raceAccessGuard, participantIdentityService, importSourceStore);
+        when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+        when(importJobRepository.save(any(com.racetracker.model.ImportJob.class))).thenAnswer(inv -> {
+            com.racetracker.model.ImportJob job = inv.getArgument(0);
+            job.setId(UUID.randomUUID());
+            return job;
+        });
+        byte[] csv = "firstName,lastName,email\n".getBytes();
+        org.springframework.mock.web.MockMultipartFile upload = new org.springframework.mock.web.MockMultipartFile(
+            "file", "../../../escape/evil.csv", "text/csv", csv);
+
+        uploadService.importCsv(raceId, upload);
+
+        org.mockito.ArgumentCaptor<com.racetracker.model.ImportJob> saved =
+            org.mockito.ArgumentCaptor.forClass(com.racetracker.model.ImportJob.class);
+        verify(importJobRepository).save(saved.capture());
+        assertThat(saved.getValue().getSourcePath()).isNull();
+        assertThat(saved.getValue().getFileName()).isEqualTo("evil.csv");
+        verify(importSourceStore).save(saved.getValue().getId(), csv);
+        verify(importProcessor).process(saved.getValue().getId());
+        try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.walk(uploads)) {
+            assertThat(files.filter(java.nio.file.Files::isRegularFile)).isEmpty();
+        }
+    }
+
+    @Test
+    void importRejectsUnsupportedFileTypes() {
+        when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+        org.springframework.mock.web.MockMultipartFile upload = new org.springframework.mock.web.MockMultipartFile(
+            "file", "payload.sh", "text/plain", "echo".getBytes());
+
+        assertThatThrownBy(() -> service.importCsv(raceId, upload))
+            .isInstanceOf(com.racetracker.exception.ApiException.class)
+            .hasMessageContaining(".csv");
+        verifyNoInteractions(importProcessor);
+    }
+
+    @Test
+    void updateRejectsABibAlreadyUsedInTheSameRaceBeforeTouchingTheEntity() {
+        UUID participantId = UUID.randomUUID();
+        when(participantRepository.existsByRaceIdAndBibNumberAndIdNot(raceId, "101", participantId)).thenReturn(true);
+        com.racetracker.dto.participant.ParticipantUpdateRequest request = new com.racetracker.dto.participant.ParticipantUpdateRequest();
+        request.setBibNumber("101");
+
+        assertThatThrownBy(() -> service.update(raceId, participantId, request))
+            .isInstanceOf(com.racetracker.exception.ConflictException.class)
+            .hasMessageContaining("bib number");
+        verify(participantRepository, never()).save(any());
+        verify(participantRepository, never()).findByRaceIdAndId(raceId, participantId);
     }
 }

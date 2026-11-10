@@ -27,7 +27,7 @@ class ParticipantIdentityServiceTest {
         race.setNextBibSequence(7);
         when(races.findByIdForUpdate(race.getId())).thenReturn(Optional.of(race));
         when(participants.existsByAthleteCode(org.mockito.ArgumentMatchers.anyString())).thenReturn(false);
-        when(participants.existsByBibNumber("CT-0007")).thenReturn(false);
+        when(participants.existsByRaceIdAndBibNumber(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("CT-0007"))).thenReturn(false);
         Participant participant = new Participant();
         participant.setRace(race);
 

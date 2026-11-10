@@ -59,7 +59,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional(readOnly = true)
     public List<NotificationDto> getMyNotifications() {
         User user = resolveCurrentUser();
-        return notificationRepository.findByUserIdOrderByCreatedAtDesc(user.getId())
+        return notificationRepository.findTop200ByUserIdOrderByCreatedAtDesc(user.getId())
             .stream()
             .map(this::toDto)
             .toList();
@@ -86,7 +86,7 @@ public class NotificationServiceImpl implements NotificationService {
     public NotificationDto notify(UUID userId, Notification.NotificationType type, String title, String message,
                                   Map<String, String> data) {
         User user = userRepository.findById(userId).orElse(null);
-        if (user == null) {
+        if (user == null || user.getDeletedAt() != null) {
             return null;
         }
 
@@ -97,6 +97,7 @@ public class NotificationServiceImpl implements NotificationService {
         notification.setMessage(message);
         notification.setIsRead(false);
         notification.setData(serialize(data));
+        notification.setSubjectParticipantId(subjectParticipantId(data));
         Notification saved = notificationRepository.save(notification);
 
         Map<String, String> payload = data == null ? Map.of() : data;
@@ -104,6 +105,18 @@ public class NotificationServiceImpl implements NotificationService {
             userId, user.getEmail(), user.getPhone(), saved.getType(), title, message, payload));
 
         return toDto(saved);
+    }
+
+    private UUID subjectParticipantId(Map<String, String> data) {
+        String value = data == null ? null : data.get("participantId");
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     @Override
@@ -133,7 +146,8 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional
-    public void registerDevice(String token, String platform) {        if (token == null || token.isBlank()) {
+    public void registerDevice(String token, String platform) {
+        if (token == null || token.isBlank()) {
             throw new com.racetracker.exception.ApiException("Device token is required");
         }
         User user = resolveCurrentUser();
@@ -148,9 +162,9 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional
     public void unregisterDevice(String token) {
-        resolveCurrentUser();
+        User user = resolveCurrentUser();
         if (token != null && !token.isBlank()) {
-            pushDeviceRepository.deleteByToken(token);
+            pushDeviceRepository.deleteByTokenAndUserId(token, user.getId());
         }
     }
 

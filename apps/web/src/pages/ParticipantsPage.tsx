@@ -39,6 +39,9 @@ const paymentColors: Record<string, string> = {
   REFUNDED: 'bg-info/20 text-info',
 }
 
+const IMPORT_POLL_INTERVAL_MS = 2000
+const IMPORT_POLL_MAX_ATTEMPTS = 150
+
 export function ParticipantsPage() {
   const { raceId } = useParams()
   const { user } = useAuth()
@@ -56,6 +59,8 @@ export function ParticipantsPage() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [preview, setPreview] = useState<import('@/types').ImportPreview | null>(null)
+  const [importSubmitting, setImportSubmitting] = useState(false)
+  const importPollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [newParticipant, setNewParticipant] = useState({
     firstName: '',
     lastName: '',
@@ -196,17 +201,44 @@ export function ParticipantsPage() {
     }
   }
 
+  const watchImportJob = (jobId: string, attempt = 0) => {
+    if (!raceId || attempt > IMPORT_POLL_MAX_ATTEMPTS) return
+    importPollRef.current = setTimeout(async () => {
+      const job = await participantsApi.getImportJob(raceId, jobId).catch(() => null)
+      if (job && (job.status === 'COMPLETED' || job.status === 'FAILED')) {
+        importPollRef.current = null
+        void loadImportJobs()
+        if (job.status === 'COMPLETED') {
+          void loadParticipants()
+          toast.success(t('common:importCompleted', { success: job.successCount ?? 0, skipped: job.errorCount ?? 0 }))
+        } else {
+          toast.error(t('common:importFailed'))
+        }
+        return
+      }
+      watchImportJob(jobId, attempt + 1)
+    }, IMPORT_POLL_INTERVAL_MS)
+  }
+
+  useEffect(() => () => {
+    if (importPollRef.current) clearTimeout(importPollRef.current)
+  }, [])
+
   const confirmImport = async () => {
-    if (!raceId || !previewFileRef.current) return
+    if (!raceId || !previewFileRef.current || importSubmitting) return
+    setImportSubmitting(true)
     try {
-      await participantsApi.importCsv(raceId, previewFileRef.current)
+      const job = await participantsApi.importCsv(raceId, previewFileRef.current)
       toast.success(t('common:importStarted'))
       setPreviewOpen(false)
       setPreview(null)
       previewFileRef.current = null
       void loadImportJobs()
+      if (job?.id) watchImportJob(job.id)
     } catch {
       toast.error(t('common:importStartFailed'))
+    } finally {
+      setImportSubmitting(false)
     }
   }
 
@@ -655,6 +687,25 @@ export function ParticipantsPage() {
                     </TableCell>
                     <TableCell className="text-xs">
                       <span className="text-success">{job.successCount}</span> / <span className="text-destructive">{job.errorCount}</span>
+                      {job.rowErrors && job.rowErrors.length > 0 && (
+                        <details className="mt-1">
+                          <summary className="cursor-pointer text-muted-foreground">
+                            {t('common:importRowErrorsSummary', { count: job.errorCount ?? job.rowErrors.length })}
+                          </summary>
+                          <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
+                            {job.rowErrors.map((rowError) => (
+                              <li key={`${job.id}-${rowError.row}`}>
+                                {t('common:importRowError', { row: rowError.row, reason: rowError.reason })}
+                              </li>
+                            ))}
+                          </ul>
+                          {(job.errorCount ?? 0) > job.rowErrors.length && (
+                            <p className="mt-1 text-muted-foreground">
+                              {t('common:importRowErrorsTruncated', { count: job.rowErrors.length })}
+                            </p>
+                          )}
+                        </details>
+                      )}
                     </TableCell>
                     <TableCell className="text-xs">
                       {new Date(job.createdAt).toLocaleString()}
@@ -906,8 +957,8 @@ export function ParticipantsPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setPreviewOpen(false)}>{t('common:actions.cancel')}</Button>
-            <Button disabled={!preview || preview.validRows === 0} onClick={() => void confirmImport()}>
-              {t('common:importPreviewConfirm')}
+            <Button disabled={!preview || preview.validRows === 0 || importSubmitting} onClick={() => void confirmImport()}>
+              {importSubmitting ? t('common:importSubmitting') : t('common:importPreviewConfirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

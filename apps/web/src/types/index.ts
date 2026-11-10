@@ -246,9 +246,15 @@ export interface ImportJob {
   successCount?: number
   errorCount?: number
   errorMessage?: string
+  rowErrors?: ImportRowError[]
   createdAt: string
   startedAt?: string
   completedAt?: string
+}
+
+export interface ImportRowError {
+  row: number
+  reason: string
 }
 
 export type CheckpointType = 'START' | 'INTERMEDIATE' | 'WATER_STATION' | 'MEDICAL' | 'FINISH'

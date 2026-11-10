@@ -186,6 +186,9 @@ public class Race {
     @OneToMany(mappedBy = "race", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Participant> participants = new HashSet<>();
 
+    @org.hibernate.annotations.Formula("(select count(*) from participants p where p.race_id = id)")
+    private Long participantTotal;
+
     @ManyToMany
     @JoinTable(
         name = "race_admins",

@@ -64,10 +64,10 @@ public class Participant {
     @Column(name = "athlete_code", nullable = false, unique = true, length = 24)
     private String athleteCode;
 
-    @Column(name = "bib_number", unique = true)
+    @Column(name = "bib_number")
     private String bibNumber;
 
-    @Column(name = "rfid_tag", unique = true)
+    @Column(name = "rfid_tag")
     private String rfidTag;
 
     @Enumerated(EnumType.STRING)

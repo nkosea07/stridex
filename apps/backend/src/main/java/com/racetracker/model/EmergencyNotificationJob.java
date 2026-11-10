@@ -12,7 +12,7 @@ import java.util.UUID;
 @Getter
 @Setter
 public class EmergencyNotificationJob {
-    public enum Status { PENDING, PROCESSING, DISPATCHED, EXHAUSTED }
+    public enum Status { PENDING, PROCESSING, DISPATCHED, EXHAUSTED, SKIPPED }
 
     @Id
     private UUID id;

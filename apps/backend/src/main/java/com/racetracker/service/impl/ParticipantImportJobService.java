@@ -15,9 +15,11 @@ public class ParticipantImportJobService {
     private static final int MAX_ATTEMPTS = 3;
 
     private final ImportJobRepository repository;
+    private final ImportSourceStore sourceStore;
 
-    public ParticipantImportJobService(ImportJobRepository repository) {
+    public ParticipantImportJobService(ImportJobRepository repository, ImportSourceStore sourceStore) {
         this.repository = repository;
+        this.sourceStore = sourceStore;
     }
 
     @Transactional
@@ -27,7 +29,7 @@ public class ParticipantImportJobService {
             return Optional.empty();
         }
         ImportJob job = candidate.get();
-        if (job.getSourcePath() == null || job.getSourcePath().isBlank()
+        if (!sourceStore.hasSource(job)
             || (job.getStatus() != ImportJob.JobStatus.PENDING
                 && (job.getStatus() != ImportJob.JobStatus.PROCESSING
                     || (job.getUpdatedAt() != null && job.getUpdatedAt().isAfter(staleBefore))))) {
@@ -38,6 +40,7 @@ public class ParticipantImportJobService {
             job.setCompletedAt(OffsetDateTime.now());
             job.setErrorMessage("Import retry limit exhausted");
             repository.saveAndFlush(job);
+            sourceStore.delete(jobId);
             return Optional.empty();
         }
         int attempt = count(job.getAttempts()) + 1;
@@ -76,6 +79,7 @@ public class ParticipantImportJobService {
         job.setStatus(ImportJob.JobStatus.COMPLETED);
         job.setCompletedAt(OffsetDateTime.now());
         repository.save(job);
+        sourceStore.delete(jobId);
         return true;
     }
 
@@ -88,6 +92,7 @@ public class ParticipantImportJobService {
         if (attempt >= MAX_ATTEMPTS) {
             job.setStatus(ImportJob.JobStatus.FAILED);
             job.setCompletedAt(OffsetDateTime.now());
+            sourceStore.delete(jobId);
         } else {
             job.setStatus(ImportJob.JobStatus.PENDING);
         }

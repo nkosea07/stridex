@@ -38,31 +38,37 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public DashboardStatsDto getStats() {
-        long totalRaces = raceRepository.count();
-
-        long activeRaces = raceRepository.countByStatusIn(List.of(
-            Race.RaceStatus.IN_PROGRESS,
-            Race.RaceStatus.REGISTRATION_OPEN
-        ));
-
-        long totalParticipants = participantRepository.count();
-
         OffsetDateTime liveSince = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(10);
-        long liveTracking = gpsLocationRepository.countDistinctParticipantsActiveSince(liveSince);
-
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        long upcomingRaces = raceRepository.countByRaceDateBetween(today.plusDays(1), today.plusDays(30));
-
         OffsetDateTime dayStart = today.atStartOfDay().atOffset(ZoneOffset.UTC);
-        long completedToday = checkpointRecordRepository.countFinishRecordsSince(dayStart);
+        List<Race.RaceStatus> activeStatuses = List.of(Race.RaceStatus.IN_PROGRESS, Race.RaceStatus.REGISTRATION_OPEN);
 
+        org.springframework.security.core.Authentication authentication =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        boolean superAdmin = authentication != null && authentication.getAuthorities().stream()
+            .anyMatch(authority -> "ROLE_SUPER_ADMIN".equals(authority.getAuthority()));
+        if (superAdmin) {
+            return new DashboardStatsDto(
+                raceRepository.count(),
+                raceRepository.countByStatusIn(activeStatuses),
+                participantRepository.count(),
+                gpsLocationRepository.countDistinctParticipantsActiveSince(liveSince),
+                raceRepository.countByRaceDateBetween(today.plusDays(1), today.plusDays(30)),
+                checkpointRecordRepository.countFinishRecordsSince(dayStart)
+            );
+        }
+
+        if (authentication == null || authentication.getName() == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Dashboard access requires authentication");
+        }
+        String email = authentication.getName();
         return new DashboardStatsDto(
-            totalRaces,
-            activeRaces,
-            totalParticipants,
-            liveTracking,
-            upcomingRaces,
-            completedToday
+            raceRepository.countManagedBy(email),
+            raceRepository.countManagedByStatusIn(email, activeStatuses),
+            participantRepository.countInRacesManagedBy(email),
+            gpsLocationRepository.countDistinctParticipantsActiveSinceInRacesManagedBy(email, liveSince),
+            raceRepository.countManagedByRaceDateBetween(email, today.plusDays(1), today.plusDays(30)),
+            checkpointRecordRepository.countFinishRecordsSinceInRacesManagedBy(email, dayStart)
         );
     }
 }

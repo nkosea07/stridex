@@ -33,6 +33,9 @@ public interface EmergencyNotificationJobRepository extends JpaRepository<Emerge
 
     long countByAlertIdAndStatus(UUID alertId, EmergencyNotificationJob.Status status);
 
+    long countByAlertIdAndStatusAndChannelNot(UUID alertId, EmergencyNotificationJob.Status status,
+                                              com.racetracker.model.NotificationDelivery.Channel channel);
+
     long countByAlertIdAndStatusIn(UUID alertId, Collection<EmergencyNotificationJob.Status> statuses);
 
     long countByStatus(EmergencyNotificationJob.Status status);

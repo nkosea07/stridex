@@ -34,6 +34,9 @@ public class WhatsAppNotificationChannel implements NotificationChannel {
 
     @Override
     public void send(NotificationMessage message) {
+        if (message.recipientPhone() == null || message.recipientPhone().isBlank()) {
+            throw new com.racetracker.notification.RecipientUnreachableException("no phone number");
+        }
         RaceTrackerProperties.Notifications notifications = properties.getNotifications();
         Map<String, String> data = message.data() == null ? Map.of() : message.data();
         String template = valueOr(data.get("whatsappTemplate"), notifications.getWhatsappDefaultTemplate());

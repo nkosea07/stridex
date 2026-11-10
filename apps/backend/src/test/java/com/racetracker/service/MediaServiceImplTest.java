@@ -147,4 +147,50 @@ class MediaServiceImplTest {
         assertThatThrownBy(() -> service.content(raceId, media.getId(), true))
             .isInstanceOf(com.racetracker.exception.ResourceNotFoundException.class);
     }
+
+    private long storedFiles() throws java.io.IOException {
+        try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(tempDir)) {
+            return files.filter(java.nio.file.Files::isRegularFile).count();
+        }
+    }
+
+    @Test
+    void rolledBackUploadRemovesTheStoredObject() throws Exception {
+        when(raceRepository.findById(raceId)).thenReturn(Optional.of(race()));
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.upload(raceId, new MockMultipartFile("file", "photo.png", "image/png", new byte[]{1, 2, 3}),
+                null, null, null);
+            assertThat(storedFiles()).isEqualTo(1);
+
+            for (var sync : org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()) {
+                sync.afterCompletion(org.springframework.transaction.support.TransactionSynchronization.STATUS_ROLLED_BACK);
+            }
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+        assertThat(storedFiles()).isZero();
+    }
+
+    @Test
+    void deletedMediaObjectsAreRemovedOnlyAfterCommit() throws Exception {
+        when(raceRepository.findById(raceId)).thenReturn(Optional.of(race()));
+        MediaDto uploaded = service.upload(raceId,
+            new MockMultipartFile("file", "photo.png", "image/png", new byte[]{1, 2, 3}), null, null, null);
+        org.mockito.ArgumentCaptor<RaceMedia> saved = org.mockito.ArgumentCaptor.forClass(RaceMedia.class);
+        org.mockito.Mockito.verify(mediaRepository).save(saved.capture());
+        when(mediaRepository.findByRaceIdAndId(raceId, uploaded.getId())).thenReturn(Optional.of(saved.getValue()));
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.delete(raceId, uploaded.getId());
+            assertThat(storedFiles()).as("objects survive until the row deletion commits").isEqualTo(1);
+            for (var sync : org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()) {
+                sync.afterCommit();
+            }
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+        assertThat(storedFiles()).isZero();
+    }
 }

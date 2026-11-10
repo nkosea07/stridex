@@ -655,12 +655,13 @@ export function SettingsPage() {
                             ? t('nav:grantedOn', { date: formatDate(consent.dataProcessingConsentAt) })
                             : '',
                         })}
+                        {consent?.dataProcessingConsentAt != null && ` ${t('nav:dataProcessingWithdrawHint')}`}
                       </p>
                     </div>
                     <Switch
                       id="consentProcessing"
                       checked={consent?.dataProcessingConsentAt != null}
-                      disabled={consentSaving || !consent}
+                      disabled={consentSaving || !consent || consent.dataProcessingConsentAt != null}
                       onCheckedChange={(checked) => void handleConsentChange({ dataProcessingConsent: checked })}
                     />
                   </div>

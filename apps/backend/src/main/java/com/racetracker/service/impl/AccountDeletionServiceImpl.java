@@ -9,6 +9,7 @@ import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.model.User;
 import com.racetracker.repository.AuthTokenRepository;
+import com.racetracker.repository.PushDeviceRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.service.AccountDeletionService;
 import com.racetracker.service.AccountPrivacyService;
@@ -37,6 +38,7 @@ public class AccountDeletionServiceImpl implements AccountDeletionService {
 
     private final UserRepository userRepository;
     private final AuthTokenRepository authTokenRepository;
+    private final PushDeviceRepository pushDeviceRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditEventService auditEventService;
     private final AccountPrivacyService accountPrivacyService;
@@ -46,6 +48,7 @@ public class AccountDeletionServiceImpl implements AccountDeletionService {
     public AccountDeletionServiceImpl(
         UserRepository userRepository,
         AuthTokenRepository authTokenRepository,
+        PushDeviceRepository pushDeviceRepository,
         PasswordEncoder passwordEncoder,
         AuditEventService auditEventService,
         AccountPrivacyService accountPrivacyService,
@@ -54,6 +57,7 @@ public class AccountDeletionServiceImpl implements AccountDeletionService {
     ) {
         this.userRepository = userRepository;
         this.authTokenRepository = authTokenRepository;
+        this.pushDeviceRepository = pushDeviceRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditEventService = auditEventService;
         this.accountPrivacyService = accountPrivacyService;
@@ -64,7 +68,8 @@ public class AccountDeletionServiceImpl implements AccountDeletionService {
     @Override
     @Transactional
     public DeletionStatusDto request(UUID userId, DeleteAccountRequest request) {
-        User user = requireUser(userId);
+        User user = userRepository.findByIdForUpdate(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         if (user.getDeletedAt() != null) {
             throw new ConflictException("This account has already been deleted");
         }
@@ -91,6 +96,7 @@ public class AccountDeletionServiceImpl implements AccountDeletionService {
         userRepository.save(user);
 
         authTokenRepository.deleteByUserId(userId);
+        pushDeviceRepository.deleteByUserId(userId);
 
         auditEventService.recordInCurrentTransaction("ACCOUNT_DELETION_REQUESTED", userId, "USER", userId.toString(),
             "SUCCESS", Map.of("scheduledFor", user.getDeletionScheduledFor().toString()));

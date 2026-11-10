@@ -22,7 +22,9 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     boolean existsByRaceIdAndEmailIgnoreCase(UUID raceId, String email);
 
-    boolean existsByRfidTag(String rfidTag);
+    boolean existsByRaceIdAndRfidTag(UUID raceId, String rfidTag);
+
+    boolean existsByRaceIdAndRfidTagAndIdNot(UUID raceId, String rfidTag, UUID id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Participant p where p.id = :id")
@@ -229,11 +231,22 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     boolean existsByUserIdAndStatusIn(UUID userId, Collection<Participant.ParticipantStatus> statuses);
 
-    boolean existsByBibNumber(String bibNumber);
+    boolean existsByRaceIdAndBibNumber(UUID raceId, String bibNumber);
+
+    boolean existsByRaceIdAndBibNumberAndIdNot(UUID raceId, String bibNumber, UUID id);
 
     boolean existsByAthleteCode(String athleteCode);
 
     long countByRaceId(UUID raceId);
+
+    @Query("""
+        select count(p) from Participant p
+        where p.race.id in (select managed.id from Race managed
+              left join managed.createdBy owner
+              left join managed.admins assignedAdmin
+              where lower(owner.email) = lower(:email) or lower(assignedAdmin.email) = lower(:email))
+        """)
+    long countInRacesManagedBy(@Param("email") String email);
 
     long countByRaceIdAndStatusIn(UUID raceId, Collection<Participant.ParticipantStatus> statuses);
 
@@ -294,8 +307,11 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
     List<Object[]> countByAgeGroup(@Param("raceId") UUID raceId);
 
     @Query(value = """
-        SELECT to_char(date_trunc('day', p.registered_at), 'YYYY-MM-DD') AS day, count(*)
+        SELECT to_char(date_trunc('day', p.registered_at AT TIME ZONE coalesce(tz.name, 'UTC')), 'YYYY-MM-DD') AS day,
+               count(*)
         FROM participants p
+        JOIN races r ON r.id = p.race_id
+        LEFT JOIN pg_timezone_names tz ON tz.name = r.timezone
         WHERE p.race_id = :raceId
           AND p.registered_at >= now() - make_interval(days => :days)
         GROUP BY day

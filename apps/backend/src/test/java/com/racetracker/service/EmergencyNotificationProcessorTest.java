@@ -68,7 +68,7 @@ class EmergencyNotificationProcessorTest {
             EmergencyNotificationJob.Status.PENDING, EmergencyNotificationJob.Status.PROCESSING))).thenReturn(0L);
         org.mockito.Mockito.doReturn(0L).when(jobRepository)
             .countByAlertIdAndStatus(alertId, EmergencyNotificationJob.Status.EXHAUSTED);
-        when(jobRepository.countByAlertIdAndStatus(alertId, EmergencyNotificationJob.Status.DISPATCHED)).thenReturn(1L);
+        when(jobRepository.countByAlertIdAndStatusAndChannelNot(alertId, EmergencyNotificationJob.Status.DISPATCHED, NotificationDelivery.Channel.IN_APP)).thenReturn(1L);
         when(alertRepository.findById(alertId)).thenReturn(Optional.of(job.getAlert()));
 
         processor.processBatch();
@@ -101,7 +101,7 @@ class EmergencyNotificationProcessorTest {
         when(jobRepository.findClaimableIds(any(), any(Integer.class))).thenReturn(List.of(retry.getId()));
         org.mockito.Mockito.doReturn(1L).when(jobRepository)
             .countByAlertIdAndStatus(alertId, EmergencyNotificationJob.Status.EXHAUSTED);
-        when(jobRepository.countByAlertIdAndStatus(alertId, EmergencyNotificationJob.Status.DISPATCHED)).thenReturn(0L);
+        when(jobRepository.countByAlertIdAndStatusAndChannelNot(alertId, EmergencyNotificationJob.Status.DISPATCHED, NotificationDelivery.Channel.IN_APP)).thenReturn(0L);
         when(alertRepository.findById(alertId)).thenReturn(Optional.of(retry.getAlert()));
 
         processor.processBatch();
@@ -117,7 +117,7 @@ class EmergencyNotificationProcessorTest {
         when(jobRepository.findClaimableIds(any(), any(Integer.class))).thenReturn(List.of(job.getId()));
         when(jobRepository.findByIdForUpdate(job.getId())).thenReturn(Optional.of(job));
         when(jobRepository.countByAlertIdAndStatus(alertId, EmergencyNotificationJob.Status.EXHAUSTED)).thenReturn(1L);
-        when(jobRepository.countByAlertIdAndStatus(alertId, EmergencyNotificationJob.Status.DISPATCHED)).thenReturn(1L);
+        when(jobRepository.countByAlertIdAndStatusAndChannelNot(alertId, EmergencyNotificationJob.Status.DISPATCHED, NotificationDelivery.Channel.IN_APP)).thenReturn(1L);
         when(alertRepository.findById(alertId)).thenReturn(Optional.of(job.getAlert()));
         pushChannel.fail = true;
 
@@ -137,7 +137,7 @@ class EmergencyNotificationProcessorTest {
             EmergencyNotificationJob.Status.PENDING, EmergencyNotificationJob.Status.PROCESSING))).thenReturn(1L);
         when(jobRepository.countByAlertIdAndStatus(alertId, EmergencyNotificationJob.Status.EXHAUSTED))
             .thenReturn(1L);
-        when(jobRepository.countByAlertIdAndStatus(alertId, EmergencyNotificationJob.Status.DISPATCHED))
+        when(jobRepository.countByAlertIdAndStatusAndChannelNot(alertId, EmergencyNotificationJob.Status.DISPATCHED, NotificationDelivery.Channel.IN_APP))
             .thenReturn(1L);
         when(alertRepository.findById(alertId)).thenReturn(Optional.of(job.getAlert()));
         pushChannel.fail = true;
@@ -167,19 +167,64 @@ class EmergencyNotificationProcessorTest {
             EmergencyNotificationJob.Status.PENDING, EmergencyNotificationJob.Status.PROCESSING))).thenReturn(0L);
         org.mockito.Mockito.doReturn(0L).when(jobRepository)
             .countByAlertIdAndStatus(alertId, EmergencyNotificationJob.Status.EXHAUSTED);
-        when(jobRepository.countByAlertIdAndStatus(alertId, EmergencyNotificationJob.Status.DISPATCHED)).thenReturn(1L);
+        when(jobRepository.countByAlertIdAndStatusAndChannelNot(alertId, EmergencyNotificationJob.Status.DISPATCHED, NotificationDelivery.Channel.IN_APP)).thenReturn(0L);
         when(alertRepository.findById(alertId)).thenReturn(Optional.of(job.getAlert()));
 
         processor.processBatch();
 
         assertThat(job.getStatus()).isEqualTo(EmergencyNotificationJob.Status.DISPATCHED);
+        assertThat(job.getAlert().getDeliveryStatus())
+            .as("an in-app row alone is not evidence that staff were reached")
+            .isEqualTo(EmergencyAlert.DeliveryStatus.ESCALATION_REQUIRED);
         verify(notificationRepository).save(any(Notification.class));
         verify(trackingLivePublisher).publishUserAlert(any(), any(NotificationDto.class));
         assertThat(pushChannel.sent).isZero();
     }
 
+    @Test
+    void unreachableRecipientIsSkippedNotReportedAsDispatched() {
+        EmergencyNotificationJob job = job(NotificationDelivery.Channel.PUSH, 0);
+        pushChannel.unreachable = true;
+        when(jobRepository.findClaimableIds(any(), any(Integer.class))).thenReturn(List.of(job.getId()));
+        when(jobRepository.findByIdForUpdate(job.getId())).thenReturn(Optional.of(job));
+        when(jobRepository.countByAlertIdAndStatusIn(alertId, List.of(
+            EmergencyNotificationJob.Status.PENDING, EmergencyNotificationJob.Status.PROCESSING))).thenReturn(0L);
+        org.mockito.Mockito.doReturn(0L).when(jobRepository)
+            .countByAlertIdAndStatus(alertId, EmergencyNotificationJob.Status.EXHAUSTED);
+        when(jobRepository.countByAlertIdAndStatusAndChannelNot(alertId, EmergencyNotificationJob.Status.DISPATCHED,
+            NotificationDelivery.Channel.IN_APP)).thenReturn(0L);
+        when(alertRepository.findById(alertId)).thenReturn(Optional.of(job.getAlert()));
+
+        processor.processBatch();
+
+        assertThat(job.getStatus()).isEqualTo(EmergencyNotificationJob.Status.SKIPPED);
+        assertThat(job.getAlert().getDeliveryStatus()).isEqualTo(EmergencyAlert.DeliveryStatus.ESCALATION_REQUIRED);
+    }
+
+    @Test
+    void erasedStaffRecipientIsSkippedInsteadOfEmailedAtAPlaceholderAddress() {
+        EmergencyNotificationJob job = job(NotificationDelivery.Channel.PUSH, 0);
+        job.getRecipient().setDeletedAt(java.time.OffsetDateTime.now().minusDays(1));
+        job.getRecipient().setEmail("deleted+" + recipientId + "@deleted.local");
+        when(jobRepository.findClaimableIds(any(), any(Integer.class))).thenReturn(List.of(job.getId()));
+        when(jobRepository.findByIdForUpdate(job.getId())).thenReturn(Optional.of(job));
+        when(jobRepository.countByAlertIdAndStatusIn(alertId, List.of(
+            EmergencyNotificationJob.Status.PENDING, EmergencyNotificationJob.Status.PROCESSING))).thenReturn(0L);
+        org.mockito.Mockito.doReturn(0L).when(jobRepository)
+            .countByAlertIdAndStatus(alertId, EmergencyNotificationJob.Status.EXHAUSTED);
+        when(jobRepository.countByAlertIdAndStatusAndChannelNot(alertId, EmergencyNotificationJob.Status.DISPATCHED,
+            NotificationDelivery.Channel.IN_APP)).thenReturn(0L);
+        when(alertRepository.findById(alertId)).thenReturn(Optional.of(job.getAlert()));
+
+        processor.processBatch();
+
+        assertThat(pushChannel.sent).isZero();
+        assertThat(job.getStatus()).isEqualTo(EmergencyNotificationJob.Status.SKIPPED);
+        assertThat(job.getAlert().getDeliveryStatus()).isEqualTo(EmergencyAlert.DeliveryStatus.ESCALATION_REQUIRED);
+    }
+
     private EmergencyNotificationJob job(NotificationDelivery.Channel channel, int attempts) {
-        User recipient = User.builder().id(recipientId).email("staff@example.com").phone("0700").build();
+        User recipient = User.builder().id(recipientId).email("staff@example.com").phone("0700").isActive(true).build();
         Race race = new Race();
         race.setId(raceId);
         Participant participant = Participant.builder().id(UUID.randomUUID()).race(race)
@@ -202,6 +247,7 @@ class EmergencyNotificationProcessorTest {
 
     private static class TestChannel implements NotificationChannel {
         private boolean fail;
+        private boolean unreachable;
         private int sent;
 
         @Override
@@ -216,6 +262,9 @@ class EmergencyNotificationProcessorTest {
 
         @Override
         public void send(NotificationMessage message) {
+            if (unreachable) {
+                throw new com.racetracker.notification.RecipientUnreachableException("no registered push devices");
+            }
             if (fail) {
                 throw new IllegalStateException("provider down");
             }

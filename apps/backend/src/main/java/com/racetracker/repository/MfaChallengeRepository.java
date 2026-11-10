@@ -11,6 +11,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface MfaChallengeRepository extends JpaRepository<MfaChallenge, UUID> {
+    void deleteByUserId(UUID userId);
+
 
     Optional<MfaChallenge> findByIdAndUserId(UUID id, UUID userId);
 

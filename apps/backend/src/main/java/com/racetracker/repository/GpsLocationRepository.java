@@ -41,6 +41,17 @@ public interface GpsLocationRepository extends JpaRepository<GpsLocation, UUID> 
     @Query("select count(distinct g.participant.id) from GpsLocation g where g.recordedAt >= :since")
     long countDistinctParticipantsActiveSince(@Param("since") OffsetDateTime since);
 
+    @Query("""
+        select count(distinct g.participant.id) from GpsLocation g
+        where g.recordedAt >= :since
+          and g.race.id in (select managed.id from Race managed
+              left join managed.createdBy owner
+              left join managed.admins assignedAdmin
+              where lower(owner.email) = lower(:email) or lower(assignedAdmin.email) = lower(:email))
+        """)
+    long countDistinctParticipantsActiveSinceInRacesManagedBy(@Param("email") String email,
+                                                              @Param("since") OffsetDateTime since);
+
     @Query("select g.participant.id, count(g) from GpsLocation g where g.race.id = :raceId and g.filtered = true group by g.participant.id")
     List<Object[]> countFilteredByRace(@Param("raceId") UUID raceId);
 

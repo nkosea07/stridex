@@ -44,7 +44,8 @@ class ParticipantExportServiceTest {
         new RaceTrackerProperties(), mock(ParticipantCredentialService.class), mock(TeamRepository.class),
         mock(RaceRegistrationFieldRepository.class), mock(ParticipantRegistrationAnswerRepository.class),
         mock(RegistrationEmailService.class), mock(NotificationService.class), mock(ParticipantImportProcessor.class),
-        mock(CapabilityAuthorizationService.class), guard, mock(ParticipantIdentityService.class));
+        mock(CapabilityAuthorizationService.class), guard, mock(ParticipantIdentityService.class),
+        mock(com.racetracker.service.impl.ImportSourceStore.class));
 
     @Test
     void csvKeepsV1HeaderAndEscaping() {

@@ -50,6 +50,9 @@ public class ImportJob {
     @Column(columnDefinition = "TEXT")
     private String errorMessage;
 
+    @Column(name = "row_errors", columnDefinition = "TEXT")
+    private String rowErrors;
+
     @CreationTimestamp
     private OffsetDateTime createdAt;
 

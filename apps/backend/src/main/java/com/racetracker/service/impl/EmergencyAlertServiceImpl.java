@@ -3,6 +3,7 @@ package com.racetracker.service.impl;
 import com.racetracker.dto.emergency.EmergencyAlertDto;
 import com.racetracker.dto.emergency.EmergencyAlertRequest;
 import com.racetracker.exception.ApiException;
+import com.racetracker.exception.ConflictException;
 import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.model.EmergencyAlert;
@@ -34,6 +35,8 @@ import java.math.BigDecimal;
 @Slf4j
 @Service
 public class EmergencyAlertServiceImpl implements EmergencyAlertService {
+
+    private static final java.time.Duration DUPLICATE_ACTIVATION_WINDOW = java.time.Duration.ofMinutes(10);
 
     private final EmergencyAlertRepository emergencyAlertRepository;
     private final RaceRepository raceRepository;
@@ -78,11 +81,30 @@ public class EmergencyAlertServiceImpl implements EmergencyAlertService {
         validateCoordinates(request.getLatitude(), request.getLongitude());
         Race race = raceRepository.findById(raceId)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
-        User reporter = userRepository.findByEmailIgnoreCase(actorEmail)
+        User reporter = (requireParticipant
+            ? userRepository.findByEmailIgnoreCaseForUpdate(actorEmail)
+            : userRepository.findByEmailIgnoreCase(actorEmail))
             .orElseThrow(() -> new UnauthorizedException("Unauthorized"));
         Participant participant = participantRepository.findByRaceIdAndUserId(raceId, reporter.getId()).orElse(null);
         if (requireParticipant && participant == null) {
             throw new AccessDeniedException("You do not have an athlete registration for this race");
+        }
+
+        if (requireParticipant) {
+            java.util.Optional<EmergencyAlert> open = emergencyAlertRepository
+                .findFirstByRaceIdAndReportedByIdAndStatusNotAndCreatedAtAfterOrderByCreatedAtDesc(
+                    raceId, reporter.getId(), EmergencyAlert.EmergencyStatus.RESOLVED,
+                    OffsetDateTime.now().minus(DUPLICATE_ACTIVATION_WINDOW));
+            if (open.isPresent()) {
+                EmergencyAlert existing = open.get();
+                if (request.getLatitude() != null) {
+                    existing.setLatitude(request.getLatitude());
+                    existing.setLongitude(request.getLongitude());
+                    emergencyAlertRepository.save(existing);
+                }
+                log.info("Duplicate SOS activation merged into open alert; alertId={}", existing.getId());
+                return toDto(existing);
+            }
         }
 
         EmergencyAlert alert = EmergencyAlert.builder()
@@ -118,12 +140,18 @@ public class EmergencyAlertServiceImpl implements EmergencyAlertService {
         if (!alert.getRace().getId().equals(raceId)) {
             throw new ResourceNotFoundException("Emergency alert not found");
         }
+        if (alert.getStatus() == EmergencyAlert.EmergencyStatus.RESOLVED) {
+            if (next == EmergencyAlert.EmergencyStatus.RESOLVED) {
+                return toDto(alert);
+            }
+            throw new ConflictException("A resolved emergency alert cannot be reopened", "EMERGENCY_ALREADY_RESOLVED");
+        }
         User actor = userRepository.findByEmailIgnoreCase(actorEmail).orElse(null);
         alert.setStatus(next);
         if (alert.getAcknowledgedAt() == null) {
             alert.setAcknowledgedAt(OffsetDateTime.now());
+            alert.setAcknowledgedBy(actor == null ? null : actor.getId());
         }
-        alert.setAcknowledgedBy(actor == null ? null : actor.getId());
         if (next == EmergencyAlert.EmergencyStatus.RESOLVED) {
             jobRepository.cancelPendingForAlert(alertId);
         }

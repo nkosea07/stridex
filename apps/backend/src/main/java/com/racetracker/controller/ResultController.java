@@ -216,7 +216,12 @@ public class ResultController {
 
     private PublicRaceResultDto toPublicResult(RaceResultDto result) {
         String participantName = result.getParticipant() == null ? null
-            : (String.valueOf(result.getParticipant().getFirstName()) + " " + String.valueOf(result.getParticipant().getLastName())).trim();
+            : java.util.stream.Stream.of(result.getParticipant().getFirstName(), result.getParticipant().getLastName())
+                .filter(part -> part != null && !part.isBlank())
+                .collect(java.util.stream.Collectors.joining(" "));
+        if (participantName != null && participantName.isBlank()) {
+            participantName = null;
+        }
         String certificateToken = result.isCertificateAvailable()
             ? certificateTokenService.issue(result.getRaceId(), result.getParticipantId())
             : null;

@@ -209,5 +209,6 @@
   "privacyObjects": "Privacy object scopes",
   "financeReversals": "Payment reversals",
   "smsUnavailable": "SMS is unavailable in this release.",
-  "raceSetup": "Stages & sponsors"
+  "raceSetup": "Stages & sponsors",
+  "dataProcessingWithdrawHint": "To withdraw it, delete your account below."
 }

@@ -58,8 +58,11 @@ public class AnalyticsServiceImpl implements AnalyticsService {
         dto.setRevenue(revenue);
 
         long finished = dto.getStatusCounts().getOrDefault("FINISHED", 0L);
-        dto.setCompletionRate(dto.getTotalRegistrations() == 0 ? 0.0
-            : Math.round((finished * 1000.0) / dto.getTotalRegistrations()) / 10.0);
+        long entrants = dto.getTotalRegistrations()
+            - dto.getStatusCounts().getOrDefault(Participant.ParticipantStatus.PENDING_REVIEW.name(), 0L)
+            - dto.getStatusCounts().getOrDefault(Participant.ParticipantStatus.WAITLISTED.name(), 0L)
+            - dto.getStatusCounts().getOrDefault(Participant.ParticipantStatus.REJECTED.name(), 0L);
+        dto.setCompletionRate(entrants <= 0 ? 0.0 : Math.round((finished * 1000.0) / entrants) / 10.0);
 
         return dto;
     }
