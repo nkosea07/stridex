@@ -65,12 +65,12 @@ operational.
 
 ## Dependency audit exceptions
 
-CI runs `pnpm audit --prod --audit-level high`. Transitive fixes are pnpm `overrides` in `pnpm-workspace.yaml`, kept within each package's current major version. Three advisories have no compatible patched release and are listed in `auditConfig.ignoreGhsas`; revisit them whenever Expo, Metro, or React Navigation is upgraded and remove the entry once the dependency ships a fixed version.
+CI runs `pnpm audit --prod --audit-level high`. Transitive fixes are pnpm `overrides` in `pnpm-workspace.yaml`, kept within each package's current major version. Three advisories have no compatible patched release and are listed in `auditConfig.ignoreGhsas` and, for the Trivy scans, in `.trivyignore` with a 2027-05-16 expiry; revisit them whenever Expo, Metro, or React Navigation is upgraded and remove the entry once the dependency ships a fixed version.
 
 | Advisory | Package | Why it is accepted |
 | --- | --- | --- |
-| GHSA-5p2g-fcmc-qvqq, GHSA-w3rx-r6r6-pgpr | `image-size` 1.x via Metro | Build-time only: Metro reads the app's own image assets while bundling. The fix is in 2.x, whose main export no longer accepts the file path Metro passes. |
-| GHSA-qr28-fpjm-wq7f | `decode-uri-component` 0.2.x via React Navigation's `query-string` 7 | The fix (0.5.x) is ESM-only and `query-string` 7 loads it with `require()`. Impact is a slow parse of a crafted link inside the user's own app. |
+| GHSA-5p2g-fcmc-qvqq, GHSA-w3rx-r6r6-pgpr (CVE-2025-71329, CVE-2025-71330) | `image-size` 1.x via Metro | Build-time only: Metro reads the app's own image assets while bundling. The fix is in 2.x, whose main export no longer accepts the file path Metro passes. |
+| GHSA-qr28-fpjm-wq7f (CVE-2026-118664) | `decode-uri-component` 0.2.x via React Navigation's `query-string` 7 | The fix (0.5.x) is ESM-only and `query-string` 7 loads it with `require()`. Impact is a slow parse of a crafted link inside the user's own app. |
 
 Install with a release-age guard when changing dependencies: `pnpm install --config.minimum-release-age=20160` (14 days).
 
