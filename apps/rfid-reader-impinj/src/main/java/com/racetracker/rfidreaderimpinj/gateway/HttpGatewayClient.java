@@ -33,8 +33,14 @@ public class HttpGatewayClient implements GatewayClient {
             "reads", reads.stream().map(NormalizedRead::toGatewayMap).toList()
         );
 
+        String token = properties.getGateway().getLocalToken();
         restClient.post()
             .uri(properties.getGateway().getReadsPath())
+            .headers(headers -> {
+                if (token != null && !token.isBlank()) {
+                    headers.set("X-Gateway-Token", token.trim());
+                }
+            })
             .body(body)
             .retrieve()
             .onStatus(HttpStatusCode::isError, (request, response) -> {

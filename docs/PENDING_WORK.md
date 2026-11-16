@@ -113,7 +113,7 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 
 - New CI jobs `load-smoke` (k6) and `e2e` (Cypress) have **not run on GitHub Actions** yet.
 - Docker image builds (CI `containers` job) not run locally.
-- Migrations V1–V43 were validated on PostGIS (2026-11-08) including the V36 upgrade fixture. V44–V49 were validated on PostgreSQL 16 against stand-in tables only (PostGIS unavailable locally); run the CI PostGIS smoke before release. Nothing is pushed and no PR is open.
+- Migrations V1–V43 were validated on PostGIS (2026-11-08) including the V36 upgrade fixture. V44–V49 were validated on PostgreSQL 16 against stand-in tables only (PostGIS unavailable locally); V50 (users.terms_version, terms_accepted_at) has not been run against PostGIS locally; V51 (checkpoint self-scan token and claims) and V52 (RFID timing integrity), V53 (result integrity), V54 (waves), V55 (checkpoint passes) were run against stand-in tables on PostgreSQL 16 only; V56 (result queries) has not been run against any database. Run the CI PostGIS smoke before release. Nothing is pushed and no PR is open.
 
 ## 7. Suggested sequencing
 

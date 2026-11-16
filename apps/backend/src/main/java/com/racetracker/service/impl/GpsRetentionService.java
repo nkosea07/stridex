@@ -5,7 +5,6 @@ import com.racetracker.repository.GpsLocationRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -27,14 +26,24 @@ public class GpsRetentionService {
         this.properties = properties;
     }
 
-    @Transactional
     public int purgeExpired() {
-        int retentionDays = properties.getTracking().getRetentionDays();
+        RaceTrackerProperties.Tracking tracking = properties.getTracking();
+        int retentionDays = tracking.getRetentionDays();
         if (retentionDays <= 0) {
             return 0;
         }
+        int batchSize = Math.max(tracking.getRetentionBatchSize(), 1);
+        int maxBatches = Math.max(tracking.getRetentionMaxBatchesPerRun(), 1);
         OffsetDateTime cutoff = OffsetDateTime.now().minus(Duration.ofDays(retentionDays));
-        return gpsLocationRepository.deleteByRecordedAtBefore(cutoff);
+        int total = 0;
+        for (int batch = 0; batch < maxBatches; batch++) {
+            int deleted = gpsLocationRepository.deleteBatchRecordedBefore(cutoff, batchSize);
+            total += deleted;
+            if (deleted < batchSize) {
+                break;
+            }
+        }
+        return total;
     }
 
     @Scheduled(

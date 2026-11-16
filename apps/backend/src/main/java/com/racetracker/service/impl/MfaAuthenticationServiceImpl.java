@@ -110,7 +110,8 @@ public class MfaAuthenticationServiceImpl {
         String secret = totpService.newSecret();
         credential.setEncryptedSecret(secretCipher.encrypt(secret));
         credentialRepository.save(credential);
-        return new MfaEnrollmentResponse(secret, totpService.provisioningUri(user.getEmail(), secret));
+        String provisioningUri = totpService.provisioningUri(user.getEmail(), secret);
+        return new MfaEnrollmentResponse(secret, provisioningUri, qrCodeDataUri(provisioningUri));
     }
 
     @Transactional
@@ -228,6 +229,17 @@ public class MfaAuthenticationServiceImpl {
         } catch (RuntimeException ex) {
             if (ex instanceof UnauthorizedException unauthorized) throw unauthorized;
             throw new UnauthorizedException("Invalid or expired MFA challenge");
+        }
+    }
+
+    private String qrCodeDataUri(String value) {
+        try (java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream()) {
+            com.google.zxing.common.BitMatrix matrix = new com.google.zxing.qrcode.QRCodeWriter()
+                .encode(value, com.google.zxing.BarcodeFormat.QR_CODE, 240, 240);
+            com.google.zxing.client.j2se.MatrixToImageWriter.writeToStream(matrix, "PNG", output);
+            return "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString(output.toByteArray());
+        } catch (com.google.zxing.WriterException | java.io.IOException ex) {
+            return null;
         }
     }
 

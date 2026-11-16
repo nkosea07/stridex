@@ -285,13 +285,16 @@ export const useTrackingStore = create<ExtendedTrackingState>((set, get) => ({
     set({ locations: newLocations, liveStats });
   },
 
-  recordCheckpoint: async (record: CheckpointRecord) => {
+  recordCheckpoint: async (record: CheckpointRecord, scanToken: string, location?: GpsLocation) => {
     const { currentRace } = get();
     if (!currentRace?.id) {
       throw new Error('No active race');
     }
-    await api.recordCheckpoint(currentRace.id, record.checkpointId, record.method as 'qr_code' | 'gps');
-    set({ checkpointRecords: [...get().checkpointRecords, record] });
+    const outcome = await api.recordCheckpoint(currentRace.id, record.checkpointId, scanToken, location);
+    if (outcome.status === 'VERIFIED') {
+      set({ checkpointRecords: [...get().checkpointRecords, record] });
+    }
+    return outcome;
   },
 }));
 

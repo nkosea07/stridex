@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -15,7 +16,16 @@ public interface GpsLocationRepository extends JpaRepository<GpsLocation, UUID> 
 
     List<GpsLocation> findByParticipantIdAndRaceIdOrderByRecordedAtAsc(UUID participantId, UUID raceId);
 
+    List<GpsLocation> findByParticipantIdAndRaceIdAndRecordedAtAfterOrderByRecordedAtAsc(UUID participantId, UUID raceId,
+                                                                                        OffsetDateTime since);
+
     Optional<GpsLocation> findTopByParticipantIdAndRaceIdAndFilteredFalseOrderByRecordedAtDesc(UUID participantId, UUID raceId);
+
+    Optional<GpsLocation> findTopByParticipantIdAndRaceIdAndFilteredFalseAndRecordedAtLessThanEqualOrderByRecordedAtDesc(
+        UUID participantId, UUID raceId, OffsetDateTime latestAcceptable);
+
+    @Query(value = "SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(:streamKey, 0))", nativeQuery = true)
+    Integer lockLocationStream(@Param("streamKey") String streamKey);
 
     @Query("""
         select g
@@ -55,9 +65,19 @@ public interface GpsLocationRepository extends JpaRepository<GpsLocation, UUID> 
     @Query("select g.participant.id, count(g) from GpsLocation g where g.race.id = :raceId and g.filtered = true group by g.participant.id")
     List<Object[]> countFilteredByRace(@Param("raceId") UUID raceId);
 
+    @Transactional
     @Modifying
-    @Query("delete from GpsLocation g where g.recordedAt < :cutoff")
-    int deleteByRecordedAtBefore(@Param("cutoff") OffsetDateTime cutoff);
+    @Query(value = """
+        DELETE FROM gps_locations
+        WHERE id IN (
+            SELECT id FROM gps_locations
+            WHERE recorded_at < :cutoff
+            ORDER BY recorded_at
+            LIMIT :batchSize
+            FOR UPDATE SKIP LOCKED
+        )
+        """, nativeQuery = true)
+    int deleteBatchRecordedBefore(@Param("cutoff") OffsetDateTime cutoff, @Param("batchSize") int batchSize);
 
     @Query(value = """
         select round(coalesce(g.smoothed_latitude, g.latitude)::numeric, :scale)::double precision as latitude,

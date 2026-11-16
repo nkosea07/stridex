@@ -14,6 +14,11 @@ public interface CheckpointService {
     CheckpointRecordDto recordImported(UUID raceId, UUID checkpointId, CheckpointRecordRequest request);
 
     List<CheckpointRecordDto> listRecords(UUID raceId, UUID checkpointId);
+    List<CheckpointRecordDto> listRecords(UUID raceId, UUID checkpointId, boolean includeVoided);
+    List<CheckpointRecordDto> listRecentRecords(UUID raceId, UUID checkpointId, int limit);
+    CheckpointRecordDto voidRecord(UUID raceId, UUID checkpointId, UUID recordId, CheckpointRecordVoidRequest request);
+    CheckpointRecordDto restoreRecord(UUID raceId, UUID checkpointId, UUID recordId, CheckpointRecordVoidRequest request);
+    CheckpointRecordDto reassignRecord(UUID raceId, UUID checkpointId, UUID recordId, CheckpointRecordReassignRequest request);
     CheckpointRecordDto correctRecord(UUID raceId, UUID checkpointId, UUID recordId,
                                        com.racetracker.dto.checkpoint.CheckpointRecordCorrectionRequest request);
 }

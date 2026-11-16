@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 export const PROVIDER_DEFAULT = 'default';
 
@@ -7,13 +8,14 @@ export const Marker: React.FC<any> = ({ children }) => <>{children}</>;
 export const Polyline: React.FC<any> = () => null;
 
 const MapView: React.FC<any> = ({ children, style }) => {
+  const { t } = useTranslation();
   return (
     <View style={[styles.container, style]}>
       <View style={styles.content}>
-        <Text style={styles.title}>Map Preview Not Available on Web</Text>
-        <Text style={styles.subtitle}>Full tracking maps are optimized for native iOS and Android devices.</Text>
+        <Text style={styles.title}>{t('mobile:mapWeb.title')}</Text>
+        <Text style={styles.subtitle}>{t('mobile:mapWeb.subtitle')}</Text>
         <View style={styles.infoBox}>
-          <Text style={styles.infoText}>Use the official Web Dashboard for high-density monitoring.</Text>
+          <Text style={styles.infoText}>{t('mobile:mapWeb.info')}</Text>
         </View>
       </View>
       {children}

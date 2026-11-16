@@ -5,12 +5,25 @@ A cross-platform React Native mobile application built with Expo for athletes to
 ## Features
 
 ### For Athletes
+- **Account**: Sign up, sign in, reset a forgotten password, resend the verification email, cancel a pending account deletion
 - **Race Discovery**: Browse and search available races
-- **Race Registration**: Register for races with category selection
-- **Live GPS Tracking**: Real-time location tracking during races
-- **QR Code Scanning**: Scan checkpoints with QR codes
-- **Results & Stats**: View personal race results and statistics
-- **Achievements**: Earn badges for milestones
+- **Race Registration**: Register with category, emergency contact, and custom fields; see your registration status and bib
+- **Entry fee**: Pay the entry fee (optional promo code) through the provider's hosted checkout in an in-app browser; the status updates when the provider confirms
+- **Live GPS Tracking**: Real-time location tracking during races, with an offline queue
+- **QR Code Scanning**: Scan checkpoint self-scan codes
+- **Results**: Personal results (provisional or official), finisher certificate for official results, and result queries to the officials with their answers
+- **Stats**: Races, distance, medals, and personal bests from your server race history; achievements
+- **Notifications and privacy**: Choose push, email, and WhatsApp channels; manage marketing consent; share a copy of your data; delete your account. Tapping a notification opens the related race, result, or followed athlete
+
+### For Race Staff (volunteers and officials)
+- **Checkpoint timing**: record bibs (works offline), see the last 20 entries, and undo your own entry within 5 minutes
+- **Athlete check-in**: search by bib or name, or scan the athlete's QR code
+- **Wave starts** (officials): start an unstarted wave at the current time
+- **Incidents**: report an emergency from a checkpoint
+
+### For Spectators
+- **Following**: Follow public athletes and see their status, last checkpoint, and distance remaining
+- **Live athlete view**: Map with the course route, the athlete's track and latest position, checkpoint pins, splits, and "last updated" time. Refreshes every 30 seconds while the screen is open and the app is in the foreground, fetching only new track points (`?since=`)
 
 ### Technical Features
 - **Expo Router**: File-based navigation
@@ -27,26 +40,22 @@ A cross-platform React Native mobile application built with Expo for athletes to
 ```
 apps/mobile/
 ├── app/                    # Expo Router pages
-│   ├── (auth)/            # Authentication screens
-│   │   ├── login.tsx
-│   │   └── register.tsx
-│   ├── (tabs)/            # Main tab navigation
-│   │   ├── index.tsx      # Home
-│   │   ├── races.tsx      # Browse races
-│   │   ├── my-races.tsx   # User's registered races
-│   │   ├── results.tsx    # Results & stats
-│   │   └── profile.tsx    # User profile
-│   ├── race/
-│   │   └── [id].tsx       # Race detail page
-│   ├── tracking.tsx       # Live tracking screen
-│   ├── scanner.tsx        # QR code scanner
-│   └── _layout.tsx        # Root layout
-├── components/            # Reusable components
-├── lib/
-│   └── api.ts            # API client
-├── store/
-│   ├── auth.ts           # Auth state management
-│   └── tracking.ts       # Tracking state management
+│   ├── (auth)/            # Sign in, sign up, forgot password
+│   ├── (tabs)/            # Home, races, my races, results, following, profile
+│   ├── race/[id].tsx      # Race detail, registration, entry fee payment
+│   ├── athlete/[raceId]/[participantId].tsx  # Spectator live view of an athlete
+│   ├── tracking.tsx       # Athlete live GPS tracking
+│   ├── scanner.tsx        # Athlete checkpoint self-scan
+│   ├── operations.tsx     # Staff checkpoint timing, recent entries, wave starts
+│   ├── check-in.tsx       # Staff athlete check-in (search or QR)
+│   ├── notifications.tsx  # Notification list
+│   ├── settings.tsx       # Notification channels, consent, data export
+│   ├── account-deletion.tsx, legal-acceptance.tsx, privacy.tsx, terms.tsx
+│   └── _layout.tsx        # Root layout, legal and app-version gates, notification routing
+├── components/            # Reusable components (maps, gates, update screen)
+├── lib/                   # API client, tracking service, offline queues, i18n, helpers
+├── store/                 # auth, tracking, appUpdate (zustand)
+├── tests/                 # Vitest suites (run through the web workspace)
 ├── types/
 │   └── index.ts          # TypeScript types
 ```
@@ -88,6 +97,10 @@ EXPO_PUBLIC_API_URL=http://your-backend-url/api
 EXPO_PUBLIC_MAPBOX_TOKEN=your-mapbox-token
 ```
 
+### App version gate
+
+The app sends `X-App-Version` (from `app.json` `expo.version`) and `X-App-Platform` with every API call and checks `GET /api/v1/public/app-config` at launch. When the backend's `MOBILE_MINIMUM_VERSION` is higher, or any call returns 426 `APP_UPDATE_REQUIRED`, the app shows a full-screen update prompt linking to the configured store. Bump `expo.version` for every store release.
+
 ### API Configuration
 
 Update `lib/api.ts` with your backend URL:
@@ -121,18 +134,16 @@ The active race session is also stored locally. When the app starts, it attempts
 
 ### QR Code Scanning
 
-Athletes can scan QR codes at checkpoints:
-- Camera-based scanning
-- Instant checkpoint recording
-- Offline support with sync
+- Athletes scan a checkpoint's self-scan code; the server checks the code and the athlete's location and records a verified time or a provisional claim for officials to review. Self-scans need a connection.
+- Staff scan an athlete's registration QR code on the check-in screen.
 
 ### Maps Integration
 
 Uses `react-native-maps` for:
-- Race route visualization
+- The uploaded course route (falls back to straight lines between checkpoints when no route is uploaded)
 - Checkpoint markers
-- Current location display
-- Tracked path overlay
+- The athlete's own position and path while tracking
+- A followed athlete's track and latest position in the spectator live view
 
 ## Building for Production
 
@@ -166,18 +177,7 @@ eas submit --platform android
 
 ## Connecting to Backend
 
-The app expects these API endpoints from your Spring Boot backend:
-
-- `POST /api/v1/auth/login` - User authentication
-- `POST /api/v1/auth/register` - User registration
-- `GET /api/v1/races` - List races
-- `GET /api/v1/races/:id` - Race details
-- `POST /api/v1/races/:id/participants/register` - Register for race
-- `POST /api/v1/tracking/:raceId/location` - Send GPS location
-- `POST /api/v1/tracking/:raceId/checkpoint` - Record checkpoint
-- `GET /api/v1/results/my` - User's results
-
-See the backend README for full API documentation.
+Every endpoint path comes from `@race-tracker/contracts` (`packages/contracts/contract.json`); never hardcode paths in the app. `pnpm contracts:validate` checks that the app only uses endpoints the contract defines. See the backend README for the API documentation.
 
 ## Permissions Required
 
@@ -193,6 +193,7 @@ Run these from the monorepo root:
 ```bash
 pnpm --filter race-tracker-mobile exec tsc --noEmit
 pnpm --filter race-tracker-mobile lint
+pnpm --dir apps/mobile test
 pnpm --filter race-tracker-mobile exec expo-doctor
 ```
 

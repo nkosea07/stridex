@@ -15,6 +15,8 @@ import org.mapstruct.NullValuePropertyMappingStrategy;
 public interface UserMapper {
 
     @Mapping(target = "capabilities", expression = "java(toCapabilityTypes(user.getCapabilities()))")
+    @Mapping(target = "legalAcceptanceRequired", expression =
+        "java(com.racetracker.service.LegalDocuments.acceptanceRequired(user.getPrivacyPolicyVersion(), user.getTermsVersion()))")
     UserDto toDto(User user);
 
     default java.util.Set<UserCapabilityType> toCapabilityTypes(java.util.Set<UserCapability> capabilities) {

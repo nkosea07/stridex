@@ -102,7 +102,7 @@ export default function HomeScreen() {
         distance: Number(race.distanceKm || 0),
         daysUntil: toDaysUntil(race.raceDate),
         bibNumber: upcomingRegistration.reg.bibNumber,
-        category: race.raceType || 'Race',
+        category: race.raceType || '-',
         bannerImage: race.bannerImageUrl || DEFAULT_BANNER,
       });
     } else {
@@ -114,7 +114,7 @@ export default function HomeScreen() {
         const race = raceMap.get(String(result.raceId));
         return {
           id: String(result.id || `${result.raceId}-${result.participantId}`),
-          name: race?.name || 'Race',
+          name: race?.name || t('mobile:results.unknownRace'),
           date: toDateLabel(race?.raceDate),
           position: result.overallPosition,
           time: result.totalTime || result.chipTime || result.gunTime || '-',
@@ -126,7 +126,7 @@ export default function HomeScreen() {
       .map(({ raceDateTs, ...rest }) => rest);
 
     setRecentRaces(mappedResults);
-  }, [activeCapability, isAthlete]);
+  }, [activeCapability, isAthlete, t]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -147,16 +147,16 @@ export default function HomeScreen() {
     return (
       <View style={styles.authContainer}>
         <Ionicons name="walk" size={80} color="#0F766E" />
-        <Text style={styles.authTitle}>Race Tracker</Text>
-        <Text style={styles.authSubtitle}>Track your races in real-time</Text>
+        <Text style={styles.authTitle}>{t('mobile:ui.login.raceTracker')}</Text>
+        <Text style={styles.authSubtitle}>{t('mobile:homeScreen.tagline')}</Text>
         <Link href="/(auth)/login" asChild>
           <TouchableOpacity style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>Sign In</Text>
+            <Text style={styles.primaryButtonText}>{t('mobile:login.signIn')}</Text>
           </TouchableOpacity>
         </Link>
         <Link href="/(auth)/register" asChild>
           <TouchableOpacity style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>Create Account</Text>
+            <Text style={styles.secondaryButtonText}>{t('mobile:register.createAccount')}</Text>
           </TouchableOpacity>
         </Link>
       </View>
@@ -222,13 +222,13 @@ export default function HomeScreen() {
     >
       <View style={styles.welcomeSection}>
         <Text style={styles.welcomeText}>
-          Welcome back, {user?.firstName || 'Athlete'}!
+          {user?.firstName ? t('mobile:homeScreen.welcomeBack', { name: user.firstName }) : t('mobile:homeScreen.welcome')}
         </Text>
-        <Text style={styles.subtitle}>Ready for your next challenge?</Text>
+        <Text style={styles.subtitle}>{t('mobile:homeScreen.nextChallenge')}</Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Your Next Race</Text>
+        <Text style={styles.sectionTitle}>{t('mobile:homeScreen.nextRace')}</Text>
         {upcomingRace ? (
           <Link href={`/race/${upcomingRace.id}`} asChild>
             <TouchableOpacity style={styles.upcomingCard}>
@@ -239,7 +239,7 @@ export default function HomeScreen() {
               <View style={styles.raceOverlay}>
                 <View style={styles.daysCountdown}>
                   <Text style={styles.daysNumber}>{formatNumber(upcomingRace.daysUntil)}</Text>
-                  <Text style={styles.daysLabel}>days to go</Text>
+                  <Text style={styles.daysLabel}>{t('mobile:homeScreen.daysToGo', { count: upcomingRace.daysUntil })}</Text>
                 </View>
               </View>
               <View style={styles.raceInfo}>
@@ -259,7 +259,7 @@ export default function HomeScreen() {
                   </View>
                 </View>
                 <View style={styles.bibContainer}>
-                  <Text style={styles.bibLabel}>Your Bib Number</Text>
+                  <Text style={styles.bibLabel}>{t('mobile:homeScreen.yourBib')}</Text>
                   <Text style={styles.bibNumber}>{upcomingRace.bibNumber || '-'}</Text>
                 </View>
               </View>
@@ -267,10 +267,10 @@ export default function HomeScreen() {
           </Link>
         ) : (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No upcoming registered race</Text>
+            <Text style={styles.emptyTitle}>{t('mobile:homeScreen.noUpcoming')}</Text>
             <Link href="/races" asChild>
               <TouchableOpacity style={styles.emptyAction}>
-                <Text style={styles.emptyActionText}>Browse races</Text>
+                <Text style={styles.emptyActionText}>{t('mobile:homeScreen.browseRaces')}</Text>
               </TouchableOpacity>
             </Link>
           </View>
@@ -278,37 +278,37 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <Text style={styles.sectionTitle}>{t('mobile:homeScreen.quickActions')}</Text>
         <View style={styles.actionsGrid}>
           <Link href="/races" asChild>
             <TouchableOpacity style={styles.actionCard}>
               <Ionicons name="search" size={28} color="#0F766E" />
-              <Text style={styles.actionText}>Find Races</Text>
+              <Text style={styles.actionText}>{t('mobile:homeScreen.findRaces')}</Text>
             </TouchableOpacity>
           </Link>
           <Link href="/tracking" asChild>
             <TouchableOpacity style={styles.actionCard}>
               <Ionicons name="navigate" size={28} color="#0F766E" />
-              <Text style={styles.actionText}>Start Tracking</Text>
+              <Text style={styles.actionText}>{t('mobile:homeScreen.startTracking')}</Text>
             </TouchableOpacity>
           </Link>
           <Link href="/scanner" asChild>
             <TouchableOpacity style={styles.actionCard}>
               <Ionicons name="qr-code" size={28} color="#0F766E" />
-              <Text style={styles.actionText}>Scan QR</Text>
+              <Text style={styles.actionText}>{t('mobile:homeScreen.scanQr')}</Text>
             </TouchableOpacity>
           </Link>
           <Link href="/results" asChild>
             <TouchableOpacity style={styles.actionCard}>
               <Ionicons name="stats-chart" size={28} color="#0F766E" />
-              <Text style={styles.actionText}>My Stats</Text>
+              <Text style={styles.actionText}>{t('mobile:homeScreen.myStats')}</Text>
             </TouchableOpacity>
           </Link>
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recent Results</Text>
+        <Text style={styles.sectionTitle}>{t('mobile:results.recentResults')}</Text>
         {recentRaces.length > 0 ? (
           recentRaces.map((race) => (
             <View key={race.id} style={styles.resultCard}>
@@ -319,18 +319,18 @@ export default function HomeScreen() {
               <View style={styles.resultStats}>
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{race.position ? `#${race.position}` : '-'}</Text>
-                  <Text style={styles.statLabel}>Position</Text>
+                  <Text style={styles.statLabel}>{t('mobile:results.position')}</Text>
                 </View>
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{race.time}</Text>
-                  <Text style={styles.statLabel}>Time</Text>
+                  <Text style={styles.statLabel}>{t('mobile:results.time')}</Text>
                 </View>
               </View>
             </View>
           ))
         ) : (
           <View style={styles.emptyInline}>
-            <Text style={styles.emptyInlineText}>No results yet</Text>
+            <Text style={styles.emptyInlineText}>{t('mobile:results.empty')}</Text>
           </View>
         )}
       </View>

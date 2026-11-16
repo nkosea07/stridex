@@ -15,6 +15,7 @@ public class RfidReaderBreakdownDto {
     private String gatewayStatus;
     private Integer backlog;
     private Long lastHeartbeatAgeSeconds;
+    private Long clockOffsetMs;
     private String firmwareVersion;
     private String hardwareModel;
     private String hardwareProfile;

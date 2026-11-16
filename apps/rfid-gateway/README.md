@@ -7,6 +7,9 @@ Local edge gateway for checkpoint timing readers. It accepts normalized RFID rea
 - `RFID_BACKEND_BASE_URL` required, backend origin only, e.g. `http://localhost:8081` (the gateway appends `/api/v1/rfid/...`)
 - `RFID_BACKEND_READER_KEY` required, one-time key created from `POST /api/v1/races/{raceId}/rfid/readers`
 - `RFID_GATEWAY_PORT` default `8090`
+- `RFID_GATEWAY_HOST` default `127.0.0.1`. Any non-loopback value (the Docker image uses `0.0.0.0`) requires `RFID_GATEWAY_LOCAL_TOKEN`
+- `RFID_GATEWAY_LOCAL_TOKEN` shared secret (24+ characters) that adapters send as `X-Gateway-Token`; required for every endpoint except `GET /health` when set
+- `RFID_GATEWAY_DEDUPE_WINDOW_MS` default `3000`; repeated reads of one tag closer together than this are one pass and only the first is forwarded (`0` disables)
 - `RFID_GATEWAY_SPOOL_DIR` default `./data/rfid-gateway`
 - `RFID_GATEWAY_NAME` default `edge-gateway`
 - `RFID_GATEWAY_FIRMWARE_VERSION` default `dev`
@@ -33,6 +36,10 @@ Local edge gateway for checkpoint timing readers. It accepts normalized RFID rea
 - HTTP 401/403/408/409/425/429 and 5xx responses are retried with backoff. A revoked reader key is also retried, so reads are retained until a new key is configured.
 - Any other 4xx means the backend will never accept that batch as sent. It moves to `failed/` so later reads keep flowing; inspect `lastFlushError`, fix the cause, then `POST /failed/requeue`.
 - `POST /reads` validates each read before spooling: `rfidTag` is required, `readAt` must be ISO-8601 with a UTC offset, and `rssi` must be numeric when present.
+- Tags are canonicalised (hex EPCs upper-case, separators removed) exactly as the backend does. Reads without a `sourceEventId` get a stable one derived from gateway, reader serial, tag, read time, and antenna, so a retried batch is recognised as the same reads.
+- `eventOrigin` always comes from `RFID_GATEWAY_MODE`; a value sent by the caller is ignored.
+- Every accepted read is appended to `raw/reads-YYYY-MM-DD.ndjson` (fsynced) before deduplication. Keep this file after the race; it is the edge record for timing disputes. The gateway never prunes it.
+- Spool files are written to a temporary file, fsynced, and renamed, so a power cut cannot leave a half-written batch. A file that is unreadable anyway is moved to `corrupt/` (`corruptFiles` in `/health`) instead of blocking later batches.
 
 ## Run
 

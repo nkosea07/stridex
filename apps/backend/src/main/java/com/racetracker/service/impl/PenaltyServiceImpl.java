@@ -23,14 +23,18 @@ public class PenaltyServiceImpl implements PenaltyService {
     private final ParticipantRepository participantRepository;
     private final UserRepository userRepository;
 
+    private final com.racetracker.service.ResultLock resultLock;
+
     public PenaltyServiceImpl(
         ParticipantPenaltyRepository penaltyRepository,
         ParticipantRepository participantRepository,
-        UserRepository userRepository
+        UserRepository userRepository,
+        com.racetracker.service.ResultLock resultLock
     ) {
         this.penaltyRepository = penaltyRepository;
         this.participantRepository = participantRepository;
         this.userRepository = userRepository;
+        this.resultLock = resultLock;
     }
 
     @Override
@@ -47,15 +51,19 @@ public class PenaltyServiceImpl implements PenaltyService {
     @Transactional
     public PenaltyDto add(UUID raceId, UUID participantId, PenaltyRequest request, String actorEmail) {
         Participant participant = requireParticipant(raceId, participantId);
+        resultLock.assertOpen(raceId);
         if (request.getSeconds() == null || request.getSeconds() == 0) {
             throw new ApiException("Penalty seconds must be a non-zero value");
+        }
+        if (request.getReason() == null || request.getReason().trim().length() < 5) {
+            throw new ApiException("A reason of at least 5 characters is required for every penalty", "PENALTY_REASON_REQUIRED");
         }
 
         ParticipantPenalty penalty = ParticipantPenalty.builder()
             .race(participant.getRace())
             .participant(participant)
             .seconds(request.getSeconds())
-            .reason(request.getReason())
+            .reason(request.getReason().trim())
             .createdBy(resolveUserId(actorEmail))
             .build();
 
@@ -64,9 +72,11 @@ public class PenaltyServiceImpl implements PenaltyService {
 
     @Override
     @Transactional
-    public void remove(UUID raceId, UUID penaltyId) {
+    public void remove(UUID raceId, UUID participantId, UUID penaltyId) {
         ParticipantPenalty penalty = penaltyRepository.findByRaceIdAndId(raceId, penaltyId)
+            .filter(found -> found.getParticipant() != null && found.getParticipant().getId().equals(participantId))
             .orElseThrow(() -> new ResourceNotFoundException("Penalty not found"));
+        resultLock.assertOpen(raceId);
         penaltyRepository.delete(penalty);
     }
 

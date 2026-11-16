@@ -78,6 +78,12 @@ export RFID_GATEWAY_READER_SERIAL=<reader-serial>
 pnpm --filter rfid-gateway start
 ```
 
+Edge security and durability:
+
+- The gateway listens on `127.0.0.1` unless `RFID_GATEWAY_HOST` says otherwise, and then requires `RFID_GATEWAY_LOCAL_TOKEN`. Set the same value as `RFID_GATEWAY_LOCAL_TOKEN` for the reader adapter. Never expose the gateway port on venue Wi-Fi without the token: anyone who can post to `/reads` can create finish times.
+- Run the gateway host and every reader on NTP. The backend measures each gateway's clock from its heartbeats (`clockOffsetMs` on the reader list) and marks the reader `DEGRADED` beyond 2 s. The Impinj adapter uses the reader's own timestamp and falls back to the host clock, with a warning, when the reader clock is more than `IMPINJ_MAX_READER_CLOCK_OFFSET_MS` (2000) off.
+- Keep `raw/` from the gateway spool volume after every race.
+
 Gateway health endpoint:
 
 - `GET /health`
@@ -148,7 +154,16 @@ Content-Type: application/json
 }
 ```
 
-## 6. Race-Day Validation Checklist
+## 6. Timing Rules
+
+- Raw reads are immutable. Results come from checkpoint records derived from them, and every derivation can be re-run.
+- **Gun time.** Starting the race (status `IN_PROGRESS`) records the gun time. Reads before it, or before the scheduled start when no gun time exists, are stored as `IGNORED` and never become times. This covers tag tests at packet pickup, warm-ups through the finish chute, and athletes waiting on the start mat. If the race was started late or early in the system, correct the gun time on the RFID page, then reprocess **Ignored reads**.
+- **First read wins.** Each checkpoint keeps the earliest read of the athlete's pass. A read processed late (backup reader, delayed spool) that is earlier replaces a later automatic time, and cutoffs and DNF status are re-applied. Official corrections and manual times are never overwritten.
+- **Clock faults.** A read dated more than 5 s after the backend received it is `IGNORED` as a reader clock fault.
+- **Unmatched tags.** The RFID page lists tags with no assigned participant. Assign the tag (any letter case or separators match), then reprocess **Unmatched tags**. Reprocess **Failed reads** after fixing a registration status or processing error.
+- **Live tracking.** RFID crossings update the staff live map immediately. Athletes without the app appear at their last timed checkpoint, and distance remaining, pace, and predicted finish come from the furthest of GPS and timed checkpoints.
+
+## 7. Race-Day Validation Checklist
 
 1. Register at least one production reader and one demo-profile reader on separate races.
 2. Confirm both appear on `/admin/races/{raceId}/rfid`.
@@ -158,10 +173,12 @@ Content-Type: application/json
    - backend worker normalizes the event
    - `checkpoint_records.recordMethod=RFID`
 5. Replay the same tag or source event and verify duplicate handling.
+5a. Read a tag before starting the race and verify it is `IGNORED`; start the race, read it again, and verify a time is created.
+5b. Deliver an earlier read for an athlete who already has a time and verify the time moves earlier.
 6. Submit an unknown tag and verify it appears as unmatched without producing an official checkpoint record.
 7. Interrupt gateway/backend connectivity and verify queued reads survive restart and are delivered later.
 
-## 7. Failure Interpretation
+## 8. Failure Interpretation
 
 - `gatewayStatus=OFFLINE` and stale `lastHeartbeatAt`: edge service is down or disconnected.
 - `gatewayStatus=DEGRADED` with rising backlog: transport path is alive but not keeping up.
@@ -170,5 +187,7 @@ Content-Type: application/json
 - read events in `ERROR` with "Processing failed after N attempts": the backend could not normalize the
   read (it retried with backoff, about 5 s doubling to 5 min, up to 8 attempts). Fix the cause, then
   review those events; they are not retried automatically.
+- read events in `IGNORED` with "before the race start": pre-gun reads, expected in small numbers. A large count after the gun means the gun time is wrong; correct it and reprocess.
+- read events in `IGNORED` mentioning the clock: the reader or gateway clock is ahead of the server. Fix NTP, then reprocess ignored reads.
 - read events in `ERROR` with "Participant is not an accepted entrant": the tag belongs to a waitlisted,
   pending-approval, or rejected registration, so no checkpoint record was created.

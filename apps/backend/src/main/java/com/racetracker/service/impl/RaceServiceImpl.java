@@ -259,7 +259,20 @@ public class RaceServiceImpl implements RaceService {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
         raceAccessGuard.assertCanManage(race);
+        if (race.getStatus() != Race.RaceStatus.DRAFT) {
+            throw new ConflictException(
+                "Only draft races can be deleted. Cancel the race instead so entries, payments, and timing records are kept.",
+                "RACE_DELETE_NOT_ALLOWED");
+        }
+        auditEventService.recordForActor("RACE_DELETED", currentActorEmail(), "RACE", id.toString(), "SUCCESS",
+            java.util.Map.of("name", String.valueOf(race.getName())));
         raceRepository.delete(race);
+    }
+
+    private String currentActorEmail() {
+        org.springframework.security.core.Authentication authentication =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return authentication == null ? null : authentication.getName();
     }
 
     @Override
@@ -280,6 +293,9 @@ public class RaceServiceImpl implements RaceService {
         }
 
         race.setStatus(target);
+        if (target == Race.RaceStatus.IN_PROGRESS && race.getStartedAt() == null) {
+            race.setStartedAt(OffsetDateTime.now());
+        }
         if (target == Race.RaceStatus.CANCELLED) {
             race.setCancellationReason(reason == null || reason.isBlank() ? null : reason.trim());
             race.setCancelledAt(OffsetDateTime.now());

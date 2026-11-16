@@ -8,7 +8,9 @@ import java.util.UUID;
 public interface TrackingService {
     void recordLocation(UUID raceId, GpsLocationRequest request);
     void recordLocationsBatch(UUID raceId, GpsLocationBatchRequest request);
-    void recordCheckpoint(UUID raceId, TrackingCheckpointRequest request);
+    SelfScanResultDto recordCheckpoint(UUID raceId, TrackingCheckpointRequest request);
+
+    void publishTimingUpdate(UUID raceId, UUID participantId);
 
     List<LiveTrackingResponse> getLiveData(UUID raceId);
     ParticipantTrackResponse getParticipantTrack(UUID raceId, UUID participantId);

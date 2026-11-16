@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/theme';
 import { CapabilityGate } from '@/components/CapabilityGate';
 import { useTranslation } from 'react-i18next';
+import { isValidCoordinate, regionFor } from '@/lib/routeGeometry';
 
 function normalizeRaceStatus(raw?: string): Race['status'] {
   const value = String(raw || '').toLowerCase();
@@ -95,9 +96,10 @@ function TrackingScreenContent() {
       }
 
       try {
-        const [raceResponseRaw, checkpointsResponse] = await Promise.all([
+        const [raceResponseRaw, checkpointsResponse, coursePoints] = await Promise.all([
           api.getRace(targetRaceId),
           api.getRaceCheckpoints(targetRaceId),
+          api.getPublicRaceRoute(targetRaceId).catch(() => []),
         ]);
         const raceResponse = raceResponseRaw as any;
 
@@ -117,9 +119,9 @@ function TrackingScreenContent() {
             type: mapCheckpointType(checkpoint.checkpointType),
           })) as Checkpoint[];
 
-        const routeCoordinates = checkpointList
-          .filter((checkpoint) => checkpoint.location.latitude !== 0 || checkpoint.location.longitude !== 0)
-          .map((checkpoint) => checkpoint.location);
+        const routeCoordinates = coursePoints.length > 1
+          ? coursePoints
+          : checkpointList.map((checkpoint) => checkpoint.location).filter(isValidCoordinate);
 
         const mappedRace: Race = {
           id: String(raceResponse.id),
@@ -160,25 +162,25 @@ function TrackingScreenContent() {
 
   const handleStartTracking = async () => {
     if (!selectedRace) {
-      Alert.alert('No race selected', 'Choose a race from My Races before starting tracking.');
+      Alert.alert(t('mobile:ui.tracking.noRaceSelected'), t('mobile:ui.tracking.chooseARaceFromMyRaces'));
       return;
     }
 
     try {
       await startTracking(selectedRace);
     } catch {
-      Alert.alert('Error', 'Failed to start tracking. Please enable location services.');
+      Alert.alert(t('mobile:ui.tracking.error'), t('mobile:ui.tracking.failedToStartTrackingPleaseEnable'));
     }
   };
 
   const handleStopTracking = () => {
     Alert.alert(
-      'Stop Tracking',
-      'Are you sure you want to stop tracking? This will end your race session.',
+      t('mobile:trackingScreen.stopTitle'),
+      t('mobile:trackingScreen.stopBody'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('mobile:trackingScreen.cancel'), style: 'cancel' },
         {
-          text: 'Stop',
+          text: t('mobile:trackingScreen.stop'),
           style: 'destructive',
           onPress: () => {
             stopTracking();
@@ -193,9 +195,13 @@ function TrackingScreenContent() {
   const routePoints = useMemo(() => selectedRace?.routeCoordinates || [], [selectedRace]);
   const checkpointList = useMemo(() => selectedRace?.checkpoints || [], [selectedRace]);
 
-  const currentLocation = locations.length > 0
-    ? locations[locations.length - 1]
-    : routePoints[0] || { latitude: -34.0523, longitude: 18.4731 };
+  const initialRegion = useMemo(() => {
+    const latest = locations.length > 0 ? locations[locations.length - 1] : null;
+    if (latest && isValidCoordinate(latest)) {
+      return { latitude: latest.latitude, longitude: latest.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 };
+    }
+    return regionFor(routePoints.length ? routePoints : checkpointList.map((checkpoint) => checkpoint.location)) ?? undefined;
+  }, [locations, routePoints, checkpointList]);
 
   const sendSos = async (targetRaceId: string) => {
     setIsSendingSos(true);
@@ -251,12 +257,7 @@ function TrackingScreenContent() {
       <MapView
         style={styles.map}
         provider={PROVIDER_DEFAULT}
-        initialRegion={{
-          latitude: currentLocation.latitude,
-          longitude: currentLocation.longitude,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
+        initialRegion={initialRegion}
         showsUserLocation
         followsUserLocation={isTracking}
       >
@@ -312,7 +313,7 @@ function TrackingScreenContent() {
         ) : (
           <>
             <Ionicons name="alert-circle" size={20} color="#FFFFFF" />
-            <Text style={styles.sosText}>SOS</Text>
+            <Text style={styles.sosText}>{t('mobile:ui.tracking.sos')}</Text>
           </>
         )}
       </TouchableOpacity>

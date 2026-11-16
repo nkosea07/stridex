@@ -12,8 +12,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { resultsApi } from '@/lib/api'
 import type { RaceResult, RankingEntry } from '@/types'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
+import { ResultReleasePanel } from '@/components/results/ResultReleasePanel'
+import { TimingAnomaliesPanel } from '@/components/results/TimingAnomaliesPanel'
+import { ResultQueriesPanel } from '@/components/results/ResultQueriesPanel'
+import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 
 export function ResultsPage() {
+  const { t } = useTranslation()
   const { raceId } = useParams()
   const [results, setResults] = useState<RaceResult[]>([])
   const [resultTotal, setResultTotal] = useState(0)
@@ -42,7 +48,7 @@ export function ResultsPage() {
           if (!cancelled) setCountryRankings(data)
         }
       } catch {
-        toast.error('Failed to load rankings')
+        toast.error(t('results:ui.failedToLoadRankings'))
       } finally {
         if (!cancelled) setRankingsLoading(false)
       }
@@ -65,12 +71,12 @@ export function ResultsPage() {
       setHasMoreResults(data.page + 1 < data.totalPages)
     } catch (error) {
       if (append && error instanceof Error && error.message.toLowerCase().includes('results changed')) {
-        toast.error('Results changed. Reloading from the first page.')
+        toast.error(t('results:ui.resultsChangedReloadingFromTheFirst'))
         setResultRevision(null)
         await loadResults(0, false)
         return
       }
-      toast.error('Failed to load results')
+      toast.error(t('results:ui.failedToLoadResults'))
     } finally {
       if (append) setIsLoadingMore(false)
     }
@@ -96,14 +102,19 @@ export function ResultsPage() {
   const maleResults = filteredResults.filter((r) => r.participant?.gender === 'MALE')
   const femaleResults = filteredResults.filter((r) => r.participant?.gender === 'FEMALE')
 
+  const { user } = useAuth()
+  const canManageResults = isAdminRole(user?.role)
+  const [releaseRefresh, setReleaseRefresh] = useState(0)
+
   const handlePublishResults = async () => {
     if (!raceId) return
     try {
       await resultsApi.publish(raceId)
-      toast.success('Results published')
+      toast.success(t('results:ui.resultsPublished'))
+      setReleaseRefresh((value) => value + 1)
       await loadResults()
     } catch {
-      toast.error('Failed to publish results')
+      toast.error(t('results:ui.failedToPublishResults'))
     }
   }
 
@@ -118,7 +129,7 @@ export function ResultsPage() {
       link.click()
       URL.revokeObjectURL(url)
     } catch {
-      toast.error('Failed to export results')
+      toast.error(t('results:ui.failedToExportResults'))
     }
   }
 
@@ -126,15 +137,15 @@ export function ResultsPage() {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Pos</TableHead>
-          <TableHead>Athlete</TableHead>
-          <TableHead>Bib</TableHead>
-          <TableHead>Chip Time</TableHead>
-          <TableHead>Age Group</TableHead>
-          <TableHead>Pace</TableHead>
-          <TableHead>Speed</TableHead>
-          {showGenderPosition && <TableHead>Gender Pos</TableHead>}
-          <TableHead>Status</TableHead>
+          <TableHead>{t('results:ui.pos')}</TableHead>
+          <TableHead>{t('results:ui.athlete')}</TableHead>
+          <TableHead>{t('results:ui.bib')}</TableHead>
+          <TableHead>{t('results:ui.chipTime')}</TableHead>
+          <TableHead>{t('results:ui.ageGroup')}</TableHead>
+          <TableHead>{t('results:ui.pace')}</TableHead>
+          <TableHead>{t('results:ui.speed')}</TableHead>
+          {showGenderPosition && <TableHead>{t('results:ui.genderPos')}</TableHead>}
+          <TableHead>{t('results:ui.status')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -158,7 +169,7 @@ export function ResultsPage() {
             <TableCell>{result.averagePace || '-'}</TableCell>
             <TableCell><div className="flex items-center gap-1"><TrendingUp className="h-3 w-3 text-muted-foreground" />{result.averageSpeed ?? '-'} km/h</div></TableCell>
             {showGenderPosition && <TableCell>{result.genderPosition}</TableCell>}
-            <TableCell>{result.isOfficial ? <Badge className="bg-success/20 text-success">Official</Badge> : <Badge variant="outline">Provisional</Badge>}</TableCell>
+            <TableCell>{result.isOfficial ? <Badge className="bg-success/20 text-success">{t('results:ui.official')}</Badge> : <Badge variant="outline">{t('results:ui.provisional')}</Badge>}</TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -169,12 +180,12 @@ export function ResultsPage() {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Pos</TableHead>
+          <TableHead>{t('results:ui.pos')}</TableHead>
           <TableHead>{label}</TableHead>
-          <TableHead>Finishers</TableHead>
-          <TableHead>Total Time</TableHead>
-          <TableHead>Average</TableHead>
-          <TableHead>Best</TableHead>
+          <TableHead>{t('results:ui.finishers')}</TableHead>
+          <TableHead>{t('results:ui.totalTime')}</TableHead>
+          <TableHead>{t('results:ui.average')}</TableHead>
+          <TableHead>{t('results:ui.best')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -196,11 +207,11 @@ export function ResultsPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Results</h1>
-          <p className="text-muted-foreground">Race results and rankings</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t('results:ui.results')}</h1>
+          <p className="text-muted-foreground">{t('results:ui.raceResultsAndRankings')}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => void handleExportResults('csv')}><Download className="mr-2 h-4 w-4" />Export</Button>
+          <Button variant="outline" onClick={() => void handleExportResults('csv')}><Download className="mr-2 h-4 w-4" />{t('results:ui.export')}</Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" aria-label="Export format">
@@ -208,62 +219,66 @@ export function ResultsPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void handleExportResults('csv')}>CSV</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void handleExportResults('xlsx')}>Excel (XLSX)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void handleExportResults('pdf')}>PDF</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handleExportResults('csv')}>{t('results:ui.csv')}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handleExportResults('xlsx')}>{t('results:ui.excelXlsx')}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handleExportResults('pdf')}>{t('results:ui.pdf')}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button onClick={() => void handlePublishResults()}><Send className="mr-2 h-4 w-4" />Publish Results</Button>
+          <Button onClick={() => void handlePublishResults()}><Send className="mr-2 h-4 w-4" />{t('results:ui.publishResults')}</Button>
         </div>
       </div>
 
+      {raceId && <ResultReleasePanel raceId={raceId} canManage={canManageResults} refreshKey={releaseRefresh} />}
+      {raceId && canManageResults && <TimingAnomaliesPanel raceId={raceId} refreshKey={releaseRefresh} />}
+      {raceId && canManageResults && <ResultQueriesPanel raceId={raceId} onAnswered={() => setReleaseRefresh((value) => value + 1)} />}
+
       <div className="grid gap-4 sm:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Results</CardTitle></CardHeader><CardContent><div className="flex items-center gap-2"><Trophy className="h-5 w-5 text-chart-3" /><span className="text-2xl font-bold">{resultTotal}</span></div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Male Finishers</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{maleResults.length}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Female Finishers</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{femaleResults.length}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Best Time</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold font-mono">{filteredResults[0]?.chipTime || '--:--:--'}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('results:ui.results')}</CardTitle></CardHeader><CardContent><div className="flex items-center gap-2"><Trophy className="h-5 w-5 text-chart-3" /><span className="text-2xl font-bold">{resultTotal}</span></div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('results:ui.maleFinishers')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{maleResults.length}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('results:ui.femaleFinishers')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{femaleResults.length}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('results:ui.bestTime')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold font-mono">{filteredResults[0]?.chipTime || '--:--:--'}</div></CardContent></Card>
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search by name or bib..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input placeholder={t('results:ui.searchByNameOrBib')} className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={genderFilter} onValueChange={setGenderFilter}>
-          <SelectTrigger className="w-[150px]"><Filter className="mr-2 h-4 w-4" /><SelectValue placeholder="Gender" /></SelectTrigger>
+          <SelectTrigger className="w-[150px]"><Filter className="mr-2 h-4 w-4" /><SelectValue placeholder={t('results:ui.gender')} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="MALE">Male</SelectItem>
-            <SelectItem value="FEMALE">Female</SelectItem>
+            <SelectItem value="all">{t('results:ui.all')}</SelectItem>
+            <SelectItem value="MALE">{t('results:ui.male')}</SelectItem>
+            <SelectItem value="FEMALE">{t('results:ui.female')}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="overall">Overall</TabsTrigger>
-          <TabsTrigger value="men">Men</TabsTrigger>
-          <TabsTrigger value="women">Women</TabsTrigger>
-          <TabsTrigger value="teams">Teams</TabsTrigger>
-          <TabsTrigger value="countries">Countries</TabsTrigger>
+          <TabsTrigger value="overall">{t('results:ui.overall')}</TabsTrigger>
+          <TabsTrigger value="men">{t('results:ui.men')}</TabsTrigger>
+          <TabsTrigger value="women">{t('results:ui.women')}</TabsTrigger>
+          <TabsTrigger value="teams">{t('results:ui.teams')}</TabsTrigger>
+          <TabsTrigger value="countries">{t('results:ui.countries')}</TabsTrigger>
         </TabsList>
         <TabsContent value="overall"><ResultsTable list={filteredResults} /></TabsContent>
         <TabsContent value="men"><ResultsTable list={maleResults} showGenderPosition /></TabsContent>
         <TabsContent value="women"><ResultsTable list={femaleResults} showGenderPosition /></TabsContent>
         <TabsContent value="teams">
           {rankingsLoading ? (
-            <p className="py-6 text-sm text-muted-foreground">Loading team rankings…</p>
+            <p className="py-6 text-sm text-muted-foreground">{t('results:ui.loadingTeamRankings')}</p>
           ) : teamRankings.length === 0 ? (
-            <p className="py-6 text-sm text-muted-foreground">No team results available.</p>
+            <p className="py-6 text-sm text-muted-foreground">{t('results:ui.noTeamResultsAvailable')}</p>
           ) : (
             <RankingTable list={teamRankings} label="Team" />
           )}
         </TabsContent>
         <TabsContent value="countries">
           {rankingsLoading ? (
-            <p className="py-6 text-sm text-muted-foreground">Loading country rankings…</p>
+            <p className="py-6 text-sm text-muted-foreground">{t('results:ui.loadingCountryRankings')}</p>
           ) : countryRankings.length === 0 ? (
-            <p className="py-6 text-sm text-muted-foreground">No country results available.</p>
+            <p className="py-6 text-sm text-muted-foreground">{t('results:ui.noCountryResultsAvailable')}</p>
           ) : (
             <RankingTable list={countryRankings} label="Country" />
           )}

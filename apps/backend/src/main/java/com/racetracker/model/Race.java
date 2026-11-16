@@ -124,6 +124,15 @@ public class Race {
     @Column(name = "results_published_at")
     private OffsetDateTime resultsPublishedAt;
 
+    @Column(name = "started_at")
+    private OffsetDateTime startedAt;
+
+    @Column(name = "results_certified_at")
+    private OffsetDateTime resultsCertifiedAt;
+
+    @Column(name = "results_certified_by")
+    private UUID resultsCertifiedBy;
+
     @Column(name = "completed_at")
     private OffsetDateTime completedAt;
 

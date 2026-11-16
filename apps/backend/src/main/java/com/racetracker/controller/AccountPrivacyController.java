@@ -6,6 +6,9 @@ import com.racetracker.dto.privacy.DeleteAccountRequest;
 import com.racetracker.dto.privacy.DeletionStatusDto;
 import com.racetracker.exception.UnauthorizedException;
 import com.racetracker.repository.UserRepository;
+import com.racetracker.security.ClientAddressResolver;
+import com.racetracker.security.RequestRateLimiter;
+import jakarta.servlet.http.HttpServletRequest;
 import com.racetracker.service.AccountDeletionService;
 import com.racetracker.service.AccountPrivacyService;
 import org.springframework.http.ResponseEntity;
@@ -23,15 +26,21 @@ public class AccountPrivacyController {
     private final AccountPrivacyService accountPrivacyService;
     private final AccountDeletionService accountDeletionService;
     private final UserRepository userRepository;
+    private final RequestRateLimiter requestRateLimiter;
+    private final ClientAddressResolver clientAddressResolver;
 
     public AccountPrivacyController(
         AccountPrivacyService accountPrivacyService,
         AccountDeletionService accountDeletionService,
-        UserRepository userRepository
+        UserRepository userRepository,
+        RequestRateLimiter requestRateLimiter,
+        ClientAddressResolver clientAddressResolver
     ) {
         this.accountPrivacyService = accountPrivacyService;
         this.accountDeletionService = accountDeletionService;
         this.userRepository = userRepository;
+        this.requestRateLimiter = requestRateLimiter;
+        this.clientAddressResolver = clientAddressResolver;
     }
 
     @GetMapping("/data")
@@ -53,6 +62,15 @@ public class AccountPrivacyController {
         return ResponseEntity.ok(accountPrivacyService.updateConsent(currentUserId(authentication), request));
     }
 
+    @PostMapping("/legal-acceptance")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<com.racetracker.dto.privacy.LegalAcceptanceDto> acceptLegalDocuments(
+        @jakarta.validation.Valid @RequestBody com.racetracker.dto.privacy.LegalAcceptanceRequest request,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(accountPrivacyService.acceptLegalDocuments(currentUserId(authentication), request));
+    }
+
     @GetMapping("/deletion")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<DeletionStatusDto> deletionStatus(Authentication authentication) {
@@ -69,9 +87,12 @@ public class AccountPrivacyController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<DeletionStatusDto> requestDeletion(
         @RequestBody(required = false) DeleteAccountRequest request,
-        Authentication authentication
+        Authentication authentication,
+        HttpServletRequest servletRequest
     ) {
-        return ResponseEntity.accepted().body(accountDeletionService.request(currentUserId(authentication), request));
+        UUID userId = currentUserId(authentication);
+        requestRateLimiter.checkAccountDeletion(userId.toString(), clientAddressResolver.resolve(servletRequest));
+        return ResponseEntity.accepted().body(accountDeletionService.request(userId, request));
     }
 
     private UUID currentUserId(Authentication authentication) {

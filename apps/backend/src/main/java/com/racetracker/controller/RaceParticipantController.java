@@ -81,11 +81,21 @@ public class RaceParticipantController {
         return ResponseEntity.ok(new ApiMessageResponse("Participant deleted"));
     }
 
+    @GetMapping("/search")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
+    public ResponseEntity<List<StaffParticipantSearchResultDto>> search(@PathVariable UUID raceId, @RequestParam("q") String query) {
+        return ResponseEntity.ok(participantService.searchForStaff(raceId, query));
+    }
+
     @PostMapping("/{id}/check-in")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
-    public ResponseEntity<ParticipantDto> checkIn(@PathVariable UUID raceId, @PathVariable UUID id) {
+    public ResponseEntity<ParticipantDto> checkIn(@PathVariable UUID raceId, @PathVariable UUID id,
+                                                  Authentication authentication) {
         raceAccessGuard.assertCanPerformOperationalAction(raceId);
-        return ResponseEntity.ok(participantService.checkIn(raceId, id));
+        ParticipantDto dto = participantService.checkIn(raceId, id);
+        auditEventService.recordForActor("PARTICIPANT_CHECKED_IN", authentication.getName(),
+            "RACE_PARTICIPANT", dto.getId().toString(), "SUCCESS", Map.of("raceId", raceId.toString()));
+        return ResponseEntity.ok(dto);
     }
 
     @PostMapping("/qr-check-in")

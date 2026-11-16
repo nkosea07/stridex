@@ -5,10 +5,13 @@ import org.springframework.context.NoSuchMessageException;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
+
 /**
- * Thin wrapper over Spring's {@link MessageSource} for localized, parameterized messages.
- * Falls back to a supplied default when a key is missing so callers never break on a
- * missing translation.
+ * Thin wrapper over Spring's {@link MessageSource} for localized, parameterized messages. Text
+ * sent to someone else (emails, notifications) must use the recipient's locale via
+ * {@link #get(Locale, String, Object...)}; a key missing in that locale falls back to the base
+ * (English) catalog.
  */
 @Component
 public class LocalizedMessages {
@@ -21,6 +24,10 @@ public class LocalizedMessages {
 
     public String get(String code, Object... args) {
         return messageSource.getMessage(code, args, LocaleContextHolder.getLocale());
+    }
+
+    public String get(Locale locale, String code, Object... args) {
+        return messageSource.getMessage(code, args, locale == null ? UserLocales.DEFAULT : locale);
     }
 
     public String getOrDefault(String code, String fallback, Object... args) {

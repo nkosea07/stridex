@@ -14,14 +14,15 @@ timestamps, artifact checksums, and outcome for each rehearsal before pilot appr
    original HTTPS origin correctly for Secure refresh cookies and origin checks.
 3. Take a database backup and verify its checksum before applying migrations.
 4. Compare the live schema with the exact V1 baseline and all migrations through
-   the repository migration head (currently V49). Never run `baseline` or `repair` as a way to bypass a
+   the repository migration head (currently V58). Never run `baseline` or `repair` as a way to bypass a
    schema mismatch. Existing databases may be baselined at version 1 only after
    a DBA has recorded and approved a structural diff against `V1__baseline.sql`.
-5. Confirm global RFID simulation is disabled in production and any simulated
+5. Confirm the legal operator placeholders are replaced and reviewed, and that deployed `TRACKING_RETENTION_DAYS` and `PRIVACY_DELETION_GRACE_DAYS` match the published Privacy Policy (defaults 90 and 30 days). Changing either document's text requires bumping its version in `contract.json` and `LegalDocuments.java`, which re-prompts every signed-in user. Clients gate on the server's `legalAcceptanceRequired` flag, so older app builds are not trapped after a bump; they show an update/reload message if they try to accept outdated text. GPS retention deletes in batches (`racetracker.tracking.retention-batch-size`, default 5000; up to `retention-max-batches-per-run`, default 200, per hourly run). The first runs after enabling it work through any backlog of points older than 90 days, and race playback is unavailable for those points once they are deleted.
+6. Confirm global RFID simulation is disabled in production and any simulated
    race has explicit pilot authorization.
-6. Before dispatching deployment, provision the `race-tracker` namespace, PostgreSQL and Redis services, and `race-tracker-secrets`; the workflow fails preflight if any are missing or contain placeholder values. Set `AWS_S3_BUCKET` to the selected real bucket and `FRONTEND_URL` to the public HTTPS origin. Set `MAIL_ENABLED=true` for production with verified `MAIL_HOST`, `MAIL_PORT`, `MAIL_FROM`, and secret `MAIL_USERNAME`/`MAIL_PASSWORD`; staging may use `false`. The workflow rejects missing/placeholder inputs before applying manifests and starts the backend with the `prod` profile. Record the rendered ConfigMap validation result; do not apply `deploy/k8s/config.yaml` directly.
-7. Before V35, reconcile legacy `PENDING` refund attempts and duplicate non-null provider references against provider records. Automated refunds remain disabled. A super admin must stage each new full refund against a specific completed payment, perform or verify the external provider action, and record the receipt/case reference and outcome against that refund attempt; never infer success from a local pending row.
-8. Before deploying migrations V37–V42, run `psql "$DATABASE_URL" -f scripts/release-gate.sql` and keep the result with the release evidence. The gate blocks partial refund attempts and unknown-scope media jobs. For diagnosis, run this read-only query:
+7. Before dispatching deployment, provision the `race-tracker` namespace, PostgreSQL and Redis services, and `race-tracker-secrets`; the workflow fails preflight if any are missing or contain placeholder values. Set `AWS_S3_BUCKET` to the selected real bucket and `FRONTEND_URL` to the public HTTPS origin. Set `MAIL_ENABLED=true` for production with verified `MAIL_HOST`, `MAIL_PORT`, `MAIL_FROM`, and secret `MAIL_USERNAME`/`MAIL_PASSWORD`; staging may use `false`. The workflow rejects missing/placeholder inputs before applying manifests and starts the backend with the `prod` profile. Record the rendered ConfigMap validation result; do not apply `deploy/k8s/config.yaml` directly.
+8. Before V35, reconcile legacy `PENDING` refund attempts and duplicate non-null provider references against provider records. Automated refunds remain disabled. A super admin must stage each new full refund against a specific completed payment, perform or verify the external provider action, and record the receipt/case reference and outcome against that refund attempt; never infer success from a local pending row.
+9. Before deploying migrations V37–V42 or V52, run `psql "$DATABASE_URL" -f scripts/release-gate.sql` and keep the result with the release evidence. The gate blocks partial refund attempts and unknown-scope media jobs. For diagnosis, run this read-only query:
 
    ```sql
    SELECT r.id, r.payment_id, r.amount, r.status, r.provider_ref, r.created_at,
@@ -34,9 +35,14 @@ timestamps, artifact checksums, and outcome for each rehearsal before pilot appr
 
    Any row blocks pilot rollout until finance resolves it against provider records. Do not use the standard reconciliation endpoint to confirm a partial attempt as a full refund; it returns `REFUND_AMOUNT_MISMATCH` by design. Record the provider receipt, the amount actually returned, the operator, and the resolution decision in the finance case log. A reviewed correction must preserve the original partial amount in the audit trail.
    A provider `REVERSED` callback creates a `payment_reversal_cases` row and leaves the payment completed pending verification. Alert on `payments_reversal_review_open`; finance verifies the provider record in the super-admin **Payment reversals** view, then records a refund attempt outcome or documents why no refund is due. Do not treat a reversal row as evidence of a full refund.
-9. Confirm the SOS notification path is live before race day: staff assignments, email/push configuration, and the escalation gauges below must be alerting to an on-call owner. Confirm the rendered deployment manifests before any cluster apply; all rendering, image-tag, secret, namespace, storage, and service checks run before the first `kubectl apply`.
+10. Confirm the SOS notification path is live before race day: staff assignments, email/push configuration, and the escalation gauges below must be alerting to an on-call owner. Confirm the rendered deployment manifests before any cluster apply; all rendering, image-tag, secret, namespace, storage, and service checks run before the first `kubectl apply`.
 
 ## Backup and restore rehearsal
+
+Run `scripts/backup-restore-drill.sh` with `SOURCE_DATABASE_URL` and an empty, disposable
+`RESTORE_DATABASE_URL`. It dumps, checksums, restores, compares row counts for the critical
+tables, checks the Flyway history, and writes `evidence.txt`; it refuses to overwrite a
+non-empty target and never writes to the source. Keep the evidence file with the release record.
 
 Use a managed-database snapshot or `pg_dump` custom-format backup stored in the
 approved encrypted backup location. Do not place database credentials in shell
@@ -64,7 +70,7 @@ the source database during rehearsal.
   (nullable `import_jobs.row_errors`) are additive. V47 narrows bib-number and RFID-tag
   uniqueness from all races to each race; a prior image still runs, but it keeps rejecting
   numbers that another race already uses. V48 (nullable `notifications.subject_participant_id`,
-  backfilled from notification data) and V49 (new `import_job_sources` table) are additive; a
+  backfilled from notification data) V49 (new `import_job_sources` table), V50 (nullable `users.terms_version` and `terms_accepted_at`), and V51 (`checkpoints.self_scan_token` backfilled with a random secret, new `self_scan_claims` table), and V52 (`IGNORED` read status, `races.started_at`, `rfid_readers.clock_offset_ms`, canonical RFID tag values), V53 (result versions, certification lock, correction history, participant status reason), V54 (race waves), V55 (checkpoint passes; the participant/checkpoint unique key now includes `pass_number`), V56 (athlete result queries), V57 (voided timing records: `checkpoint_records.voided_at/voided_by/void_reason`, the active-pass unique key becomes a partial index, `VOIDED` read status, correction `action`), and V58 (`users.preferred_locale`, `account_erasures.notification_locale`) are additive; a prior image would count voided records as active times, so do not roll back below V57 after records have been voided; a prior image ignores waves, passes, versions, and queries, and keeps rejecting a second record for a checkpoint; a prior image ignores the token, but it still accepts self-scans without a code or a location check; a
   prior image ignores the new column and still writes imports to local disk; a prior image must tolerate the new columns and tables. Refresh tokens issued
   by a prior image have no session family and are treated as single-token sessions. Otherwise restore the verified backup into an isolated
   database, validate it, and perform the approved cutover.
@@ -111,6 +117,53 @@ the source database during rehearsal.
 - Public participant media requires both moderator approval and current participant consent. Revocation hides the listing, original, and thumbnail immediately; do not republish cached copies.
 - Untagged event media stays private until an authorized administrator records a non-person attestation with a reason through `attest-non-person`. A participant-linked image must use participant consent instead. The media console shows public/private state and explains when approved media is hidden for missing consent or attestation; revocation is audited.
 - The public media responses are `no-store`; do not add a CDN or cache layer that can serve media after consent is revoked.
+
+## Results release, certification, and queries
+
+- Publishing creates a new results version: an immutable copy of the results (no personal data) with a SHA-256 fingerprint chained to the previous version. Versions cannot be edited or deleted in the database.
+- Before certifying, review **Timing review** (finishers missing a timed mat, impossibly fast segments, out-of-order crossings) and answer every **Athlete result query**. Certification is refused while queries are open, while timing has changed since the last publish, or if the published results no longer match their fingerprint.
+- **Certify as official** locks timing records, corrections, penalties, result-affecting participant details, checkpoints, waves, gun times, self-scan approvals, and RFID reprocessing. New RFID reads are kept but ignored. To change anything, **Reopen results** with a reason (for example an upheld protest), make the change, publish, and certify again. Every step is audited.
+- A results integrity failure ("published results no longer match their recorded fingerprint") means the table was changed outside the platform. Do not certify; preserve the database, investigate, and republish.
+- A time that belongs to the wrong athlete (swapped chips, misread bib) is never deleted. In the checkpoint's **Records** dialog choose **Void** (removed from results, kept with your reason, its RFID reads are marked `VOIDED` so a reprocess or gun correction cannot recreate it) or **Reassign** (voids it and records the same time for the bib you enter). **Restore** undoes a void unless the athlete already has a time there. Voiding a finish returns the athlete to STARTED; voiding the read that missed a cutoff reverses the cutoff DNF. Laps are renumbered in time order. All three need a reason, are audited, and are blocked while results are certified.
+- Time corrections require a reason and keep full history. Status decisions (DQ, DNF, DNS, finished) require a reason. Checkpoints and participants with timing data cannot be deleted; withdraw the entry (DNS) instead. Only draft races can be deleted.
+
+## Wave starts and laps
+
+- Waves have their own gun. Create waves on the RFID page, assign bib ranges, and press **Fire gun now** at each start. Athletes in a wave are timed from their wave gun; reads before it are ignored. Correcting a wave or race gun time moves automatic times that fall before the new gun to the earliest valid read, or removes them, and re-runs ignored reads.
+- For loop courses, set a checkpoint's **Times crossed (laps)** and minimum seconds between crossings. Passes are derived from all reads, so late or out-of-order reads land on the right lap; only the final crossing of a finish checkpoint finishes the athlete. For a shared start/finish mat, mark the finish checkpoint so its first crossing is the chip start.
+
+## Packet pickup and offline staff capture
+
+- **Chip assignment** (race page → RFID timing → Chip assignment) assigns chips at packet pickup with a desktop RFID reader in keyboard mode. Every assignment is audited; a chip already assigned to someone else is refused.
+- **Athlete check-in on a phone** (Operations → Open athlete check-in): search by bib or name (at most 20 matches, no contact or medical details), or scan the QR code on the athlete's confirmation. Only confirmed or registered entries can be checked in (`CHECK_IN_NOT_ELIGIBLE` otherwise); send others to the registration desk. Every check-in is audited. Staff need a race staff assignment for the race; checkpoint-only volunteers cannot check athletes in.
+- **Recent entries and undo**: the Operations screen lists the last 20 entries at the selected checkpoint. Staff can undo their own manual or QR entry within 5 minutes (wrong bib, duplicate); it is voided with the reason, not deleted, and audited. After 5 minutes, or for chip reads and other people's entries, a race admin voids or reassigns it on the web.
+- **Wave starts from the start line**: an official assigned to the race can start a wave that has not started; the gun time is the moment they confirm. Correcting or backdating a gun time stays with race admins on the web.
+- Staff checkpoint captures made without a connection are saved on the phone with the tap time and sent automatically when the connection returns. The server accepts offline captures up to 24 hours old, never in the future or before the athlete's gun, and audits them. Signing out clears the queue, so send pending captures first.
+
+## Athlete payments and account recovery in the mobile app
+
+- Athletes pay the entry fee from the race page (**Pay now**). The app opens the provider checkout in an in-app browser; after payment the provider redirects to `PAYMENTS_RETURN_URL`, which should be a page that tells the athlete to close it and return to the app. The entry shows as paid only after the provider callback reaches `PAYMENTS_RESULT_URL`.
+- Checkout is refused for waitlisted, rejected, or disqualified entries (`PAYMENT_NOT_AVAILABLE_FOR_STATUS`). Registrations expose `amountDue` (current fee, including early-bird and team fees) while unpaid.
+- **Forgot password** and **Resend verification email** are available on the mobile sign-in screen. Both are rate-limited per account and per IP address; reset links open the web app's reset page.
+- Finisher certificates appear in the app once results are certified (official).
+
+## Mobile app minimum version
+
+- Set `MOBILE_MINIMUM_VERSION` (for example `1.4.0`) when an app release must be retired, and `MOBILE_IOS_STORE_URL` / `MOBILE_ANDROID_STORE_URL` so the update screen links to the store. Blank disables the check.
+- Older apps show a full-screen **Update required** prompt at launch (from `GET /api/v1/public/app-config`), and any API call they make is refused with HTTP 426 `APP_UPDATE_REQUIRED`. Browsers and integrations never send `X-App-Version` and are not affected.
+- Publish the new store build and wait for it to be live before raising the minimum. Restart the backend to apply a new value.
+
+## Admin two-factor sign-in
+
+- Super admins and race admins enrol an authenticator app at their next sign-in and save the one-time recovery codes. A lost device is handled by another super admin resetting MFA for that account (`/admin/users/{userId}/mfa/reset`). Admin accounts cannot sign in on the mobile app.
+- Rotate a leaked RFID reader key from the RFID page (**Rotate key**); the old key stops working immediately, so update the gateway at once.
+
+## Athlete checkpoint self-scans
+
+- Self-scan QR codes changed in V51. Codes printed before V51 contain only the checkpoint and race IDs, and the app now rejects them as out of date. Before race day, download each intermediate checkpoint's code from **Checkpoints → Self-scan QR code** and replace the printed copy.
+- Start and finish checkpoints have no self-scan code: their times come only from RFID, staff entry, or timing import. A race with no RFID or staff at the finish must staff it.
+- Treat printed codes as secrets. If a photo circulates, rotate the code (race admin), then replace the printed copy. Rotation invalidates every earlier copy immediately.
+- Scans the location check cannot confirm appear in **Self-scans awaiting review** on the Checkpoints page. They do not affect status or results until an official approves them. Review them before publishing results; claims for checkpoints with official timing close automatically.
 
 ## RFID race-day recovery
 

@@ -61,7 +61,7 @@ public class RacePenaltyController {
         Authentication authentication
     ) {
         raceAccessGuard.assertCanManage(raceId);
-        penaltyService.remove(raceId, penaltyId);
+        penaltyService.remove(raceId, participantId, penaltyId);
         auditEventService.recordForActor("RESULT_PENALTY_REMOVED", authentication.getName(), "PARTICIPANT",
             participantId.toString(), "SUCCESS", Map.of("penaltyId", penaltyId.toString()));
         return ResponseEntity.noContent().build();

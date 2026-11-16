@@ -35,6 +35,10 @@ public class Participant {
     private RaceCategory category;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "wave_id")
+    private RaceWave wave;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
 
@@ -105,6 +109,9 @@ public class Participant {
     // Registration
     @Column(name = "registration_source")
     private String registrationSource;
+
+    @Column(name = "status_reason", length = 500)
+    private String statusReason;
 
     @Column(name = "registered_at")
     private OffsetDateTime registeredAt;

@@ -1,5 +1,8 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Alert, Modal, TextInput, ActivityIndicator } from 'react-native';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Constants from 'expo-constants';
+import { api } from '@/lib/api';
+import { formatNumber } from '@/lib/format';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth';
@@ -7,8 +10,10 @@ import { useTheme } from '@/contexts/theme';
 import { useTranslation } from 'react-i18next';
 import { LOCALE_LABELS, SUPPORTED_LOCALES } from '@race-tracker/i18n';
 import { setAppLanguage } from '@/lib/i18n';
-import type { ThemePreference } from '@/types';
+import type { AthleteHistoryEntry, ThemePreference } from '@/types';
 import { getPreferredCapability, getUserCapabilities, hasCapability, isOperationsRole } from '@/lib/capabilities';
+
+const APP_VERSION = Constants.expoConfig?.version ?? '-';
 
 export default function ProfileScreen() {
   const { user, logout, isAuthenticated, updateProfile, updateCapabilities } = useAuthStore();
@@ -27,6 +32,30 @@ export default function ProfileScreen() {
   const [draftProfile, setDraftProfile] = useState({ firstName: '', lastName: '', phone: '' });
   const capabilities = getUserCapabilities(user);
   const preferredCapability = getPreferredCapability(user);
+  const [history, setHistory] = useState<AthleteHistoryEntry[] | null>(null);
+  const isAthlete = Boolean(user && hasCapability(user, 'ATHLETE'));
+
+  useEffect(() => {
+    if (!isAuthenticated || !isAthlete) {
+      setHistory(null);
+      return;
+    }
+    let active = true;
+    api.getMyHistory()
+      .then((entries) => { if (active) setHistory(entries); })
+      .catch(() => { if (active) setHistory(null); });
+    return () => { active = false; };
+  }, [isAuthenticated, isAthlete, user?.id]);
+
+  const profileStats = useMemo(() => {
+    if (!history) return null;
+    const finished = history.filter((entry) => !entry.disqualified);
+    return {
+      races: formatNumber(finished.length),
+      distance: formatNumber(finished.reduce((sum, entry) => sum + Number(entry.distanceKm ?? 0), 0), { maximumFractionDigits: 1 }),
+      medals: formatNumber(finished.filter((entry) => Boolean(entry.medal)).length),
+    };
+  }, [history]);
 
   const cycleTheme = async () => {
     const order: ThemePreference[] = ['light', 'dark', 'system'];
@@ -37,12 +66,12 @@ export default function ProfileScreen() {
 
   const handleLogout = () => {
     Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
+      t('mobile:ui.profile.signOut'),
+      t('mobile:profileScreen.signOutConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('mobile:ui.profile.cancel'), style: 'cancel' },
         { 
-          text: 'Sign Out', 
+          text: t('mobile:ui.profile.signOut'), 
           style: 'destructive',
           onPress: () => {
             void logout().finally(() => router.replace('/(auth)/login'));
@@ -63,7 +92,7 @@ export default function ProfileScreen() {
 
   const saveProfile = async () => {
     if (!draftProfile.firstName.trim() || !draftProfile.lastName.trim()) {
-      Alert.alert('Profile details required', 'Enter your first and last name before saving.');
+      Alert.alert(t('mobile:ui.profile.profileDetailsRequired'), t('mobile:ui.profile.enterYourFirstAndLastName'));
       return;
     }
 
@@ -75,9 +104,9 @@ export default function ProfileScreen() {
         phone: draftProfile.phone.trim() || undefined,
       });
       setProfileEditorVisible(false);
-      Alert.alert('Profile updated', 'Your profile changes have been saved.');
-    } catch (error) {
-      Alert.alert('Unable to update profile', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert(t('mobile:ui.profile.profileUpdated'), t('mobile:ui.profile.yourProfileChangesHaveBeenSaved'));
+    } catch {
+      Alert.alert(t('mobile:ui.profile.unableToUpdateProfile'), t('mobile:profileScreen.tryAgain'));
     } finally {
       setSavingProfile(false);
     }
@@ -90,43 +119,38 @@ export default function ProfileScreen() {
     try {
       await updateCapabilities({ capabilities, preferredCapability: capability });
       Alert.alert(t('mobile:capabilities.updated'));
-    } catch (error) {
+    } catch {
       Alert.alert(
         t('mobile:capabilities.updateFailed'),
-        error instanceof Error ? error.message : t('mobile:capabilities.updateFailed'),
+        t('mobile:profileScreen.tryAgain'),
       );
     } finally {
       setSavingCapability(false);
     }
   };
 
-  const unavailable = (feature: string) => {
-    Alert.alert(feature, 'This feature is not available in the pilot yet.');
-  };
-
   if (!isAuthenticated) {
     return (
       <View style={styles.authContainer}>
-        <Text style={styles.authTitle}>Sign in to view your profile</Text>
+        <Text style={styles.authTitle}>{t('mobile:ui.profile.signInToViewYourProfile')}</Text>
         <TouchableOpacity 
           style={styles.signInButton}
           onPress={() => router.push('/(auth)/login')}
         >
-          <Text style={styles.signInButtonText}>Sign In</Text>
+          <Text style={styles.signInButtonText}>{t('mobile:ui.profile.signIn')}</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   const menuItems = [
-    { icon: 'person-outline', label: 'Edit Profile', onPress: openProfileEditor },
-    { icon: 'medical-outline', label: 'Emergency Contact', onPress: () => unavailable('Emergency Contact') },
-    { icon: 'notifications-outline', label: 'Notifications', onPress: () => router.push('/notifications') },
-    { icon: 'shield-checkmark-outline', label: 'Privacy & Security', onPress: () => router.push('/privacy') },
-    { icon: 'trash-outline', label: 'Delete Account', onPress: () => router.push('/account-deletion') },
-    { icon: 'help-circle-outline', label: 'Help & Support', onPress: () => unavailable('Help & Support') },
-    { icon: 'document-text-outline', label: 'Terms & Conditions', onPress: () => unavailable('Terms & Conditions') },
-    { icon: 'information-circle-outline', label: 'About', onPress: () => Alert.alert('Race Tracker', 'Pilot mobile app. Version 1.0.0') },
+    { icon: 'person-outline', label: t('mobile:ui.profile.editProfile'), onPress: openProfileEditor },
+    { icon: 'notifications-outline', label: t('mobile:screens.notifications'), onPress: () => router.push('/notifications') },
+    { icon: 'settings-outline', label: t('mobile:settings.title'), onPress: () => router.push('/settings') },
+    { icon: 'shield-checkmark-outline', label: t('legal:common.privacyPolicy'), onPress: () => router.push('/privacy') },
+    { icon: 'trash-outline', label: t('account:deletion.title'), onPress: () => router.push('/account-deletion') },
+    { icon: 'document-text-outline', label: t('legal:common.terms'), onPress: () => router.push('/terms') },
+    { icon: 'information-circle-outline', label: t('mobile:profileScreen.about'), onPress: () => Alert.alert(t('mobile:ui.profile.raceTracker'), t('mobile:profileScreen.aboutBody', { version: APP_VERSION })) },
   ];
 
   return (
@@ -141,9 +165,6 @@ export default function ProfileScreen() {
               <Ionicons name="person" size={40} color="#FFFFFF" />
             </View>
           )}
-          <TouchableOpacity style={styles.editAvatarButton} onPress={() => unavailable('Profile photo')}>
-            <Ionicons name="camera" size={16} color="#FFFFFF" />
-          </TouchableOpacity>
         </View>
         <Text style={styles.name}>{user?.firstName} {user?.lastName}</Text>
         <Text style={styles.email}>{user?.email}</Text>
@@ -152,18 +173,18 @@ export default function ProfileScreen() {
       {/* Quick Stats */}
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>—</Text>
-          <Text style={styles.statLabel}>Races</Text>
+          <Text style={styles.statNumber}>{profileStats?.races ?? '—'}</Text>
+          <Text style={styles.statLabel}>{t('mobile:ui.profile.races')}</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>—</Text>
-          <Text style={styles.statLabel}>Total KM</Text>
+          <Text style={styles.statNumber}>{profileStats?.distance ?? '—'}</Text>
+          <Text style={styles.statLabel}>{t('mobile:ui.profile.totalKm')}</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>—</Text>
-          <Text style={styles.statLabel}>Badges</Text>
+          <Text style={styles.statNumber}>{profileStats?.medals ?? '—'}</Text>
+          <Text style={styles.statLabel}>{t('mobile:profileScreen.medals')}</Text>
         </View>
       </View>
 
@@ -218,11 +239,11 @@ export default function ProfileScreen() {
           <View style={styles.menuItemLeft}>
             <Ionicons name="moon-outline" size={22} color="#6B7280" />
             <View>
-              <Text style={styles.menuItemText}>Appearance</Text>
+              <Text style={styles.menuItemText}>{t('mobile:ui.profile.appearance')}</Text>
               <Text style={styles.menuSubText}>
                 {theme === 'system'
-                  ? `System (${resolvedTheme})`
-                  : theme.charAt(0).toUpperCase() + theme.slice(1)}
+                  ? t('mobile:profileScreen.themeSystem', { theme: t(`mobile:profileScreen.theme.${resolvedTheme}`) })
+                  : t(`mobile:profileScreen.theme.${theme}`)}
               </Text>
             </View>
           </View>
@@ -259,42 +280,42 @@ export default function ProfileScreen() {
       {/* Sign Out Button */}
       <TouchableOpacity style={styles.signOutButton} onPress={handleLogout}>
         <Ionicons name="log-out-outline" size={22} color="#DC2626" />
-        <Text style={styles.signOutText}>Sign Out</Text>
+        <Text style={styles.signOutText}>{t('mobile:ui.profile.signOut')}</Text>
       </TouchableOpacity>
 
-      <Text style={styles.version}>Version 1.0.0</Text>
+      <Text style={styles.version}>{t('mobile:profileScreen.version', { version: APP_VERSION })}</Text>
 
       <Modal visible={profileEditorVisible} transparent animationType="slide" onRequestClose={() => setProfileEditorVisible(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Edit Profile</Text>
+            <Text style={styles.modalTitle}>{t('mobile:ui.profile.editProfile')}</Text>
             <TextInput
               style={styles.modalInput}
               value={draftProfile.firstName}
               onChangeText={(firstName) => setDraftProfile((current) => ({ ...current, firstName }))}
-              placeholder="First name"
+              placeholder={t('mobile:ui.profile.firstName')}
               autoCapitalize="words"
             />
             <TextInput
               style={styles.modalInput}
               value={draftProfile.lastName}
               onChangeText={(lastName) => setDraftProfile((current) => ({ ...current, lastName }))}
-              placeholder="Last name"
+              placeholder={t('mobile:ui.profile.lastName')}
               autoCapitalize="words"
             />
             <TextInput
               style={styles.modalInput}
               value={draftProfile.phone}
               onChangeText={(phone) => setDraftProfile((current) => ({ ...current, phone }))}
-              placeholder="Phone (optional)"
+              placeholder={t('mobile:ui.profile.phoneOptional')}
               keyboardType="phone-pad"
             />
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.modalCancelButton} onPress={() => setProfileEditorVisible(false)} disabled={savingProfile}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t('mobile:ui.profile.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalSaveButton} onPress={saveProfile} disabled={savingProfile}>
-                {savingProfile ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalSaveText}>Save</Text>}
+                {savingProfile ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalSaveText}>{t('mobile:ui.profile.save')}</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -359,19 +380,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: '#FFFFFF',
-  },
-  editAvatarButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: '#1F2937',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
     borderColor: '#FFFFFF',
   },
   name: {

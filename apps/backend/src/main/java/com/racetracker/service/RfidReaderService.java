@@ -14,5 +14,7 @@ public interface RfidReaderService {
     List<RfidReaderDto> list(UUID raceId);
     RfidRaceOverviewDto overview(UUID raceId);
     RfidReaderDto revoke(UUID raceId, UUID readerId);
+
+    com.racetracker.dto.rfid.RfidReaderCreateResponse rotateKey(UUID raceId, UUID readerId);
     RfidReaderDto heartbeat(String apiKey, RfidReaderHeartbeatRequest request, String sourceIp);
 }

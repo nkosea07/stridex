@@ -29,7 +29,8 @@ class SpectatorAlertServiceTest {
         NotificationRepository notificationRepository = mock(NotificationRepository.class);
         NotificationService notificationService = mock(NotificationService.class);
         SpectatorAlertServiceImpl service =
-            new SpectatorAlertServiceImpl(followRepository, notificationRepository, notificationService);
+            new SpectatorAlertServiceImpl(followRepository, notificationRepository, notificationService,
+                com.racetracker.support.TestMessages.messages(), com.racetracker.support.TestMessages.locales());
 
         Race race = new Race();
         race.setId(UUID.randomUUID());
@@ -52,7 +53,9 @@ class SpectatorAlertServiceTest {
         service.onCheckpoint(participant, checkpoint);
 
         verify(notificationService).notify(eq(follower.getId()),
-            eq(Notification.NotificationType.CHECKPOINT_PASSED), any(), any(), any());
+            eq(Notification.NotificationType.CHECKPOINT_PASSED), any(), any(),
+            eq(java.util.Map.of("kind", "FOLLOWED_ATHLETE", "participantId", participant.getId().toString(),
+                "raceId", race.getId().toString())));
     }
 
     @Test
@@ -61,7 +64,8 @@ class SpectatorAlertServiceTest {
         NotificationRepository notificationRepository = mock(NotificationRepository.class);
         NotificationService notificationService = mock(NotificationService.class);
         SpectatorAlertServiceImpl service =
-            new SpectatorAlertServiceImpl(followRepository, notificationRepository, notificationService);
+            new SpectatorAlertServiceImpl(followRepository, notificationRepository, notificationService,
+                com.racetracker.support.TestMessages.messages(), com.racetracker.support.TestMessages.locales());
 
         Race race = new Race();
         race.setId(UUID.randomUUID());
@@ -87,7 +91,8 @@ class SpectatorAlertServiceTest {
         NotificationRepository notificationRepository = mock(NotificationRepository.class);
         NotificationService notificationService = mock(NotificationService.class);
         SpectatorAlertServiceImpl service =
-            new SpectatorAlertServiceImpl(followRepository, notificationRepository, notificationService);
+            new SpectatorAlertServiceImpl(followRepository, notificationRepository, notificationService,
+                com.racetracker.support.TestMessages.messages(), com.racetracker.support.TestMessages.locales());
 
         Race race = new Race();
         race.setId(UUID.randomUUID());

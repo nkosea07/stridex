@@ -13,6 +13,50 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ControllerAuthorizationMatrixTest {
 
     @Test
+    void resultIntegrityAndWaveGuards() {
+        String staffRead = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')";
+        String admin = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')";
+        assertGuard(ResultController.class, "certify", admin);
+        assertGuard(ResultController.class, "reopen", admin);
+        assertGuard(ResultController.class, "integrity", staffRead);
+        assertGuard(ResultController.class, "versions", staffRead);
+        assertGuard(ResultController.class, "anomalies", staffRead);
+        assertGuard(RaceWaveController.class, "list", staffRead);
+        assertGuard(RaceWaveController.class, "create", admin);
+        assertGuard(RaceWaveController.class, "start", staffRead);
+        assertGuard(RaceWaveController.class, "assign", admin);
+        assertGuard(RaceWaveController.class, "delete", admin);
+        assertGuard(ResultQueryController.class, "submit", "hasAuthority('CAP_ATHLETE')");
+        assertGuard(ResultQueryController.class, "mine", "hasAuthority('CAP_ATHLETE')");
+        assertGuard(ResultQueryController.class, "open", staffRead);
+        assertGuard(ResultQueryController.class, "resolve", staffRead);
+        String ops = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')";
+        assertGuard(CheckpointController.class, "voidRecord", ops);
+        assertGuard(CheckpointController.class, "restoreRecord", admin);
+        assertGuard(CheckpointController.class, "reassignRecord", admin);
+    }
+
+    @Test
+    void rfidTimingOperationGuards() {
+        String staffRead = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')";
+        String admin = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')";
+        assertGuard(RfidController.class, "unmatchedTags", staffRead);
+        assertGuard(RfidController.class, "reprocess", admin);
+        assertGuard(RfidController.class, "gunTime", staffRead);
+        assertGuard(RfidController.class, "correctGunTime", admin);
+        assertGuard(RfidController.class, "rotateReaderKey", admin);
+    }
+
+    @Test
+    void selfScanControllerGuards() {
+        String reviewGuard = "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')";
+        assertGuard(SelfScanController.class, "selfScanQr", reviewGuard);
+        assertGuard(SelfScanController.class, "rotateSelfScanCode", "hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')");
+        assertGuard(SelfScanController.class, "openClaims", reviewGuard);
+        assertGuard(SelfScanController.class, "decide", reviewGuard);
+    }
+
+    @Test
     void authControllerGuards() {
         assertGuard(AuthController.class, "me", "isAuthenticated()");
         assertGuard(AuthController.class, "updateProfile", "isAuthenticated()");
@@ -34,6 +78,7 @@ class ControllerAuthorizationMatrixTest {
         assertGuard(RaceParticipantController.class, "update", adminGuard);
         assertGuard(RaceParticipantController.class, "delete", adminGuard);
         assertGuard(RaceParticipantController.class, "checkIn", opsGuard);
+        assertGuard(RaceParticipantController.class, "search", opsGuard);
         assertGuard(RaceParticipantController.class, "importCsv", adminGuard);
         assertGuard(RaceParticipantController.class, "exportCsv", adminGuard);
         assertGuard(RaceParticipantController.class, "registerForRace", "hasAuthority('CAP_ATHLETE')");

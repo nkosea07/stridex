@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { PUBLIC_BROWSER_DEMO_RACE_ID } from '@/router/publicLoaders'
 import type { PublicRaceHubLoaderData } from '@/router/publicLoaders'
+import { LegalFooter } from '@/components/legal/LegalFooter'
 
 const HUB_POLL_INTERVAL_MS = 15000
 
@@ -275,6 +276,7 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
           </div>
         </div>
       </div>
+      <LegalFooter className="border-slate-200 bg-transparent" />
     </div>
   )
 }

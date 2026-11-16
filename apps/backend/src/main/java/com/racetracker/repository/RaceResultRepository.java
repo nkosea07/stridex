@@ -26,6 +26,8 @@ public interface RaceResultRepository extends JpaRepository<RaceResult, UUID> {
     @EntityGraph(attributePaths = {"participant", "category"})
     Optional<RaceResult> findByRaceIdAndParticipantId(UUID raceId, UUID participantId);
 
+    boolean existsByParticipantId(UUID participantId);
+
     @EntityGraph(attributePaths = {"participant", "participant.user", "category"})
     @Query("""
         select rr

@@ -45,7 +45,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: t('mobile:tabs.home'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
           ),
@@ -64,7 +64,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="my-races"
         options={{
-          title: 'My Races',
+          title: t('mobile:tabs.myRaces'),
           href: athleteModeAvailable && activeCapability === 'ATHLETE' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="calendar" size={size} color={color} />
@@ -74,7 +74,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="results"
         options={{
-          title: 'Results',
+          title: t('mobile:tabs.results'),
           href: athleteModeAvailable && activeCapability === 'ATHLETE' ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="trophy" size={size} color={color} />
@@ -94,7 +94,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('mobile:tabs.profile'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person" size={size} color={color} />
           ),

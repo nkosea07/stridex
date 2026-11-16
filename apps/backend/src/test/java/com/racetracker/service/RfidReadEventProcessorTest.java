@@ -50,6 +50,9 @@ class RfidReadEventProcessorTest {
     @Mock
     private SpectatorAlertService spectatorAlertService;
 
+    @Mock
+    private com.racetracker.service.TrackingService trackingService;
+
     private RfidReadEventProcessorImpl service;
 
     @BeforeEach
@@ -62,7 +65,10 @@ class RfidReadEventProcessorTest {
             participantCredentialService,
             rfidIngestMetrics,
             liveSummaryCacheInvalidator,
-            new CheckpointProgression(spectatorAlertService)
+            new CheckpointProgression(spectatorAlertService),
+            new com.racetracker.service.CutoffReevaluation(checkpointRecordRepository, participantRepository),
+            trackingService,
+            new com.racetracker.config.RaceTrackerProperties()
         );
     }
 
@@ -85,7 +91,7 @@ class RfidReadEventProcessorTest {
             fixture.reader.getRace().getId(),
             "TAG-1"
         )).thenReturn(participant);
-        when(checkpointRecordRepository.findByParticipantIdAndCheckpointId(participant.getId(), fixture.reader.getCheckpoint().getId()))
+        when(checkpointRecordRepository.findFirstByParticipantIdAndCheckpointIdOrderByPassNumberAsc(participant.getId(), fixture.reader.getCheckpoint().getId()))
             .thenReturn(Optional.empty());
         when(checkpointRecordRepository.save(any(CheckpointRecord.class))).thenAnswer(invocation -> {
             CheckpointRecord record = invocation.getArgument(0);

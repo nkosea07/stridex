@@ -42,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = RfidController.class)
-@Import({SecurityConfig.class, ApiSecurityExceptionHandler.class})
+@Import({SecurityConfig.class, com.racetracker.security.AdminMfaPolicy.class, ApiSecurityExceptionHandler.class})
 @EnableConfigurationProperties({RaceTrackerProperties.class, CorsProperties.class})
 @TestPropertySource(properties = {
     "server.servlet.context-path=",
@@ -59,6 +59,9 @@ class RfidControllerWebMvcTest {
 
     @MockBean
     private RfidIngestService rfidIngestService;
+
+    @MockBean
+    private com.racetracker.service.RfidTimingService rfidTimingService;
 
     @MockBean
     private AuditEventService auditEventService;

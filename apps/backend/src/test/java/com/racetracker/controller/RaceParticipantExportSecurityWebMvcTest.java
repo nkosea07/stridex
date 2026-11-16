@@ -34,7 +34,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = RaceParticipantController.class)
-@Import({SecurityConfig.class, ApiSecurityExceptionHandler.class, RaceAccessGuard.class})
+@Import({SecurityConfig.class, com.racetracker.security.AdminMfaPolicy.class, ApiSecurityExceptionHandler.class, RaceAccessGuard.class})
 @EnableConfigurationProperties({RaceTrackerProperties.class, CorsProperties.class})
 @TestPropertySource(properties = {
     "server.servlet.context-path=",

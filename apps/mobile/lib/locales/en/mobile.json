@@ -5,7 +5,23 @@
     "recoveryResult": "If your account is eligible, its deletion has been cancelled. You can now sign in.",
     "recoveryError": "We could not check the deletion request. Please try again.",
     "cancelDeletion": "Cancel a pending account deletion",
-    "recovering": "Checking account deletion…"
+    "recovering": "Checking account deletion…",
+    "adminWebOnlyTitle": "Use the web dashboard",
+    "adminWebOnly": "Administrator accounts require two-factor sign-in, which is available on the web dashboard. Sign in there, or use a staff or athlete account in the app.",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "noAccount": "Do not have an account?",
+    "verifyTitle": "Verify your email",
+    "verifyBody": "Open the link we emailed you to verify your account, then sign in. Did not get it?",
+    "verifyLater": "Not now",
+    "resendVerification": "Resend email",
+    "verificationSent": "If the account needs verifying, a new email is on its way. Check your inbox and spam folder.",
+    "verificationFailed": "The verification email could not be sent. Please try again.",
+    "failure": {
+      "invalidCredentials": "The email or password is incorrect.",
+      "network": "You appear to be offline. Check your connection and try again.",
+      "tooManyAttempts": "Too many attempts. Wait a few minutes and try again."
+    }
   },
   "register": {
     "onboardingTitle": "What brings you to Race Tracker?",
@@ -15,7 +31,13 @@
     "followRaces": "Follow races",
     "followRacesDescription": "Keep up with public race action and athletes.",
     "both": "Both",
-    "bothDescription": "Join races and follow the action in one account."
+    "bothDescription": "Join races and follow the action in one account.",
+    "creatingAccount": "Creating account…",
+    "createAccount": "Create account",
+    "failed": "Your account could not be created. Check your details and try again.",
+    "emailInUse": "An account with this email already exists. Sign in instead.",
+    "verifyEmailSent": "Account created. Open the link we emailed you to verify your account, then sign in.",
+    "ok": "OK"
   },
   "capabilities": {
     "title": "Experience mode",
@@ -102,7 +124,62 @@
     "totalDistance": "Total distance",
     "seeAll": "See all results",
     "loadMore": "Load more results",
-    "loadingMore": "Loading more results..."
+    "loadingMore": "Loading more results...",
+    "loading": "Loading your results",
+    "unknownRace": "Race",
+    "races": "Races",
+    "bestMarathon": "Best marathon",
+    "averagePace": "Average pace",
+    "achievements": "Achievements",
+    "unlocked": "Unlocked",
+    "locked": "Locked",
+    "achievement": {
+      "firstFinish": {
+        "title": "First finish",
+        "description": "Completed your first race"
+      },
+      "marathonFinisher": {
+        "title": "Marathon finisher",
+        "description": "Finished a marathon distance race"
+      },
+      "tenRaces": {
+        "title": "10 races",
+        "description": "Completed ten races"
+      }
+    },
+    "recentResults": "Recent results",
+    "empty": "No results available yet",
+    "official": "Official",
+    "provisional": "Provisional",
+    "time": "Time",
+    "position": "Position",
+    "certificate": "Certificate",
+    "certificateFailedTitle": "Certificate",
+    "certificateFailed": "The certificate could not be opened. Check your connection and try again.",
+    "query": {
+      "open": "Query result",
+      "title": "Query your result",
+      "help": "Tell the officials what looks wrong, for example a missing split or a time that does not match your watch. They will review it and reply here.",
+      "placeholder": "Describe the problem",
+      "tooShort": "Please describe the problem in at least {{count}} characters.",
+      "send": "Send query",
+      "sending": "Sending…",
+      "cancel": "Cancel",
+      "submitted": "Your query was sent. You will be notified when the officials answer.",
+      "failed": "Your query could not be sent. Please try again.",
+      "errors": {
+        "RESULT_QUERY_LIMIT": "You already have open queries for this race. Wait for the officials to answer them.",
+        "RESULTS_CERTIFIED": "These results are official. Contact the race organizer about any further concerns."
+      },
+      "listTitle": "Your result queries",
+      "answer": "Officials: {{note}}",
+      "status": {
+        "OPEN": "Waiting for officials",
+        "RESOLVED": "Resolved",
+        "REJECTED": "Answered – no change"
+      }
+    },
+    "personalBests": "Personal bests"
   },
   "home": {
     "spectatorTitle": "Follow races",
@@ -129,7 +206,8 @@
     "openRace": "Open race",
     "unavailableTitle": "Following is unavailable",
     "unavailableDescription": "We could not load your followed athletes. Try again.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "watchLive": "Watch {{name}} live"
   },
   "sos": {
     "send": "Send SOS",
@@ -164,7 +242,68 @@
     "registering": "Registering...",
     "loadMoreAthletes": "Load more athletes",
     "loadingMoreAthletes": "Loading more athletes...",
-    "followControlHint": "Follow or unfollow this athlete"
+    "followControlHint": "Follow or unfollow this athlete",
+    "notFound": "Race not found",
+    "about": "About",
+    "noDescription": "No description available.",
+    "categories": "Categories",
+    "noCategories": "No categories configured.",
+    "checkpoints": "Checkpoints",
+    "noCheckpoints": "No checkpoints configured.",
+    "cutoff": "Cutoff: {{time}}",
+    "participants": "Participants",
+    "registered": "registered",
+    "bib": "Bib {{bib}}",
+    "registrationStatus": {
+      "pending": "You are registered",
+      "confirmed": "Your place is confirmed",
+      "pending_review": "Your registration is waiting for review",
+      "waitlisted": "You are on the waitlist",
+      "rejected": "Your registration was not approved",
+      "cancelled": "Your registration was cancelled",
+      "dns": "Marked as did not start",
+      "dnf": "Marked as did not finish",
+      "finished": "Finished"
+    },
+    "register": {
+      "title": "Register for {{name}}",
+      "category": "Category",
+      "contactName": "Emergency contact name",
+      "contactNamePlaceholder": "Full name",
+      "contactPhone": "Emergency contact phone",
+      "contactPhonePlaceholder": "Phone number",
+      "relationship": "Relationship",
+      "relationshipPlaceholder": "For example, spouse",
+      "self": "Self",
+      "bloodType": "Blood type (optional)",
+      "bloodTypePlaceholder": "For example, O+",
+      "medicalConditions": "Medical conditions (optional)",
+      "medicalConditionsPlaceholder": "Conditions staff should know",
+      "allergies": "Allergies (optional)",
+      "allergiesPlaceholder": "Allergies",
+      "shirtSize": "Shirt size (optional)",
+      "shirtSizePlaceholder": "For example, M",
+      "teamName": "Team name (optional)",
+      "teamNamePlaceholder": "Team",
+      "clubName": "Club name (optional)",
+      "clubNamePlaceholder": "Club",
+      "acceptWaiverLabel": "I accept the race waiver",
+      "acceptWaiverVersion": "I accept the race waiver ({{version}})",
+      "cancel": "Cancel",
+      "submit": "Submit",
+      "submitting": "Submitting…",
+      "unavailableTitle": "Registration unavailable",
+      "noCategories": "No race categories are available for registration yet.",
+      "failedTitle": "Registration failed",
+      "selectCategory": "Please select a category.",
+      "acceptWaiver": "You must accept the race waiver.",
+      "failed": "We could not register you for this race. Check your details and try again.",
+      "submittedTitle": "Registration submitted",
+      "waitlisted": "You have been added to the waitlist.",
+      "pendingReview": "Your registration is pending review.",
+      "completed": "Registration completed.",
+      "completedPay": "Registration completed. Pay the entry fee below to secure your place."
+    }
   },
   "operations": {
     "title": "Race operations",
@@ -194,7 +333,15 @@
     "submitting": "Submitting…",
     "loadError": "Could not load race operations. Reopen this screen to retry.",
     "empty": "No races are available for your operations role.",
-    "noCheckpoints": "No checkpoints are available for this race."
+    "noCheckpoints": "No checkpoints are available for this race.",
+    "offlineSavedTitle": "Saved offline",
+    "offlineSavedBody": "No connection. Bib {{bib}} was saved on this phone with the time you tapped and will be sent automatically ({{count}} waiting).",
+    "offlinePending": "{{count}} captures waiting to send",
+    "offlineSendNow": "Send now",
+    "offlineSentTitle": "Offline captures sent",
+    "offlineSentBody": "{{count}} saved captures were sent.",
+    "offlineRejectedTitle": "Some captures were refused",
+    "offlineRejectedLine": "Bib {{bib}}: {{reason}}"
   },
   "scanner": {
     "recordedTitle": "Checkpoint recorded",
@@ -205,12 +352,330 @@
     "wrongRace": "This checkpoint is not part of your current race.",
     "unreadable": "Unable to read checkpoint data.",
     "ok": "OK",
-    "tryAgain": "Try again"
+    "tryAgain": "Try again",
+    "title": "Scan checkpoint",
+    "instructions": "Position the checkpoint QR code within the frame",
+    "scanAgain": "Tap to scan again",
+    "requestingPermission": "Requesting camera permission…",
+    "permissionTitle": "Camera access required",
+    "permissionBody": "Allow camera access to scan checkpoint QR codes.",
+    "enableCamera": "Enable camera",
+    "locating": "Confirming your location…",
+    "outdatedCode": "This checkpoint code is out of date. Ask a race official for the current code.",
+    "provisionalTitle": "Scan received",
+    "provisionalBody": "We could not confirm your location at this checkpoint, so an official will review it. Keep going — it does not affect your official timing until confirmed.",
+    "errors": {
+      "SELF_SCAN_CODE_INVALID": "This checkpoint code is not valid. Scan the code displayed at the checkpoint.",
+      "SELF_SCAN_NOT_ALLOWED": "Start and finish times come from official timing, so this checkpoint cannot be self-scanned.",
+      "RACE_NOT_IN_PROGRESS": "Checkpoints can only be scanned while the race is in progress.",
+      "CHECKPOINT_ALREADY_RECORDED": "This checkpoint is already recorded for you.",
+      "TRACKING_CLOSED": "Your race entry is closed, so checkpoints can no longer be recorded."
+    }
   },
   "trackingStop": {
     "title": "Tracking stopped",
     "notRegistered": "Your location could not be shared because you are no longer registered for this race. Contact the race organizer if this is unexpected.",
     "notPermitted": "Your location could not be shared because your account is not allowed to track this race. Contact the race organizer if this is unexpected.",
+    "closed": "Live tracking has ended because your race is over or your result has been recorded. Your location is no longer being shared.",
     "ok": "OK"
+  },
+  "ui": {
+    "tracking": {
+      "sos": "SOS",
+      "noRaceSelected": "No race selected",
+      "error": "Error",
+      "chooseARaceFromMyRaces": "Choose a race from My Races before starting tracking.",
+      "failedToStartTrackingPleaseEnable": "Failed to start tracking. Please enable location services."
+    },
+    "register": {
+      "createAccount": "Create Account",
+      "joinThousandsOfAthletesTrackingTheir": "Join thousands of athletes tracking their races",
+      "alreadyHaveAnAccount": "Already have an account?",
+      "signIn": "Sign In",
+      "error": "Error",
+      "pleaseFillInAllRequiredFields": "Please fill in all required fields",
+      "passwordsDoNotMatch": "Passwords do not match",
+      "passwordMustBeAtLeast8": "Password must be at least 8 characters",
+      "firstName": "First Name",
+      "lastName": "Last Name",
+      "emailAddress": "Email address",
+      "phoneNumberOptional": "Phone number (optional)",
+      "password": "Password",
+      "confirmPassword": "Confirm Password"
+    },
+    "login": {
+      "raceTracker": "Race Tracker",
+      "signInToContinue": "Sign in to continue",
+      "forgotPassword": "Forgot password?",
+      "signUp": "Sign Up",
+      "error": "Error",
+      "loginFailed": "Login Failed",
+      "pleaseFillInAllFields": "Please fill in all fields",
+      "emailAddress": "Email address",
+      "password": "Password"
+    },
+    "profile": {
+      "signInToViewYourProfile": "Sign in to view your profile",
+      "signIn": "Sign In",
+      "races": "Races",
+      "totalKm": "Total KM",
+      "appearance": "Appearance",
+      "signOut": "Sign Out",
+      "editProfile": "Edit Profile",
+      "cancel": "Cancel",
+      "save": "Save",
+      "profileDetailsRequired": "Profile details required",
+      "profileUpdated": "Profile updated",
+      "unableToUpdateProfile": "Unable to update profile",
+      "raceTracker": "Race Tracker",
+      "enterYourFirstAndLastName": "Enter your first and last name before saving.",
+      "yourProfileChangesHaveBeenSaved": "Your profile changes have been saved.",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "phoneOptional": "Phone (optional)"
+    },
+    "notifications": {
+      "enablePushNotifications": "Enable push notifications",
+      "noNotificationsYet": "No notifications yet.",
+      "unableToLoadNotifications": "Unable to load notifications"
+    }
+  },
+  "appUpdate": {
+    "title": "Update required",
+    "body": "This version of the app is no longer supported. Install the latest version to keep tracking, timing and results working.",
+    "action": "Update the app",
+    "storeFallback": "Open your app store and update Race Tracker to continue."
+  },
+  "forgotPassword": {
+    "title": "Reset your password",
+    "intro": "Enter the email you signed up with. We will send you a link to choose a new password.",
+    "send": "Send reset link",
+    "sent": "If an account exists for that email, we have sent a reset link. Open it on this phone or any computer to choose a new password, then sign in here.",
+    "backToSignIn": "Back to sign in",
+    "back": "Back",
+    "invalidEmail": "Enter a valid email address.",
+    "tooMany": "Too many requests. Wait a few minutes and try again.",
+    "network": "You appear to be offline. Check your connection and try again.",
+    "failed": "The reset link could not be sent. Please try again."
+  },
+  "payment": {
+    "title": "Entry fee",
+    "due": "Entry fee due: {{amount}}",
+    "payNow": "Pay now",
+    "opening": "Opening payment…",
+    "promoCode": "Promo code (optional)",
+    "paid": "Entry fee paid",
+    "confirmed": "Payment received. Your entry fee is paid.",
+    "awaitingConfirmation": "If you completed the payment, it will show as paid as soon as the payment provider confirms it. You will also get a notification.",
+    "unavailable": "Online payment is not available for this race right now. Contact the race organizer.",
+    "network": "You appear to be offline. Check your connection and try again.",
+    "errors": {
+      "PAYMENT_ALREADY_COMPLETED": "This entry is already paid.",
+      "PAYMENT_WAIVED": "The organizer waived the entry fee for you.",
+      "PAYMENT_NOT_AVAILABLE_FOR_STATUS": "Payment opens once your registration has a confirmed place.",
+      "REFUND_STATE_CONFLICT": "This entry was refunded. Contact the race organizer."
+    }
+  },
+  "tabs": {
+    "home": "Home",
+    "myRaces": "My races",
+    "results": "Results",
+    "profile": "Profile"
+  },
+  "screens": {
+    "raceDetails": "Race details",
+    "liveTracking": "Live tracking",
+    "notifications": "Notifications",
+    "athleteLive": "Live athlete"
+  },
+  "notificationsScreen": {
+    "tryAgain": "Please pull to refresh and try again.",
+    "pushEnabled": "Push enabled",
+    "pushUnavailable": "Push unavailable",
+    "pushEnabledBody": "This device will receive race alerts.",
+    "pushUnavailableBody": "Notifications could not be enabled. Check device permissions and try again."
+  },
+  "trackingScreen": {
+    "stopTitle": "Stop tracking",
+    "stopBody": "Are you sure you want to stop tracking? This ends your race session.",
+    "cancel": "Cancel",
+    "stop": "Stop",
+    "title": "Race tracking",
+    "distance": "DISTANCE",
+    "distanceValue": "{{distance}} km",
+    "pace": "PACE",
+    "paceValue": "{{pace}} /km",
+    "progress": "RACE PROGRESS",
+    "batterySaver": "BATTERY SAVER",
+    "batterySaverHint": "Reduces GPS frequency"
+  },
+  "mapWeb": {
+    "title": "Map preview is not available on the web",
+    "subtitle": "Full tracking maps are designed for the iOS and Android apps.",
+    "info": "Use the web dashboard for race-wide monitoring."
+  },
+  "profileScreen": {
+    "signOutConfirm": "Are you sure you want to sign out?",
+    "tryAgain": "Please try again.",
+    "about": "About",
+    "aboutBody": "Race Tracker mobile app, version {{version}}.",
+    "version": "Version {{version}}",
+    "medals": "Medals",
+    "themeSystem": "System ({{theme}})",
+    "theme": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    }
+  },
+  "homeScreen": {
+    "tagline": "Track your races in real time",
+    "welcome": "Welcome back!",
+    "welcomeBack": "Welcome back, {{name}}!",
+    "nextChallenge": "Ready for your next challenge?",
+    "nextRace": "Your next race",
+    "daysToGo_one": "day to go",
+    "daysToGo_other": "days to go",
+    "yourBib": "Your bib number",
+    "noUpcoming": "No upcoming registered race",
+    "browseRaces": "Browse races",
+    "quickActions": "Quick actions",
+    "findRaces": "Find races",
+    "startTracking": "Start tracking",
+    "scanQr": "Scan QR",
+    "myStats": "My stats"
+  },
+  "myRacesScreen": {
+    "bib": "Bib number",
+    "result": "Result",
+    "paymentDue": "Entry fee due",
+    "tabs": {
+      "upcoming": "Upcoming",
+      "completed": "Completed",
+      "all": "All"
+    },
+    "empty": {
+      "upcoming": "No upcoming races",
+      "completed": "No completed races",
+      "all": "You have not registered for any races yet"
+    }
+  },
+  "athleteLive": {
+    "loading": "Loading live tracking",
+    "noLocation": "No live location shared yet",
+    "seenJustNow": "Location updated just now",
+    "seenMinutesAgo_one": "Location updated {{count}} minute ago",
+    "seenMinutesAgo_other": "Location updated {{count}} minutes ago",
+    "mapLabel": "Map of the course and the athlete's position",
+    "noMap": "The map appears once the course or the athlete's location is available.",
+    "stats": {
+      "lastCheckpoint": "Last checkpoint",
+      "elapsed": "Elapsed",
+      "pace": "Average pace",
+      "predictedFinish": "Predicted finish",
+      "remaining": "Distance remaining"
+    },
+    "splits": "Splits",
+    "noSplits": "No checkpoint times yet.",
+    "refreshNote": "Updates every 30 seconds while this screen is open. Pull down to refresh now."
+  },
+  "checkIn": {
+    "title": "Athlete check-in",
+    "description": "Find an athlete by bib number or name, or scan the QR code on their registration confirmation.",
+    "scan": "Scan athlete QR code",
+    "stopScanning": "Stop scanning",
+    "searchPlaceholder": "Bib number or name",
+    "noMatches": "No athletes match.",
+    "checkIn": "Check in",
+    "checkingIn": "Checking in…",
+    "checkInName": "Check in {{name}}",
+    "checkedIn": "Checked in",
+    "confirmTitle": "Check in athlete",
+    "confirmBody": "Check in {{name}} (bib {{bib}})? Confirm their identity first.",
+    "doneTitle": "Checked in",
+    "doneBody": "{{name}} (bib {{bib}}) is checked in.",
+    "failedTitle": "Check-in failed",
+    "next": "Next",
+    "cancel": "Cancel",
+    "cameraTitle": "Camera",
+    "cameraDenied": "Camera access is needed to scan QR codes. Enable it in Settings or search by bib instead."
+  },
+  "staff": {
+    "openCheckIn": "Open athlete check-in",
+    "recentEntries": "Recent entries at this checkpoint",
+    "refresh": "Refresh",
+    "noEntries": "No entries yet.",
+    "undo": "Undo",
+    "undoing": "Undoing…",
+    "undoBib": "Undo entry for bib {{bib}}",
+    "undoTitle": "Undo this entry?",
+    "undoBody": "Bib {{bib}} will be removed from results. You can undo your own entries for 5 minutes; after that, ask a race admin.",
+    "reasonWrongBib": "Wrong bib entered",
+    "reasonDuplicate": "Duplicate entry",
+    "undoneTitle": "Entry undone",
+    "undoneBody": "The entry for bib {{bib}} was removed.",
+    "method": {
+      "MANUAL": "Manual",
+      "QR_CODE": "QR",
+      "RFID": "Chip",
+      "GPS": "GPS"
+    },
+    "waves": "Wave starts",
+    "waveStartedAt": "Started {{time}}",
+    "waveScheduled": "Scheduled {{time}}",
+    "waveNotStarted": "Not started",
+    "startWave": "Start",
+    "startWaveName": "Start wave {{name}}",
+    "starting": "Starting…",
+    "startWaveTitle": "Start this wave?",
+    "startWaveBody": "Fire the gun for {{name}} now? The current time becomes the official start for every athlete in this wave.",
+    "waveCorrectionsNote": "Only race admins can correct a gun time, on the web dashboard.",
+    "errors": {
+      "network": "You appear to be offline. Check your connection and try again.",
+      "notFound": "Not found. Check the bib number or the QR code.",
+      "notAllowed": "You are not assigned to do this for this race.",
+      "generic": "Something went wrong. Please try again.",
+      "CHECK_IN_NOT_ELIGIBLE": "This athlete cannot be checked in. Their registration is not confirmed; send them to the registration desk.",
+      "QR_CHECK_IN_CODE_INVALID": "This is not an athlete check-in QR code.",
+      "PARTICIPANT_SEARCH_INVALID": "Enter a bib number or a name.",
+      "CHECKPOINT_ALREADY_RECORDED": "This bib already has a time at this checkpoint.",
+      "PARTICIPANT_NOT_ENTERED": "This bib is not an accepted entrant in this race.",
+      "RESULTS_CERTIFIED": "Results are certified. Ask a race admin to reopen them.",
+      "RECORD_UNDO_WINDOW_EXPIRED": "It is more than 5 minutes since this entry. Ask a race admin to correct it.",
+      "GUN_TIME_OFFICIAL_NOW_ONLY": "Officials can only start a wave at the current time.",
+      "OFFLINE_CAPTURE_BEFORE_GUN": "This capture is earlier than the athlete's start.",
+      "OFFLINE_CAPTURE_OUT_OF_RANGE": "This capture is too old or in the future."
+    }
+  },
+  "settings": {
+    "title": "Notifications and privacy",
+    "loading": "Loading your settings",
+    "loadFailed": "Your settings could not be loaded.",
+    "retry": "Try again",
+    "saveFailedTitle": "Not saved",
+    "saveFailed": "The change could not be saved. Check your connection and try again.",
+    "notificationsTitle": "How we contact you",
+    "notificationsHelp": "Choose where race updates, results, and alerts about athletes you follow are sent.",
+    "channel": {
+      "pushEnabled": "Push notifications",
+      "emailEnabled": "Email",
+      "whatsappEnabled": "WhatsApp"
+    },
+    "channelHint": {
+      "pushEnabled": "Alerts on this phone",
+      "emailEnabled": "Sent to your account email",
+      "whatsappEnabled": "Only if the race organizer sends WhatsApp updates"
+    },
+    "safetyNote": "Every notification is still kept in your Notifications list in the app.",
+    "privacyTitle": "Privacy",
+    "marketing": "News and offers",
+    "marketingHint": "Occasional news about upcoming races. Race updates are not affected.",
+    "processingConsent": "You agreed to the processing of your data on {{date}}.",
+    "export": "Share a copy of my data",
+    "exporting": "Preparing your data…",
+    "exportHint": "Includes your profile, registrations, results, and consents as text you can save or send.",
+    "exportTitle": "Your data",
+    "exportShareTitle": "My Race Tracker data",
+    "exportFailed": "Your data could not be prepared. Please try again."
   }
 }

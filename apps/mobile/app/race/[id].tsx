@@ -1,5 +1,6 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, Modal, TextInput, Switch } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, getApiErrorKind, getNonEmptyRouteId, type ApiErrorKind } from '@/lib/api';
@@ -75,7 +76,7 @@ function RaceDetailScreenContent() {
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [registrationFields, setRegistrationFields] = useState<RegistrationField[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
-  const [contact, setContact] = useState({ name: '', phone: '', relationship: 'Self' });
+  const [contact, setContact] = useState({ name: '', phone: '', relationship: '' });
   const [medical, setMedical] = useState({ bloodType: '', medicalConditions: '', allergies: '' });
   const [shirtSize, setShirtSize] = useState('');
   const [teamName, setTeamName] = useState('');
@@ -86,19 +87,59 @@ function RaceDetailScreenContent() {
   const [myRegistration, setMyRegistration] = useState<Registration | null>(null);
   const [savingMediaConsent, setSavingMediaConsent] = useState(false);
 
+  const [paying, setPaying] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+
+  const loadMyRegistration = useCallback(async () => {
+    if (!routeId || !canRegister) return null;
+    const registrations = await api.getMyRaces();
+    return registrations.find((item) => item.raceId === routeId) ?? null;
+  }, [routeId, canRegister]);
+
   useEffect(() => {
     if (!routeId || !canRegister) {
       setMyRegistration(null);
       return;
     }
     let active = true;
-    void api.getMyRaces().then((registrations) => {
-      if (active) setMyRegistration(registrations.find((item) => item.raceId === routeId) ?? null);
+    void loadMyRegistration().then((registration) => {
+      if (active) setMyRegistration(registration);
     }).catch(() => {
       if (active) setMyRegistration(null);
     });
     return () => { active = false; };
-  }, [routeId, canRegister]);
+  }, [routeId, canRegister, loadMyRegistration]);
+
+  const registrationState = String(myRegistration?.status ?? '').toLowerCase();
+  const paymentDue = Boolean(myRegistration
+    && Number(myRegistration.amountDue ?? 0) > 0
+    && (!myRegistration.paymentStatus || myRegistration.paymentStatus === 'UNPAID' || myRegistration.paymentStatus === 'PENDING')
+    && !['rejected', 'waitlisted', 'cancelled'].includes(registrationState));
+
+  const startPayment = async () => {
+    if (!myRegistration || !routeId || paying) return;
+    setPaying(true);
+    try {
+      const checkout = await api.startPaymentCheckout(routeId, myRegistration.id, promoCode);
+      if (!checkout.checkoutUrl) {
+        Alert.alert(t('mobile:payment.title'), t('mobile:payment.unavailable'));
+        return;
+      }
+      await WebBrowser.openBrowserAsync(checkout.checkoutUrl);
+      const refreshed = await loadMyRegistration().catch(() => null);
+      if (refreshed) setMyRegistration(refreshed);
+      Alert.alert(t('mobile:payment.title'), refreshed?.paymentStatus === 'PAID'
+        ? t('mobile:payment.confirmed')
+        : t('mobile:payment.awaitingConfirmation'));
+    } catch (error: any) {
+      const known = ['PAYMENT_ALREADY_COMPLETED', 'PAYMENT_WAIVED', 'PAYMENT_NOT_AVAILABLE_FOR_STATUS', 'REFUND_STATE_CONFLICT'];
+      Alert.alert(t('mobile:payment.title'), known.includes(error?.code)
+        ? t(`mobile:payment.errors.${error.code}`)
+        : error?.isNetworkError ? t('mobile:payment.network') : t('mobile:payment.unavailable'));
+    } finally {
+      setPaying(false);
+    }
+  };
 
   const updateMediaConsent = async (consented: boolean) => {
     if (!myRegistration || savingMediaConsent) return;
@@ -257,7 +298,7 @@ function RaceDetailScreenContent() {
 
     const firstCategory = (race.categories || [])[0];
     if (!firstCategory?.id) {
-      Alert.alert('Registration unavailable', 'No race categories are available for registration yet.');
+      Alert.alert(t('mobile:race.register.unavailableTitle'), t('mobile:race.register.noCategories'));
       return;
     }
 
@@ -266,7 +307,7 @@ function RaceDetailScreenContent() {
     setContact({
       name: user ? `${user.firstName} ${user.lastName}`.trim() : '',
       phone: user?.phone || '',
-      relationship: 'Self',
+      relationship: t('mobile:race.register.self'),
     });
     setIsRegisterOpen(true);
 
@@ -281,11 +322,11 @@ function RaceDetailScreenContent() {
 
   const submitRegistration = async () => {
     if (!selectedCategoryId) {
-      Alert.alert('Registration failed', 'Please select a category.');
+      Alert.alert(t('mobile:race.register.failedTitle'), t('mobile:race.register.selectCategory'));
       return;
     }
     if (race?.requireWaiver && !waiverAccepted) {
-      Alert.alert('Registration failed', 'You must accept the race waiver.');
+      Alert.alert(t('mobile:race.register.failedTitle'), t('mobile:race.register.acceptWaiver'));
       return;
     }
 
@@ -313,15 +354,19 @@ function RaceDetailScreenContent() {
       setMyRegistration(registration);
       const status = registration.status;
       Alert.alert(
-        'Registration submitted',
+        t('mobile:race.register.submittedTitle'),
         status === 'waitlisted'
-          ? 'You have been added to the waitlist.'
+          ? t('mobile:race.register.waitlisted')
           : status === 'pending_review'
-            ? 'Your registration is pending review.'
-            : 'Registration completed.',
+            ? t('mobile:race.register.pendingReview')
+            : Number(registration.amountDue ?? 0) > 0
+              ? t('mobile:race.register.completedPay')
+              : t('mobile:race.register.completed'),
       );
     } catch (error: any) {
-      Alert.alert('Registration failed', error?.message || 'Unable to register for this race.');
+      Alert.alert(t('mobile:race.register.failedTitle'), error?.isNetworkError
+        ? t('mobile:payment.network')
+        : t('mobile:race.register.failed'));
     } finally {
       setIsRegistering(false);
     }
@@ -364,7 +409,7 @@ function RaceDetailScreenContent() {
   if (!race) {
     return (
       <View style={styles.center}>
-        <Text style={styles.emptyText}>Race not found</Text>
+        <Text style={styles.emptyText}>{t('mobile:race.notFound')}</Text>
       </View>
     );
   }
@@ -406,12 +451,12 @@ function RaceDetailScreenContent() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About</Text>
-            <Text style={styles.description}>{race.description || 'No description available.'}</Text>
+            <Text style={styles.sectionTitle}>{t('mobile:race.about')}</Text>
+            <Text style={styles.description}>{race.description || t('mobile:race.noDescription')}</Text>
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Categories</Text>
+            <Text style={styles.sectionTitle}>{t('mobile:race.categories')}</Text>
             {(race.categories || []).length ? (
               (race.categories || []).map((category: any) => (
                 <View key={String(category.id)} style={styles.categoryCard}>
@@ -427,12 +472,12 @@ function RaceDetailScreenContent() {
                 </View>
               ))
             ) : (
-              <Text style={styles.placeholderText}>No categories configured.</Text>
+              <Text style={styles.placeholderText}>{t('mobile:race.noCategories')}</Text>
             )}
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Checkpoints</Text>
+            <Text style={styles.sectionTitle}>{t('mobile:race.checkpoints')}</Text>
             <View style={styles.checkpointsList}>
               {checkpoints.length ? (
                 checkpoints.map((checkpoint, index) => (
@@ -451,24 +496,24 @@ function RaceDetailScreenContent() {
                       <Text style={styles.checkpointName}>{checkpoint.name}</Text>
                       <Text style={styles.checkpointDetails}>
                         {formatDistanceKm(Number(checkpoint.distanceFromStartKm || 0))}
-                        {checkpoint.cutoffTime ? ` • Cutoff: ${checkpoint.cutoffTime}` : ''}
+                        {checkpoint.cutoffTime ? ` • ${t('mobile:race.cutoff', { time: checkpoint.cutoffTime })}` : ''}
                       </Text>
                     </View>
                   </View>
                 ))
               ) : (
-                <Text style={styles.placeholderText}>No checkpoints configured.</Text>
+                <Text style={styles.placeholderText}>{t('mobile:race.noCheckpoints')}</Text>
               )}
             </View>
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Participants</Text>
+            <Text style={styles.sectionTitle}>{t('mobile:race.participants')}</Text>
             <View style={styles.participantsCard}>
               <Text style={styles.participantsCount}>
                 {formatNumber(filled)} {max > 0 ? `/ ${formatNumber(max)}` : ''}
               </Text>
-              <Text style={styles.participantsLabel}>registered</Text>
+              <Text style={styles.participantsLabel}>{t('mobile:race.registered')}</Text>
               <View style={styles.progressBar}>
                 <View style={[styles.progressFill, { width: `${percent}%` }]} />
               </View>
@@ -552,6 +597,39 @@ function RaceDetailScreenContent() {
 
       <View style={styles.registerContainer}>
         {canRegister && myRegistration && (
+          <View style={styles.registrationSummary} accessibilityLiveRegion="polite">
+            <Text style={styles.registrationStatusText}>
+              {t(`mobile:race.registrationStatus.${registrationState || 'pending'}`, { defaultValue: t('mobile:race.registrationStatus.pending') })}
+              {myRegistration.bibNumber ? ` · ${t('mobile:race.bib', { bib: myRegistration.bibNumber })}` : ''}
+            </Text>
+            {myRegistration.paymentStatus === 'PAID' && (
+              <Text style={styles.registrationNotice}>{t('mobile:payment.paid')}</Text>
+            )}
+            {paymentDue && (
+              <>
+                <Text style={styles.registrationNotice}>
+                  {t('mobile:payment.due', { amount: formatCurrency(Number(myRegistration.amountDue), myRegistration.currency || race?.currency || 'USD') })}
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={promoCode}
+                  onChangeText={setPromoCode}
+                  autoCapitalize="characters"
+                  maxLength={50}
+                  placeholder={t('mobile:payment.promoCode')}
+                  placeholderTextColor="#9CA3AF"
+                  accessibilityLabel={t('mobile:payment.promoCode')}
+                />
+                <TouchableOpacity style={styles.registerButton} onPress={() => void startPayment()} disabled={paying}
+                  accessibilityRole="button" accessibilityLabel={t('mobile:payment.payNow')}
+                  accessibilityState={{ busy: paying, disabled: paying }}>
+                  <Text style={styles.registerButtonText}>{paying ? t('mobile:payment.opening') : t('mobile:payment.payNow')}</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        )}
+        {canRegister && myRegistration && (
           <View style={styles.switchRow}>
             <Switch
               value={myRegistration.mediaPublicationConsent === true}
@@ -562,7 +640,7 @@ function RaceDetailScreenContent() {
             <Text style={styles.registrationNotice}>{t('common:mediaPublicationManage')}</Text>
           </View>
         )}
-        {canRegister ? (
+        {canRegister && myRegistration ? null : canRegister ? (
           <TouchableOpacity style={styles.registerButton} onPress={openRegistration} disabled={isRegistering} accessibilityRole="button" accessibilityLabel={t('mobile:race.registerNow')} accessibilityState={{ busy: isRegistering, disabled: isRegistering }}>
             <Text style={styles.registerButtonText}>{isRegistering ? t('mobile:race.registering') : t('mobile:race.registerNow')}</Text>
           </TouchableOpacity>
@@ -577,9 +655,9 @@ function RaceDetailScreenContent() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalTitle}>Register for {race?.name}</Text>
+              <Text style={styles.modalTitle}>{t('mobile:race.register.title', { name: race?.name ?? '' })}</Text>
 
-              <Text style={styles.fieldLabel}>Category</Text>
+              <Text style={styles.fieldLabel}>{t('mobile:race.register.category')}</Text>
               <View style={styles.optionRow}>
                 {(race?.categories || []).map((category: any) => (
                   <TouchableOpacity
@@ -594,71 +672,71 @@ function RaceDetailScreenContent() {
                 ))}
               </View>
 
-              <Text style={styles.fieldLabel}>Emergency contact name</Text>
+              <Text style={styles.fieldLabel}>{t('mobile:race.register.contactName')}</Text>
               <TextInput
                 style={styles.input}
                 value={contact.name}
                 onChangeText={(value) => setContact((prev) => ({ ...prev, name: value }))}
-                placeholder="Full name"
+                placeholder={t('mobile:race.register.contactNamePlaceholder')}
                 placeholderTextColor="#9CA3AF"
               />
 
-              <Text style={styles.fieldLabel}>Emergency contact phone</Text>
+              <Text style={styles.fieldLabel}>{t('mobile:race.register.contactPhone')}</Text>
               <TextInput
                 style={styles.input}
                 value={contact.phone}
                 onChangeText={(value) => setContact((prev) => ({ ...prev, phone: value }))}
-                placeholder="Phone number"
+                placeholder={t('mobile:race.register.contactPhonePlaceholder')}
                 keyboardType="phone-pad"
                 placeholderTextColor="#9CA3AF"
               />
 
-              <Text style={styles.fieldLabel}>Relationship</Text>
+              <Text style={styles.fieldLabel}>{t('mobile:race.register.relationship')}</Text>
               <TextInput
                 style={styles.input}
                 value={contact.relationship}
                 onChangeText={(value) => setContact((prev) => ({ ...prev, relationship: value }))}
-                placeholder="e.g. Spouse"
+                placeholder={t('mobile:race.register.relationshipPlaceholder')}
                 placeholderTextColor="#9CA3AF"
               />
 
-              <Text style={styles.fieldLabel}>Blood type (optional)</Text>
+              <Text style={styles.fieldLabel}>{t('mobile:race.register.bloodType')}</Text>
               <TextInput style={styles.input} value={medical.bloodType}
                 onChangeText={(value) => setMedical((current) => ({ ...current, bloodType: value }))}
-                placeholder="e.g. O+" placeholderTextColor="#9CA3AF" />
-              <Text style={styles.fieldLabel}>Medical conditions (optional)</Text>
+                placeholder={t('mobile:race.register.bloodTypePlaceholder')} placeholderTextColor="#9CA3AF" />
+              <Text style={styles.fieldLabel}>{t('mobile:race.register.medicalConditions')}</Text>
               <TextInput style={styles.input} value={medical.medicalConditions}
                 onChangeText={(value) => setMedical((current) => ({ ...current, medicalConditions: value }))}
-                placeholder="Conditions staff should know" placeholderTextColor="#9CA3AF" />
-              <Text style={styles.fieldLabel}>Allergies (optional)</Text>
+                placeholder={t('mobile:race.register.medicalConditionsPlaceholder')} placeholderTextColor="#9CA3AF" />
+              <Text style={styles.fieldLabel}>{t('mobile:race.register.allergies')}</Text>
               <TextInput style={styles.input} value={medical.allergies}
                 onChangeText={(value) => setMedical((current) => ({ ...current, allergies: value }))}
-                placeholder="Allergies" placeholderTextColor="#9CA3AF" />
+                placeholder={t('mobile:race.register.allergiesPlaceholder')} placeholderTextColor="#9CA3AF" />
 
-              <Text style={styles.fieldLabel}>Shirt size (optional)</Text>
+              <Text style={styles.fieldLabel}>{t('mobile:race.register.shirtSize')}</Text>
               <TextInput
                 style={styles.input}
                 value={shirtSize}
                 onChangeText={setShirtSize}
-                placeholder="e.g. M"
+                placeholder={t('mobile:race.register.shirtSizePlaceholder')}
                 placeholderTextColor="#9CA3AF"
               />
 
-              <Text style={styles.fieldLabel}>Team name (optional)</Text>
+              <Text style={styles.fieldLabel}>{t('mobile:race.register.teamName')}</Text>
               <TextInput
                 style={styles.input}
                 value={teamName}
                 onChangeText={setTeamName}
-                placeholder="Team"
+                placeholder={t('mobile:race.register.teamNamePlaceholder')}
                 placeholderTextColor="#9CA3AF"
               />
 
-              <Text style={styles.fieldLabel}>Club name (optional)</Text>
+              <Text style={styles.fieldLabel}>{t('mobile:race.register.clubName')}</Text>
               <TextInput
                 style={styles.input}
                 value={clubName}
                 onChangeText={setClubName}
-                placeholder="Club"
+                placeholder={t('mobile:race.register.clubNamePlaceholder')}
                 placeholderTextColor="#9CA3AF"
               />
 
@@ -710,7 +788,9 @@ function RaceDetailScreenContent() {
                   <View style={styles.switchRow}>
                     <Switch value={waiverAccepted} onValueChange={setWaiverAccepted} />
                     <Text style={styles.waiverLabel}>
-                      I accept the race waiver{race?.waiverVersion ? ` (${race.waiverVersion})` : ''}
+                      {race?.waiverVersion
+                        ? t('mobile:race.register.acceptWaiverVersion', { version: race.waiverVersion })
+                        : t('mobile:race.register.acceptWaiverLabel')}
                     </Text>
                   </View>
                 </View>
@@ -718,10 +798,10 @@ function RaceDetailScreenContent() {
 
               <View style={styles.modalActions}>
                 <TouchableOpacity style={styles.modalCancel} onPress={() => setIsRegisterOpen(false)} disabled={isRegistering}>
-                  <Text style={styles.modalCancelText}>Cancel</Text>
+                  <Text style={styles.modalCancelText}>{t('mobile:race.register.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.modalConfirm} onPress={submitRegistration} disabled={isRegistering}>
-                  <Text style={styles.modalConfirmText}>{isRegistering ? 'Submitting...' : 'Submit'}</Text>
+                  <Text style={styles.modalConfirmText}>{isRegistering ? t('mobile:race.register.submitting') : t('mobile:race.register.submit')}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -985,6 +1065,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  registrationSummary: {
+    gap: 10,
+    marginBottom: 8,
+  },
+  registrationStatusText: {
+    color: '#111827',
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   registrationNotice: {
     color: '#6B7280',

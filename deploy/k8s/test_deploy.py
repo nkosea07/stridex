@@ -145,7 +145,7 @@ class DeploymentPreflightTest(unittest.TestCase):
     @staticmethod
     def encoded_secret(**overrides):
         keys = {key: "real-value" for key in (
-            "DB_USERNAME", "DB_PASSWORD", "JWT_SECRET", "REDIS_PASSWORD", "AWS_S3_ACCESS_KEY", "AWS_S3_SECRET_KEY")}
+            "DB_USERNAME", "DB_PASSWORD", "JWT_SECRET", "MFA_ENCRYPTION_KEY", "REDIS_PASSWORD", "AWS_S3_ACCESS_KEY", "AWS_S3_SECRET_KEY")}
         keys.update(overrides)
         return json.dumps({"data": {key: base64.b64encode(value.encode()).decode()
                                     for key, value in keys.items()}})

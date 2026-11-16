@@ -38,8 +38,9 @@ class AuthEmailServiceImplTest {
     void disabledMailDoesNotAcknowledgeDeletionNotice() {
         RaceTrackerProperties properties = new RaceTrackerProperties();
         properties.getEmail().setEnabled(false);
-        assertThatThrownBy(() -> new AuthEmailServiceImpl(mailSender, templateEngine, properties)
-            .sendAccountDeletionCompletedConfirmed("runner@example.com", "Ada"))
+        assertThatThrownBy(() -> new AuthEmailServiceImpl(mailSender, templateEngine, properties,
+                com.racetracker.support.TestMessages.messages(), com.racetracker.support.TestMessages.locales())
+            .sendAccountDeletionCompletedConfirmed("runner@example.com", "Ada", null))
             .isInstanceOf(ServiceUnavailableException.class)
             .extracting("code").isEqualTo("ACCOUNT_DELETION_NOTICE_UNAVAILABLE");
         verify(mailSender, never()).send(any(MimeMessage.class));
@@ -53,8 +54,9 @@ class AuthEmailServiceImplTest {
         when(mailSender.createMimeMessage()).thenReturn(new MimeMessage(Session.getInstance(new Properties())));
         doThrow(new MailSendException("unavailable")).when(mailSender).send(any(MimeMessage.class));
 
-        assertThatThrownBy(() -> new AuthEmailServiceImpl(mailSender, templateEngine, properties)
-            .sendAccountDeletionCompletedConfirmed("runner@example.com", "Ada"))
+        assertThatThrownBy(() -> new AuthEmailServiceImpl(mailSender, templateEngine, properties,
+                com.racetracker.support.TestMessages.messages(), com.racetracker.support.TestMessages.locales())
+            .sendAccountDeletionCompletedConfirmed("runner@example.com", "Ada", null))
             .isInstanceOf(ServiceUnavailableException.class)
             .extracting("code").isEqualTo("ACCOUNT_DELETION_NOTICE_UNAVAILABLE");
     }

@@ -115,7 +115,7 @@ class ActuatorSecurityIntegrationTest {
         MailSenderAutoConfiguration.class
     })
     @EnableConfigurationProperties({CorsProperties.class, RaceTrackerProperties.class})
-    @Import({SecurityConfig.class, JwtAuthenticationFilter.class, ApiSecurityExceptionHandler.class})
+    @Import({SecurityConfig.class, com.racetracker.security.AdminMfaPolicy.class, JwtAuthenticationFilter.class, ApiSecurityExceptionHandler.class})
     static class TestApplication {
 
         @Bean

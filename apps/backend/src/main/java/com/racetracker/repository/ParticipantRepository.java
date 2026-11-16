@@ -24,6 +24,8 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     boolean existsByRaceIdAndRfidTag(UUID raceId, String rfidTag);
 
+    long countByWaveId(UUID waveId);
+
     boolean existsByRaceIdAndRfidTagAndIdNot(UUID raceId, String rfidTag, UUID id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -142,6 +144,7 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
             FROM checkpoint_records cr
             JOIN checkpoints cp ON cp.id = cr.checkpoint_id
             JOIN target_races tr ON tr.id = cr.race_id
+            WHERE cr.voided_at IS NULL
             GROUP BY cr.race_id, cr.participant_id
         ), base AS (
             SELECT p.id AS participant_id, p.race_id, p.user_id, p.category_id, p.bib_number,
@@ -318,4 +321,18 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
         ORDER BY day
         """, nativeQuery = true)
     List<Object[]> registrationSeries(@Param("raceId") UUID raceId, @Param("days") int days);
+
+    @EntityGraph(attributePaths = {"category", "wave"})
+    @Query("""
+        select p
+        from Participant p
+        where p.race.id = :raceId
+          and (
+            lower(coalesce(p.bibNumber, '')) like lower(concat(:query, '%'))
+            or lower(concat(coalesce(p.firstName, ''), ' ', coalesce(p.lastName, ''))) like lower(concat('%', :query, '%'))
+          )
+        order by case when lower(coalesce(p.bibNumber, '')) = lower(:query) then 0 else 1 end,
+          p.lastName asc, p.firstName asc, p.id asc
+    """)
+    List<Participant> searchForStaff(@Param("raceId") UUID raceId, @Param("query") String query, Pageable pageable);
 }

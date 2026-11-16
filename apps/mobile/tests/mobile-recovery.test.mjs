@@ -430,6 +430,65 @@ describe('location upload failures', () => {
       String(sql).includes("status = 'rejected'") && params[0] === 'not_registered' && params[2] === 'race-e'
     ))).toBe(true)
   })
+
+  it('stops tracking when the server says the race entry is closed', async () => {
+    const rows = [createLocation(61, 'race-f', '2026-10-05T10:00:00.000Z')]
+    mocks.hasStartedLocationUpdates.mockResolvedValue(true)
+    mocks.isTaskRegistered.mockResolvedValue(false)
+    const tracking = await loadTracking(rows, (ApiRequestError) => new ApiRequestError('Live tracking has ended', 409, false, 'TRACKING_CLOSED'))
+    mocks.database.getFirstAsync.mockResolvedValue({ raceId: 'race-f', status: 'active', stopReason: null, quarantined: 0 })
+    const notices = []
+    tracking.subscribeTrackingStopped((notice) => notices.push(notice))
+
+    await tracking.syncPendingLocations('race-f')
+
+    expect(rows[0].synced).toBe(2)
+    expect(mocks.stopLocationUpdates).toHaveBeenCalledOnce()
+    expect(notices).toEqual([{ raceId: 'race-f', reason: 'closed' }])
+    const { ApiRequestError } = await import('../lib/api.ts')
+    expect(tracking.classifySyncFailure(new ApiRequestError('conflict', 409))).toBe('retry')
+  })
+})
+
+describe('checkpoint self-scan', () => {
+  const checkpointId = '6f1c0b0e-1111-4c4c-8888-123456789abc'
+  const raceId = '7a2d1c0f-2222-4d4d-9999-abcdef012345'
+  const token = 'ab'.repeat(32)
+
+  it('reads the secret self-scan code and flags printed codes from before the change', async () => {
+    const { parseSelfScanCode } = await import('../lib/selfScan.ts')
+
+    expect(parseSelfScanCode(`${checkpointId}:${raceId}:${token}`)).toEqual({ kind: 'ok', code: { checkpointId, raceId, token } })
+    expect(parseSelfScanCode(`${checkpointId}:${raceId}`)).toEqual({ kind: 'outdated' })
+    expect(parseSelfScanCode(`${checkpointId}:${raceId}:not-hex`)).toEqual({ kind: 'unreadable' })
+    expect(parseSelfScanCode(42)).toEqual({ kind: 'unreadable' })
+  })
+
+  it('sends the scan code and current fix, and reports provisional scans', async () => {
+    mocks.secureValues.set('auth_token', 'access-token')
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: 'PROVISIONAL', reason: 'OUT_OF_RANGE' }), { status: 202 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { api } = await import('../lib/api.ts')
+    const fix = { latitude: -17.83, longitude: 31.05, accuracy: 8, timestamp: '2026-11-15T09:00:00.000Z' }
+
+    await expect(api.recordCheckpoint(raceId, checkpointId, token, fix)).resolves.toEqual({
+      status: 'PROVISIONAL',
+      reason: 'OUT_OF_RANGE',
+    })
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({
+      checkpointId, method: 'qr_code', scanToken: token, location: fix,
+    })
+  })
+
+  it('maps refusal codes to localized messages and hides raw server text', async () => {
+    const { selfScanErrorKey } = await import('../lib/selfScan.ts')
+    const { ApiRequestError } = await import('../lib/api.ts')
+
+    expect(selfScanErrorKey(new ApiRequestError('x', 409, false, 'SELF_SCAN_NOT_ALLOWED'))).toBe('mobile:scanner.errors.SELF_SCAN_NOT_ALLOWED')
+    expect(selfScanErrorKey(new ApiRequestError('stack trace', 500, false, 'INTERNAL_ERROR'))).toBe('mobile:scanner.failedBody')
+  })
 })
 
 describe('local location history retention', () => {
@@ -521,6 +580,8 @@ describe('account capabilities', () => {
       password: 'password-123',
       privacyPolicyAccepted: true,
       privacyPolicyVersion: '2026-01',
+      termsAccepted: true,
+      termsVersion: '2026-02',
       experiences: ['SPECTATOR'],
     })
 
@@ -531,7 +592,75 @@ describe('account capabilities', () => {
       email: 'runner@example.com',
       experiences: ['SPECTATOR'],
       privacyPolicyAccepted: true,
+      termsAccepted: true,
+      termsVersion: '2026-02',
     })
+  })
+
+  it('records acceptance of the current legal documents', async () => {
+    mocks.secureValues.set('auth_token', 'access-token')
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        privacyPolicyVersion: '2026-11-10',
+        privacyPolicyAcceptedAt: '2026-11-10T08:00:00Z',
+        termsVersion: '2026-11-10',
+        termsAcceptedAt: '2026-11-10T08:00:00Z',
+      }), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { api } = await import('../lib/api.ts')
+    const { API_CONTRACT } = await import('@race-tracker/contracts')
+
+    await expect(api.acceptLegalDocuments()).resolves.toEqual({
+      privacyPolicyVersion: '2026-11-10',
+      termsVersion: '2026-11-10',
+    })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain(API_CONTRACT.endpoints.myLegalAcceptance)
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(String(init.body))).toEqual({
+      privacyPolicyVersion: API_CONTRACT.legal.privacyPolicyVersion,
+      termsVersion: API_CONTRACT.legal.termsVersion,
+    })
+  })
+
+  it('surfaces stable deletion error codes and parses blockers', async () => {
+    mocks.secureValues.set('auth_token', 'access-token')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        deletionRequested: false,
+        requestedAt: null,
+        scheduledFor: null,
+        blockers: ['ACCOUNT_DELETION_ACTIVE_RACES', 7],
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        message: 'Password is incorrect',
+        code: 'ACCOUNT_DELETION_PASSWORD_INVALID',
+      }), { status: 400 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { api } = await import('../lib/api.ts')
+    const { deletionErrorKey, knownBlockers } = await import('../lib/accountDeletion.ts')
+
+    const status = await api.deletionStatus()
+    expect(knownBlockers(status.blockers)).toEqual(['ACCOUNT_DELETION_ACTIVE_RACES'])
+
+    const failure = await api.deleteAccount('wrong', 'DELETE').catch((error) => error)
+    expect(failure.code).toBe('ACCOUNT_DELETION_PASSWORD_INVALID')
+    expect(deletionErrorKey(failure)).toBe('account:deletion.errors.ACCOUNT_DELETION_PASSWORD_INVALID')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(mocks.secureValues.get('auth_token')).toBe('access-token')
+  })
+
+  it('requires acceptance until both stored versions match the contract', async () => {
+    const { needsLegalAcceptance, LEGAL_VERSIONS } = await import('../lib/legal.ts')
+
+    expect(needsLegalAcceptance(null)).toBe(false)
+    expect(needsLegalAcceptance({ privacyPolicyVersion: LEGAL_VERSIONS.privacy, termsVersion: null })).toBe(true)
+    expect(needsLegalAcceptance({ privacyPolicyVersion: 'old', termsVersion: LEGAL_VERSIONS.terms })).toBe(true)
+    expect(needsLegalAcceptance({ privacyPolicyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms })).toBe(false)
+    expect(needsLegalAcceptance({ privacyPolicyVersion: '2099-01-01', termsVersion: '2099-01-01', legalAcceptanceRequired: false })).toBe(false)
+    expect(needsLegalAcceptance({ privacyPolicyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms, legalAcceptanceRequired: true })).toBe(true)
   })
 
   it('uses the additive profile capabilities endpoint and preserves the full account capability set', async () => {

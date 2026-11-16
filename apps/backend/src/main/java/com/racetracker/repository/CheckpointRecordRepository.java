@@ -15,13 +15,77 @@ public interface CheckpointRecordRepository extends JpaRepository<CheckpointReco
 
     long countByCheckpointId(UUID checkpointId);
 
+    boolean existsByParticipantId(UUID participantId);
+
+    @Query(value = "select * from checkpoint_records where id = :id and race_id = :raceId and checkpoint_id = :checkpointId "
+        + "and voided_at is not null", nativeQuery = true)
+    Optional<CheckpointRecord> findVoided(@Param("raceId") UUID raceId, @Param("checkpointId") UUID checkpointId,
+                                          @Param("id") UUID id);
+
+    @Query(value = "select * from checkpoint_records where race_id = :raceId and checkpoint_id = :checkpointId "
+        + "and voided_at is not null order by voided_at desc limit 500", nativeQuery = true)
+    List<CheckpointRecord> findVoidedByCheckpoint(@Param("raceId") UUID raceId, @Param("checkpointId") UUID checkpointId);
+
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "update checkpoint_records set pass_number = pass_number + 100000 "
+        + "where participant_id = :participantId and checkpoint_id = :checkpointId and voided_at is null", nativeQuery = true)
+    int parkActivePasses(@Param("participantId") UUID participantId, @Param("checkpointId") UUID checkpointId);
+
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "update checkpoint_records cr set pass_number = ranked.position from ("
+        + "select id, row_number() over (order by coalesce(adjusted_recorded_at, recorded_at), recorded_at, id) as position "
+        + "from checkpoint_records where participant_id = :participantId and checkpoint_id = :checkpointId "
+        + "and voided_at is null) ranked where cr.id = ranked.id", nativeQuery = true)
+    int renumberActivePasses(@Param("participantId") UUID participantId, @Param("checkpointId") UUID checkpointId);
+
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "update checkpoint_records set voided_at = null, voided_by = null, void_reason = null, "
+        + "pass_number = :passNumber where id = :id and voided_at is not null", nativeQuery = true)
+    int restore(@Param("id") UUID id, @Param("passNumber") int passNumber);
+
+    long countByParticipantIdAndCheckpointId(UUID participantId, UUID checkpointId);
+
+    @Query(value = "select exists(select 1 from checkpoint_records where participant_id = :participantId)", nativeQuery = true)
+    boolean existsIncludingVoidedByParticipantId(@Param("participantId") UUID participantId);
+
+    @Query(value = "select exists(select 1 from checkpoint_records where checkpoint_id = :checkpointId)", nativeQuery = true)
+    boolean existsIncludingVoidedByCheckpointId(@Param("checkpointId") UUID checkpointId);
+
+    @Query("""
+        select r from CheckpointRecord r join fetch r.participant p left join p.wave w
+        where r.race.id = :raceId
+          and r.recordMethod = com.racetracker.model.CheckpointRecord.RecordMethod.RFID
+          and r.adjustedRecordedAt is null
+          and r.recordedAt < :gate
+          and w is null
+        """)
+    List<CheckpointRecord> findAutomaticBeforeGateWithoutWave(@Param("raceId") UUID raceId,
+                                                             @Param("gate") OffsetDateTime gate);
+
+    @Query("""
+        select r from CheckpointRecord r join fetch r.participant p join p.wave w
+        where r.race.id = :raceId
+          and r.recordMethod = com.racetracker.model.CheckpointRecord.RecordMethod.RFID
+          and r.adjustedRecordedAt is null
+          and r.recordedAt < :gate
+          and w.id = :waveId
+        """)
+    List<CheckpointRecord> findAutomaticBeforeGateInWave(@Param("raceId") UUID raceId, @Param("waveId") UUID waveId,
+                                                        @Param("gate") OffsetDateTime gate);
+
     @EntityGraph(attributePaths = {"participant", "checkpoint", "race", "recordedBy"})
-    Optional<CheckpointRecord> findByParticipantIdAndCheckpointId(UUID participantId, UUID checkpointId);
+    Optional<CheckpointRecord> findFirstByParticipantIdAndCheckpointIdOrderByPassNumberAsc(UUID participantId, UUID checkpointId);
+
+    List<CheckpointRecord> findByParticipantIdAndCheckpointIdOrderByPassNumberAsc(UUID participantId, UUID checkpointId);
 
     Optional<CheckpointRecord> findByRaceIdAndCheckpointIdAndId(UUID raceId, UUID checkpointId, UUID id);
 
     @EntityGraph(attributePaths = {"participant", "checkpoint", "race", "recordedBy"})
     List<CheckpointRecord> findByRaceIdAndCheckpointIdOrderByRecordedAtAsc(UUID raceId, UUID checkpointId);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"participant", "recordedBy"})
+    List<CheckpointRecord> findByRaceIdAndCheckpointIdOrderByCreatedAtDesc(UUID raceId, UUID checkpointId,
+                                                                          org.springframework.data.domain.Pageable pageable);
 
     @EntityGraph(attributePaths = {"participant", "checkpoint", "race", "recordedBy"})
     List<CheckpointRecord> findByRaceIdOrderByRecordedAtDesc(UUID raceId);

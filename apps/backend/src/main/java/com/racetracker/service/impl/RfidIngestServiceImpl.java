@@ -112,7 +112,7 @@ public class RfidIngestServiceImpl implements RfidIngestService {
         event.setReader(reader);
         event.setRace(reader.getRace());
         event.setCheckpoint(reader.getCheckpoint());
-        event.setRfidTag(read.getRfidTag().trim());
+        event.setRfidTag(com.racetracker.service.RfidTagValues.canonical(read.getRfidTag()));
         event.setSourceEventId(read.getSourceEventId() != null && !read.getSourceEventId().isBlank()
             ? read.getSourceEventId().trim()
             : null);

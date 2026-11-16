@@ -121,13 +121,19 @@ public class PaymentServiceImpl implements PaymentService {
         if (participant.getPaymentStatus() == Participant.PaymentStatus.WAIVED) {
             throw new ConflictException("The registration fee for this participant was waived", "PAYMENT_WAIVED");
         }
+        if (participant.getStatus() == Participant.ParticipantStatus.REJECTED
+            || participant.getStatus() == Participant.ParticipantStatus.WAITLISTED
+            || participant.getStatus() == Participant.ParticipantStatus.DISQUALIFIED) {
+            throw new ConflictException("Payment opens once this registration has a confirmed place",
+                "PAYMENT_NOT_AVAILABLE_FOR_STATUS");
+        }
         RaceTrackerProperties.Payments payments = properties.getPayments();
         if (isBlank(payments.getResultUrl()) || isBlank(payments.getReturnUrl())) {
             throw new ApiException("Payment result/return URLs are not configured");
         }
         Race race = participant.getRace();
 
-        BigDecimal baseAmount = registrationFee(participant, race);
+        BigDecimal baseAmount = com.racetracker.service.RegistrationFees.current(participant, race);
         if (baseAmount == null || baseAmount.signum() <= 0) {
             throw new ApiException("This race does not require an online payment");
         }
@@ -359,7 +365,7 @@ public class PaymentServiceImpl implements PaymentService {
             participant.setPaymentStatus(Participant.PaymentStatus.REFUNDED);
             participantRepository.save(participant);
             notifyPayment(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
-                "payment.refunded", "Refund processed", "Your payment for " + raceName(participant) + " has been refunded.");
+                "payment.refunded", raceName(participant));
         }
         reversalCaseRepository.findById(payment.getId()).ifPresent(reversal -> {
             reversal.setResolvedAt(OffsetDateTime.now());
@@ -393,29 +399,6 @@ public class PaymentServiceImpl implements PaymentService {
         return new ExternalRefundAttemptDto(attempt.getId(), payment.getId(), attempt.getAmount(),
             attempt.getCurrency(), attempt.getStatus().name(), payment.getProviderRef(),
             attempt.getProviderRef(), attempt.getCreatedAt());
-    }
-
-    private BigDecimal registrationFee(Participant participant, Race race) {
-        if (participant.getTeam() != null) {
-            BigDecimal teamFee = participant.getCategory() != null && participant.getCategory().getTeamFee() != null
-                ? participant.getCategory().getTeamFee()
-                : race.getTeamFee();
-            if (teamFee != null && teamFee.signum() > 0) {
-                return teamFee;
-            }
-        }
-        if (race.getEarlyBirdEndsAt() != null && !OffsetDateTime.now().isAfter(race.getEarlyBirdEndsAt())) {
-            BigDecimal earlyBirdFee = participant.getCategory() != null
-                && participant.getCategory().getEarlyBirdFee() != null
-                ? participant.getCategory().getEarlyBirdFee()
-                : race.getEarlyBirdFee();
-            if (earlyBirdFee != null && earlyBirdFee.signum() > 0) {
-                return earlyBirdFee;
-            }
-        }
-        return participant.getCategory() != null && participant.getCategory().getRegistrationFee() != null
-            ? participant.getCategory().getRegistrationFee()
-            : race.getRegistrationFee();
     }
 
     private BigDecimal payableAmount(Payment payment) {
@@ -510,13 +493,13 @@ public class PaymentServiceImpl implements PaymentService {
                 }
 
                 notifyPayment(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
-                    "payment.received", "Payment received", "Your payment for " + raceName(participant) + " has been received.");
+                    "payment.received", raceName(participant));
             }
             case "FAILED" -> {
                 payment.setStatus(Payment.PaymentStatus.FAILED);
                 paymentRepository.save(payment);
                 notifyPayment(payment.getParticipant(), com.racetracker.model.Notification.NotificationType.ALERT,
-                    "payment.failed", "Payment failed", "Your payment for " + raceName(payment.getParticipant()) + " did not complete.");
+                    "payment.failed", raceName(payment.getParticipant()));
             }
             case "CANCELLED" -> {
                 payment.setStatus(Payment.PaymentStatus.CANCELLED);
@@ -555,13 +538,13 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void notifyPayment(Participant participant, com.racetracker.model.Notification.NotificationType type,
-                               String templateCode, String title, String message) {
+                               String templateCode, Object... args) {
         if (participant == null || participant.getUser() == null) {
             return;
         }
         try {
-            notificationService.notifyTemplated(participant.getUser().getId(), type, templateCode, title, message,
-                java.util.Map.of("participantId", participant.getId().toString()));
+            notificationService.notifyLocalized(participant.getUser().getId(), type, templateCode, args,
+                notificationData(participant, "PAYMENT"));
         } catch (RuntimeException ex) {
             log.warn("Failed to notify participant {} about payment: {}", participant.getId(), ex.getMessage());
         }
@@ -569,8 +552,18 @@ public class PaymentServiceImpl implements PaymentService {
 
     private String raceName(Participant participant) {
         if (participant == null || participant.getRace() == null || participant.getRace().getName() == null) {
-            return "your race";
+            return "";
         }
         return participant.getRace().getName();
+    }
+
+    private static java.util.Map<String, String> notificationData(Participant participant, String kind) {
+        java.util.Map<String, String> data = new java.util.LinkedHashMap<>();
+        data.put("kind", kind);
+        data.put("participantId", participant.getId().toString());
+        if (participant.getRace() != null && participant.getRace().getId() != null) {
+            data.put("raceId", participant.getRace().getId().toString());
+        }
+        return data;
     }
 }

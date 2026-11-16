@@ -278,7 +278,7 @@ public class ParticipantImportProcessor {
         participant.setPhone(cell(row, index, "phone"));
         participant.setNationality(cell(row, index, "nationality"));
         participant.setBibNumber(cell(row, index, "bibNumber"));
-        participant.setRfidTag(cell(row, index, "rfidTag"));
+        participant.setRfidTag(com.racetracker.service.RfidTagValues.canonical(cell(row, index, "rfidTag")));
         participant.setRegistrationSource(
             Optional.ofNullable(cell(row, index, "registrationSource")).orElse("CSV_IMPORT"));
         participant.setStatus(parseStatusNullable(cell(row, index, "status"),

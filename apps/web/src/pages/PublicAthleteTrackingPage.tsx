@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { PublicAthleteTrackingLoaderData } from '@/router/publicLoaders'
+import { LegalFooter } from '@/components/legal/LegalFooter'
 
 const TRACKING_POLL_INTERVAL_MS = 15000
 
@@ -398,6 +399,7 @@ export function PublicAthleteTrackingPage({
           <AthleteTrackPlayback raceId={raceId} participantId={participantId} />
         </div>
       </div>
+      <LegalFooter className="border-slate-800 bg-transparent text-slate-400" />
     </div>
   )
 }

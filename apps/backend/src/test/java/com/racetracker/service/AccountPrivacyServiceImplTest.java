@@ -340,4 +340,33 @@ class AccountPrivacyServiceImplTest {
             .hasMessageContaining("delete your account");
         assertThat(user.getDataProcessingConsentAt()).isNotNull();
     }
+
+    @Test
+    void acceptingCurrentLegalDocumentsRecordsVersionsAndAudits() {
+        User user = user();
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
+        com.racetracker.dto.privacy.LegalAcceptanceRequest request = new com.racetracker.dto.privacy.LegalAcceptanceRequest();
+        request.setPrivacyPolicyVersion(com.racetracker.service.LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION);
+        request.setTermsVersion(com.racetracker.service.LegalDocuments.CURRENT_TERMS_VERSION);
+
+        var accepted = service.acceptLegalDocuments(userId, request);
+
+        assertThat(accepted.termsVersion()).isEqualTo(com.racetracker.service.LegalDocuments.CURRENT_TERMS_VERSION);
+        assertThat(user.getTermsAcceptedAt()).isNotNull();
+        assertThat(user.getPrivacyPolicyAcceptedAt()).isNotNull();
+        verify(auditEventService).recordInCurrentTransaction(org.mockito.ArgumentMatchers.eq("LEGAL_DOCUMENTS_ACCEPTED"),
+            org.mockito.ArgumentMatchers.eq(userId), any(), any(), any(), any());
+    }
+
+    @Test
+    void acceptingAStaleTermsVersionIsRejected() {
+        com.racetracker.dto.privacy.LegalAcceptanceRequest request = new com.racetracker.dto.privacy.LegalAcceptanceRequest();
+        request.setPrivacyPolicyVersion(com.racetracker.service.LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION);
+        request.setTermsVersion("2020-01-01");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.acceptLegalDocuments(userId, request))
+            .isInstanceOf(com.racetracker.exception.ApiException.class)
+            .hasMessageContaining("Terms and Conditions");
+        verify(userRepository, never()).save(any());
+    }
 }

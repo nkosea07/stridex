@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Stack, router } from 'expo-router';
+import { useEffect, useRef } from 'react';
+import { Stack, router, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -16,17 +16,27 @@ import {
   FiraCode_600SemiBold, 
   FiraCode_700Bold 
 } from '@expo-google-fonts/fira-code';
-import { initializeAuth } from '@/store/auth';
+import { initializeAuth, useAuthStore } from '@/store/auth';
+import { LEGAL_ROUTES, needsLegalAcceptance } from '@/lib/legal';
 import { useTrackingStore } from '@/store/tracking';
-import { addNotificationResponseListener } from '@/lib/notifications';
+import { useAppUpdateStore } from '@/store/appUpdate';
+import { setAppIdentity, setUpdateRequiredHandler } from '@/lib/api';
+import { UpdateRequiredScreen } from '@/components/UpdateRequiredScreen';
+import Constants from 'expo-constants';
+import { addNotificationResponseListener, takeLaunchNotificationData } from '@/lib/notifications';
+import { routeForNotification } from '@/lib/notificationRoutes';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import i18n, { initI18n } from '@/lib/i18n';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, Platform, StyleSheet } from 'react-native';
 import { ThemeProvider, useTheme } from '@/contexts/theme';
 
 // Keep splash screen visible while loading resources
 SplashScreen.preventAutoHideAsync();
+
+const APP_VERSION = Constants.expoConfig?.version ?? null;
+setAppIdentity({ version: APP_VERSION, platform: Platform.OS });
+setUpdateRequiredHandler(() => useAppUpdateStore.getState().markUpdateRequired());
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -49,6 +59,7 @@ export default function RootLayout() {
     const init = async () => {
       try {
         await initI18n();
+        await useAppUpdateStore.getState().check(APP_VERSION);
         await initializeAuth();
         await useTrackingStore.getState().recoverActiveTrackingSession();
       } catch (error) {
@@ -84,12 +95,39 @@ function RootNavigator() {
   const { colors, resolvedTheme } = useTheme();
   const { t } = useTranslation();
   const trackingStopNotice = useTrackingStore((state) => state.trackingStopNotice);
+  const segments = useSegments();
+  const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isAuthLoading = useAuthStore((state) => state.isLoading);
+  const currentSegment = segments[0] as string | undefined;
+  const legalAcceptanceRequired = !isAuthLoading && isAuthenticated && needsLegalAcceptance(user);
+  const updateRequired = useAppUpdateStore((state) => state.updateRequired);
+  const { i18n: i18nInstance } = useTranslation();
+  const language = i18nInstance.resolvedLanguage ?? i18nInstance.language;
+  const syncedLanguage = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user || !language || user.preferredLocale === language) return;
+    const key = `${user.id}:${language}`;
+    if (syncedLanguage.current === key) return;
+    syncedLanguage.current = key;
+    useAuthStore.getState().updateProfile({ preferredLocale: language }).catch(() => undefined);
+  }, [isAuthenticated, user, language]);
+
+  useEffect(() => {
+    if (!legalAcceptanceRequired) return;
+    if (currentSegment === '(auth)' || currentSegment === 'tracking') return;
+    if (currentSegment && LEGAL_ROUTES.has(currentSegment)) return;
+    router.replace('/legal-acceptance');
+  }, [legalAcceptanceRequired, currentSegment]);
 
   useEffect(() => {
     if (!trackingStopNotice) return;
-    const body = trackingStopNotice.reason === 'not_registered'
-      ? t('mobile:trackingStop.notRegistered')
-      : t('mobile:trackingStop.notPermitted');
+    const body = trackingStopNotice.reason === 'closed'
+      ? t('mobile:trackingStop.closed')
+      : trackingStopNotice.reason === 'not_registered'
+        ? t('mobile:trackingStop.notRegistered')
+        : t('mobile:trackingStop.notPermitted');
     Alert.alert(t('mobile:trackingStop.title'), body, [{
       text: t('mobile:trackingStop.ok'),
       onPress: () => void useTrackingStore.getState().acknowledgeTrackingStop(),
@@ -97,11 +135,30 @@ function RootNavigator() {
   }, [trackingStopNotice, t]);
 
   useEffect(() => {
-    const subscription = addNotificationResponseListener(() => {
-      router.push('/notifications');
+    const subscription = addNotificationResponseListener((response) => {
+      const data = response.notification.request.content.data;
+      router.push(routeForNotification(data && typeof data === 'object' ? data as Record<string, unknown> : null));
     });
     return () => subscription.remove();
   }, []);
+
+  const launchRouteChecked = useRef(false);
+  useEffect(() => {
+    if (isAuthLoading || !isAuthenticated || legalAcceptanceRequired || updateRequired || launchRouteChecked.current) return;
+    launchRouteChecked.current = true;
+    void takeLaunchNotificationData().then((data) => {
+      if (data) router.push(routeForNotification(data));
+    });
+  }, [isAuthLoading, isAuthenticated, legalAcceptanceRequired, updateRequired]);
+
+  if (updateRequired) {
+    return (
+      <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar style={resolvedTheme === 'dark' ? 'light' : 'dark'} />
+        <UpdateRequiredScreen />
+      </GestureHandlerRootView>
+    );
+  }
 
   return (
     <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -125,14 +182,14 @@ function RootNavigator() {
         <Stack.Screen
           name="race/[id]"
           options={{
-            title: 'Race Details',
+            title: t('mobile:screens.raceDetails'),
             presentation: 'card',
           }}
         />
         <Stack.Screen
           name="tracking"
           options={{
-            title: 'Live Tracking',
+            title: t('mobile:screens.liveTracking'),
             presentation: 'fullScreenModal',
             gestureEnabled: false,
           }}
@@ -140,28 +197,64 @@ function RootNavigator() {
         <Stack.Screen
           name="scanner"
           options={{
-            title: 'Scan Checkpoint',
+            title: t('mobile:scanner.title'),
             presentation: 'modal',
+          }}
+        />
+        <Stack.Screen
+          name="settings"
+          options={{
+            title: t('mobile:settings.title'),
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
+          name="check-in"
+          options={{
+            title: t('mobile:checkIn.title'),
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
+          name="athlete/[raceId]/[participantId]"
+          options={{
+            title: t('mobile:screens.athleteLive'),
+            presentation: 'card',
           }}
         />
         <Stack.Screen
           name="notifications"
           options={{
-            title: 'Notifications',
+            title: t('mobile:screens.notifications'),
             presentation: 'card',
           }}
         />
         <Stack.Screen
           name="privacy"
           options={{
-            title: 'Privacy Policy',
+            title: t('legal:common.privacyPolicy'),
             presentation: 'card',
+          }}
+        />
+        <Stack.Screen
+          name="terms"
+          options={{
+            title: t('legal:common.terms'),
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
+          name="legal-acceptance"
+          options={{
+            title: t('legal:acceptance.title'),
+            headerShown: false,
+            gestureEnabled: false,
           }}
         />
         <Stack.Screen
           name="account-deletion"
           options={{
-            title: 'Delete Account',
+            title: t('account:deletion.title'),
             presentation: 'card',
           }}
         />

@@ -1,3 +1,5 @@
+import { canonicalTag } from './tag.mjs';
+
 export class GatewayValidationError extends Error {}
 
 const OFFSET_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/i;
@@ -11,7 +13,7 @@ export function validateBatchPayload(payload) {
     if (!read || typeof read !== 'object') {
       throw new GatewayValidationError(`reads[${index}] must be an object`);
     }
-    const rfidTag = typeof read.rfidTag === 'string' ? read.rfidTag.trim() : '';
+    const rfidTag = canonicalTag(read.rfidTag);
     const readAt = typeof read.readAt === 'string' ? read.readAt.trim() : '';
 
     if (!rfidTag) {
@@ -33,8 +35,7 @@ export function validateBatchPayload(payload) {
       readAt,
       antenna: typeof read.antenna === 'string' && read.antenna.trim() ? read.antenna.trim() : undefined,
       rssi: read.rssi ?? undefined,
-      rawPayload: typeof read.rawPayload === 'string' && read.rawPayload.trim() ? read.rawPayload : undefined,
-      eventOrigin: typeof read.eventOrigin === 'string' && read.eventOrigin.trim() ? read.eventOrigin.trim().toUpperCase() : undefined
+      rawPayload: typeof read.rawPayload === 'string' && read.rawPayload.trim() ? read.rawPayload : undefined
     };
   });
 

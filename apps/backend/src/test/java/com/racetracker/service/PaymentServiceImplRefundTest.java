@@ -492,6 +492,26 @@ class PaymentServiceImplRefundTest {
     }
 
     @Test
+    void waitlistedAndRejectedEntriesCannotStartCheckout() {
+        Participant participant = participant();
+        User athlete = new User();
+        athlete.setEmail("athlete@example.com");
+        participant.setUser(athlete);
+        participant.setPaymentStatus(Participant.PaymentStatus.UNPAID);
+        participant.getRace().setRegistrationFee(BigDecimal.valueOf(100));
+        when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
+
+        for (Participant.ParticipantStatus status : java.util.List.of(Participant.ParticipantStatus.WAITLISTED,
+            Participant.ParticipantStatus.REJECTED)) {
+            participant.setStatus(status);
+            assertThatThrownBy(() -> service.startCheckout(raceId, participantId, null, "athlete@example.com", true))
+                .isInstanceOf(ConflictException.class)
+                .extracting("code").isEqualTo("PAYMENT_NOT_AVAILABLE_FOR_STATUS");
+        }
+        verifyNoInteractions(pesepayClient);
+    }
+
+    @Test
     void athleteCannotStartCheckoutForAnotherUsersParticipant() {
         Participant participant = participant();
         User owner = new User();

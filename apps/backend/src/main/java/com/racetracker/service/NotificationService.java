@@ -18,6 +18,9 @@ public interface NotificationService {
      * Like {@link #notify} but resolves subject/body from an admin-managed template by code,
      * falling back to the supplied title/message when no template exists.
      */
+    NotificationDto notifyLocalized(UUID userId, Notification.NotificationType type, String templateCode,
+                                    Object[] args, Map<String, String> data);
+
     NotificationDto notifyTemplated(UUID userId, Notification.NotificationType type, String templateCode,
                                     String fallbackTitle, String fallbackMessage, Map<String, String> data);
     void registerDevice(String token, String platform);

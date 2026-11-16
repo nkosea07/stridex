@@ -24,10 +24,8 @@
   "creatingAccount": "Creating account...",
   "alreadyHaveAccount": "Already have an account?",
   "signIn": "Sign in",
-  "privacyPrefix": "I have read and accept the",
   "privacyLink": "Privacy Policy",
   "errorPasswords": "Passwords do not match.",
-  "errorPrivacy": "Please accept the Privacy Policy to continue.",
   "errorExperience": "Choose at least one way to use Race Tracker.",
   "errorValidation": "Check the highlighted registration details and try again.",
   "errorConflict": "An account with these details already exists.",
@@ -97,5 +95,9 @@
   "fieldOptionsPlaceholder": "S, M, L, XL",
   "registrationBloodType": "Blood type",
   "registrationMedicalConditions": "Medical conditions",
-  "registrationAllergies": "Allergies"
+  "registrationAllergies": "Allergies",
+  "legalPrefix": "I agree to the",
+  "termsLink": "Terms and Conditions",
+  "legalJoin": "and acknowledge the",
+  "errorLegal": "Please accept the Terms and Conditions and acknowledge the Privacy Policy to continue."
 }

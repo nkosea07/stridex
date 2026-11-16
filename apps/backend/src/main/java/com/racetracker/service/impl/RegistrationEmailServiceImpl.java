@@ -25,36 +25,34 @@ public class RegistrationEmailServiceImpl implements RegistrationEmailService {
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
     private final RaceTrackerProperties raceTrackerProperties;
+    private final com.racetracker.service.LocalizedMessages localizedMessages;
+    private final com.racetracker.service.UserLocales userLocales;
 
     @Async
     @Override
     public void sendRegistrationReceived(Participant participant) {
-        send(participant, "registration-received",
-            "We received your registration for " + raceName(participant));
+        send(participant, "registration-received", "email.registrationReceived.subject");
     }
 
     @Async
     @Override
     public void sendRegistrationApproved(Participant participant) {
-        send(participant, "registration-approved",
-            "Your registration for " + raceName(participant) + " is confirmed");
+        send(participant, "registration-approved", "email.registrationApproved.subject");
     }
 
     @Async
     @Override
     public void sendRegistrationWaitlisted(Participant participant) {
-        send(participant, "registration-waitlisted",
-            "You are on the waitlist for " + raceName(participant));
+        send(participant, "registration-waitlisted", "email.registrationWaitlisted.subject");
     }
 
     @Async
     @Override
     public void sendRegistrationRejected(Participant participant) {
-        send(participant, "registration-rejected",
-            "Update on your registration for " + raceName(participant));
+        send(participant, "registration-rejected", "email.registrationRejected.subject");
     }
 
-    private void send(Participant participant, String template, String subject) {
+    private void send(Participant participant, String template, String subjectKey) {
         if (participant == null || participant.getEmail() == null || participant.getEmail().isBlank()) {
             return;
         }
@@ -63,10 +61,12 @@ public class RegistrationEmailServiceImpl implements RegistrationEmailService {
             return;
         }
 
-        Race race = participant.getRace();
-        Context context = new Context();
+        java.util.Locale locale = userLocales.of(participant);
+        String raceName = raceName(participant);
+        String subject = localizedMessages.get(locale, subjectKey, raceName);
+        Context context = new Context(locale);
         context.setVariable("firstName", participant.getFirstName());
-        context.setVariable("raceName", race != null ? race.getName() : "your race");
+        context.setVariable("raceName", raceName);
         context.setVariable("bibNumber", participant.getBibNumber());
         context.setVariable("rejectionReason", participant.getRejectionReason());
         context.setVariable("waitlistPosition", participant.getWaitlistPosition());
@@ -88,6 +88,6 @@ public class RegistrationEmailServiceImpl implements RegistrationEmailService {
 
     private String raceName(Participant participant) {
         Race race = participant.getRace();
-        return race != null ? race.getName() : "your race";
+        return race != null && race.getName() != null ? race.getName() : "";
     }
 }

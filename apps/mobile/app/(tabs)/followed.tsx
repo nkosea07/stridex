@@ -128,6 +128,15 @@ function FollowedScreenContent() {
               {favorite.status && <Text style={styles.status}>{t(statusTranslationKey(favorite.status), { defaultValue: favorite.status })}</Text>}
             </View>
             <View style={styles.favoriteActions}>
+              <Link href={{ pathname: '/athlete/[raceId]/[participantId]', params: { raceId: favorite.raceId, participantId: favorite.participantId } }} asChild>
+                <TouchableOpacity
+                  style={styles.viewButton}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('mobile:following.watchLive', { name: favorite.participantName || t('mobile:following.athlete') })}
+                >
+                  <Ionicons name="navigate-outline" size={18} color="#0F766E" />
+                </TouchableOpacity>
+              </Link>
               <Link href={`/race/${favorite.raceId}`} asChild>
                 <TouchableOpacity
                   style={styles.viewButton}

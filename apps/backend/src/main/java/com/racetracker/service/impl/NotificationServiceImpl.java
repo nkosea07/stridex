@@ -36,6 +36,8 @@ public class NotificationServiceImpl implements NotificationService {
     private final ObjectMapper objectMapper;
     private final com.racetracker.service.NotificationPreferenceService preferenceService;
     private final com.racetracker.service.NotificationTemplateService notificationTemplateService;
+    private final com.racetracker.service.LocalizedMessages localizedMessages;
+    private final com.racetracker.service.UserLocales userLocales;
 
     public NotificationServiceImpl(
         NotificationRepository notificationRepository,
@@ -44,7 +46,9 @@ public class NotificationServiceImpl implements NotificationService {
         NotificationDispatcher notificationDispatcher,
         ObjectMapper objectMapper,
         com.racetracker.service.NotificationPreferenceService preferenceService,
-        com.racetracker.service.NotificationTemplateService notificationTemplateService
+        com.racetracker.service.NotificationTemplateService notificationTemplateService,
+        com.racetracker.service.LocalizedMessages localizedMessages,
+        com.racetracker.service.UserLocales userLocales
     ) {
         this.notificationRepository = notificationRepository;
         this.userRepository = userRepository;
@@ -53,6 +57,8 @@ public class NotificationServiceImpl implements NotificationService {
         this.objectMapper = objectMapper;
         this.preferenceService = preferenceService;
         this.notificationTemplateService = notificationTemplateService;
+        this.localizedMessages = localizedMessages;
+        this.userLocales = userLocales;
     }
 
     @Override
@@ -121,13 +127,33 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional
+    public NotificationDto notifyLocalized(UUID userId, Notification.NotificationType type, String templateCode,
+                                           Object[] args, Map<String, String> data) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null || user.getDeletedAt() != null) {
+            return null;
+        }
+        java.util.Locale locale = userLocales.of(user);
+        String key = "notification." + templateCode.toLowerCase(java.util.Locale.ROOT);
+        return applyTemplate(userId, type, templateCode, locale.getLanguage(),
+            localizedMessages.get(locale, key + ".title", args), localizedMessages.get(locale, key + ".body", args), data);
+    }
+
+    @Override
+    @Transactional
     public NotificationDto notifyTemplated(UUID userId, Notification.NotificationType type, String templateCode,
                                            String fallbackTitle, String fallbackMessage, Map<String, String> data) {
+        return applyTemplate(userId, type, templateCode, null, fallbackTitle, fallbackMessage, data);
+    }
+
+    private NotificationDto applyTemplate(UUID userId, Notification.NotificationType type, String templateCode,
+                                          String locale, String fallbackTitle, String fallbackMessage,
+                                          Map<String, String> data) {
         String title = fallbackTitle;
         String message = fallbackMessage;
         Map<String, String> payload = data == null ? new java.util.LinkedHashMap<>() : new java.util.LinkedHashMap<>(data);
         try {
-            var resolved = notificationTemplateService.resolve(templateCode, null);
+            var resolved = notificationTemplateService.resolve(templateCode, locale);
             if (resolved.isPresent()) {
                 title = resolved.get().subject();
                 message = resolved.get().body();

@@ -1,4 +1,5 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
 import { GatewayValidationError } from './payload.mjs';
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
@@ -26,11 +27,25 @@ async function readJson(request) {
   }
 }
 
-export function createServer({ gatewayService, logger = console }) {
+function tokenMatches(expected, provided) {
+  if (typeof provided !== 'string') {
+    return false;
+  }
+  const left = Buffer.from(expected, 'utf8');
+  const right = Buffer.from(provided, 'utf8');
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+export function createServer({ gatewayService, localToken = null, logger = console }) {
   return http.createServer(async (request, response) => {
     try {
       if (request.method === 'GET' && request.url === '/health') {
         sendJson(response, 200, await gatewayService.health());
+        return;
+      }
+
+      if (localToken && !tokenMatches(localToken, request.headers['x-gateway-token'])) {
+        sendJson(response, 401, { message: 'Gateway token required' });
         return;
       }
 

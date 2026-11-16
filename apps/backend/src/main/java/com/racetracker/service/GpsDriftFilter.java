@@ -32,6 +32,10 @@ public class GpsDriftFilter {
             return FilterResult.rejected("INVALID_COORDINATE");
         }
 
+        if (recordedAt != null && recordedAt.isAfter(latestAcceptableRecordedAt())) {
+            return FilterResult.rejected("FUTURE_TIMESTAMP");
+        }
+
         double accuracyThreshold = properties.getTracking().getAccuracyThresholdMeters();
         if (accuracy != null && accuracy.doubleValue() > accuracyThreshold) {
             return FilterResult.rejected("LOW_ACCURACY");
@@ -68,6 +72,11 @@ public class GpsDriftFilter {
             distanceKm = 0;
         }
         return FilterResult.accepted(smoothedLat, smoothedLng, distanceKm);
+    }
+
+    public OffsetDateTime latestAcceptableRecordedAt() {
+        long skewSeconds = Math.max(properties.getTracking().getMaxClockSkewSeconds(), 0);
+        return OffsetDateTime.now().plusSeconds(skewSeconds);
     }
 
     public static BigDecimal effectiveLatitude(GpsLocation location) {

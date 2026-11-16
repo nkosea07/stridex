@@ -10,11 +10,11 @@ await store.init();
 
 const backendClient = new BackendClient(config);
 const gatewayService = new GatewayService({ config, store, backendClient });
-const server = createServer({ gatewayService });
+const server = createServer({ gatewayService, localToken: config.localToken });
 
-server.listen(config.port, () => {
+server.listen(config.port, config.host, () => {
   console.log(
-    `RFID gateway listening on ${config.port} for ${config.gatewayName} ` +
+    `RFID gateway listening on ${config.host}:${config.port} for ${config.gatewayName} ` +
     `(${config.hardwareProfile}/${config.readerClass}) -> ${config.backendBaseUrl}`
   );
 });

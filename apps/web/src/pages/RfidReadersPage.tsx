@@ -25,6 +25,10 @@ import {
 import { checkpointsApi, racesApi, rfidApi } from '@/lib/api'
 import type { Checkpoint, Race, RfidRaceOverview, RfidReader, RfidReaderCreateResponse } from '@/types'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
+import { RfidTimingPanel, clockOffsetWarning } from '@/components/rfid/RfidTimingPanel'
+import { WavesPanel } from '@/components/rfid/WavesPanel'
+import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 
 const gatewayStatusColors = {
   ONLINE: 'bg-success/20 text-success',
@@ -43,6 +47,9 @@ function formatDateTime(value?: string) {
 
 export function RfidReadersPage() {
   const { raceId } = useParams()
+  const { t } = useTranslation()
+  const { user } = useAuth()
+  const canManageTiming = isAdminRole(user?.role)
   const [race, setRace] = useState<Race | null>(null)
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([])
   const [readers, setReaders] = useState<RfidReader[]>([])
@@ -75,7 +82,7 @@ export function RfidReadersPage() {
       setReaders(readersData)
       setOverview(overviewData)
     } catch {
-      toast.error('Failed to load RFID monitoring')
+      toast.error(t('rfid:ui.failedToLoadRfidMonitoring'))
     } finally {
       setIsLoading(false)
     }
@@ -103,7 +110,7 @@ export function RfidReadersPage() {
   const handleCreate = async () => {
     if (!raceId) return
     if (!createForm.checkpointId || !createForm.name.trim() || !createForm.externalId.trim()) {
-      toast.error('Checkpoint, name, and external id are required')
+      toast.error(t('rfid:ui.checkpointNameAndExternalIdAre'))
       return
     }
     setCreating(true)
@@ -122,11 +129,24 @@ export function RfidReadersPage() {
     }
   }
 
+  const handleRotateKey = async (reader: RfidReader) => {
+    if (!raceId || !window.confirm(t('rfid:keys.rotateConfirm', { name: reader.name }))) return
+    try {
+      const rotated = await rfidApi.rotateReaderKey(raceId, reader.id)
+      setCreatedReader(rotated)
+      setCreateOpen(true)
+      toast.success(t('rfid:keys.rotated', { name: reader.name }))
+      await load()
+    } catch {
+      toast.error(t('rfid:keys.rotateFailed'))
+    }
+  }
+
   const handleRevoke = async (reader: RfidReader) => {
     if (!raceId) return
     try {
       await rfidApi.revokeReader(raceId, reader.id)
-      toast.success('Reader revoked')
+      toast.success(t('rfid:ui.readerRevoked'))
       await load()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to revoke reader')
@@ -135,31 +155,31 @@ export function RfidReadersPage() {
 
   const cards = [
     {
-      title: 'Readers',
+      title: t('rfid:ui.readers'),
       value: overview?.totalReaders ?? 0,
       detail: `${overview?.onlineReaders ?? 0} online / ${overview?.degradedReaders ?? 0} degraded / ${overview?.offlineReaders ?? 0} offline`,
       icon: <Radio className="h-4 w-4 text-primary" />,
     },
     {
-      title: 'Queue Depth',
+      title: t('rfid:ui.queueDepth'),
       value: overview?.queueDepth ?? 0,
       detail: `silence timeout ${overview?.readerSilenceTimeoutSeconds ?? 0}s`,
       icon: <Clock3 className="h-4 w-4 text-warning-foreground" />,
     },
     {
-      title: 'Duplicate Rate',
+      title: t('rfid:ui.duplicateRate'),
       value: `${(overview?.duplicateRate ?? 0).toFixed(1)}%`,
       detail: `${overview?.duplicateCount ?? 0} duplicate events`,
       icon: <Activity className="h-4 w-4 text-live" />,
     },
     {
-      title: 'Unknown Tags',
+      title: t('rfid:ui.unknownTags'),
       value: `${(overview?.unknownCredentialRate ?? 0).toFixed(1)}%`,
       detail: `${overview?.unknownCredentialCount ?? 0} unmatched reads`,
       icon: <AlertTriangle className="h-4 w-4 text-destructive" />,
     },
     {
-      title: 'Ingress Lag',
+      title: t('rfid:ui.ingressLag'),
       value: overview?.averageIngressLagMillis != null ? `${overview.averageIngressLagMillis} ms` : '-',
       detail: `oldest queued read ${overview?.oldestQueuedReadAgeSeconds ?? 0}s`,
       icon: <Cpu className="h-4 w-4 text-muted-foreground" />,
@@ -167,14 +187,14 @@ export function RfidReadersPage() {
   ]
 
   if (isLoading && !race) {
-    return <div className="p-6">Loading RFID monitoring...</div>
+    return <div className="p-6">{t('rfid:ui.loadingRfidMonitoring')}</div>
   }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">RFID Monitoring</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('rfid:ui.rfidMonitoring')}</h1>
           <p className="text-sm text-muted-foreground">
             {race?.name ?? 'Race'} reader health, ingest backlog, and timing-event quality signals.
           </p>
@@ -182,11 +202,11 @@ export function RfidReadersPage() {
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => void load()}>
             <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
+            {t('rfid:ui.refresh')}
           </Button>
           <Button onClick={openCreate} disabled={rfidCheckpoints.length === 0}>
             <Plus className="mr-2 h-4 w-4" />
-            New reader
+            {t('rfid:ui.newReader')}
           </Button>
         </div>
       </div>
@@ -206,24 +226,28 @@ export function RfidReadersPage() {
         ))}
       </div>
 
+      {raceId && <RfidTimingPanel raceId={raceId} canManage={canManageTiming} />}
+
+      {raceId && <WavesPanel raceId={raceId} canManage={canManageTiming} />}
+
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Registered Readers</CardTitle>
-          <CardDescription>Per-checkpoint reader status for this race.</CardDescription>
+          <CardTitle className="text-base">{t('rfid:ui.registeredReaders')}</CardTitle>
+          <CardDescription>{t('rfid:ui.perCheckpointReaderStatusForThis')}</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Checkpoint</TableHead>
-                <TableHead>Profile</TableHead>
-                <TableHead>Gateway</TableHead>
-                <TableHead>Backlog</TableHead>
-                <TableHead>Last Seen</TableHead>
-                <TableHead>Last Processed</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t('rfid:ui.name')}</TableHead>
+                <TableHead>{t('rfid:ui.checkpoint')}</TableHead>
+                <TableHead>{t('rfid:ui.profile')}</TableHead>
+                <TableHead>{t('rfid:ui.gateway')}</TableHead>
+                <TableHead>{t('rfid:ui.backlog')}</TableHead>
+                <TableHead>{t('rfid:ui.lastSeen')}</TableHead>
+                <TableHead>{t('rfid:ui.lastProcessed')}</TableHead>
+                <TableHead>{t('rfid:ui.status')}</TableHead>
+                <TableHead className="text-right">{t('rfid:ui.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -243,7 +267,16 @@ export function RfidReadersPage() {
                     <div className="text-xs text-muted-foreground">{reader.hardwareModel ?? reader.firmwareVersion ?? '-'}</div>
                   </TableCell>
                   <TableCell>{reader.gatewayBacklog ?? 0}</TableCell>
-                  <TableCell>{formatDateTime(reader.lastSeenAt || reader.lastHeartbeatAt)}</TableCell>
+                  <TableCell>
+                    <div>{formatDateTime(reader.lastSeenAt || reader.lastHeartbeatAt)}</div>
+                    {reader.clockOffsetMs != null && (
+                      <div className={clockOffsetWarning(reader.clockOffsetMs) ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
+                        {clockOffsetWarning(reader.clockOffsetMs)
+                          ? t('rfid:timing.clockOffsetWarning', { offset: reader.clockOffsetMs })
+                          : t('rfid:timing.clockOffset', { offset: reader.clockOffsetMs })}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell>{formatDateTime(reader.lastProcessedAt)}</TableCell>
                   <TableCell className="space-y-1">
                     <div className="flex flex-wrap gap-2">
@@ -258,13 +291,18 @@ export function RfidReadersPage() {
                     <div className="text-xs text-destructive">{reader.lastError || ''}</div>
                   </TableCell>
                   <TableCell className="text-right">
+                    {canManageTiming && reader.status !== 'REVOKED' && (
+                      <Button variant="ghost" size="sm" onClick={() => void handleRotateKey(reader)}>
+                        {t('rfid:keys.rotate')}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => void handleRevoke(reader)}
                       disabled={reader.status === 'REVOKED'}
                     >
-                      Revoke
+                      {t('rfid:ui.revoke')}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -272,7 +310,7 @@ export function RfidReadersPage() {
               {readers.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={9} className="text-sm text-muted-foreground">
-                    No RFID readers registered for this race.
+                    {t('rfid:ui.noRfidReadersRegisteredForThis')}
                   </TableCell>
                 </TableRow>
               )}
@@ -284,17 +322,16 @@ export function RfidReadersPage() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New RFID reader</DialogTitle>
+            <DialogTitle>{t('rfid:ui.newRfidReader')}</DialogTitle>
             <DialogDescription>
-              Register an edge reader for a checkpoint that has RFID enabled.
+              {t('rfid:ui.registerAnEdgeReaderForA')}
             </DialogDescription>
           </DialogHeader>
 
           {createdReader ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Reader <span className="font-medium text-foreground">{createdReader.name}</span> was created. Copy the
-                API key now — it is shown only once.
+                Reader <span className="font-medium text-foreground">{createdReader.name}</span> {t('rfid:ui.wasCreatedCopyTheApiKey')}
               </p>
               <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-3">
                 <KeyRound className="h-4 w-4 text-primary" />
@@ -304,23 +341,23 @@ export function RfidReadersPage() {
                   size="sm"
                   onClick={() => {
                     void navigator.clipboard.writeText(createdReader.apiKey)
-                    toast.success('API key copied')
+                    toast.success(t('rfid:ui.apiKeyCopied'))
                   }}
                 >
-                  Copy
+                  {t('rfid:ui.copy')}
                 </Button>
               </div>
             </div>
           ) : (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="reader-checkpoint">Checkpoint</Label>
+                <Label htmlFor="reader-checkpoint">{t('rfid:ui.checkpoint')}</Label>
                 <Select
                   value={createForm.checkpointId}
                   onValueChange={(value) => setCreateForm((form) => ({ ...form, checkpointId: value }))}
                 >
                   <SelectTrigger id="reader-checkpoint">
-                    <SelectValue placeholder="Select a checkpoint" />
+                    <SelectValue placeholder={t('rfid:ui.selectACheckpoint')} />
                   </SelectTrigger>
                   <SelectContent>
                     {rfidCheckpoints.map((checkpoint) => (
@@ -332,21 +369,21 @@ export function RfidReadersPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="reader-name">Name</Label>
+                <Label htmlFor="reader-name">{t('rfid:ui.name')}</Label>
                 <Input
                   id="reader-name"
                   value={createForm.name}
                   onChange={(e) => setCreateForm((form) => ({ ...form, name: e.target.value }))}
-                  placeholder="Finish line reader"
+                  placeholder={t('rfid:ui.finishLineReader')}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="reader-external">External id</Label>
+                <Label htmlFor="reader-external">{t('rfid:ui.externalId')}</Label>
                 <Input
                   id="reader-external"
                   value={createForm.externalId}
                   onChange={(e) => setCreateForm((form) => ({ ...form, externalId: e.target.value }))}
-                  placeholder="reader-01"
+                  placeholder={t('rfid:ui.reader01')}
                 />
               </div>
             </div>
@@ -354,11 +391,11 @@ export function RfidReadersPage() {
 
           <DialogFooter>
             {createdReader ? (
-              <Button onClick={() => setCreateOpen(false)}>Done</Button>
+              <Button onClick={() => setCreateOpen(false)}>{t('rfid:ui.done')}</Button>
             ) : (
               <>
                 <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
-                  Cancel
+                  {t('rfid:ui.cancel')}
                 </Button>
                 <Button onClick={() => void handleCreate()} disabled={creating}>
                   {creating ? 'Creating…' : 'Create reader'}

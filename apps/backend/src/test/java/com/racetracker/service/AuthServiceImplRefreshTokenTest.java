@@ -64,6 +64,12 @@ class AuthServiceImplRefreshTokenTest {
     @Mock
     private AuditEventService auditEventService;
 
+    @Mock
+    private com.racetracker.security.AdminMfaPolicy adminMfaPolicy;
+
+    @Mock
+    private com.racetracker.service.UserLocales userLocales;
+
     @InjectMocks
     private AuthServiceImpl authService;
 
@@ -74,6 +80,26 @@ class AuthServiceImplRefreshTokenTest {
 
         assertThrows(UnauthorizedException.class, () -> authService.refreshToken(token));
         verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void adminRefreshTokenWithoutVerifiedMfaIsNotRenewed() {
+        User admin = baseUser();
+        admin.setRole(User.UserRole.SUPER_ADMIN);
+        String refreshToken = "legacy-admin-refresh";
+        AuthToken storedToken = storedToken(admin, refreshToken, UUID.randomUUID(), null);
+        when(jwtService.hasTokenType(refreshToken, JwtService.TOKEN_TYPE_REFRESH)).thenReturn(true);
+        when(authTokenRepository.findByTokenAndTokenType(refreshToken, AuthToken.TokenType.REFRESH))
+            .thenReturn(Optional.of(storedToken));
+        when(jwtService.isTokenValid(eq(refreshToken), any(org.springframework.security.core.userdetails.UserDetails.class)))
+            .thenReturn(true);
+        when(jwtService.isMfaVerified(refreshToken)).thenReturn(false);
+        when(adminMfaPolicy.requiresMfa(User.UserRole.SUPER_ADMIN)).thenReturn(true);
+
+        org.junit.jupiter.api.Assertions.assertThrows(com.racetracker.exception.UnauthorizedException.class,
+            () -> authService.refreshToken(refreshToken));
+        verify(authTokenRepository).consumeIfActive(eq(storedToken.getId()), any(OffsetDateTime.class));
+        verify(jwtService, never()).generateAccessToken(any());
     }
 
     @Test

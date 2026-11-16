@@ -14,16 +14,28 @@ public class RfidIngestMetrics {
     private final Counter unknownCredentialCounter;
     private final Counter invalidReaderCounter;
     private final Counter errorCounter;
+    private final Counter ignoredCounter;
+    private final Counter improvedCounter;
 
     public RfidIngestMetrics(MeterRegistry meterRegistry, RfidReadEventRepository rfidReadEventRepository) {
         this.duplicateCounter = meterRegistry.counter("tracking.rfid.duplicate.count");
         this.unknownCredentialCounter = meterRegistry.counter("tracking.rfid.unknown_credential.count");
         this.invalidReaderCounter = meterRegistry.counter("tracking.rfid.invalid_reader.count");
         this.errorCounter = meterRegistry.counter("tracking.rfid.error.count");
+        this.ignoredCounter = meterRegistry.counter("tracking.rfid.ignored.count");
+        this.improvedCounter = meterRegistry.counter("tracking.rfid.earlier_read.count");
         Gauge.builder("tracking.rfid.queue.depth", rfidReadEventRepository,
                 repo -> repo.countByStatus(RfidReadEvent.RfidReadEventStatus.RECEIVED))
             .description("RFID read events waiting to be normalized")
             .register(meterRegistry);
+    }
+
+    public void incrementIgnored() {
+        ignoredCounter.increment();
+    }
+
+    public void incrementEarlierRead() {
+        improvedCounter.increment();
     }
 
     public void incrementDuplicate() {

@@ -37,6 +37,7 @@ export type EndpointKey =
   | 'authBrowserLogout'
   | 'myDataExport'
   | 'myConsent'
+  | 'myLegalAcceptance'
   | 'myAccount'
   | 'myDeletionStatus'
   | 'myDeletionCancel'
@@ -56,6 +57,7 @@ export type EndpointKey =
   | 'raceParticipants'
   | 'raceParticipantById'
   | 'raceParticipantCheckIn'
+  | 'raceParticipantSearch'
   | 'raceParticipantImport'
   | 'raceParticipantImportJobs'
   | 'raceParticipantImportJobById'
@@ -68,6 +70,7 @@ export type EndpointKey =
   | 'operationsCheckpoints'
   | 'checkpointEmergency'
   | 'publicRaceHub'
+  | 'publicAppConfig'
   | 'publicRaceLive'
   | 'publicRaceLiveFeed'
   | 'publicRaceResults'
@@ -129,13 +132,29 @@ export type EndpointKey =
   | 'raceResults'
   | 'raceResultByParticipant'
   | 'raceResultsPublish'
+  | 'raceResultsCertify'
+  | 'raceResultsReopen'
+  | 'raceResultsIntegrity'
+  | 'raceResultsVersions'
+  | 'raceResultsAnomalies'
+  | 'myResultQuery'
+  | 'myResultQueries'
+  | 'raceResultQueries'
+  | 'raceResultQueryResolution'
   | 'checkpointRecordCorrect'
+  | 'checkpointRecordVoid'
+  | 'checkpointRecordRestore'
+  | 'checkpointRecordReassign'
   | 'checkpointRecords'
   | 'raceCheckpointExport'
   | 'myRegistrations'
   | 'trackingLocation'
   | 'trackingLocations'
   | 'trackingCheckpoint'
+  | 'checkpointSelfScanQr'
+  | 'checkpointSelfScanQrRotate'
+  | 'raceSelfScanClaims'
+  | 'raceSelfScanClaimDecision'
   | 'raceTrackingLive'
   | 'raceParticipantTracking'
   | 'myResults'
@@ -157,6 +176,14 @@ export type EndpointKey =
   | 'raceRfidReaders'
   | 'raceRfidOverview'
   | 'raceRfidReaderRevoke'
+  | 'raceRfidReaderRotateKey'
+  | 'raceRfidUnmatchedTags'
+  | 'raceRfidReprocess'
+  | 'raceGunTime'
+  | 'raceWaves'
+  | 'raceWave'
+  | 'raceWaveStart'
+  | 'raceWaveParticipants'
   | 'rfidReadEvents'
   | 'rfidReaderHeartbeat';
 
@@ -173,7 +200,14 @@ export interface ApiContract {
   legal: {
     privacyPolicyVersion: string;
     privacyPolicyPath: string;
+    termsVersion: string;
+    termsPath: string;
     mediaPublicationConsentVersion: string;
+    operatorName: string;
+    operatorAddress: string;
+    contactEmail: string;
+    accountDeletionGraceDays: number;
+    gpsRetentionDays: number;
   };
   i18n: {
     defaultLocale: string;

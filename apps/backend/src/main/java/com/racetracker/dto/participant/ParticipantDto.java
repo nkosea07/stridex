@@ -14,6 +14,7 @@ public class ParticipantDto {
     private UUID id;
     private UUID raceId;
     private UUID categoryId;
+    private UUID waveId;
     private String firstName;
     private String lastName;
     private String email;
@@ -26,6 +27,7 @@ public class ParticipantDto {
     private String bibNumber;
     private String rfidTag;
     private String status;
+    private String statusReason;
     private String emergencyContactName;
     private String emergencyContactPhone;
     private String emergencyContactRelation;

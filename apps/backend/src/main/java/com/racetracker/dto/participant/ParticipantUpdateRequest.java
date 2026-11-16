@@ -21,6 +21,8 @@ public class ParticipantUpdateRequest {
     private String bibNumber;
     private String rfidTag;
     private String status;
+    @jakarta.validation.constraints.Size(max = 500)
+    private String statusReason;
     private String emergencyContactName;
     private String emergencyContactPhone;
     private String emergencyContactRelation;

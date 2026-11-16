@@ -104,10 +104,11 @@ public class PublicTrackingController {
     public ResponseEntity<PublicParticipantTrackResponse> getAthleteTrack(
         @PathVariable UUID raceId,
         @PathVariable UUID participantId,
+        @RequestParam(required = false) String since,
         HttpServletRequest request
     ) {
         rateLimit(raceId, request);
-        return ResponseEntity.ok(publicTrackingService.getAthleteTrack(raceId, participantId));
+        return ResponseEntity.ok(publicTrackingService.getAthleteTrack(raceId, participantId, parseTime(since)));
     }
 
     @GetMapping("/tracking/heatmap")

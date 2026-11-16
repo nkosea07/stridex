@@ -7,7 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const contractPath = path.join(root, 'packages/contracts/contract.json');
 const backendConfigPath = path.join(root, 'apps/backend/src/main/resources/application.yml');
 const backendSecurityPath = path.join(root, 'apps/backend/src/main/java/com/racetracker/config/SecurityConfig.java');
-const backendAuthServicePath = path.join(root, 'apps/backend/src/main/java/com/racetracker/service/impl/AuthServiceImpl.java');
+const backendLegalDocumentsPath = path.join(root, 'apps/backend/src/main/java/com/racetracker/service/LegalDocuments.java');
 const backendControllerDirectory = path.join(root, 'apps/backend/src/main/java/com/racetracker/controller');
 const webApiPath = path.join(root, 'apps/web/src/lib/api.ts');
 const mobileApiPath = path.join(root, 'apps/mobile/lib/api.ts');
@@ -374,9 +374,36 @@ assert(
   'contract.legal.privacyPolicyPath must be "/privacy".',
 );
 assert(
-  read(backendAuthServicePath).includes(`CURRENT_PRIVACY_POLICY_VERSION = "${contract.legal.privacyPolicyVersion}"`),
-  'Backend registration privacy policy version must match contract.legal.privacyPolicyVersion.',
+  read(backendLegalDocumentsPath).includes(`CURRENT_PRIVACY_POLICY_VERSION = "${contract.legal.privacyPolicyVersion}"`),
+  'Backend privacy policy version (LegalDocuments) must match contract.legal.privacyPolicyVersion.',
 );
+assert(
+  contract.legal && typeof contract.legal.termsVersion === 'string' && contract.legal.termsVersion.length > 0,
+  'contract.legal.termsVersion must be a non-empty string.',
+);
+assert(
+  contract.legal && contract.legal.termsPath === '/terms',
+  'contract.legal.termsPath must be "/terms".',
+);
+assert(
+  read(backendLegalDocumentsPath).includes(`CURRENT_TERMS_VERSION = "${contract.legal.termsVersion}"`),
+  'Backend terms version (LegalDocuments) must match contract.legal.termsVersion.',
+);
+const backendApplicationConfig = read(path.join(root, 'apps/backend/src/main/resources/application.yml'));
+assert(
+  backendApplicationConfig.includes(`deletion-grace-days: \${PRIVACY_DELETION_GRACE_DAYS:${contract.legal.accountDeletionGraceDays}}`),
+  'contract.legal.accountDeletionGraceDays must match the backend deletion-grace-days default stated in the privacy policy.',
+);
+assert(
+  backendApplicationConfig.includes(`retention-days: \${TRACKING_RETENTION_DAYS:${contract.legal.gpsRetentionDays}}`),
+  'contract.legal.gpsRetentionDays must match the backend GPS retention-days default stated in the privacy policy.',
+);
+for (const field of ['operatorName', 'operatorAddress', 'contactEmail']) {
+  assert(
+    contract.legal && typeof contract.legal[field] === 'string' && contract.legal[field].trim().length > 0,
+    `contract.legal.${field} must be a non-empty string (replace the placeholder before launch).`,
+  );
+}
 const mediaConsentServicePath = path.join(root, 'apps/backend/src/main/java/com/racetracker/service/MediaConsentService.java');
 assert(
   contract.legal.mediaPublicationConsentVersion === 'MEDIA_PUBLICATION_V1',
@@ -411,6 +438,16 @@ assert(
 );
 
 const backendConfig = read(backendConfigPath);
+const backendLocalesMatch = backendConfig.match(/^\s+supported-locales:\s*([A-Za-z,\- ]+)$/m);
+if (!backendLocalesMatch) {
+  fail('Could not find racetracker.i18n.supported-locales in backend application.yml.');
+} else {
+  const backendLocales = backendLocalesMatch[1].split(',').map((locale) => locale.trim()).filter(Boolean);
+  assert(
+    backendLocales.join(',') === supportedLocales.join(','),
+    `Backend racetracker.i18n.supported-locales (${backendLocales.join(',')}) must match contract.i18n.supportedLocales (${supportedLocales.join(',')}).`,
+  );
+}
 const backendVersionMatch = backendConfig.match(/racetracker:\s*[\s\S]*?api:\s*[\s\S]*?version:\s*([0-9]+)/);
 if (!backendVersionMatch) {
   fail('Could not find racetracker.api.version in backend application.yml.');

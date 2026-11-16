@@ -16,6 +16,10 @@ export interface User {
   emailVerified?: boolean;
   createdAt?: string;
   profileImage?: string;
+  privacyPolicyVersion?: string | null;
+  termsVersion?: string | null;
+  legalAcceptanceRequired?: boolean | null;
+  preferredLocale?: string | null;
 }
 
 export interface AuthResponse {
@@ -35,13 +39,16 @@ export interface RegisterRequest {
   phone?: string;
   privacyPolicyAccepted: boolean;
   privacyPolicyVersion: string;
+  termsAccepted: boolean;
+  termsVersion: string;
   experiences?: RegistrationExperience[];
 }
 
 export interface ProfileUpdateRequest {
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
   phone?: string;
+  preferredLocale?: string;
 }
 
 export interface CapabilityUpdateRequest {
@@ -196,6 +203,9 @@ export interface Registration {
   };
   shirtSize?: string;
   paymentStatus?: 'UNPAID' | 'PENDING' | 'PAID' | 'WAIVED' | 'REFUNDED';
+  paymentAmount?: number | null;
+  amountDue?: number | null;
+  currency?: string | null;
   mediaPublicationConsent?: boolean;
   teamId?: string;
   teamName?: string;
@@ -278,6 +288,115 @@ export interface RaceResult {
   genderPosition?: number;
   splits: CheckpointRecord[];
   status: 'in_progress' | 'finished' | 'dnf' | 'dns' | 'dq';
+  raceName?: string;
+  official?: boolean;
+  certificateAvailable?: boolean;
+  certificateToken?: string | null;
+}
+
+export interface AthleteHistoryEntry {
+  raceId: string;
+  raceName?: string | null;
+  raceDate?: string | null;
+  distanceKm?: number | null;
+  chipTime?: string | null;
+  overallPosition?: number | null;
+  official?: boolean;
+  disqualified?: boolean;
+  medal?: string | null;
+}
+
+export interface PublicCheckpointSplit {
+  name: string;
+  time?: string | null;
+  distanceMeters?: number | null;
+  durationSeconds?: number | null;
+  paceSecondsPerKm?: number | null;
+}
+
+export interface PublicAthleteTracking {
+  participantId: string;
+  participantName?: string | null;
+  bibNumber?: string | null;
+  status?: string | null;
+  lastCheckpoint?: string | null;
+  elapsedTime?: string | null;
+  averagePace?: string | null;
+  predictedFinishTime?: string | null;
+  distanceRemaining?: number | null;
+  splits: PublicCheckpointSplit[];
+}
+
+export interface StaffParticipant {
+  id: string;
+  bibNumber?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  categoryName?: string | null;
+  waveName?: string | null;
+  status?: string | null;
+  checkedInAt?: string | null;
+}
+
+export interface StationRecord {
+  id: string;
+  participantId: string;
+  participantName?: string | null;
+  bibNumber?: string | null;
+  recordedAt: string;
+  recordMethod?: string | null;
+  recordedById?: string | null;
+  passNumber?: number | null;
+}
+
+export interface RaceWave {
+  id: string;
+  name: string;
+  scheduledStart?: string | null;
+  startedAt?: string | null;
+  participants?: number;
+}
+
+export interface NotificationPreferences {
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  smsEnabled: boolean;
+  whatsappEnabled: boolean;
+}
+
+export interface ConsentState {
+  dataProcessingConsentAt?: string | null;
+  marketingConsent: boolean;
+}
+
+export interface PersonalBest {
+  distanceKm: number;
+  chipTime?: string | null;
+  raceId?: string | null;
+  raceName?: string | null;
+  resultCount?: number;
+}
+
+export interface ResultQuery {
+  id: string;
+  raceId: string;
+  participantId: string;
+  checkpointId?: string | null;
+  checkpointName?: string | null;
+  message: string;
+  status: 'OPEN' | 'RESOLVED' | 'REJECTED' | string;
+  resolutionNote?: string | null;
+  createdAt?: string | null;
+  resolvedAt?: string | null;
+}
+
+export interface PaymentCheckout {
+  id?: string;
+  status?: string;
+  amount?: number;
+  payableAmount?: number;
+  currency?: string;
+  checkoutUrl?: string | null;
 }
 
 export interface RaceResultPage {
@@ -312,6 +431,7 @@ export interface AuthState {
   logout: () => Promise<void>;
   updateProfile: (data: ProfileUpdateRequest) => Promise<void>;
   updateCapabilities: (data: CapabilityUpdateRequest) => Promise<void>;
+  acceptLegalDocuments: () => Promise<void>;
 }
 
 export type ThemePreference = 'light' | 'dark' | 'system';
@@ -326,12 +446,16 @@ export interface TrackingState {
   startTracking: (race: Race) => Promise<void>;
   stopTracking: () => void;
   addLocation: (location: GpsLocation) => void;
-  recordCheckpoint: (record: CheckpointRecord) => Promise<void>;
+  recordCheckpoint: (
+    record: CheckpointRecord,
+    scanToken: string,
+    location?: GpsLocation,
+  ) => Promise<{ status: 'VERIFIED' | 'PROVISIONAL'; reason: string | null }>;
   setBatterySaver: (enabled: boolean) => void;
   clearTrackingData: () => Promise<void>;
   rehydrateFromLocalDb: (raceId: string) => Promise<void>;
   recoverActiveTrackingSession: () => Promise<void>;
-  trackingStopNotice: { raceId: string; reason: 'not_registered' | 'not_permitted' } | null;
+  trackingStopNotice: { raceId: string; reason: 'not_registered' | 'not_permitted' | 'closed' } | null;
   acknowledgeTrackingStop: () => Promise<void>;
 }
 
@@ -339,4 +463,5 @@ export interface DeletionStatus {
   deletionRequested: boolean;
   requestedAt?: string | null;
   scheduledFor?: string | null;
+  blockers?: string[];
 }

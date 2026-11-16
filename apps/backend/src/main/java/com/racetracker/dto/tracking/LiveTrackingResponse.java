@@ -18,6 +18,8 @@ public class LiveTrackingResponse {
     private String lastCheckpoint;
     private String elapsedTime;
     private String status;
+    private String recordedAt;
+    private String positionSource;
     private String predictedFinishTime;
     private BigDecimal distanceRemaining;
     private String averagePace;

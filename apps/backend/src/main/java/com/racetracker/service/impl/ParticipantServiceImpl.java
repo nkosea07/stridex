@@ -83,6 +83,8 @@ public class ParticipantServiceImpl implements ParticipantService {
     private final RaceAccessGuard raceAccessGuard;
     private final ParticipantIdentityService participantIdentityService;
 
+    private final com.racetracker.service.ParticipantChangeControl participantChangeControl;
+
     public ParticipantServiceImpl(
         ParticipantRepository participantRepository,
         RaceRepository raceRepository,
@@ -102,7 +104,8 @@ public class ParticipantServiceImpl implements ParticipantService {
         CapabilityAuthorizationService capabilityAuthorizationService,
         RaceAccessGuard raceAccessGuard,
         ParticipantIdentityService participantIdentityService,
-        ImportSourceStore importSourceStore
+        ImportSourceStore importSourceStore,
+        com.racetracker.service.ParticipantChangeControl participantChangeControl
     ) {
         this.participantRepository = participantRepository;
         this.raceRepository = raceRepository;
@@ -123,6 +126,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         this.raceAccessGuard = raceAccessGuard;
         this.participantIdentityService = participantIdentityService;
         this.importSourceStore = importSourceStore;
+        this.participantChangeControl = participantChangeControl;
     }
 
     @Override
@@ -192,7 +196,9 @@ public class ParticipantServiceImpl implements ParticipantService {
         raceAccessGuard.assertCanManage(raceId);
         assertIdentifiersAvailable(raceId, participantId, request.getBibNumber(), request.getRfidTag());
         Participant participant = getParticipant(raceId, participantId);
+        com.racetracker.service.ParticipantChangeControl.Snapshot before = participantChangeControl.snapshot(participant);
         applyUpdateFields(participant, request);
+        participantChangeControl.verifyAndRecord(before, participant, request.getStatusReason());
 
         Participant saved = participantRepository.save(participant);
         participantCredentialService.syncParticipantCredentials(saved, request.getRfidTag(), request.getCredentials());
@@ -204,6 +210,8 @@ public class ParticipantServiceImpl implements ParticipantService {
     public void delete(UUID raceId, UUID participantId) {
         raceAccessGuard.assertCanManage(raceId);
         Participant participant = getParticipant(raceId, participantId);
+        participantChangeControl.verifyDeletable(participant);
+        participantChangeControl.recordDeletion(participant);
         registrationAnswerRepository.deleteByParticipantId(participantId);
         participantRepository.delete(participant);
     }
@@ -219,15 +227,39 @@ public class ParticipantServiceImpl implements ParticipantService {
         }
         if (participant.getStatus() != Participant.ParticipantStatus.REGISTERED
             && participant.getStatus() != Participant.ParticipantStatus.CONFIRMED) {
-            throw new ApiException("Participant is not eligible for check-in");
+            throw new ConflictException("Participant is not eligible for check-in", "CHECK_IN_NOT_ELIGIBLE");
         }
         participant.setCheckedInAt(OffsetDateTime.now());
         participant.setStatus(Participant.ParticipantStatus.CHECKED_IN);
         Participant saved = participantRepository.save(participant);
         notifyParticipant(saved, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
-            "registration.checked_in", "Check-in confirmed", "You are checked in for " + raceName(saved) + ".");
+            "registration.checked_in", raceName(saved));
         return toStaffAwareDto(saved);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.racetracker.dto.participant.StaffParticipantSearchResultDto> searchForStaff(UUID raceId, String query) {
+        raceAccessGuard.assertCanReadStaff(raceId);
+        String term = query == null ? "" : query.replaceAll("[%_\\\\]", "").trim();
+        if (term.isEmpty() || term.length() > 50) {
+            throw new ApiException("Enter a bib number or a name of up to 50 characters", "PARTICIPANT_SEARCH_INVALID");
+        }
+        return participantRepository.searchForStaff(raceId, term, org.springframework.data.domain.PageRequest.of(0, STAFF_SEARCH_LIMIT))
+            .stream()
+            .map(participant -> new com.racetracker.dto.participant.StaffParticipantSearchResultDto(
+                participant.getId(),
+                participant.getBibNumber(),
+                participant.getFirstName(),
+                participant.getLastName(),
+                participant.getCategory() != null ? participant.getCategory().getName() : null,
+                participant.getWave() != null ? participant.getWave().getName() : null,
+                participant.getStatus() != null ? participant.getStatus().name() : null,
+                participant.getCheckedInAt()))
+            .toList();
+    }
+
+    private static final int STAFF_SEARCH_LIMIT = 20;
 
     @Override
     @Transactional
@@ -943,17 +975,17 @@ public class ParticipantServiceImpl implements ParticipantService {
             case CONFIRMED, CHECKED_IN -> () -> {
                 registrationEmailService.sendRegistrationApproved(participant);
                 notifyParticipant(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
-                    "registration.confirmed", "Registration confirmed", "Your registration for " + raceName(participant) + " is confirmed.");
+                    "registration.confirmed", raceName(participant));
             };
             case WAITLISTED -> () -> {
                 registrationEmailService.sendRegistrationWaitlisted(participant);
                 notifyParticipant(participant, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
-                    "registration.waitlisted", "Added to waitlist", "You are on the waitlist for " + raceName(participant) + ".");
+                    "registration.waitlisted", raceName(participant));
             };
             case REJECTED -> () -> {
                 registrationEmailService.sendRegistrationRejected(participant);
                 notifyParticipant(participant, com.racetracker.model.Notification.NotificationType.ALERT,
-                    "registration.rejected", "Registration update", "Your registration for " + raceName(participant) + " was not approved.");
+                    "registration.rejected", raceName(participant));
             };
             default -> null;
         };
@@ -974,13 +1006,13 @@ public class ParticipantServiceImpl implements ParticipantService {
     }
 
     private void notifyParticipant(Participant participant, com.racetracker.model.Notification.NotificationType type,
-                                   String templateCode, String title, String message) {
+                                   String templateCode, Object... args) {
         if (participant.getUser() == null) {
             return;
         }
         try {
-            notificationService.notifyTemplated(participant.getUser().getId(), type, templateCode, title, message,
-                java.util.Map.of("participantId", participant.getId().toString()));
+            notificationService.notifyLocalized(participant.getUser().getId(), type, templateCode, args,
+                notificationData(participant, "REGISTRATION"));
         } catch (RuntimeException ex) {
             // Notification delivery must never break registration flows.
         }
@@ -988,7 +1020,7 @@ public class ParticipantServiceImpl implements ParticipantService {
 
     private String raceName(Participant participant) {
         return participant.getRace() != null && participant.getRace().getName() != null
-            ? participant.getRace().getName() : "your race";
+            ? participant.getRace().getName() : "";
     }
 
     private void assertIdentifiersAvailable(UUID raceId, UUID participantId, String requestedBib, String requestedTag) {
@@ -998,7 +1030,7 @@ public class ParticipantServiceImpl implements ParticipantService {
             : participantRepository.existsByRaceIdAndBibNumberAndIdNot(raceId, bib, participantId))) {
             throw new ConflictException("This bib number is already assigned in this race", "BIB_NUMBER_IN_USE");
         }
-        String tag = blankToNull(requestedTag);
+        String tag = com.racetracker.service.RfidTagValues.canonical(requestedTag);
         if (tag != null && (participantId == null
             ? participantRepository.existsByRaceIdAndRfidTag(raceId, tag)
             : participantRepository.existsByRaceIdAndRfidTagAndIdNot(raceId, tag, participantId))) {
@@ -1020,7 +1052,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         participant.setGender(parseGenderNullable(request.getGender()));
         participant.setNationality(request.getNationality());
         participant.setBibNumber(blankToNull(request.getBibNumber()));
-        participant.setRfidTag(blankToNull(request.getRfidTag()));
+        participant.setRfidTag(com.racetracker.service.RfidTagValues.canonical(request.getRfidTag()));
         participant.setEmergencyContactName(request.getEmergencyContactName());
         participant.setEmergencyContactPhone(request.getEmergencyContactPhone());
         participant.setEmergencyContactRelation(request.getEmergencyContactRelation());
@@ -1043,7 +1075,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         if (request.getGender() != null) participant.setGender(parseGenderNullable(request.getGender()));
         if (request.getNationality() != null) participant.setNationality(request.getNationality());
         if (request.getBibNumber() != null) participant.setBibNumber(blankToNull(request.getBibNumber()));
-        if (request.getRfidTag() != null) participant.setRfidTag(blankToNull(request.getRfidTag()));
+        if (request.getRfidTag() != null) participant.setRfidTag(com.racetracker.service.RfidTagValues.canonical(request.getRfidTag()));
         if (request.getStatus() != null) {
             Participant.ParticipantStatus newStatus = parseStatus(request.getStatus());
             participant.setStatus(newStatus);
@@ -1077,6 +1109,12 @@ public class ParticipantServiceImpl implements ParticipantService {
         dto.setShirtSize(participant.getShirtSize());
         dto.setPaymentStatus(participant.getPaymentStatus() != null ? participant.getPaymentStatus().name() : null);
         dto.setPaymentAmount(participant.getPaymentAmount());
+        if (participant.getPaymentStatus() == Participant.PaymentStatus.UNPAID
+            || participant.getPaymentStatus() == Participant.PaymentStatus.PENDING) {
+            java.math.BigDecimal fee = com.racetracker.service.RegistrationFees.current(participant, participant.getRace());
+            dto.setAmountDue(fee != null && fee.signum() > 0 ? fee : null);
+        }
+        dto.setCurrency(participant.getRace() != null ? participant.getRace().getCurrency() : null);
         dto.setRejectionReason(participant.getRejectionReason());
         dto.setWaitlistPosition(participant.getWaitlistPosition());
         if (participant.getTeam() != null) {
@@ -1318,5 +1356,15 @@ public class ParticipantServiceImpl implements ParticipantService {
         if (value == null) return "";
         String s = String.valueOf(value).replace("\"", "\"\"");
         return '"' + s + '"';
+    }
+
+    private static java.util.Map<String, String> notificationData(Participant participant, String kind) {
+        java.util.Map<String, String> data = new java.util.LinkedHashMap<>();
+        data.put("kind", kind);
+        data.put("participantId", participant.getId().toString());
+        if (participant.getRace() != null && participant.getRace().getId() != null) {
+            data.put("raceId", participant.getRace().getId().toString());
+        }
+        return data;
     }
 }

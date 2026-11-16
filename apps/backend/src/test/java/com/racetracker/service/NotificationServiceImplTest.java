@@ -29,7 +29,8 @@ class NotificationServiceImplTest {
     private final NotificationDispatcher dispatcher = mock(NotificationDispatcher.class);
     private final NotificationServiceImpl service = new NotificationServiceImpl(notifications, users,
         mock(PushDeviceRepository.class), dispatcher, new ObjectMapper(),
-        mock(NotificationPreferenceService.class), mock(NotificationTemplateService.class));
+        mock(NotificationPreferenceService.class), mock(NotificationTemplateService.class),
+        com.racetracker.support.TestMessages.messages(), com.racetracker.support.TestMessages.locales());
     private final UUID followerId = UUID.randomUUID();
 
     private void follower(User user) {

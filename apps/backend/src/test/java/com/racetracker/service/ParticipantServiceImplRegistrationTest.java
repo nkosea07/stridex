@@ -77,6 +77,9 @@ class ParticipantServiceImplRegistrationTest {
     private final UUID categoryId = UUID.randomUUID();
     private final String email = "athlete@example.com";
 
+    private final com.racetracker.service.ParticipantChangeControl participantChangeControl =
+        org.mockito.Mockito.mock(com.racetracker.service.ParticipantChangeControl.class);
+
     @BeforeEach
     void setUp() {
         service = new ParticipantServiceImpl(
@@ -84,7 +87,8 @@ class ParticipantServiceImplRegistrationTest {
             importJobRepository, participantMapper, importJobMapper, new RaceTrackerProperties(),
             participantCredentialService, teamRepository, registrationFieldRepository,
             registrationAnswerRepository, registrationEmailService, notificationService, importProcessor,
-            capabilityAuthorizationService, raceAccessGuard, participantIdentityService, importSourceStore
+            capabilityAuthorizationService, raceAccessGuard, participantIdentityService, importSourceStore,
+            participantChangeControl
         );
 
         user = User.builder()
@@ -448,8 +452,8 @@ class ParticipantServiceImplRegistrationTest {
         when(participantRepository.findByRaceIdAndIdForUpdate(raceId, participant.getId())).thenReturn(Optional.of(participant));
 
         assertThatThrownBy(() -> service.checkIn(raceId, participant.getId()))
-            .isInstanceOf(ApiException.class)
-            .hasMessageContaining("not eligible");
+            .isInstanceOf(com.racetracker.exception.ConflictException.class)
+            .extracting("code").isEqualTo("CHECK_IN_NOT_ELIGIBLE");
     }
 
     @Test
@@ -528,7 +532,8 @@ class ParticipantServiceImplRegistrationTest {
             importJobRepository, participantMapper, importJobMapper, properties,
             participantCredentialService, teamRepository, registrationFieldRepository,
             registrationAnswerRepository, registrationEmailService, notificationService, importProcessor,
-            capabilityAuthorizationService, raceAccessGuard, participantIdentityService, importSourceStore);
+            capabilityAuthorizationService, raceAccessGuard, participantIdentityService, importSourceStore,
+            participantChangeControl);
         when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
         when(importJobRepository.save(any(com.racetracker.model.ImportJob.class))).thenAnswer(inv -> {
             com.racetracker.model.ImportJob job = inv.getArgument(0);
@@ -577,5 +582,35 @@ class ParticipantServiceImplRegistrationTest {
             .hasMessageContaining("bib number");
         verify(participantRepository, never()).save(any());
         verify(participantRepository, never()).findByRaceIdAndId(raceId, participantId);
+    }
+
+    @Test
+    void staffSearchIsBoundedStripsWildcardsAndReturnsNoContactDetails() {
+        Participant found = Participant.builder().id(UUID.randomUUID()).race(race).firstName("Ada").lastName("Runner")
+            .bibNumber("101").email("ada@example.com").phone("0710000000").status(Participant.ParticipantStatus.CONFIRMED).build();
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> page =
+            org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        org.mockito.Mockito.when(participantRepository.searchForStaff(org.mockito.ArgumentMatchers.eq(raceId),
+            org.mockito.ArgumentMatchers.eq("ada"), page.capture())).thenReturn(List.of(found));
+
+        var results = service.searchForStaff(raceId, " %a_da% ");
+
+        org.mockito.Mockito.verify(raceAccessGuard).assertCanReadStaff(raceId);
+        assertThat(page.getValue().getPageSize()).isEqualTo(20);
+        assertThat(results).singleElement().satisfies(result -> {
+            assertThat(result.bibNumber()).isEqualTo("101");
+            assertThat(result.status()).isEqualTo("CONFIRMED");
+        });
+        assertThat(com.racetracker.dto.participant.StaffParticipantSearchResultDto.class.getRecordComponents())
+            .extracting(java.lang.reflect.RecordComponent::getName)
+            .doesNotContain("email", "phone", "emergencyContactPhone", "medicalConditions");
+    }
+
+    @Test
+    void staffSearchRejectsEmptyOrOverlongQueries() {
+        assertThatThrownBy(() -> service.searchForStaff(raceId, " %% "))
+            .isInstanceOf(ApiException.class).extracting("code").isEqualTo("PARTICIPANT_SEARCH_INVALID");
+        assertThatThrownBy(() -> service.searchForStaff(raceId, "x".repeat(51)))
+            .isInstanceOf(ApiException.class).extracting("code").isEqualTo("PARTICIPANT_SEARCH_INVALID");
     }
 }

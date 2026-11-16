@@ -41,7 +41,7 @@ public class ReflectiveOctaneSdkFacade implements OctaneSdkFacade {
         readerInstance = readerClass.getConstructor().newInstance();
 
         registerListenerIfPresent(readerClass, "setTagReportListener", "com.impinj.octane.TagReportListener",
-            (method, args) -> handleTagReport(args, readConsumer));
+            (method, args) -> handleTagReport(args, readConsumer, readerProperties));
         registerListenerIfPresent(readerClass, "setKeepaliveListener", "com.impinj.octane.KeepaliveListener",
             (method, args) -> keepaliveListener.run());
         registerListenerIfPresent(readerClass, "setConnectionLostListener", "com.impinj.octane.ConnectionLostListener",
@@ -90,6 +90,8 @@ public class ReflectiveOctaneSdkFacade implements OctaneSdkFacade {
         Object report = invoke(settings, "getReport");
         invokeIfPresent(report, "setIncludeAntennaPortNumber", true);
         invokeIfPresent(report, "setIncludePeakRssi", true);
+        invokeIfPresent(report, "setIncludeFirstSeenTime", true);
+        invokeIfPresent(report, "setIncludeLastSeenTime", true);
         setEnumIfPresent(report, "setMode", "com.impinj.octane.ReportMode", "Individual");
 
         Object keepalives = invokeIfPresent(settings, "getKeepalives");
@@ -118,7 +120,8 @@ public class ReflectiveOctaneSdkFacade implements OctaneSdkFacade {
         }
     }
 
-    private void handleTagReport(Object[] args, Consumer<NormalizedRead> readConsumer) {
+    private void handleTagReport(Object[] args, Consumer<NormalizedRead> readConsumer,
+                                 ImpinjReaderProperties.Reader readerProperties) {
         if (args == null || args.length < 2 || args[1] == null) {
             return;
         }
@@ -141,18 +144,27 @@ public class ReflectiveOctaneSdkFacade implements OctaneSdkFacade {
                 if (peakRssi instanceof Number value) {
                     rssi = BigDecimal.valueOf(value.doubleValue());
                 }
-                OffsetDateTime readAt = OffsetDateTime.now();
-                Object lastSeenTime = invokeIfPresent(tag, "getLastSeenTime");
-                if (lastSeenTime instanceof OffsetDateTime offsetDateTime) {
-                    readAt = offsetDateTime;
+                Object seen = invokeIfPresent(tag, "getFirstSeenTime");
+                if (seen == null) {
+                    seen = invokeIfPresent(tag, "getLastSeenTime");
                 }
+                ReaderTimestamps.Resolved time = ReaderTimestamps.resolve(
+                    seen, java.time.Instant.now(), readerProperties.getMaxReaderClockOffsetMs());
+                if ("ADAPTER_CLOCK".equals(time.source()) && time.readerClockOffsetMs() != null) {
+                    log.warn("Reader {} clock differs from the adapter by {} ms; using the adapter clock. Configure NTP on the reader.",
+                        readerProperties.getName(), time.readerClockOffsetMs());
+                }
+                long micros = time.readAt().toInstant().getEpochSecond() * 1_000_000L
+                    + time.readAt().toInstant().getNano() / 1_000L;
                 readConsumer.accept(new NormalizedRead(
-                    epc + "-" + System.nanoTime(),
+                    readerProperties.getName() + ":" + epc + ":" + micros + ":" + (antenna == null ? "" : antenna),
                     epc,
-                    readAt,
+                    time.readAt(),
                     antenna,
                     rssi,
-                    "{\"source\":\"impinj-octane\"}"
+                    "{\"source\":\"impinj-octane\",\"timestampSource\":\"" + time.source() + "\""
+                        + (time.readerClockOffsetMs() == null ? "" : ",\"readerClockOffsetMs\":" + time.readerClockOffsetMs())
+                        + "}"
                 ));
             }
         } catch (Exception error) {

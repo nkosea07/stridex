@@ -32,7 +32,31 @@ public final class CheckpointCutoff {
         if (chipStart != null) {
             return chipStart;
         }
-        return participant == null ? null : scheduledStart(participant.getRace());
+        return gunStart(participant);
+    }
+
+    /**
+     * The gun that started this participant: their wave's recorded gun, else the wave's scheduled
+     * start, else the race gun, else the race's scheduled start.
+     */
+    public static OffsetDateTime gunStart(Participant participant) {
+        if (participant == null) {
+            return null;
+        }
+        com.racetracker.model.RaceWave wave = participant.getWave();
+        if (wave != null) {
+            if (wave.getStartedAt() != null) {
+                return wave.getStartedAt();
+            }
+            if (wave.getScheduledStart() != null) {
+                return wave.getScheduledStart();
+            }
+        }
+        Race race = participant.getRace();
+        if (race != null && race.getStartedAt() != null) {
+            return race.getStartedAt();
+        }
+        return scheduledStart(race);
     }
 
     public static OffsetDateTime scheduledStart(Race race) {
@@ -67,8 +91,7 @@ public final class CheckpointCutoff {
         }
         OffsetDateTime earliest = null;
         for (CheckpointRecord record : records) {
-            if (record.getCheckpoint() == null
-                || record.getCheckpoint().getCheckpointType() != Checkpoint.CheckpointType.START) {
+            if (!CheckpointPasses.isStart(record)) {
                 continue;
             }
             OffsetDateTime effective = effectiveTime(record);

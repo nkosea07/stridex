@@ -4,9 +4,10 @@ import com.racetracker.config.RaceTrackerProperties;
 import com.racetracker.dto.privacy.DeleteAccountRequest;
 import com.racetracker.dto.privacy.DeletionStatusDto;
 import com.racetracker.exception.ApiException;
-import com.racetracker.exception.UnauthorizedException;
+import com.racetracker.exception.ConflictException;
 import com.racetracker.model.User;
 import com.racetracker.repository.AuthTokenRepository;
+import com.racetracker.repository.RaceRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.service.impl.AccountDeletionServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,7 @@ class AccountDeletionServiceImplTest {
 
     @Mock com.racetracker.repository.PushDeviceRepository pushDeviceRepository;
     @Mock UserRepository userRepository;
+    @Mock RaceRepository raceRepository;
     @Mock AuthTokenRepository authTokenRepository;
     @Mock PasswordEncoder passwordEncoder;
     @Mock AuditEventService auditEventService;
@@ -45,7 +47,7 @@ class AccountDeletionServiceImplTest {
     void setUp() {
         RaceTrackerProperties properties = new RaceTrackerProperties();
         properties.getPrivacy().setDeletionGraceDays(30);
-        service = new AccountDeletionServiceImpl(userRepository, authTokenRepository, pushDeviceRepository, passwordEncoder,
+        service = new AccountDeletionServiceImpl(userRepository, raceRepository, authTokenRepository, pushDeviceRepository, passwordEncoder,
             auditEventService, accountPrivacyService, properties, authEmailService);
     }
 
@@ -84,7 +86,81 @@ class AccountDeletionServiceImplTest {
         when(passwordEncoder.matches("nope", "hash")).thenReturn(false);
 
         assertThatThrownBy(() -> service.request(userId, request("nope", "DELETE")))
-            .isInstanceOf(UnauthorizedException.class);
+            .isInstanceOf(ApiException.class)
+            .extracting("code").isEqualTo("ACCOUNT_DELETION_PASSWORD_INVALID");
+        verify(userRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void lastActiveSuperAdminCannotScheduleDeletion() {
+        User admin = user();
+        admin.setRole(User.UserRole.SUPER_ADMIN);
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(admin));
+        when(passwordEncoder.matches("pw", "hash")).thenReturn(true);
+        when(userRepository.countOtherActiveByRole(User.UserRole.SUPER_ADMIN, userId)).thenReturn(0L);
+
+        assertThatThrownBy(() -> service.request(userId, request("pw", "DELETE")))
+            .isInstanceOf(ConflictException.class)
+            .extracting("code").isEqualTo("ACCOUNT_DELETION_LAST_SUPER_ADMIN");
+        assertThat(admin.getIsActive()).isTrue();
+        assertThat(admin.getDeletionRequestedAt()).isNull();
+        verify(authTokenRepository, org.mockito.Mockito.never()).deleteByUserId(any());
+    }
+
+    @Test
+    void organizerOfAnActiveRaceWithNoOtherManagerCannotScheduleDeletion() {
+        User organizer = user();
+        organizer.setRole(User.UserRole.RACE_ADMIN);
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(organizer));
+        when(passwordEncoder.matches("pw", "hash")).thenReturn(true);
+        when(raceRepository.countActiveWithoutOtherManager(org.mockito.ArgumentMatchers.eq(userId), any())).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.request(userId, request("pw", "DELETE")))
+            .isInstanceOf(ConflictException.class)
+            .extracting("code").isEqualTo("ACCOUNT_DELETION_ACTIVE_RACES");
+        assertThat(organizer.getDeletionRequestedAt()).isNull();
+    }
+
+    @Test
+    void statusReportsBlockersBeforeTheUserConfirms() {
+        User admin = user();
+        admin.setRole(User.UserRole.SUPER_ADMIN);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(admin));
+        when(userRepository.countOtherActiveByRole(User.UserRole.SUPER_ADMIN, userId)).thenReturn(0L);
+        when(raceRepository.countActiveWithoutOtherManager(org.mockito.ArgumentMatchers.eq(userId), any())).thenReturn(2L);
+
+        DeletionStatusDto status = service.status(userId);
+
+        assertThat(status.isDeletionRequested()).isFalse();
+        assertThat(status.getBlockers())
+            .containsExactly("ACCOUNT_DELETION_LAST_SUPER_ADMIN", "ACCOUNT_DELETION_ACTIVE_RACES");
+    }
+
+    @Test
+    void deletionRequestsAreSerializedBeforeBlockersAreEvaluated() {
+        User admin = user();
+        admin.setRole(User.UserRole.SUPER_ADMIN);
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(admin));
+        when(passwordEncoder.matches("pw", "hash")).thenReturn(true);
+        when(userRepository.countOtherActiveByRole(User.UserRole.SUPER_ADMIN, userId)).thenReturn(1L);
+
+        service.request(userId, request("pw", "DELETE"));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(userRepository);
+        order.verify(userRepository).acquireTransactionLock(org.mockito.ArgumentMatchers.anyLong());
+        order.verify(userRepository).findByIdForUpdate(userId);
+        order.verify(userRepository).countOtherActiveByRole(User.UserRole.SUPER_ADMIN, userId);
+    }
+
+    @Test
+    void superAdminWithAnotherActiveSuperAdminCanScheduleDeletion() {
+        User admin = user();
+        admin.setRole(User.UserRole.SUPER_ADMIN);
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(admin));
+        when(passwordEncoder.matches("pw", "hash")).thenReturn(true);
+        when(userRepository.countOtherActiveByRole(User.UserRole.SUPER_ADMIN, userId)).thenReturn(1L);
+
+        assertThat(service.request(userId, request("pw", "DELETE")).isDeletionRequested()).isTrue();
     }
 
     @Test
@@ -94,7 +170,7 @@ class AccountDeletionServiceImplTest {
 
         assertThatThrownBy(() -> service.request(userId, request("pw", "yes")))
             .isInstanceOf(ApiException.class)
-            .hasMessageContaining("DELETE");
+            .extracting("code").isEqualTo("ACCOUNT_DELETION_CONFIRMATION_REQUIRED");
     }
 
     @Test
@@ -125,7 +201,7 @@ class AccountDeletionServiceImplTest {
         assertThat(purged).isEqualTo(1);
         verify(accountPrivacyService).eraseAccount(due.getId());
         org.mockito.Mockito.verify(authEmailService, org.mockito.Mockito.never())
-            .sendAccountDeletionCompletedConfirmed(any(), any());
+            .sendAccountDeletionCompletedConfirmed(any(), any(), any());
     }
 
     @Test

@@ -46,8 +46,12 @@ public class CheckpointProgression {
     }
 
     public void apply(Participant participant, Checkpoint checkpoint, boolean cutoffMissed) {
+        apply(participant, checkpoint, 1, cutoffMissed);
+    }
+
+    public void apply(Participant participant, Checkpoint checkpoint, int passNumber, boolean cutoffMissed) {
         ParticipantStatus previous = participant.getStatus();
-        ParticipantStatus next = nextStatus(previous, checkpoint, cutoffMissed);
+        ParticipantStatus next = nextStatus(previous, checkpoint, passNumber, cutoffMissed);
         if (next != previous) {
             participant.setStatus(next);
         }
@@ -64,6 +68,11 @@ public class CheckpointProgression {
     }
 
     public static ParticipantStatus nextStatus(ParticipantStatus previous, Checkpoint checkpoint, boolean cutoffMissed) {
+        return nextStatus(previous, checkpoint, 1, cutoffMissed);
+    }
+
+    public static ParticipantStatus nextStatus(ParticipantStatus previous, Checkpoint checkpoint, int passNumber,
+                                               boolean cutoffMissed) {
         ParticipantStatus current = previous == null ? ParticipantStatus.REGISTERED : previous;
         if (!TIMEABLE.contains(current)) {
             return previous;
@@ -71,7 +80,7 @@ public class CheckpointProgression {
         if (cutoffMissed) {
             return ParticipantStatus.DNF;
         }
-        if (checkpoint != null && checkpoint.getCheckpointType() == Checkpoint.CheckpointType.FINISH) {
+        if (CheckpointPasses.isFinish(checkpoint, passNumber)) {
             return ParticipantStatus.FINISHED;
         }
         return ParticipantStatus.STARTED;

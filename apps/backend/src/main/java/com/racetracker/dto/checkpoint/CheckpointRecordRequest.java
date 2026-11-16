@@ -13,4 +13,5 @@ public class CheckpointRecordRequest {
     private String participantBibNumber;
     private String method;
     private OffsetDateTime recordedAt;
+    private OffsetDateTime capturedOfflineAt;
 }

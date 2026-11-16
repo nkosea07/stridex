@@ -55,7 +55,12 @@ class CheckpointServiceImplTest {
     void setUp() {
         service = new CheckpointServiceImpl(checkpointRepository, checkpointRecordRepository, participantRepository,
             raceRepository, userRepository, checkpointMapper, liveSummaryCacheInvalidator, raceAccessGuard,
-            new CheckpointProgression(spectatorAlertService));
+            new CheckpointProgression(spectatorAlertService),
+            new com.racetracker.service.CutoffReevaluation(checkpointRecordRepository, participantRepository),
+            org.mockito.Mockito.mock(com.racetracker.service.ResultLock.class),
+            org.mockito.Mockito.mock(com.racetracker.service.AuditEventService.class),
+            org.mockito.Mockito.mock(com.racetracker.repository.CheckpointRecordCorrectionRepository.class),
+            org.mockito.Mockito.mock(com.racetracker.repository.RfidReadEventRepository.class));
     }
 
     @Test
@@ -74,7 +79,7 @@ class CheckpointServiceImplTest {
 
         when(checkpointRepository.findByRaceIdAndId(raceId, checkpointId)).thenReturn(Optional.of(checkpoint));
         when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
-        when(checkpointRecordRepository.findByParticipantIdAndCheckpointId(participantId, checkpointId))
+        when(checkpointRecordRepository.findFirstByParticipantIdAndCheckpointIdOrderByPassNumberAsc(participantId, checkpointId))
             .thenReturn(Optional.empty());
         when(checkpointRecordRepository.findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participantId, raceId))
             .thenReturn(List.of(startRecord(OffsetDateTime.now().minusHours(3))));
@@ -109,7 +114,7 @@ class CheckpointServiceImplTest {
 
         when(checkpointRepository.findByRaceIdAndId(raceId, checkpointId)).thenReturn(Optional.of(checkpoint));
         when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
-        when(checkpointRecordRepository.findByParticipantIdAndCheckpointId(participantId, checkpointId))
+        when(checkpointRecordRepository.findFirstByParticipantIdAndCheckpointIdOrderByPassNumberAsc(participantId, checkpointId))
             .thenReturn(Optional.empty());
         when(checkpointRecordRepository.findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participantId, raceId))
             .thenReturn(List.of(startRecord(OffsetDateTime.now().minusMinutes(30))));
@@ -166,7 +171,7 @@ class CheckpointServiceImplTest {
         request.setRecordedAt(historicalTime);
         when(checkpointRepository.findByRaceIdAndId(raceId, checkpointId)).thenReturn(Optional.of(checkpoint));
         when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
-        when(checkpointRecordRepository.findByParticipantIdAndCheckpointId(participantId, checkpointId))
+        when(checkpointRecordRepository.findFirstByParticipantIdAndCheckpointIdOrderByPassNumberAsc(participantId, checkpointId))
             .thenReturn(Optional.empty());
         when(checkpointRecordRepository.save(any(CheckpointRecord.class))).thenAnswer(inv -> inv.getArgument(0));
         when(checkpointMapper.toRecordDto(any(CheckpointRecord.class))).thenReturn(new CheckpointRecordDto());
@@ -194,7 +199,7 @@ class CheckpointServiceImplTest {
 
         when(checkpointRepository.findByRaceIdAndId(raceId, checkpointId)).thenReturn(Optional.of(checkpoint));
         when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
-        when(checkpointRecordRepository.findByParticipantIdAndCheckpointId(participantId, checkpointId))
+        when(checkpointRecordRepository.findFirstByParticipantIdAndCheckpointIdOrderByPassNumberAsc(participantId, checkpointId))
             .thenReturn(Optional.empty());
         when(checkpointRecordRepository.save(any(CheckpointRecord.class))).thenAnswer(inv -> inv.getArgument(0));
         when(checkpointMapper.toRecordDto(any(CheckpointRecord.class))).thenReturn(new CheckpointRecordDto());

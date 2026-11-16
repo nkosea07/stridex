@@ -1,9 +1,18 @@
+import crypto from 'node:crypto';
 import { chunkReads, validateBatchPayload } from './payload.mjs';
+import { ReadDeduplicator } from './dedupe.mjs';
 
 const RETRYABLE_CLIENT_STATUSES = new Set([401, 403, 408, 409, 425, 429]);
 
 export function isPermanentRejection(status) {
   return status >= 400 && status < 500 && !RETRYABLE_CLIENT_STATUSES.has(status);
+}
+
+// A stable identity for reads the adapter sent without one, so a batch retried after a lost
+// response is recognised by the backend as the same reads instead of new ones.
+export function deriveSourceEventId(config, read) {
+  const identity = [config.gatewayName, config.readerSerial ?? '', read.rfidTag, read.readAt, read.antenna ?? ''].join('|');
+  return `gw-${crypto.createHash('sha256').update(identity).digest('hex').slice(0, 40)}`;
 }
 
 function describeBackendError(response) {
@@ -31,6 +40,7 @@ export class GatewayService {
     this.rejectedBatchCount = 0;
     this.currentFlushRetryDelayMs = config.retryInitialDelayMs;
     this.currentHeartbeatRetryDelayMs = config.retryInitialDelayMs;
+    this.deduplicator = new ReadDeduplicator(config.dedupeWindowMs ?? 0);
   }
 
   get lastError() {
@@ -41,9 +51,14 @@ export class GatewayService {
     const normalized = validateBatchPayload(payload);
     const reads = normalized.reads.map((read) => ({
       ...read,
-      eventOrigin: read.eventOrigin ?? this.config.eventOrigin,
+      sourceEventId: read.sourceEventId ?? deriveSourceEventId(this.config, read),
+      eventOrigin: this.config.eventOrigin,
     }));
-    const chunks = chunkReads(reads, this.config.batchSize);
+    if (typeof this.store.appendRawLog === 'function') {
+      await this.store.appendRawLog(reads);
+    }
+    const accepted = this.deduplicator.filter(reads);
+    const chunks = chunkReads(accepted, this.config.batchSize);
 
     for (const reads of chunks) {
       await this.store.enqueue({ reads });
@@ -51,7 +66,8 @@ export class GatewayService {
 
     return {
       queuedBatches: chunks.length,
-      queuedReads: normalized.reads.length,
+      queuedReads: accepted.length,
+      suppressedReads: reads.length - accepted.length,
       backlogFiles: await this.store.countPendingFiles()
     };
   }
@@ -188,6 +204,9 @@ export class GatewayService {
       pendingFiles: await this.store.countPendingFiles(),
       pendingReads: await this.store.countPendingReads(),
       failedFiles: await this.countFailedFiles(),
+      corruptFiles: typeof this.store.countCorruptFiles === 'function' ? await this.store.countCorruptFiles() : 0,
+      dedupeWindowMs: this.config.dedupeWindowMs ?? 0,
+      suppressedDuplicateReads: this.deduplicator.suppressedCount,
       lastError: this.lastError,
       lastFlushError: this.flushError,
       lastHeartbeatError: this.heartbeatError,

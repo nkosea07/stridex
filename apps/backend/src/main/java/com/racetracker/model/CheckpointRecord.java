@@ -13,6 +13,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
+@org.hibernate.annotations.SQLRestriction("voided_at is null")
 @Table(name = "checkpoint_records", 
        uniqueConstraints = @UniqueConstraint(columnNames = {"participant_id", "checkpoint_id"}))
 @Getter
@@ -37,6 +38,10 @@ public class CheckpointRecord {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "race_id", nullable = false)
     private Race race;
+
+    @Builder.Default
+    @Column(name = "pass_number", nullable = false)
+    private Integer passNumber = 1;
 
     @Column(name = "recorded_at", nullable = false)
     private OffsetDateTime recordedAt;
@@ -78,6 +83,15 @@ public class CheckpointRecord {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    @Column(name = "voided_at")
+    private OffsetDateTime voidedAt;
+
+    @Column(name = "voided_by")
+    private UUID voidedBy;
+
+    @Column(name = "void_reason", length = 500)
+    private String voidReason;
 
     @CreationTimestamp
     @Column(name = "created_at")

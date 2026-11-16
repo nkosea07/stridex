@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { api } from '@/lib/api';
+import { enqueueOfflineCapture, flushOfflineCaptures, loadOfflineCaptures } from '@/lib/offlineCaptures';
+import { api, ApiRequestError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { isOperationsRole } from '@/lib/capabilities';
-import type { Race } from '@/types';
-import { assignedOptions, createSingleFlight, incidentMessage, isCurrentOperation, receiptCopyKey, validSelection } from '@/lib/operations';
+import type { Race, RaceWave, StationRecord } from '@/types';
+import { formatTime } from '@/lib/format';
+import { assignedOptions, canUndoEntry, createSingleFlight, incidentMessage, isCurrentOperation, receiptCopyKey, staffErrorKey, validSelection } from '@/lib/operations';
 import type { OperationOption } from '@/lib/operations';
+
+const OFFLINE_FLUSH_INTERVAL_MS = 30_000;
 
 export default function OperationsScreen() {
   const { t } = useTranslation();
@@ -21,6 +25,7 @@ export default function OperationsScreen() {
   const [loading, setLoading] = useState(false);
   const [checkpointLoading, setCheckpointLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pendingOffline, setPendingOffline] = useState(0);
   const [error, setError] = useState(false);
   const [incidentOpen, setIncidentOpen] = useState(false);
   const [draft, setDraft] = useState('');
@@ -34,6 +39,86 @@ export default function OperationsScreen() {
   const [focusRevision, setFocusRevision] = useState(0);
   const volunteer = user?.role === 'VOLUNTEER';
   const [assignments, setAssignments] = useState<Record<string, OperationOption[]> | null>(null);
+  const [recent, setRecent] = useState<StationRecord[]>([]);
+  const [recentLoading, setRecentLoading] = useState(false);
+  const [undoingId, setUndoingId] = useState<string | null>(null);
+  const [waves, setWaves] = useState<RaceWave[]>([]);
+  const [startingWaveId, setStartingWaveId] = useState<string | null>(null);
+  const recentSequence = useRef(0);
+
+  const loadRecent = useCallback(async (targetRace: string, targetCheckpoint: string) => {
+    const sequence = ++recentSequence.current;
+    if (!targetRace || !targetCheckpoint) {
+      setRecent([]);
+      return;
+    }
+    setRecentLoading(true);
+    try {
+      const rows = await api.getRecentStationRecords(targetRace, targetCheckpoint, 20);
+      if (sequence === recentSequence.current) setRecent(rows);
+    } catch {
+      if (sequence === recentSequence.current) setRecent([]);
+    } finally {
+      if (sequence === recentSequence.current) setRecentLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadRecent(raceId, checkpointId);
+  }, [raceId, checkpointId, loadRecent]);
+
+  useEffect(() => {
+    if (volunteer || !raceId) {
+      setWaves([]);
+      return;
+    }
+    let active = true;
+    api.getRaceWaves(raceId)
+      .then((rows) => { if (active) setWaves(rows); })
+      .catch(() => { if (active) setWaves([]); });
+    return () => { active = false; };
+  }, [raceId, volunteer, focusRevision]);
+
+  const undoEntry = (entry: StationRecord) => {
+    const run = async (reason: string) => {
+      setUndoingId(entry.id);
+      try {
+        await api.undoStationRecord(raceId, checkpointId, entry.id, reason);
+        await loadRecent(raceId, checkpointId);
+        Alert.alert(t('mobile:staff.undoneTitle'), t('mobile:staff.undoneBody', { bib: entry.bibNumber ?? '-' }));
+      } catch (undoError) {
+        Alert.alert(t('mobile:operations.failedTitle'), t(staffErrorKey(undoError)));
+      } finally {
+        setUndoingId(null);
+      }
+    };
+    Alert.alert(t('mobile:staff.undoTitle'), t('mobile:staff.undoBody', { bib: entry.bibNumber ?? '-' }), [
+      { text: t('mobile:operations.cancel'), style: 'cancel' },
+      { text: t('mobile:staff.reasonWrongBib'), onPress: () => void run(t('mobile:staff.reasonWrongBib')) },
+      { text: t('mobile:staff.reasonDuplicate'), onPress: () => void run(t('mobile:staff.reasonDuplicate')) },
+    ]);
+  };
+
+  const startWave = (wave: RaceWave) => {
+    Alert.alert(t('mobile:staff.startWaveTitle'), t('mobile:staff.startWaveBody', { name: wave.name }), [
+      { text: t('mobile:operations.cancel'), style: 'cancel' },
+      {
+        text: t('mobile:staff.startWave'),
+        style: 'destructive',
+        onPress: () => void (async () => {
+          setStartingWaveId(wave.id);
+          try {
+            const started = await api.startWave(raceId, wave.id);
+            setWaves((current) => current.map((row) => row.id === wave.id ? { ...row, startedAt: started.startedAt ?? new Date().toISOString() } : row));
+          } catch (waveError) {
+            Alert.alert(t('mobile:operations.failedTitle'), t(staffErrorKey(waveError)));
+          } finally {
+            setStartingWaveId(null);
+          }
+        })(),
+      },
+    ]);
+  };
 
   useFocusEffect(useCallback(() => {
     if (!canOperate) return;
@@ -122,16 +207,50 @@ export default function OperationsScreen() {
     return () => { checkpointSequence.current += 1; };
   }, [raceId, volunteer, assignments, focusRevision]);
 
+  const refreshPending = useCallback(async () => {
+    setPendingOffline((await loadOfflineCaptures()).length);
+  }, []);
+
+  const sendPending = useCallback(async (announce: boolean) => {
+    const result = await flushOfflineCaptures((capture) =>
+      api.recordCheckpointTime(capture.raceId, capture.checkpointId, capture.bib, 'MANUAL', capture.capturedAt));
+    setPendingOffline(result.remaining);
+    if (result.rejected.length > 0) {
+      Alert.alert(t('mobile:operations.offlineRejectedTitle'), result.rejected
+        .map((item) => t('mobile:operations.offlineRejectedLine', { bib: item.capture.bib, reason: item.message }))
+        .join('\n'));
+    } else if (announce && result.sent > 0) {
+      Alert.alert(t('mobile:operations.offlineSentTitle'), t('mobile:operations.offlineSentBody', { count: result.sent }));
+    }
+  }, [t]);
+
+  useEffect(() => {
+    void refreshPending();
+    const timer = setInterval(() => {
+      void loadOfflineCaptures().then((queue) => { if (queue.length > 0) void sendPending(false); });
+    }, OFFLINE_FLUSH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [refreshPending, sendPending]);
+
   const record = async () => {
     if (!raceId || !checkpointId || !bib.trim() || loading || checkpointLoading || error) return;
     await recordFlight.current.run(async () => {
       setBusy(true);
+      const capturedAt = new Date().toISOString();
       try {
         await api.recordCheckpointTime(raceId, checkpointId, bib.trim());
         Alert.alert(t('mobile:operations.recordedTitle'), t('mobile:operations.recordedBody', { bib }));
         setBib('');
+        void loadRecent(raceId, checkpointId);
       } catch (error) {
-        Alert.alert(t('mobile:operations.failedTitle'), error instanceof Error ? error.message : t('mobile:operations.failedBody'));
+        if (error instanceof ApiRequestError && error.isNetworkError) {
+          const pending = await enqueueOfflineCapture({ raceId, checkpointId, bib: bib.trim(), capturedAt });
+          setPendingOffline(pending);
+          Alert.alert(t('mobile:operations.offlineSavedTitle'), t('mobile:operations.offlineSavedBody', { bib, count: pending }));
+          setBib('');
+        } else {
+          Alert.alert(t('mobile:operations.failedTitle'), t(staffErrorKey(error)));
+        }
       } finally {
         setBusy(false);
       }
@@ -169,6 +288,11 @@ export default function OperationsScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>{t('mobile:operations.title')}</Text>
       <Text style={styles.muted}>{t('mobile:operations.description')}</Text>
+      <Link href="/check-in" asChild>
+        <TouchableOpacity style={styles.linkButton} accessibilityRole="link">
+          <Text style={styles.linkText}>{t('mobile:staff.openCheckIn')}</Text>
+        </TouchableOpacity>
+      </Link>
       {loading ? <ActivityIndicator color="#0F766E" /> : null}
       {error ? <Text accessibilityRole="alert" style={styles.error}>{t('mobile:operations.loadError')}</Text> : null}
       {!loading && !error && races.length === 0 ? <Text style={styles.muted}>{t('mobile:operations.empty')}</Text> : null}
@@ -204,6 +328,70 @@ export default function OperationsScreen() {
         disabled={!checkpointId || !bib.trim() || busy || loading || checkpointLoading || error} onPress={() => void record()}>
         <Text style={styles.buttonText}>{busy ? t('mobile:operations.recording') : t('mobile:operations.record')}</Text>
       </TouchableOpacity>
+      {pendingOffline > 0 ? (
+        <View accessibilityLiveRegion="polite">
+          <Text style={styles.muted}>{t('mobile:operations.offlinePending', { count: pendingOffline })}</Text>
+          <TouchableOpacity style={styles.secondary} accessibilityRole="button" onPress={() => void sendPending(true)}>
+            <Text style={styles.secondaryText}>{t('mobile:operations.offlineSendNow')}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      {checkpointId ? (
+        <View style={styles.section} accessibilityLiveRegion="polite">
+          <View style={styles.sectionHeader}>
+            <Text style={styles.label}>{t('mobile:staff.recentEntries')}</Text>
+            <TouchableOpacity accessibilityRole="button" onPress={() => void loadRecent(raceId, checkpointId)}>
+              <Text style={styles.linkText}>{t('mobile:staff.refresh')}</Text>
+            </TouchableOpacity>
+          </View>
+          {recentLoading && recent.length === 0 ? <ActivityIndicator color="#0F766E" /> : null}
+          {!recentLoading && recent.length === 0 ? <Text style={styles.muted}>{t('mobile:staff.noEntries')}</Text> : null}
+          {recent.map((entry) => {
+            const undoable = canUndoEntry(entry, user?.id, Date.parse(entry.recordedAt) || null);
+            return (
+              <View key={entry.id} style={styles.entryRow}>
+                <View style={styles.entryInfo}>
+                  <Text style={styles.entryBib}>#{entry.bibNumber ?? '-'} {entry.participantName ?? ''}</Text>
+                  <Text style={styles.muted}>
+                    {formatTime(entry.recordedAt, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}{entry.recordMethod ? ` · ${t(`mobile:staff.method.${entry.recordMethod}`, { defaultValue: entry.recordMethod })}` : ''}
+                  </Text>
+                </View>
+                {undoable ? (
+                  <TouchableOpacity accessibilityRole="button" disabled={undoingId === entry.id} onPress={() => undoEntry(entry)}
+                    accessibilityLabel={t('mobile:staff.undoBib', { bib: entry.bibNumber ?? '-' })}>
+                    <Text style={styles.secondaryText}>{undoingId === entry.id ? t('mobile:staff.undoing') : t('mobile:staff.undo')}</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+      {!volunteer && waves.length > 0 ? (
+        <View style={styles.section}>
+          <Text style={styles.label}>{t('mobile:staff.waves')}</Text>
+          {waves.map((wave) => (
+            <View key={wave.id} style={styles.entryRow}>
+              <View style={styles.entryInfo}>
+                <Text style={styles.entryBib}>{wave.name}</Text>
+                <Text style={styles.muted}>
+                  {wave.startedAt
+                    ? t('mobile:staff.waveStartedAt', { time: formatTime(wave.startedAt) })
+                    : wave.scheduledStart ? t('mobile:staff.waveScheduled', { time: formatTime(wave.scheduledStart) }) : t('mobile:staff.waveNotStarted')}
+                </Text>
+              </View>
+              {!wave.startedAt ? (
+                <TouchableOpacity style={[styles.button, startingWaveId === wave.id && styles.disabled]} disabled={startingWaveId === wave.id}
+                  accessibilityRole="button" accessibilityLabel={t('mobile:staff.startWaveName', { name: wave.name })}
+                  onPress={() => startWave(wave)}>
+                  <Text style={styles.buttonText}>{startingWaveId === wave.id ? t('mobile:staff.starting') : t('mobile:staff.startWave')}</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ))}
+          <Text style={styles.muted}>{t('mobile:staff.waveCorrectionsNote')}</Text>
+        </View>
+      ) : null}
       <TouchableOpacity style={[styles.secondary, (!checkpointId || loading || checkpointLoading || error) && styles.disabled]}
         disabled={!checkpointId || loading || checkpointLoading || error} accessibilityRole="button" onPress={() => setIncidentOpen(true)}>
         <Text style={styles.secondaryText}>{t('mobile:operations.reportIncident')}</Text>
@@ -254,4 +442,11 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: 20 },
   modalContent: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, gap: 12 },
   multiline: { minHeight: 120 },
+  section: { gap: 8, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  entryRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
+  entryInfo: { flex: 1 },
+  entryBib: { fontWeight: '700', color: '#0F172A' },
+  linkButton: { alignSelf: 'flex-start', paddingVertical: 6 },
+  linkText: { color: '#0F766E', fontWeight: '700' },
 });

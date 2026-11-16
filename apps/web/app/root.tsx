@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, type LinksFunction } from 'react-router'
 import { I18nextProvider } from 'react-i18next'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { LegalAcceptanceGate } from '@/components/legal/LegalAcceptanceGate'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { Toaster } from '@/components/ui/sonner'
 import i18n from '@/i18n'
@@ -56,7 +57,9 @@ export default function Root() {
     <I18nextProvider i18n={i18n}>
       <ThemeProvider>
         <AuthProvider>
-          <Outlet />
+          <LegalAcceptanceGate>
+            <Outlet />
+          </LegalAcceptanceGate>
           <Toaster />
         </AuthProvider>
       </ThemeProvider>

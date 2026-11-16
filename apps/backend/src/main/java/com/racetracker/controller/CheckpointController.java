@@ -118,9 +118,49 @@ public class CheckpointController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
     public ResponseEntity<List<CheckpointRecordDto>> listRecords(
         @PathVariable UUID raceId,
-        @PathVariable UUID checkpointId
+        @PathVariable UUID checkpointId,
+        @RequestParam(defaultValue = "false") boolean includeVoided,
+        @RequestParam(required = false) Integer limit
     ) {
         raceAccessGuard.assertCanAccessCheckpoint(raceId, checkpointId);
-        return ResponseEntity.ok(checkpointService.listRecords(raceId, checkpointId));
+        if (limit != null) {
+            return ResponseEntity.ok(checkpointService.listRecentRecords(raceId, checkpointId, limit));
+        }
+        return ResponseEntity.ok(checkpointService.listRecords(raceId, checkpointId, includeVoided));
+    }
+
+    @PostMapping("/{raceId}/checkpoints/{checkpointId}/records/{recordId}/void")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'VOLUNTEER', 'OFFICIAL')")
+    public ResponseEntity<CheckpointRecordDto> voidRecord(
+        @PathVariable UUID raceId,
+        @PathVariable UUID checkpointId,
+        @PathVariable UUID recordId,
+        @Valid @RequestBody CheckpointRecordVoidRequest request
+    ) {
+        return ResponseEntity.ok(checkpointService.voidRecord(raceId, checkpointId, recordId, request));
+    }
+
+    @PostMapping("/{raceId}/checkpoints/{checkpointId}/records/{recordId}/restore")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    public ResponseEntity<CheckpointRecordDto> restoreRecord(
+        @PathVariable UUID raceId,
+        @PathVariable UUID checkpointId,
+        @PathVariable UUID recordId,
+        @Valid @RequestBody CheckpointRecordVoidRequest request
+    ) {
+        raceAccessGuard.assertCanManage(raceId);
+        return ResponseEntity.ok(checkpointService.restoreRecord(raceId, checkpointId, recordId, request));
+    }
+
+    @PostMapping("/{raceId}/checkpoints/{checkpointId}/records/{recordId}/reassign")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    public ResponseEntity<CheckpointRecordDto> reassignRecord(
+        @PathVariable UUID raceId,
+        @PathVariable UUID checkpointId,
+        @PathVariable UUID recordId,
+        @Valid @RequestBody CheckpointRecordReassignRequest request
+    ) {
+        raceAccessGuard.assertCanManage(raceId);
+        return ResponseEntity.ok(checkpointService.reassignRecord(raceId, checkpointId, recordId, request));
     }
 }

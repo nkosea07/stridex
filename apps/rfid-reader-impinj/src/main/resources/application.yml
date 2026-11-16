@@ -10,6 +10,7 @@ management:
 adapter:
   gateway:
     base-url: ${RFID_GATEWAY_BASE_URL:http://localhost:8090}
+    local-token: ${RFID_GATEWAY_LOCAL_TOKEN:}
     reads-path: ${RFID_GATEWAY_READS_PATH:/reads}
     batch-size: ${RFID_GATEWAY_BATCH_SIZE:50}
     flush-interval-ms: ${RFID_GATEWAY_FLUSH_INTERVAL_MS:500}
@@ -28,6 +29,7 @@ adapter:
     session: ${IMPINJ_SESSION:2}
     search-mode: ${IMPINJ_SEARCH_MODE:DualTarget}
     keepalive-interval-ms: ${IMPINJ_KEEPALIVE_INTERVAL_MS:5000}
+    max-reader-clock-offset-ms: ${IMPINJ_MAX_READER_CLOCK_OFFSET_MS:2000}
     connect-retry-initial-delay-ms: ${IMPINJ_CONNECT_RETRY_INITIAL_DELAY_MS:1000}
     connect-retry-max-delay-ms: ${IMPINJ_CONNECT_RETRY_MAX_DELAY_MS:15000}
     health-check-interval-ms: ${IMPINJ_HEALTH_CHECK_INTERVAL_MS:3000}

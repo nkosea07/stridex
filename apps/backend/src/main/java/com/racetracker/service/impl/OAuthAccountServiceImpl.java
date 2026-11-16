@@ -31,6 +31,7 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
     private final UserMapper userMapper;
     private final AuthTokenRepository authTokenRepository;
     private final UserCapabilityRepository userCapabilityRepository;
+    private final com.racetracker.service.UserLocales userLocales;
 
     public OAuthAccountServiceImpl(
         OAuthIdentityVerifier identityVerifier,
@@ -39,7 +40,8 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
         JwtService jwtService,
         UserMapper userMapper,
         AuthTokenRepository authTokenRepository,
-        UserCapabilityRepository userCapabilityRepository
+        UserCapabilityRepository userCapabilityRepository,
+        com.racetracker.service.UserLocales userLocales
     ) {
         this.identityVerifier = identityVerifier;
         this.userRepository = userRepository;
@@ -48,6 +50,7 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
         this.userMapper = userMapper;
         this.authTokenRepository = authTokenRepository;
         this.userCapabilityRepository = userCapabilityRepository;
+        this.userLocales = userLocales;
     }
 
     @Override
@@ -86,6 +89,7 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
             .isActive(true)
             .emailVerified(true)
             .failedLoginAttempts(0)
+            .preferredLocale(userLocales.fromCurrentRequest())
             .build();
         User saved = userRepository.save(user);
         UserCapability capability = UserCapability.builder()

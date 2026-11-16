@@ -23,5 +23,7 @@ public interface PublicTrackingService {
 
     PublicParticipantTrackResponse getAthleteTrack(UUID raceId, UUID participantId);
 
+    PublicParticipantTrackResponse getAthleteTrack(UUID raceId, UUID participantId, java.time.OffsetDateTime since);
+
     List<HeatCellDto> getRaceHeatmap(UUID raceId, OffsetDateTime from, OffsetDateTime to, Integer scale);
 }

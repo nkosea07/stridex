@@ -62,11 +62,20 @@ class ResultPersistenceTest {
     private final UUID raceId = UUID.randomUUID();
     private final UUID participantId = UUID.randomUUID();
 
+    private final com.racetracker.repository.RaceResultVersionRepository versionRepository =
+        org.mockito.Mockito.mock(com.racetracker.repository.RaceResultVersionRepository.class);
+
     @BeforeEach
     void setUp() {
         resultService = new ResultServiceImpl(raceRepository, participantRepository, checkpointRecordRepository,
             userRepository, participantMapper, resultRevisionRepository, penaltyRepository,
-            raceResultRepository, raceCategoryRepository, capabilityAuthorizationService);
+            raceResultRepository, raceCategoryRepository, capabilityAuthorizationService,
+            new com.racetracker.service.ResultVersioning(versionRepository, new com.fasterxml.jackson.databind.ObjectMapper()),
+            org.mockito.Mockito.mock(com.racetracker.service.ResultLock.class),
+            versionRepository,
+            org.mockito.Mockito.mock(com.racetracker.repository.ResultQueryRepository.class));
+        org.mockito.Mockito.lenient().when(versionRepository.save(org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     private Race completedRace() {
@@ -80,7 +89,8 @@ class ResultPersistenceTest {
     void publishRejectsRaceThatIsNotCompleted() {
         Race race = completedRace();
         race.setStatus(Race.RaceStatus.IN_PROGRESS);
-        when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+        org.mockito.Mockito.lenient().when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+        org.mockito.Mockito.lenient().when(raceRepository.findByIdForUpdate(raceId)).thenReturn(Optional.of(race));
 
         assertThatThrownBy(() -> resultService.publish(raceId))
             .isInstanceOf(ConflictException.class)
@@ -92,7 +102,8 @@ class ResultPersistenceTest {
     @Test
     void publishSnapshotsComputedResults() {
         Race race = completedRace();
-        when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+        org.mockito.Mockito.lenient().when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+        org.mockito.Mockito.lenient().when(raceRepository.findByIdForUpdate(raceId)).thenReturn(Optional.of(race));
 
         Participant participant = Participant.builder()
             .id(participantId)
@@ -146,7 +157,8 @@ class ResultPersistenceTest {
     void servedResultsComeFromPersistedRowsOncePublished() {
         Race race = completedRace();
         race.setResultsPublishedAt(OffsetDateTime.now());
-        when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+        org.mockito.Mockito.lenient().when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+        org.mockito.Mockito.lenient().when(raceRepository.findByIdForUpdate(raceId)).thenReturn(Optional.of(race));
         when(resultRevisionRepository.currentRevision(raceId)).thenReturn(1L);
 
         Participant participant = Participant.builder()

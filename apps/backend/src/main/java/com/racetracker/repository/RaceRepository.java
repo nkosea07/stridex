@@ -101,6 +101,22 @@ public interface RaceRepository extends JpaRepository<Race, UUID> {
     long countManagedByStatusIn(@Param("email") String email, @Param("statuses") Collection<Race.RaceStatus> statuses);
 
     @Query("""
+        select count(distinct r) from Race r
+        left join r.createdBy owner
+        where r.status in :statuses
+          and (owner.id = :userId
+               or exists (select managed.id from Race managed join managed.admins admin
+                          where managed.id = r.id and admin.id = :userId))
+          and not (owner is not null and owner.id <> :userId and owner.isActive = true
+                   and owner.deletedAt is null and owner.deletionRequestedAt is null)
+          and not exists (select other.id from Race shared join shared.admins other
+                          where shared.id = r.id and other.id <> :userId and other.isActive = true
+                            and other.deletedAt is null and other.deletionRequestedAt is null)
+        """)
+    long countActiveWithoutOtherManager(@Param("userId") UUID userId,
+                                        @Param("statuses") Collection<Race.RaceStatus> statuses);
+
+    @Query("""
         select count(r) from Race r
         where r.raceDate between :from and :to
           and r.id in (select managed.id from Race managed

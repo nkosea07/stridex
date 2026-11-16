@@ -83,6 +83,6 @@ public class RfidReadEvent {
     private OffsetDateTime nextAttemptAt;
 
     public enum RfidReadEventStatus {
-        RECEIVED, ACCEPTED, DUPLICATE, UNKNOWN_TAG, INVALID_READER, ERROR
+        RECEIVED, ACCEPTED, DUPLICATE, UNKNOWN_TAG, INVALID_READER, ERROR, IGNORED, VOIDED
     }
 }

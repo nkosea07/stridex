@@ -19,5 +19,13 @@ public interface ResultService {
 
     List<com.racetracker.dto.result.PersonalBestDto> getMyPersonalBests();
     RaceResultPageDto getMyResultsPage(int page, int size);
-    void publish(UUID raceId);
+    int publish(UUID raceId);
+
+    com.racetracker.dto.result.ResultVersionDto certify(UUID raceId);
+
+    void reopen(UUID raceId, String reason);
+
+    com.racetracker.dto.result.ResultIntegrityDto integrity(UUID raceId);
+
+    java.util.List<com.racetracker.dto.result.ResultVersionDto> versions(UUID raceId);
 }

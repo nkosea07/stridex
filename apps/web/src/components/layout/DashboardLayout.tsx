@@ -28,6 +28,7 @@ import {
 import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { useTranslation } from 'react-i18next'
 import { getRaceNavigationForRole } from '@/config/adminNavigation'
+import { LegalFooter } from '@/components/legal/LegalFooter'
 
 const mainNavItems = [
   { to: '/admin', icon: LayoutDashboard, labelKey: 'nav:dashboard', end: true },
@@ -225,8 +226,11 @@ export function DashboardLayout() {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto">
-          <Outlet />
+        <main className="flex flex-1 flex-col overflow-auto">
+          <div className="flex-1">
+            <Outlet />
+          </div>
+          <LegalFooter />
         </main>
       </div>
     </div>

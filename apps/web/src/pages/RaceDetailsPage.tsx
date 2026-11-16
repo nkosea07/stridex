@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Ban, Flag, Users, MapPin, Timer, Trophy, Calendar, Play, Pause, CheckCircle, Pencil } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -31,10 +32,10 @@ const statusColors: Record<RaceStatus, string> = {
 }
 
 const statusActions: Record<RaceStatus, { label: string; nextStatus: RaceStatus; icon: React.ReactNode }[]> = {
-  DRAFT: [{ label: 'Open Registration', nextStatus: 'REGISTRATION_OPEN', icon: <Play className="h-4 w-4" /> }],
-  REGISTRATION_OPEN: [{ label: 'Close Registration', nextStatus: 'REGISTRATION_CLOSED', icon: <Pause className="h-4 w-4" /> }],
-  REGISTRATION_CLOSED: [{ label: 'Start Race', nextStatus: 'IN_PROGRESS', icon: <Play className="h-4 w-4" /> }],
-  IN_PROGRESS: [{ label: 'Complete Race', nextStatus: 'COMPLETED', icon: <CheckCircle className="h-4 w-4" /> }],
+  DRAFT: [{ label: 'raceDetails:ui.openRegistration', nextStatus: 'REGISTRATION_OPEN', icon: <Play className="h-4 w-4" /> }],
+  REGISTRATION_OPEN: [{ label: 'raceDetails:ui.closeRegistration', nextStatus: 'REGISTRATION_CLOSED', icon: <Pause className="h-4 w-4" /> }],
+  REGISTRATION_CLOSED: [{ label: 'raceDetails:ui.startRace', nextStatus: 'IN_PROGRESS', icon: <Play className="h-4 w-4" /> }],
+  IN_PROGRESS: [{ label: 'raceDetails:ui.completeRace', nextStatus: 'COMPLETED', icon: <CheckCircle className="h-4 w-4" /> }],
   COMPLETED: [],
   CANCELLED: [],
 }
@@ -42,6 +43,7 @@ const statusActions: Record<RaceStatus, { label: string; nextStatus: RaceStatus;
 export function RaceDetailPage() {
   const { raceId } = useParams()
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { user } = useAuth()
   const canManageRace = isAdminRole(user?.role)
 
@@ -67,7 +69,7 @@ export function RaceDetailPage() {
       setResults(resultsData)
       setLive(liveData)
     } catch {
-      toast.error('Failed to load race details')
+      toast.error(t('raceDetails:ui.failedToLoadRaceDetails'))
     }
   }
 
@@ -94,10 +96,10 @@ export function RaceDetailPage() {
     if (!raceId) return
     try {
       await racesApi.updateStatus(raceId, status, reason)
-      toast.success('Race status updated')
+      toast.success(t('raceDetails:ui.raceStatusUpdated'))
       await load()
     } catch {
-      toast.error('Failed to update race status')
+      toast.error(t('raceDetails:ui.failedToUpdateRaceStatus'))
     }
   }
 
@@ -146,11 +148,11 @@ export function RaceDetailPage() {
   const handleSaveRace = async () => {
     if (!raceId) return
     if (!editForm.name.trim()) {
-      toast.error('Race name is required')
+      toast.error(t('raceDetails:ui.raceNameIsRequired'))
       return
     }
     if (editForm.requireWaiver && !editForm.waiverText.trim()) {
-      toast.error('Waiver text is required when a waiver is enforced')
+      toast.error(t('raceDetails:ui.waiverTextIsRequiredWhenA'))
       return
     }
     setSaving(true)
@@ -172,7 +174,7 @@ export function RaceDetailPage() {
         requireWaiver: editForm.requireWaiver,
         waiverText: editForm.waiverText.trim() || undefined,
       })
-      toast.success('Race updated')
+      toast.success(t('raceDetails:ui.raceUpdated'))
       setEditOpen(false)
       await load()
     } catch (error) {
@@ -183,7 +185,7 @@ export function RaceDetailPage() {
   }
 
   if (!race) {
-    return <div className="p-6">Loading race...</div>
+    return <div className="p-6">{t('raceDetails:ui.loadingRace')}</div>
   }
 
   return (
@@ -211,7 +213,7 @@ export function RaceDetailPage() {
           {canManageRace && statusActions[race.status]?.map((action) => (
               <Button key={action.nextStatus} variant="outline" onClick={() => void handleStatusChange(action.nextStatus)}>
                 {action.icon}
-                <span className="ml-2">{action.label}</span>
+                <span className="ml-2">{t(action.label)}</span>
               </Button>
             ))}
           {canManageRace && race.status !== 'CANCELLED' && race.status !== 'COMPLETED' && (
@@ -220,13 +222,13 @@ export function RaceDetailPage() {
               if (reason !== null) void handleStatusChange('CANCELLED', reason)
             }}>
               <Ban className="mr-2 h-4 w-4" />
-              Cancel race
+              {t('raceDetails:ui.cancelRace')}
             </Button>
           )}
           {canManageRace && (
             <Button variant="outline" onClick={openEdit}>
               <Pencil className="mr-2 h-4 w-4" />
-              Edit
+              {t('raceDetails:ui.edit')}
             </Button>
           )}
         </div>
@@ -234,122 +236,131 @@ export function RaceDetailPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="cursor-pointer" onClick={() => navigate(`/admin/races/${raceId}/participants`)}>
-          <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Participants</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('raceDetails:ui.participants')}</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{participants.length.toLocaleString()}</div><Progress value={registrationProgress} className="mt-2 h-1" /></CardContent>
         </Card>
 
         <Card className="cursor-pointer" onClick={() => navigate(`/admin/races/${raceId}/live`)}>
-          <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Live Tracking</CardTitle><MapPin className="h-4 w-4 text-live" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{live.length.toLocaleString()}</div><p className="text-xs text-muted-foreground">Athletes on course</p></CardContent>
+          <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('raceDetails:ui.liveTracking')}</CardTitle><MapPin className="h-4 w-4 text-live" /></CardHeader>
+          <CardContent><div className="text-2xl font-bold">{live.length.toLocaleString()}</div><p className="text-xs text-muted-foreground">{t('raceDetails:ui.athletesOnCourse')}</p></CardContent>
         </Card>
 
         <Card className="cursor-pointer" onClick={() => navigate(`/admin/races/${raceId}/checkpoints`)}>
-          <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Checkpoints</CardTitle><Timer className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{checkpoints.length}</div><p className="text-xs text-muted-foreground">Configured timing points</p></CardContent>
+          <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('raceDetails:ui.checkpoints')}</CardTitle><Timer className="h-4 w-4 text-muted-foreground" /></CardHeader>
+          <CardContent><div className="text-2xl font-bold">{checkpoints.length}</div><p className="text-xs text-muted-foreground">{t('raceDetails:ui.configuredTimingPoints')}</p></CardContent>
+        </Card>
+
+        <Card className="cursor-pointer" onClick={() => navigate(`/admin/races/${raceId}/rfid`)}>
+          <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('tags:openTimingPage')}</CardTitle><Timer className="h-4 w-4 text-muted-foreground" /></CardHeader>
+          <CardContent>
+            <Button variant="link" className="h-auto p-0 text-sm" onClick={(event) => { event.stopPropagation(); navigate(`/admin/races/${raceId}/tags`) }}>
+              {t('tags:openTagPage')}
+            </Button>
+          </CardContent>
         </Card>
 
         <Card className="cursor-pointer" onClick={() => navigate(`/admin/races/${raceId}/results`)}>
-          <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Finished</CardTitle><Trophy className="h-4 w-4 text-primary" /></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('raceDetails:ui.finished')}</CardTitle><Trophy className="h-4 w-4 text-primary" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{byStatus.finished.toLocaleString()}</div><Progress value={finishProgress} className="mt-2 h-1" /></CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Race Snapshot</CardTitle>
-          <CardDescription>Operational status and summary</CardDescription>
+          <CardTitle className="text-base">{t('raceDetails:ui.raceSnapshot')}</CardTitle>
+          <CardDescription>{t('raceDetails:ui.operationalStatusAndSummary')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Registered</span><span>{participants.length}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Checked In</span><span>{byStatus.checkedIn}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Started</span><span>{byStatus.started}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Official Results</span><span>{results.filter((r) => r.isOfficial).length}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Distance</span><span>{race.distanceKm ?? '-'} km</span></div>
-          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Max Participants</span><span>{race.maxParticipants ?? '-'}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Timezone</span><span>{race.timezone ?? 'UTC'}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Early bird</span><span>{race.earlyBirdFee ?? '-'} {race.currency}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Team fee</span><span>{race.teamFee ?? '-'} {race.currency}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Bib prefix</span><span>{race.bibPrefix || '-'}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-muted-foreground">Medal places</span><span>{race.medalPlaces ?? 3}</span></div>
-          {race.cancellationReason && <div className="flex justify-between text-sm"><span className="text-muted-foreground">Cancellation</span><span>{race.cancellationReason}</span></div>}
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.registered')}</span><span>{participants.length}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.checkedIn')}</span><span>{byStatus.checkedIn}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.started')}</span><span>{byStatus.started}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.officialResults')}</span><span>{results.filter((r) => r.isOfficial).length}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.distance')}</span><span>{race.distanceKm ?? '-'} km</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.maxParticipants')}</span><span>{race.maxParticipants ?? '-'}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.timezone')}</span><span>{race.timezone ?? 'UTC'}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.earlyBird')}</span><span>{race.earlyBirdFee ?? '-'} {race.currency}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.teamFee')}</span><span>{race.teamFee ?? '-'} {race.currency}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.bibPrefix')}</span><span>{race.bibPrefix || '-'}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.medalPlaces')}</span><span>{race.medalPlaces ?? 3}</span></div>
+          {race.cancellationReason && <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.cancellation')}</span><span>{race.cancellationReason}</span></div>}
         </CardContent>
       </Card>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit race</DialogTitle>
-            <DialogDescription>Update the race configuration.</DialogDescription>
+            <DialogTitle>{t('raceDetails:ui.editRace')}</DialogTitle>
+            <DialogDescription>{t('raceDetails:ui.updateTheRaceConfiguration')}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="space-y-2">
-              <Label htmlFor="race-name">Name</Label>
+              <Label htmlFor="race-name">{t('raceDetails:ui.name')}</Label>
               <Input id="race-name" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="race-description">Description</Label>
+              <Label htmlFor="race-description">{t('raceDetails:ui.description')}</Label>
               <Input id="race-description" value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="race-city">City</Label>
+                <Label htmlFor="race-city">{t('raceDetails:ui.city')}</Label>
                 <Input id="race-city" value={editForm.city} onChange={(e) => setEditForm((f) => ({ ...f, city: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="race-country">Country</Label>
+                <Label htmlFor="race-country">{t('raceDetails:ui.country')}</Label>
                 <Input id="race-country" value={editForm.country} onChange={(e) => setEditForm((f) => ({ ...f, country: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="race-date">Race date</Label>
+                <Label htmlFor="race-date">{t('raceDetails:ui.raceDate')}</Label>
                 <Input id="race-date" type="date" value={editForm.raceDate} onChange={(e) => setEditForm((f) => ({ ...f, raceDate: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="race-start">Start time</Label>
+                <Label htmlFor="race-start">{t('raceDetails:ui.startTime')}</Label>
                 <Input id="race-start" type="time" value={editForm.startTime} onChange={(e) => setEditForm((f) => ({ ...f, startTime: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="race-distance">Distance (km)</Label>
+                <Label htmlFor="race-distance">{t('raceDetails:ui.distanceKm')}</Label>
                 <Input id="race-distance" type="number" step="0.1" value={editForm.distanceKm} onChange={(e) => setEditForm((f) => ({ ...f, distanceKm: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="race-max">Max participants</Label>
+                <Label htmlFor="race-max">{t('raceDetails:ui.maxParticipants2')}</Label>
                 <Input id="race-max" type="number" value={editForm.maxParticipants} onChange={(e) => setEditForm((f) => ({ ...f, maxParticipants: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="race-fee">Registration fee</Label>
+                <Label htmlFor="race-fee">{t('raceDetails:ui.registrationFee')}</Label>
                 <Input id="race-fee" type="number" step="0.01" value={editForm.registrationFee} onChange={(e) => setEditForm((f) => ({ ...f, registrationFee: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="race-currency">Currency</Label>
+                <Label htmlFor="race-currency">{t('raceDetails:ui.currency')}</Label>
                 <Input id="race-currency" maxLength={3} value={editForm.currency} onChange={(e) => setEditForm((f) => ({ ...f, currency: e.target.value.toUpperCase() }))} />
               </div>
             </div>
             <div className="space-y-3 rounded-md border border-border p-3">
               <div className="flex items-center justify-between">
-                <Label htmlFor="race-public">Public registration</Label>
+                <Label htmlFor="race-public">{t('raceDetails:ui.publicRegistration')}</Label>
                 <Switch id="race-public" checked={editForm.isPublicRegistration} onCheckedChange={(v) => setEditForm((f) => ({ ...f, isPublicRegistration: v }))} />
               </div>
               <div className="flex items-center justify-between">
-                <Label htmlFor="race-approval">Require approval</Label>
+                <Label htmlFor="race-approval">{t('raceDetails:ui.requireApproval')}</Label>
                 <Switch id="race-approval" checked={editForm.requireApproval} onCheckedChange={(v) => setEditForm((f) => ({ ...f, requireApproval: v }))} />
               </div>
               <div className="flex items-center justify-between">
-                <Label htmlFor="race-waitlist">Waitlist enabled</Label>
+                <Label htmlFor="race-waitlist">{t('raceDetails:ui.waitlistEnabled')}</Label>
                 <Switch id="race-waitlist" checked={editForm.waitlistEnabled} onCheckedChange={(v) => setEditForm((f) => ({ ...f, waitlistEnabled: v }))} />
               </div>
               <div className="flex items-center justify-between">
-                <Label htmlFor="race-waiver">Require waiver</Label>
+                <Label htmlFor="race-waiver">{t('raceDetails:ui.requireWaiver')}</Label>
                 <Switch id="race-waiver" checked={editForm.requireWaiver} onCheckedChange={(v) => setEditForm((f) => ({ ...f, requireWaiver: v }))} />
               </div>
               {editForm.requireWaiver && (
                 <div className="space-y-2">
-                  <Label htmlFor="race-waiver-text">Waiver text</Label>
+                  <Label htmlFor="race-waiver-text">{t('raceDetails:ui.waiverText')}</Label>
                   <Input id="race-waiver-text" value={editForm.waiverText} onChange={(e) => setEditForm((f) => ({ ...f, waiverText: e.target.value }))} />
                 </div>
               )}
@@ -357,7 +368,7 @@ export function RaceDetailPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>
-              Cancel
+              {t('raceDetails:ui.cancel')}
             </Button>
             <Button onClick={() => void handleSaveRace()} disabled={saving}>
               {saving ? 'Saving…' : 'Save changes'}

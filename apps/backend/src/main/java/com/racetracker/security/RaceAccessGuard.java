@@ -111,6 +111,15 @@ public class RaceAccessGuard {
         assertCanManage(race);
     }
 
+    public boolean canManage(UUID raceId) {
+        try {
+            assertCanManage(raceId);
+            return true;
+        } catch (AccessDeniedException ex) {
+            return false;
+        }
+    }
+
     public void assertCanManage(Race race) {
         assertCanManage(race, SecurityContextHolder.getContext().getAuthentication());
     }

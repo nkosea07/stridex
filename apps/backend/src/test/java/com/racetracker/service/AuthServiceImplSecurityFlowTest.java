@@ -88,8 +88,37 @@ class AuthServiceImplSecurityFlowTest {
     @Mock
     private ParticipantRepository participantRepository;
 
+    @Mock
+    private com.racetracker.security.AdminMfaPolicy adminMfaPolicy;
+
+    @Mock
+    private com.racetracker.service.UserLocales userLocales;
+
     @InjectMocks
     private AuthServiceImpl authService;
+
+    @Test
+    void adminLoginReturnsATwoFactorChallengeInsteadOfASession() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("admin@example.com");
+        request.setPassword("password123");
+        User admin = baseUser();
+        admin.setEmail("admin@example.com");
+        admin.setRole(User.UserRole.RACE_ADMIN);
+        when(userRepository.findByEmailIgnoreCase("admin@example.com")).thenReturn(Optional.of(admin));
+        when(adminMfaPolicy.requiresMfa(User.UserRole.RACE_ADMIN)).thenReturn(true);
+        when(mfaAuthenticationService.createChallenge(admin))
+            .thenReturn(new MfaAuthenticationServiceImpl.Challenge("challenge-token", true));
+
+        com.racetracker.dto.auth.AuthResponse response = authService.login(request);
+
+        org.assertj.core.api.Assertions.assertThat(response.getToken()).isNull();
+        org.assertj.core.api.Assertions.assertThat(response.getRefreshToken()).isNull();
+        org.assertj.core.api.Assertions.assertThat(response.getMfaRequired()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(response.getMfaEnrollmentRequired()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(response.getMfaChallengeToken()).isEqualTo("challenge-token");
+        org.mockito.Mockito.verify(jwtService, org.mockito.Mockito.never()).generateAccessToken(any());
+    }
 
     @Test
     void login_rejectsWhenAccountLocked() {
@@ -215,7 +244,9 @@ class AuthServiceImplSecurityFlowTest {
         request.setFirstName("New");
         request.setLastName("User");
         request.setPrivacyPolicyAccepted(true);
-        request.setPrivacyPolicyVersion("2026-10-11");
+        request.setPrivacyPolicyVersion(LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION);
+        request.setTermsAccepted(true);
+        request.setTermsVersion(LegalDocuments.CURRENT_TERMS_VERSION);
 
         when(userRepository.existsByEmailIgnoreCase("newuser@example.com")).thenReturn(false);
         when(passwordEncoder.encode("12345678")).thenReturn("hashed");
@@ -246,7 +277,9 @@ class AuthServiceImplSecurityFlowTest {
         request.setFirstName("Pri");
         request.setLastName("Vacy");
         request.setPrivacyPolicyAccepted(true);
-        request.setPrivacyPolicyVersion("2026-10-11");
+        request.setPrivacyPolicyVersion(LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION);
+        request.setTermsAccepted(true);
+        request.setTermsVersion(LegalDocuments.CURRENT_TERMS_VERSION);
 
         when(userRepository.existsByEmailIgnoreCase("privacy@example.com")).thenReturn(false);
         when(passwordEncoder.encode("12345678")).thenReturn("hashed");
@@ -262,7 +295,7 @@ class AuthServiceImplSecurityFlowTest {
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
-        assertThat(captor.getValue().getPrivacyPolicyVersion()).isEqualTo("2026-10-11");
+        assertThat(captor.getValue().getPrivacyPolicyVersion()).isEqualTo(LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION);
         assertThat(captor.getValue().getPrivacyPolicyAcceptedAt()).isNotNull();
     }
 
@@ -304,7 +337,9 @@ class AuthServiceImplSecurityFlowTest {
         request.setFirstName("Default");
         request.setLastName("Athlete");
         request.setPrivacyPolicyAccepted(true);
-        request.setPrivacyPolicyVersion("2026-10-11");
+        request.setPrivacyPolicyVersion(LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION);
+        request.setTermsAccepted(true);
+        request.setTermsVersion(LegalDocuments.CURRENT_TERMS_VERSION);
 
         when(userRepository.existsByEmailIgnoreCase("default@example.com")).thenReturn(false);
         when(passwordEncoder.encode("12345678")).thenReturn("hashed");
@@ -337,7 +372,9 @@ class AuthServiceImplSecurityFlowTest {
         request.setLastName("User");
         request.setExperiences(Set.of(com.racetracker.model.UserCapabilityType.SPECTATOR));
         request.setPrivacyPolicyAccepted(true);
-        request.setPrivacyPolicyVersion("2026-10-11");
+        request.setPrivacyPolicyVersion(LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION);
+        request.setTermsAccepted(true);
+        request.setTermsVersion(LegalDocuments.CURRENT_TERMS_VERSION);
 
         when(userRepository.existsByEmailIgnoreCase("spectator@example.com")).thenReturn(false);
         when(passwordEncoder.encode("12345678")).thenReturn("hashed");
@@ -372,7 +409,9 @@ class AuthServiceImplSecurityFlowTest {
             com.racetracker.model.UserCapabilityType.ATHLETE,
             com.racetracker.model.UserCapabilityType.SPECTATOR));
         request.setPrivacyPolicyAccepted(true);
-        request.setPrivacyPolicyVersion("2026-10-11");
+        request.setPrivacyPolicyVersion(LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION);
+        request.setTermsAccepted(true);
+        request.setTermsVersion(LegalDocuments.CURRENT_TERMS_VERSION);
 
         when(userRepository.existsByEmailIgnoreCase("both@example.com")).thenReturn(false);
         when(passwordEncoder.encode("12345678")).thenReturn("hashed");
@@ -521,5 +560,28 @@ class AuthServiceImplSecurityFlowTest {
             .emailVerified(true)
             .failedLoginAttempts(0)
             .build();
+    }
+
+    @Test
+    void registerRequiresTheCurrentTermsVersion() {
+        RegisterRequest request = new RegisterRequest();
+        request.setEmail("runner@example.com");
+        request.setPassword("password123");
+        request.setFirstName("Ada");
+        request.setLastName("Runner");
+        request.setPrivacyPolicyAccepted(true);
+        request.setPrivacyPolicyVersion(LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION);
+        when(userRepository.existsByEmailIgnoreCase("runner@example.com")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.register(request))
+            .isInstanceOf(com.racetracker.exception.ApiException.class)
+            .hasMessageContaining("Terms and Conditions");
+
+        request.setTermsAccepted(true);
+        request.setTermsVersion("2020-01-01");
+        assertThatThrownBy(() -> authService.register(request))
+            .isInstanceOf(com.racetracker.exception.ApiException.class)
+            .hasMessageContaining("current Terms");
+        verify(userRepository, never()).save(any());
     }
 }

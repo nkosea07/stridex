@@ -81,6 +81,40 @@ class PublicTrackingServiceTrackTest {
     }
 
     @Test
+    void incrementalTrackReadsOnlyPointsAfterTheGivenTime() {
+        RaceRepository races = mock(RaceRepository.class);
+        ParticipantRepository participants = mock(ParticipantRepository.class);
+        GpsLocationRepository gps = mock(GpsLocationRepository.class);
+        UUID raceId = UUID.randomUUID();
+        UUID participantId = UUID.randomUUID();
+        Race race = new Race();
+        race.setId(raceId);
+        race.setStatus(Race.RaceStatus.IN_PROGRESS);
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setRace(race);
+        participant.setIsTrackingEnabled(true);
+        OffsetDateTime since = OffsetDateTime.parse("2026-11-15T08:00:00Z");
+        GpsLocation newer = new GpsLocation();
+        newer.setLatitude(BigDecimal.valueOf(-17.82));
+        newer.setLongitude(BigDecimal.valueOf(31.05));
+        newer.setFiltered(false);
+        newer.setRecordedAt(since.plusSeconds(5));
+
+        when(races.findByIdForPublicVisibility(raceId)).thenReturn(Optional.of(race));
+        when(participants.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
+        when(gps.findByParticipantIdAndRaceIdAndRecordedAtAfterOrderByRecordedAtAsc(participantId, raceId, since))
+            .thenReturn(List.of(newer));
+
+        var response = newService(races, participants, gps, mock(CheckpointRecordRepository.class),
+            mock(RaceFeedRevisionRepository.class)).getAthleteTrack(raceId, participantId, since);
+
+        assertThat(response.getPoints()).hasSize(1);
+        assertThat(response.getPoints().get(0).getTime()).isEqualTo(since.plusSeconds(5).toString());
+        org.mockito.Mockito.verify(gps, org.mockito.Mockito.never()).findByParticipantIdAndRaceIdOrderByRecordedAtAsc(any(), any());
+    }
+
+    @Test
     void athleteTrackEmptyWhenTrackingDisabled() {
         RaceRepository races = mock(RaceRepository.class);
         ParticipantRepository participants = mock(ParticipantRepository.class);

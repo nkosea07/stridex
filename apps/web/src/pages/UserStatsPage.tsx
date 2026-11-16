@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertCircle, MapPin, RefreshCcw, UserMinus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { ResultQueryDialog } from '@/components/results/ResultQueryDialog'
 import { favoritesApi, participantsApi, resultsApi } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -31,6 +32,7 @@ export function UserStatsPage() {
   const sessionRef = useRef<SessionSnapshot>({ userId, generation: sessionGeneration })
   sessionRef.current = { userId, generation: sessionGeneration }
   const { t } = useTranslation()
+  const [queryRace, setQueryRace] = useState<{ id: string; name: string } | null>(null)
   const activeCapability = getPreferredCapability(user)
   const isAthleteMode = activeCapability === 'ATHLETE'
   const isSpectatorMode = activeCapability === 'SPECTATOR'
@@ -182,6 +184,11 @@ export function UserStatsPage() {
                   {entry.qualificationStatus ?? '—'}
                 </Badge>
                 {entry.medal ? <Badge variant="outline">{entry.medal}</Badge> : null}
+                {!entry.official && (
+                  <Button size="sm" variant="ghost" onClick={() => setQueryRace({ id: entry.raceId, name: entry.raceName })}>
+                    {t('results:queries.ask')}
+                  </Button>
+                )}
               </div>
             ))}
           </CardContent>
@@ -280,6 +287,8 @@ export function UserStatsPage() {
           )}
         </CardContent>
       </Card>}
+      <ResultQueryDialog raceId={queryRace?.id ?? null} raceName={queryRace?.name}
+        onOpenChange={(open) => { if (!open) setQueryRace(null) }} />
     </div>
   )
 }

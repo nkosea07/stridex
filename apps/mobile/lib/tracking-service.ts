@@ -51,7 +51,7 @@ export type TrackingSessionRow = {
   updatedAt: string;
 };
 
-export type TrackingStopReason = 'not_registered' | 'not_permitted';
+export type TrackingStopReason = 'not_registered' | 'not_permitted' | 'closed';
 
 export type TrackingStopNotice = { raceId: string; reason: TrackingStopReason };
 
@@ -65,6 +65,7 @@ type SyncFailureDisposition = 'retry' | 'reject' | TrackingStopReason;
 
 export const classifySyncFailure = (error: unknown): SyncFailureDisposition => {
   if (!(error instanceof ApiRequestError) || error.isNetworkError || error.status === undefined) return 'retry';
+  if (error.status === 409 && error.code === 'TRACKING_CLOSED') return 'closed';
   if (error.status === 404) return 'not_registered';
   if (error.status === 403) return 'not_permitted';
   if (error.status === 400 || error.status === 413 || error.status === 422) return 'reject';

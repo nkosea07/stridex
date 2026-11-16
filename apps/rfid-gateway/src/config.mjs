@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 const MAX_BACKEND_BATCH_SIZE = 200;
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -36,6 +37,11 @@ function optionalString(name, fallback = '') {
 
 export function loadConfig() {
   const port = optionalInt('RFID_GATEWAY_PORT', 8090);
+  const host = optionalString('RFID_GATEWAY_HOST', '127.0.0.1');
+  const localToken = optionalString('RFID_GATEWAY_LOCAL_TOKEN');
+  if (!LOOPBACK_HOSTS.has(host) && localToken.length < 24) {
+    throw new Error('RFID_GATEWAY_LOCAL_TOKEN (at least 24 characters) is required when RFID_GATEWAY_HOST is not a loopback address');
+  }
   const backendBaseUrl = required('RFID_BACKEND_BASE_URL').replace(/\/+$/, '');
   const backendReaderKey = required('RFID_BACKEND_READER_KEY');
   const spoolDir = path.resolve(optionalString('RFID_GATEWAY_SPOOL_DIR', './data/rfid-gateway'));
@@ -56,6 +62,8 @@ export function loadConfig() {
     mode,
     eventOrigin: mode === 'simulation' ? 'SIMULATED' : 'HARDWARE',
     port,
+    host,
+    localToken: localToken || null,
     backendBaseUrl,
     backendReaderKey,
     spoolDir,
@@ -70,6 +78,7 @@ export function loadConfig() {
     flushIntervalMs: optionalBoundedInt('RFID_GATEWAY_FLUSH_INTERVAL_MS', 1000, 100, 3600000),
     requestTimeoutMs: optionalBoundedInt('RFID_GATEWAY_REQUEST_TIMEOUT_MS', 10000, 1000, 600000),
     retryInitialDelayMs: optionalBoundedInt('RFID_GATEWAY_RETRY_INITIAL_DELAY_MS', 1000, 100, 3600000),
-    retryMaxDelayMs: optionalBoundedInt('RFID_GATEWAY_RETRY_MAX_DELAY_MS', 10000, 100, 3600000)
+    retryMaxDelayMs: optionalBoundedInt('RFID_GATEWAY_RETRY_MAX_DELAY_MS', 10000, 100, 3600000),
+    dedupeWindowMs: optionalBoundedInt('RFID_GATEWAY_DEDUPE_WINDOW_MS', 3000, 0, 600000)
   };
 }

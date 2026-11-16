@@ -167,6 +167,8 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         consent.put("marketingConsent", Boolean.TRUE.equals(user.getMarketingConsent()));
         consent.put("privacyPolicyVersion", user.getPrivacyPolicyVersion());
         consent.put("privacyPolicyAcceptedAt", user.getPrivacyPolicyAcceptedAt());
+        consent.put("termsVersion", user.getTermsVersion());
+        consent.put("termsAcceptedAt", user.getTermsAcceptedAt());
 
         Map<String, Object> notificationPreferences = new LinkedHashMap<>();
         notificationPreferenceRepository.findById(userId).ifPresent(preference -> {
@@ -232,6 +234,42 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
 
     @Override
     @Transactional
+    public com.racetracker.dto.privacy.LegalAcceptanceDto acceptLegalDocuments(
+        UUID userId, com.racetracker.dto.privacy.LegalAcceptanceRequest request) {
+        if (!com.racetracker.service.LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION.equals(request.getPrivacyPolicyVersion())) {
+            throw new com.racetracker.exception.ApiException("The current privacy policy version must be accepted",
+                "PRIVACY_POLICY_VERSION_MISMATCH");
+        }
+        if (!com.racetracker.service.LegalDocuments.CURRENT_TERMS_VERSION.equals(request.getTermsVersion())) {
+            throw new com.racetracker.exception.ApiException("The current Terms and Conditions version must be accepted",
+                "TERMS_VERSION_MISMATCH");
+        }
+        User user = userRepository.findByIdForUpdate(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        OffsetDateTime now = OffsetDateTime.now();
+        boolean changed = false;
+        if (!request.getPrivacyPolicyVersion().equals(user.getPrivacyPolicyVersion())) {
+            user.setPrivacyPolicyVersion(request.getPrivacyPolicyVersion());
+            user.setPrivacyPolicyAcceptedAt(now);
+            changed = true;
+        }
+        if (!request.getTermsVersion().equals(user.getTermsVersion())) {
+            user.setTermsVersion(request.getTermsVersion());
+            user.setTermsAcceptedAt(now);
+            changed = true;
+        }
+        if (changed) {
+            userRepository.save(user);
+            auditEventService.recordInCurrentTransaction("LEGAL_DOCUMENTS_ACCEPTED", userId, "USER", userId.toString(),
+                "SUCCESS", Map.of("privacyPolicyVersion", user.getPrivacyPolicyVersion(),
+                    "termsVersion", user.getTermsVersion()));
+        }
+        return new com.racetracker.dto.privacy.LegalAcceptanceDto(user.getPrivacyPolicyVersion(),
+            user.getPrivacyPolicyAcceptedAt(), user.getTermsVersion(), user.getTermsAcceptedAt());
+    }
+
+    @Override
+    @Transactional
     public void eraseAccount(UUID userId) {
         User user = userRepository.findByIdForUpdate(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -248,6 +286,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         erasure.setStagedAt(now);
         erasure.setNotificationEmail(user.getEmail());
         erasure.setNotificationFirstName(user.getFirstName());
+        erasure.setNotificationLocale(user.getPreferredLocale());
         accountErasureRepository.saveAndFlush(erasure);
         deletionJobRepository.stageOriginals(userId, now);
         deletionJobRepository.stageThumbnails(userId, now);
@@ -371,7 +410,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         }
     }
 
-    public record NotificationClaim(UUID userId, String email, String firstName, UUID leaseToken) {}
+    public record NotificationClaim(UUID userId, String email, String firstName, String locale, UUID leaseToken) {}
 
     @Transactional
     public List<NotificationClaim> claimNotifications(int limit) {
@@ -383,7 +422,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
             erasure.setNotificationLeaseToken(token);
             erasure.setNotificationLeaseUntil(now.plusMinutes(5));
             claimed.add(new NotificationClaim(userId, erasure.getNotificationEmail(),
-                erasure.getNotificationFirstName(), token));
+                erasure.getNotificationFirstName(), erasure.getNotificationLocale(), token));
         }
         return claimed;
     }
@@ -397,6 +436,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         erasure.setNotificationDispatchedAt(OffsetDateTime.now());
         erasure.setNotificationEmail(null);
         erasure.setNotificationFirstName(null);
+        erasure.setNotificationLocale(null);
         erasure.setNotificationLeaseToken(null);
         erasure.setNotificationLeaseUntil(null);
     }
@@ -440,6 +480,8 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         user.setDataProcessingConsentAt(null);
         user.setPrivacyPolicyVersion(null);
         user.setPrivacyPolicyAcceptedAt(null);
+        user.setTermsVersion(null);
+        user.setTermsAcceptedAt(null);
         user.setDeletedAt(now);
         userRepository.save(user);
 

@@ -20,9 +20,12 @@ public class CheckpointRecordDto {
     private String splitTime;
     private String elapsedTime;
     private Boolean isVerified;
+    private Integer passNumber;
     private Boolean isCutoffMissed;
     private String notes;
     private String adjustedRecordedAt;
     private String adjustmentReason;
     private String adjustedAt;
+    private String voidedAt;
+    private String voidReason;
 }

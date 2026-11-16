@@ -56,7 +56,7 @@ CI runs the JS job on Node 22; the local floor is Node 20.19 (`.node-version`).
 
 - Backend DB vars are `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USERNAME`/`DB_PASSWORD` — not `DATABASE_URL`.
 - Web build-time config: `VITE_API_URL`, `VITE_MAPBOX_TOKEN`. Mobile: `EXPO_PUBLIC_*` only — never put server secrets in client variables.
-- Pilot: `compose.pilot.yml` with `.env.pilot` copied from `.env.pilot.example`. Production requires a non-default `JWT_SECRET`, HTTPS `FRONTEND_URL`, secure cookies, and `RFID_SIMULATION_ENABLED=false`. MFA is not required for the current release; legacy MFA endpoints remain only for compatibility.
+- Pilot: `compose.pilot.yml` with `.env.pilot` copied from `.env.pilot.example`. Production requires a non-default `JWT_SECRET`, HTTPS `FRONTEND_URL`, secure cookies, and `RFID_SIMULATION_ENABLED=false`. Super admins and race admins must sign in with TOTP two-factor verification (`MFA_REQUIRED_FOR_ADMINS=true` and a base64 32-byte `MFA_ENCRYPTION_KEY` are enforced in production); the JWT filter rejects their tokens without the verified-MFA claim. Local `dev` defaults to not requiring it.
 - Ops/procedure references: `docs/pilot-operations-runbook.md`, `docs/rfid-race-pilot-runbook.md`. Never commit populated `.env` files (gitignored; `apps/backend/.env` is local-only and untracked).
 
 ## Repo conventions

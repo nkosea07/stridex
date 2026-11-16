@@ -11,4 +11,8 @@ public class TrackingCheckpointRequest {
     private UUID checkpointId;
     private String method;
     private String timestamp;
+    @jakarta.validation.constraints.Size(max = 128)
+    private String scanToken;
+    @jakarta.validation.Valid
+    private GpsLocationRequest location;
 }
