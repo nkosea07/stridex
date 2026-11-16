@@ -83,7 +83,7 @@ jobs:
     needs: [javascript, backend]
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       - run: docker build -t race-tracker/backend:ci -f apps/backend/Dockerfile apps/backend
       - run: docker build -t race-tracker/web:ci -f apps/web/Dockerfile .
       - run: docker build -t race-tracker/rfid-gateway:ci -f apps/rfid-gateway/Dockerfile apps/rfid-gateway
