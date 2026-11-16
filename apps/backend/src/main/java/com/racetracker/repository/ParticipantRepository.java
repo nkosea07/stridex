@@ -22,7 +22,11 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     boolean existsByRaceIdAndEmailIgnoreCase(UUID raceId, String email);
 
-    boolean existsByRfidTag(String rfidTag);
+    boolean existsByRaceIdAndRfidTag(UUID raceId, String rfidTag);
+
+    long countByWaveId(UUID waveId);
+
+    boolean existsByRaceIdAndRfidTagAndIdNot(UUID raceId, String rfidTag, UUID id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Participant p where p.id = :id")
@@ -116,8 +120,13 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     @Query(value = """
         WITH target_races AS (
-            SELECT r.id, r.race_date
+            SELECT r.id, r.race_date,
+                   CASE
+                       WHEN r.race_date IS NULL OR r.start_time IS NULL THEN NULL
+                       ELSE (r.race_date + r.start_time) AT TIME ZONE coalesce(tz.name, 'UTC')
+                   END AS scheduled_start
             FROM races r
+            LEFT JOIN pg_timezone_names tz ON tz.name = r.timezone
             WHERE (:raceId IS NULL OR r.id = :raceId)
               AND (:publishedOnly = false OR r.results_published_at IS NOT NULL)
               AND (:userId IS NULL OR EXISTS (
@@ -135,11 +144,12 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
             FROM checkpoint_records cr
             JOIN checkpoints cp ON cp.id = cr.checkpoint_id
             JOIN target_races tr ON tr.id = cr.race_id
+            WHERE cr.voided_at IS NULL
             GROUP BY cr.race_id, cr.participant_id
         ), base AS (
             SELECT p.id AS participant_id, p.race_id, p.user_id, p.category_id, p.bib_number,
                    p.status::text AS status, p.gender::text AS gender,
-                   coalesce(p.checked_in_at, ct.start_checkpoint_at, p.registered_at) AS start_time,
+                   coalesce(ct.start_checkpoint_at, tr.scheduled_start) AS start_time,
                    ct.finish_at,
                    coalesce(pen.penalty_seconds, 0) AS penalty_seconds,
                    CASE
@@ -224,11 +234,22 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     boolean existsByUserIdAndStatusIn(UUID userId, Collection<Participant.ParticipantStatus> statuses);
 
-    boolean existsByBibNumber(String bibNumber);
+    boolean existsByRaceIdAndBibNumber(UUID raceId, String bibNumber);
+
+    boolean existsByRaceIdAndBibNumberAndIdNot(UUID raceId, String bibNumber, UUID id);
 
     boolean existsByAthleteCode(String athleteCode);
 
     long countByRaceId(UUID raceId);
+
+    @Query("""
+        select count(p) from Participant p
+        where p.race.id in (select managed.id from Race managed
+              left join managed.createdBy owner
+              left join managed.admins assignedAdmin
+              where lower(owner.email) = lower(:email) or lower(assignedAdmin.email) = lower(:email))
+        """)
+    long countInRacesManagedBy(@Param("email") String email);
 
     long countByRaceIdAndStatusIn(UUID raceId, Collection<Participant.ParticipantStatus> statuses);
 
@@ -289,12 +310,29 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
     List<Object[]> countByAgeGroup(@Param("raceId") UUID raceId);
 
     @Query(value = """
-        SELECT to_char(date_trunc('day', p.registered_at), 'YYYY-MM-DD') AS day, count(*)
+        SELECT to_char(date_trunc('day', p.registered_at AT TIME ZONE coalesce(tz.name, 'UTC')), 'YYYY-MM-DD') AS day,
+               count(*)
         FROM participants p
+        JOIN races r ON r.id = p.race_id
+        LEFT JOIN pg_timezone_names tz ON tz.name = r.timezone
         WHERE p.race_id = :raceId
           AND p.registered_at >= now() - make_interval(days => :days)
         GROUP BY day
         ORDER BY day
         """, nativeQuery = true)
     List<Object[]> registrationSeries(@Param("raceId") UUID raceId, @Param("days") int days);
+
+    @EntityGraph(attributePaths = {"category", "wave"})
+    @Query("""
+        select p
+        from Participant p
+        where p.race.id = :raceId
+          and (
+            lower(coalesce(p.bibNumber, '')) like lower(concat(:query, '%'))
+            or lower(concat(coalesce(p.firstName, ''), ' ', coalesce(p.lastName, ''))) like lower(concat('%', :query, '%'))
+          )
+        order by case when lower(coalesce(p.bibNumber, '')) = lower(:query) then 0 else 1 end,
+          p.lastName asc, p.firstName asc, p.id asc
+    """)
+    List<Participant> searchForStaff(@Param("raceId") UUID raceId, @Param("query") String query, Pageable pageable);
 }

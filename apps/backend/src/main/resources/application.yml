@@ -1,6 +1,10 @@
 spring:
   application:
     name: race-tracker-backend
+  messages:
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
   config:
     import: optional:file:.env[.properties]
   
@@ -150,6 +154,9 @@ logging:
 
 # Race Tracker Custom Configuration
 racetracker:
+  races:
+    default-time-limit-hours: ${RACE_DEFAULT_TIME_LIMIT_HOURS:24}
+    completion-grace-minutes: ${RACE_COMPLETION_GRACE_MINUTES:60}
   # Object storage objects remain private. The current media API intentionally loads bytes
   # through the backend; signed URL delivery requires a future API contract change.
   storage:
@@ -179,6 +186,14 @@ racetracker:
     enabled: true
   mfa:
     encryption-key: ${MFA_ENCRYPTION_KEY:}
+    required-for-admins: ${MFA_REQUIRED_FOR_ADMINS:true}
+  i18n:
+    supported-locales: en,sn,nd,af,zu,fr,pt,sw
+  mobile:
+    minimum-version: ${MOBILE_MINIMUM_VERSION:}
+    latest-version: ${MOBILE_LATEST_VERSION:}
+    ios-store-url: ${MOBILE_IOS_STORE_URL:}
+    android-store-url: ${MOBILE_ANDROID_STORE_URL:}
   bib:
     qr-code-size: 200
     default-prefix: "RT"
@@ -191,6 +206,7 @@ racetracker:
     min-distance-for-accumulation-meters: ${TRACKING_MIN_DISTANCE_METERS:5}
     max-track-points: ${TRACKING_MAX_TRACK_POINTS:1000}
     heatmap-scale: ${TRACKING_HEATMAP_SCALE:3}
+    retention-days: ${TRACKING_RETENTION_DAYS:90}
   email:
     enabled: ${MAIL_ENABLED:false}
     from-address: ${MAIL_FROM:noreply@racetracker.com}
@@ -275,6 +291,8 @@ racetracker:
     enabled: true
   rfid:
     simulation-enabled: true
+  mfa:
+    required-for-admins: ${MFA_REQUIRED_FOR_ADMINS:false}
   seed:
     default-admin:
       enabled: true

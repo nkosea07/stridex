@@ -65,21 +65,28 @@ public class FcmPushNotificationService implements PushNotificationService {
     }
 
     @Override
-    public void sendToTokens(List<String> tokens, String title, String body, Map<String, String> data) {
+    public boolean isAvailable() {
+        return messaging != null;
+    }
+
+    @Override
+    public int sendToTokens(List<String> tokens, String title, String body, Map<String, String> data) {
         if (messaging == null || tokens == null || tokens.isEmpty()) {
-            return;
+            return 0;
         }
+        MulticastMessage message = MulticastMessage.builder()
+            .addAllTokens(tokens)
+            .setNotification(Notification.builder().setTitle(title).setBody(body).build())
+            .putAllData(data == null ? Map.of() : data)
+            .build();
+        BatchResponse response;
         try {
-            MulticastMessage message = MulticastMessage.builder()
-                .addAllTokens(tokens)
-                .setNotification(Notification.builder().setTitle(title).setBody(body).build())
-                .putAllData(data == null ? Map.of() : data)
-                .build();
-            BatchResponse response = messaging.sendEachForMulticast(message);
-            pruneStaleTokens(tokens, response);
+            response = messaging.sendEachForMulticast(message);
         } catch (Exception ex) {
-            log.warn("Failed to deliver push notification: {}", ex.getMessage());
+            throw new IllegalStateException("Push provider request failed", ex);
         }
+        pruneStaleTokens(tokens, response);
+        return response.getSuccessCount();
     }
 
     private void pruneStaleTokens(List<String> tokens, BatchResponse response) {

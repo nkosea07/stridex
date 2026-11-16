@@ -46,12 +46,17 @@ import type {
   RoutePoint,
   EmergencyAlert,
   DeletionStatus,
+  SelfScanClaim,
+  RfidUnmatchedTag,
+  GunTime,
+  RfidReprocessScope,
   NotificationPreference,
   ConsentState,
   RaceInsightsSummary,
   ParticipantAnomaly,
   RfidReaderCreateResponse,
   UserCapability,
+  LegalAcceptance,
 } from '@/types'
 import { API_CONTRACT } from '@race-tracker/contracts'
 
@@ -69,6 +74,8 @@ const PUBLIC_AUTH_ENDPOINTS = new Set([
   API_CONTRACT.endpoints.authMfaVerifyLogin,
   API_CONTRACT.endpoints.authBrowserLogin,
   API_CONTRACT.endpoints.authBrowserMfaVerifyLogin,
+  API_CONTRACT.endpoints.authBrowserMfaTotpEnroll,
+  API_CONTRACT.endpoints.authBrowserMfaTotpConfirm,
   API_CONTRACT.endpoints.authRefresh,
   API_CONTRACT.endpoints.authBrowserRefresh,
 ])
@@ -93,7 +100,17 @@ export interface BrowserAuthResponse {
   token?: string | null
   refreshToken?: string | null
   requiresEmailVerification?: boolean
+  mfaRequired?: boolean | null
+  mfaEnrollmentRequired?: boolean | null
+  mfaChallengeToken?: string | null
+  recoveryCodes?: string[] | null
   user: User
+}
+
+export interface MfaEnrollment {
+  secret: string
+  provisioningUri: string
+  qrCodeDataUri: string | null
 }
 
 interface ApiErrorPayload {
@@ -127,7 +144,7 @@ export function normalizeUser(user: User): User {
 }
 
 function normalizeAuthResponse(response: BrowserAuthResponse): BrowserAuthResponse {
-  return { ...response, user: normalizeUser(response.user) }
+  return response.user ? { ...response, user: normalizeUser(response.user) } : response
 }
 
 async function getApiError(response: Response, fallbackMessage: string) {
@@ -170,14 +187,19 @@ async function refreshBrowserSession(expectedGeneration = browserSessionGenerati
   const refreshGeneration = expectedGeneration
   setAccessToken(null)
   const promise = (async () => {
+    const requestRefresh = (csrfToken: string) => fetch(`${API_BASE}${API_CONTRACT.endpoints.authBrowserRefresh}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'X-CSRF-Token': decodeURIComponent(csrfToken) },
+    })
     const csrfToken = getCookie('rt_browser_csrf')
     if (!csrfToken) return false
     try {
-      const response = await fetch(`${API_BASE}${API_CONTRACT.endpoints.authBrowserRefresh}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'X-CSRF-Token': decodeURIComponent(csrfToken) },
-      })
+      let response = await requestRefresh(csrfToken)
+      const rotatedCsrfToken = getCookie('rt_browser_csrf')
+      if (response.status === 401 && rotatedCsrfToken && rotatedCsrfToken !== csrfToken) {
+        response = await requestRefresh(rotatedCsrfToken)
+      }
       if (!response.ok) return false
       const session = await response.json() as BrowserAuthResponse
       if (!session.token || refreshGeneration !== browserSessionGeneration) return false
@@ -322,6 +344,24 @@ export const authApi = {
     }))
   },
 
+  mfaEnroll: (challengeToken: string) =>
+    fetchApi<MfaEnrollment>(API_CONTRACT.endpoints.authBrowserMfaTotpEnroll, {
+      method: 'POST',
+      body: JSON.stringify({ challengeToken }),
+    }),
+
+  mfaConfirmEnrollment: async (challengeToken: string, code: string) =>
+    normalizeAuthResponse(await fetchApi<BrowserAuthResponse>(API_CONTRACT.endpoints.authBrowserMfaTotpConfirm, {
+      method: 'POST',
+      body: JSON.stringify({ challengeToken, code }),
+    })),
+
+  mfaVerifyLogin: async (challengeToken: string, code: string) =>
+    normalizeAuthResponse(await fetchApi<BrowserAuthResponse>(API_CONTRACT.endpoints.authBrowserMfaVerifyLogin, {
+      method: 'POST',
+      body: JSON.stringify({ challengeToken, code }),
+    })),
+
   restoreBrowserSession: refreshBrowserSession,
   setAccessToken,
   
@@ -333,6 +373,8 @@ export const authApi = {
     phone?: string
     privacyPolicyAccepted?: boolean
     privacyPolicyVersion?: string
+    termsAccepted?: boolean
+    termsVersion?: string
     experiences?: UserCapability[]
   }) =>
     fetchApi<BrowserAuthResponse>(API_CONTRACT.endpoints.authRegister, {
@@ -340,7 +382,7 @@ export const authApi = {
       body: JSON.stringify(data),
     }).then(normalizeAuthResponse),
 
-  registerOrganizer: (data: { email: string; password: string; firstName: string; lastName: string; phone?: string; organizationName: string; privacyPolicyAccepted: boolean; privacyPolicyVersion: string }) =>
+  registerOrganizer: (data: { email: string; password: string; firstName: string; lastName: string; phone?: string; organizationName: string; privacyPolicyAccepted: boolean; privacyPolicyVersion: string; termsAccepted: boolean; termsVersion: string }) =>
     fetchApi<BrowserAuthResponse>(API_CONTRACT.endpoints.authRegisterOrganizer, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -348,7 +390,7 @@ export const authApi = {
   
   me: () => fetchApi<User>(API_CONTRACT.endpoints.authMe).then(normalizeUser),
 
-  updateProfile: (data: { firstName: string; lastName: string; phone?: string }) =>
+  updateProfile: (data: { firstName?: string; lastName?: string; phone?: string; preferredLocale?: string }) =>
     fetchApi<User>(API_CONTRACT.endpoints.authProfile, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -385,6 +427,15 @@ export const authApi = {
 
   consent: () =>
     fetchApi<ConsentState>(buildContractPath(API_CONTRACT.endpoints.myConsent, {})),
+
+  acceptLegalDocuments: () =>
+    fetchApi<LegalAcceptance>(buildContractPath(API_CONTRACT.endpoints.myLegalAcceptance, {}), {
+      method: 'POST',
+      body: JSON.stringify({
+        privacyPolicyVersion: API_CONTRACT.legal.privacyPolicyVersion,
+        termsVersion: API_CONTRACT.legal.termsVersion,
+      }),
+    }),
 
   updateConsent: (data: { dataProcessingConsent?: boolean; marketingConsent?: boolean }) =>
     fetchApi<ConsentState>(buildContractPath(API_CONTRACT.endpoints.myConsent, {}), {
@@ -563,7 +614,7 @@ export const participantsApi = {
     return fetchAuthenticated(buildContractPath(API_CONTRACT.endpoints.raceParticipantImport, { raceId }), {
       method: 'POST',
       body: formData,
-    }, 'CSV import failed').then(res => res.json())
+    }, 'CSV import failed').then(res => res.json() as Promise<ImportJob>)
   },
   
   exportParticipants: (raceId: string, format: 'csv' | 'xlsx' = 'csv') =>
@@ -686,6 +737,29 @@ export const publicRegistrationApi = {
 }
 
 // Checkpoints API
+export const selfScanApi = {
+  qrCode: (raceId: string, checkpointId: string) =>
+    fetchAuthenticated(
+      buildContractPath(API_CONTRACT.endpoints.checkpointSelfScanQr, { raceId, checkpointId }),
+      undefined,
+      'Self-scan code unavailable',
+    ).then(res => res.blob()),
+
+  rotate: (raceId: string, checkpointId: string) =>
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.checkpointSelfScanQrRotate, { raceId, checkpointId }), {
+      method: 'POST',
+    }),
+
+  openClaims: (raceId: string) =>
+    fetchApi<SelfScanClaim[]>(buildContractPath(API_CONTRACT.endpoints.raceSelfScanClaims, { raceId })),
+
+  decide: (raceId: string, claimId: string, decision: 'APPROVE' | 'REJECT', note?: string) =>
+    fetchApi<SelfScanClaim>(buildContractPath(API_CONTRACT.endpoints.raceSelfScanClaimDecision, { raceId, claimId }), {
+      method: 'POST',
+      body: JSON.stringify({ decision, note }),
+    }),
+}
+
 export const checkpointsApi = {
   list: (raceId: string) => fetchApi<Checkpoint[]>(buildContractPath(API_CONTRACT.endpoints.raceCheckpoints, { raceId })),
   
@@ -716,8 +790,26 @@ export const checkpointsApi = {
       body: JSON.stringify(data),
     }),
 
-  listRecords: (raceId: string, checkpointId: string) =>
-    fetchApi<CheckpointRecord[]>(buildContractPath(API_CONTRACT.endpoints.checkpointRecords, { raceId, checkpointId })),
+  listRecords: (raceId: string, checkpointId: string, includeVoided = false) =>
+    fetchApi<CheckpointRecord[]>(`${buildContractPath(API_CONTRACT.endpoints.checkpointRecords, { raceId, checkpointId })}${includeVoided ? '?includeVoided=true' : ''}`),
+
+  voidRecord: (raceId: string, checkpointId: string, recordId: string, reason: string) =>
+    fetchApi<CheckpointRecord>(buildContractPath(API_CONTRACT.endpoints.checkpointRecordVoid, { raceId, checkpointId, recordId }), {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
+  restoreRecord: (raceId: string, checkpointId: string, recordId: string, reason: string) =>
+    fetchApi<CheckpointRecord>(buildContractPath(API_CONTRACT.endpoints.checkpointRecordRestore, { raceId, checkpointId, recordId }), {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
+  reassignRecord: (raceId: string, checkpointId: string, recordId: string, data: { participantBibNumber: string; reason: string }) =>
+    fetchApi<CheckpointRecord>(buildContractPath(API_CONTRACT.endpoints.checkpointRecordReassign, { raceId, checkpointId, recordId }), {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   importTiming: (raceId: string, file: File) => {
     const formData = new FormData()
@@ -742,6 +834,43 @@ export const rfidApi = {
   revokeReader: (raceId: string, readerId: string) =>
     fetchApi<RfidReader>(buildContractPath(API_CONTRACT.endpoints.raceRfidReaderRevoke, { raceId, readerId }), {
       method: 'PATCH',
+    }),
+  rotateReaderKey: (raceId: string, readerId: string) =>
+    fetchApi<RfidReaderCreateResponse>(buildContractPath(API_CONTRACT.endpoints.raceRfidReaderRotateKey, { raceId, readerId }), {
+      method: 'POST',
+    }),
+  unmatchedTags: (raceId: string) =>
+    fetchApi<RfidUnmatchedTag[]>(buildContractPath(API_CONTRACT.endpoints.raceRfidUnmatchedTags, { raceId })),
+  reprocess: (raceId: string, statuses: RfidReprocessScope[]) =>
+    fetchApi<{ requeued: number }>(buildContractPath(API_CONTRACT.endpoints.raceRfidReprocess, { raceId }), {
+      method: 'POST',
+      body: JSON.stringify({ statuses }),
+    }),
+  gunTime: (raceId: string) =>
+    fetchApi<GunTime>(buildContractPath(API_CONTRACT.endpoints.raceGunTime, { raceId })),
+  waves: (raceId: string) =>
+    fetchApi<import('@/types').RaceWave[]>(buildContractPath(API_CONTRACT.endpoints.raceWaves, { raceId })),
+  createWave: (raceId: string, data: { name: string; sortOrder?: number; scheduledStart?: string | null }) =>
+    fetchApi<import('@/types').RaceWave>(buildContractPath(API_CONTRACT.endpoints.raceWaves, { raceId }), {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  deleteWave: (raceId: string, waveId: string) =>
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceWave, { raceId, waveId }), { method: 'DELETE' }),
+  startWave: (raceId: string, waveId: string, data: { startedAt?: string; reason?: string } = {}) =>
+    fetchApi<import('@/types').RaceWave>(buildContractPath(API_CONTRACT.endpoints.raceWaveStart, { raceId, waveId }), {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  assignWave: (raceId: string, waveId: string, participantIds: string[]) =>
+    fetchApi<{ assigned: number }>(buildContractPath(API_CONTRACT.endpoints.raceWaveParticipants, { raceId, waveId }), {
+      method: 'POST',
+      body: JSON.stringify({ participantIds }),
+    }),
+  correctGunTime: (raceId: string, startedAt: string, reason: string) =>
+    fetchApi<GunTime>(buildContractPath(API_CONTRACT.endpoints.raceGunTime, { raceId }), {
+      method: 'PUT',
+      body: JSON.stringify({ startedAt, reason }),
     }),
 }
 
@@ -821,6 +950,41 @@ export const resultsApi = {
   
   publish: (raceId: string) =>
     fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceResultsPublish, { raceId }), { method: 'POST' }),
+
+  certify: (raceId: string) =>
+    fetchApi<import('@/types').ResultVersion>(buildContractPath(API_CONTRACT.endpoints.raceResultsCertify, { raceId }), { method: 'POST' }),
+
+  reopen: (raceId: string, reason: string) =>
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.raceResultsReopen, { raceId }), {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
+  integrity: (raceId: string) =>
+    fetchApi<import('@/types').ResultIntegrity>(buildContractPath(API_CONTRACT.endpoints.raceResultsIntegrity, { raceId })),
+
+  versions: (raceId: string) =>
+    fetchApi<import('@/types').ResultVersion[]>(buildContractPath(API_CONTRACT.endpoints.raceResultsVersions, { raceId })),
+
+  submitQuery: (raceId: string, message: string, checkpointId?: string) =>
+    fetchApi<import('@/types').ResultQuery>(buildContractPath(API_CONTRACT.endpoints.myResultQuery, { raceId }), {
+      method: 'POST',
+      body: JSON.stringify({ message, checkpointId }),
+    }),
+
+  myQueries: () => fetchApi<import('@/types').ResultQuery[]>(API_CONTRACT.endpoints.myResultQueries),
+
+  openQueries: (raceId: string) =>
+    fetchApi<import('@/types').ResultQuery[]>(buildContractPath(API_CONTRACT.endpoints.raceResultQueries, { raceId })),
+
+  resolveQuery: (raceId: string, queryId: string, outcome: 'RESOLVED' | 'REJECTED', note: string) =>
+    fetchApi<import('@/types').ResultQuery>(buildContractPath(API_CONTRACT.endpoints.raceResultQueryResolution, { raceId, queryId }), {
+      method: 'POST',
+      body: JSON.stringify({ outcome, note }),
+    }),
+
+  anomalies: (raceId: string) =>
+    fetchApi<import('@/types').TimingAnomaly[]>(buildContractPath(API_CONTRACT.endpoints.raceResultsAnomalies, { raceId })),
 
   teamRankings: (raceId: string) =>
     fetchApi<RankingEntry[]>(buildContractPath(API_CONTRACT.endpoints.raceTeamRankings, { raceId })),
@@ -1057,43 +1221,73 @@ export const promoApi = {
 
 import { Client } from '@stomp/stompjs'
 
-// STOMP client management
-let stompClient: Client | null = null
+const ACCESS_TOKEN_REFRESH_SKEW_MS = 30_000
 
-export function connectLiveTracking(raceId: string, onMessage: (data: LiveTrackingData) => void) {
+function decodeBase64Url(value: string) {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, String.fromCharCode(0x2f))
+  return atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='))
+}
+
+function accessTokenExpiresAt(token: string): number | null {
+  const payload = token.split('.')[1]
+  if (!payload) return null
+  try {
+    const json = JSON.parse(decodeBase64Url(payload)) as { exp?: unknown }
+    return typeof json.exp === 'number' ? json.exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+
+async function resolveSocketAccessToken(): Promise<string | null> {
+  const current = accessToken
+  const expiresAt = current ? accessTokenExpiresAt(current) : null
+  if (current && (expiresAt === null || expiresAt - ACCESS_TOKEN_REFRESH_SKEW_MS > Date.now())) {
+    return current
+  }
+  return (await refreshBrowserSession()) ? accessToken : null
+}
+
+function liveSocketUrl() {
   const envUrl = (import.meta.env.VITE_WS_URL as string | undefined)?.trim()
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   // Served by the backend at the API context path and proxied by the web server.
-  const wsUrl = envUrl || `${protocol}//${window.location.host}${API_CONTRACT.web.wsTrackingPath}`
-  
-  const token = accessToken
-  
-  stompClient = new Client({
-    brokerURL: wsUrl,
-    connectHeaders: {
-      Authorization: `Bearer ${token}`,
-    },
+  return envUrl || `${protocol}//${window.location.host}${API_CONTRACT.web.wsTrackingPath}`
+}
+
+function connectAuthenticatedTopic<T>(destination: string, onMessage: (data: T) => void) {
+  const client = new Client({
+    brokerURL: liveSocketUrl(),
     reconnectDelay: 5000,
     heartbeatIncoming: 4000,
     heartbeatOutgoing: 4000,
   })
 
-  stompClient.onConnect = () => {
-    stompClient?.subscribe(`/topic/race.${raceId}`, (message) => {
-      if (message.body) {
-        onMessage(JSON.parse(message.body))
+  client.beforeConnect = async () => {
+    const token = await resolveSocketAccessToken()
+    client.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {}
+  }
+
+  client.onConnect = () => {
+    client.subscribe(destination, (message) => {
+      if (!message.body) return
+      try {
+        onMessage(JSON.parse(message.body) as T)
+      } catch {
+        return
       }
     })
   }
 
-  stompClient.activate()
-  
+  client.activate()
+
   return () => {
-    if (stompClient) {
-      stompClient.deactivate()
-      stompClient = null
-    }
+    void client.deactivate()
   }
+}
+
+export function connectLiveTracking(raceId: string, onMessage: (data: LiveTrackingData) => void) {
+  return connectAuthenticatedTopic<LiveTrackingData>(`/topic/race.${raceId}`, onMessage)
 }
 
 export interface UserAlertPayload {
@@ -1102,35 +1296,6 @@ export interface UserAlertPayload {
   type?: string
 }
 
-let userAlertClient: Client | null = null
-
 export function connectUserAlerts(userId: string, onMessage: (data: UserAlertPayload) => void) {
-  const envUrl = (import.meta.env.VITE_WS_URL as string | undefined)?.trim()
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = envUrl || `${protocol}//${window.location.host}${API_CONTRACT.web.wsTrackingPath}`
-
-  userAlertClient = new Client({
-    brokerURL: wsUrl,
-    connectHeaders: { Authorization: `Bearer ${accessToken}` },
-    reconnectDelay: 5000,
-    heartbeatIncoming: 4000,
-    heartbeatOutgoing: 4000,
-  })
-
-  userAlertClient.onConnect = () => {
-    userAlertClient?.subscribe(`/topic/user.${userId}`, (message) => {
-      if (message.body) {
-        onMessage(JSON.parse(message.body))
-      }
-    })
-  }
-
-  userAlertClient.activate()
-
-  return () => {
-    if (userAlertClient) {
-      userAlertClient.deactivate()
-      userAlertClient = null
-    }
-  }
+  return connectAuthenticatedTopic<UserAlertPayload>(`/topic/user.${userId}`, onMessage)
 }

@@ -2,9 +2,38 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions } from 'rea
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Location from 'expo-location';
 import { useTrackingStore } from '@/store/tracking';
 import { CapabilityGate } from '@/components/CapabilityGate';
+import { parseSelfScanCode, selfScanErrorKey } from '@/lib/selfScan';
+import type { GpsLocation } from '@/types';
+
+const FIX_TIMEOUT_MS = 6000;
+
+async function currentFix(): Promise<GpsLocation | undefined> {
+  const toGps = (position: Location.LocationObject): GpsLocation => ({
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    altitude: position.coords.altitude ?? undefined,
+    accuracy: position.coords.accuracy ?? undefined,
+    speed: position.coords.speed ?? undefined,
+    heading: position.coords.heading ?? undefined,
+    timestamp: new Date(position.timestamp).toISOString(),
+  });
+  try {
+    const fresh = await Promise.race([
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), FIX_TIMEOUT_MS)),
+    ]);
+    if (fresh) return toGps(fresh);
+    const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 60_000, requiredAccuracy: 100 });
+    return lastKnown ? toGps(lastKnown) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 const { width } = Dimensions.get('window');
 const SCANNER_SIZE = width * 0.7;
@@ -21,7 +50,9 @@ function ScannerScreenContent() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [flashOn, setFlashOn] = useState(false);
+  const [locating, setLocating] = useState(false);
   const { recordCheckpoint, currentRace } = useTrackingStore();
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!permission?.granted) {
@@ -29,47 +60,51 @@ function ScannerScreenContent() {
     }
   }, [permission, requestPermission]);
 
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+  const handleBarCodeScanned = async ({ data }: { type: string; data: string }) => {
     if (scanned) return;
     setScanned(true);
 
-    // Parse QR code data (expected format: checkpoint_id:race_id)
-    try {
-      const [checkpointId, raceId] = data.split(':');
-      
-      if (currentRace && currentRace.id === raceId) {
-        recordCheckpoint({
-          id: `${Date.now()}`,
-          checkpointId,
-          timestamp: new Date().toISOString(),
-          method: 'qr_code',
-        });
+    const parsed = parseSelfScanCode(data);
+    if (parsed.kind !== 'ok') {
+      Alert.alert(t('mobile:scanner.invalidTitle'),
+        t(parsed.kind === 'outdated' ? 'mobile:scanner.outdatedCode' : 'mobile:scanner.unreadable'),
+        [{ text: t('mobile:scanner.tryAgain'), onPress: () => setScanned(false) }]);
+      return;
+    }
+    const { checkpointId, raceId, token } = parsed.code;
+    if (!currentRace || currentRace.id !== raceId) {
+      Alert.alert(t('mobile:scanner.invalidTitle'), t('mobile:scanner.wrongRace'),
+        [{ text: t('mobile:scanner.tryAgain'), onPress: () => setScanned(false) }]);
+      return;
+    }
 
-        Alert.alert(
-          'Checkpoint Recorded!',
-          `Successfully scanned checkpoint ${checkpointId}`,
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
-      } else {
-        Alert.alert(
-          'Invalid QR Code',
-          'This checkpoint is not part of your current race.',
-          [{ text: 'Try Again', onPress: () => setScanned(false) }]
-        );
-      }
-    } catch {
+    setLocating(true);
+    try {
+      const location = await currentFix();
+      const outcome = await recordCheckpoint({
+        id: `${Date.now()}`,
+        checkpointId,
+        timestamp: new Date().toISOString(),
+        method: 'qr_code',
+      }, token, location);
+      const verified = outcome.status === 'VERIFIED';
       Alert.alert(
-        'Invalid QR Code',
-        'Unable to read checkpoint data.',
-        [{ text: 'Try Again', onPress: () => setScanned(false) }]
+        t(verified ? 'mobile:scanner.recordedTitle' : 'mobile:scanner.provisionalTitle'),
+        t(verified ? 'mobile:scanner.recordedBody' : 'mobile:scanner.provisionalBody'),
+        [{ text: t('mobile:scanner.ok'), onPress: () => router.back() }],
       );
+    } catch (error) {
+      Alert.alert(t('mobile:scanner.failedTitle'), t(selfScanErrorKey(error)),
+        [{ text: t('mobile:scanner.tryAgain'), onPress: () => setScanned(false) }]);
+    } finally {
+      setLocating(false);
     }
   };
 
   if (!permission) {
     return (
       <View style={styles.container}>
-        <Text style={styles.loadingText}>Requesting camera permission...</Text>
+        <Text style={styles.loadingText}>{t('mobile:scanner.requestingPermission')}</Text>
       </View>
     );
   }
@@ -79,12 +114,10 @@ function ScannerScreenContent() {
       <View style={styles.container}>
         <View style={styles.permissionContainer}>
           <Ionicons name="camera-outline" size={64} color="#6B7280" />
-          <Text style={styles.permissionTitle}>Camera Access Required</Text>
-          <Text style={styles.permissionText}>
-            Please enable camera access to scan checkpoint QR codes
-          </Text>
+          <Text style={styles.permissionTitle}>{t('mobile:scanner.permissionTitle')}</Text>
+          <Text style={styles.permissionText}>{t('mobile:scanner.permissionBody')}</Text>
           <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-            <Text style={styles.permissionButtonText}>Enable Camera</Text>
+            <Text style={styles.permissionButtonText}>{t('mobile:scanner.enableCamera')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -108,7 +141,7 @@ function ScannerScreenContent() {
             <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
               <Ionicons name="close" size={28} color="#FFFFFF" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Scan Checkpoint</Text>
+            <Text style={styles.headerTitle}>{t('mobile:scanner.title')}</Text>
             <TouchableOpacity 
               style={styles.flashButton} 
               onPress={() => setFlashOn(!flashOn)}
@@ -133,15 +166,15 @@ function ScannerScreenContent() {
 
           {/* Instructions */}
           <View style={styles.instructionsContainer}>
-            <Text style={styles.instructionsText}>
-              Position the QR code within the frame to scan
+            <Text style={styles.instructionsText} accessibilityLiveRegion="polite">
+              {locating ? t('mobile:scanner.locating') : t('mobile:scanner.instructions')}
             </Text>
-            {scanned && (
+            {scanned && !locating && (
               <TouchableOpacity 
                 style={styles.rescanButton}
                 onPress={() => setScanned(false)}
               >
-                <Text style={styles.rescanButtonText}>Tap to Scan Again</Text>
+                <Text style={styles.rescanButtonText}>{t('mobile:scanner.scanAgain')}</Text>
               </TouchableOpacity>
             )}
           </View>

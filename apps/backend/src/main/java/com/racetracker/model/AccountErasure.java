@@ -44,6 +44,9 @@ public class AccountErasure {
     @Column(name = "notification_first_name")
     private String notificationFirstName;
 
+    @Column(name = "notification_locale", length = 10)
+    private String notificationLocale;
+
     @Column(name = "notification_lease_token")
     private UUID notificationLeaseToken;
 

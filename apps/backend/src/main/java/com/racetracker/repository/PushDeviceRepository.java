@@ -14,8 +14,13 @@ public interface PushDeviceRepository extends JpaRepository<PushDevice, UUID> {
 
     List<PushDevice> findByUserId(UUID userId);
 
+    long countByUserId(UUID userId);
+
     @Transactional
     void deleteByToken(String token);
+
+    @Transactional
+    void deleteByTokenAndUserId(String token, UUID userId);
 
     @Transactional
     void deleteByUserId(UUID userId);

@@ -36,6 +36,20 @@ class AnalyticsServiceImplTest {
     }
 
     @Test
+    void completionRateExcludesRegistrationsThatNeverEnteredTheRace() {
+        when(participantRepository.countByRaceId(raceId)).thenReturn(10L);
+        when(participantRepository.countByStatusGrouped(raceId)).thenReturn(List.<Object[]>of(
+            new Object[]{Participant.ParticipantStatus.FINISHED, 3L},
+            new Object[]{Participant.ParticipantStatus.DNF, 1L},
+            new Object[]{Participant.ParticipantStatus.WAITLISTED, 4L},
+            new Object[]{Participant.ParticipantStatus.REJECTED, 2L}
+        ));
+        when(participantRepository.paymentTotals(raceId)).thenReturn(List.of());
+
+        assertThat(service.summary(raceId).getCompletionRate()).isEqualTo(75.0);
+    }
+
+    @Test
     void summaryAggregatesStatusesRevenueAndCompletion() {
         when(participantRepository.countByRaceId(raceId)).thenReturn(10L);
         when(participantRepository.countByStatusGrouped(raceId)).thenReturn(List.<Object[]>of(

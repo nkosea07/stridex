@@ -53,6 +53,8 @@ public class OrganizerApplicationService {
         userRequest.setPhone(request.getPhone());
         userRequest.setPrivacyPolicyAccepted(request.getPrivacyPolicyAccepted());
         userRequest.setPrivacyPolicyVersion(request.getPrivacyPolicyVersion());
+        userRequest.setTermsAccepted(request.getTermsAccepted());
+        userRequest.setTermsVersion(request.getTermsVersion());
         userRequest.setCreateNormalCapabilities(false);
 
         AuthResponse response = authService.register(userRequest);

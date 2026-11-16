@@ -24,6 +24,8 @@ public class RegistrationDto {
     private String shirtSize;
     private String paymentStatus;
     private BigDecimal paymentAmount;
+    private BigDecimal amountDue;
+    private String currency;
     private UUID teamId;
     private String teamName;
     private String rejectionReason;

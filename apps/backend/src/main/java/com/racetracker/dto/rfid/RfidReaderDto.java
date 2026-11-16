@@ -26,6 +26,7 @@ public class RfidReaderDto {
     private String lastError;
     private String lastHeartbeatAt;
     private String lastProcessedAt;
+    private Long clockOffsetMs;
     private String createdAt;
     private String updatedAt;
 }

@@ -1,0 +1,6 @@
+{
+  "ui": {
+    "mapboxTokenIsMissingPleaseCheck": "Mapbox token is missing. Please check your configuration.",
+    "failedToLoadRaceData": "Failed to load race data"
+  }
+}

@@ -10,11 +10,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { checkpointsApi, routeApi } from '@/lib/api'
+import { ApiError, checkpointsApi, routeApi } from '@/lib/api'
+import { formatDateTime } from '@/lib/format'
 import { toast } from 'sonner'
 import type { Checkpoint, CheckpointType, CheckpointRecord } from '@/types'
 import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { useTranslation } from 'react-i18next'
+import { SelfScanClaimsPanel } from '@/components/checkpoints/SelfScanClaimsPanel'
+import { SelfScanQrDialog, acceptsSelfScan } from '@/components/checkpoints/SelfScanQrDialog'
 
 const checkpointTypeColors: Record<CheckpointType, string> = {
   START: 'bg-primary/20 text-primary',
@@ -24,11 +27,23 @@ const checkpointTypeColors: Record<CheckpointType, string> = {
   FINISH: 'bg-chart-3/20 text-chart-3',
 }
 
+type RecordAction = 'adjust' | 'void' | 'restore' | 'reassign'
+
+const RECORD_ACTION_ERRORS = new Set([
+  'TIMING_SLOT_OCCUPIED',
+  'REASSIGN_SAME_PARTICIPANT',
+  'PARTICIPANT_NOT_ENTERED',
+  'RESULTS_CERTIFIED',
+  'CORRECTION_REASON_REQUIRED',
+])
+
 export function CheckpointsPage() {
   const { raceId } = useParams()
   const { user } = useAuth()
   const { t } = useTranslation()
   const canManageRaceConfiguration = isAdminRole(user?.role)
+  const canReviewSelfScans = canManageRaceConfiguration || user?.role === 'OFFICIAL'
+  const [selfScanCheckpoint, setSelfScanCheckpoint] = useState<Checkpoint | null>(null)
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([])
   const [search, setSearch] = useState('')
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -42,7 +57,8 @@ export function CheckpointsPage() {
   const [records, setRecords] = useState<CheckpointRecord[]>([])
   const [recordsLoading, setRecordsLoading] = useState(false)
   const [correctionRecord, setCorrectionRecord] = useState<CheckpointRecord | null>(null)
-  const [correctionForm, setCorrectionForm] = useState({ adjustedRecordedAt: '', reason: '' })
+  const [correctionForm, setCorrectionForm] = useState({ adjustedRecordedAt: '', reason: '', bib: '' })
+  const [correctionMode, setCorrectionMode] = useState<RecordAction>('adjust')
   const [correcting, setCorrecting] = useState(false)
   const gpxInputRef = useRef<HTMLInputElement>(null)
   const timingInputRef = useRef<HTMLInputElement>(null)
@@ -84,6 +100,9 @@ export function CheckpointsPage() {
     cutoffTime: '',
     hasRfidReader: false,
     hasQrScanner: false,
+    expectedPasses: '1',
+    minPassSeconds: '60',
+    firstPassIsStart: false,
   })
 
   const handleExport = async (format: 'csv' | 'gpx') => {
@@ -115,37 +134,62 @@ export function CheckpointsPage() {
     setRecordsOpen(true)
     setRecordsLoading(true)
     try {
-      setRecords(await checkpointsApi.listRecords(raceId, checkpoint.id))
+      setRecords(await checkpointsApi.listRecords(raceId, checkpoint.id, canManageRaceConfiguration))
     } catch {
-      toast.error('Failed to load records')
+      toast.error(t('checkpoints:ui.failedToLoadRecords'))
     } finally {
       setRecordsLoading(false)
     }
   }
 
-  const beginCorrection = (record: CheckpointRecord) => {
+  const beginCorrection = (record: CheckpointRecord, mode: RecordAction = 'adjust') => {
     setCorrectionRecord(record)
+    setCorrectionMode(mode)
     setCorrectionForm({
-      adjustedRecordedAt: record.adjustedRecordedAt ? record.adjustedRecordedAt.slice(0, 16) : '',
-      reason: record.adjustmentReason ?? '',
+      adjustedRecordedAt: mode === 'adjust' && record.adjustedRecordedAt ? record.adjustedRecordedAt.slice(0, 16) : '',
+      reason: mode === 'adjust' ? record.adjustmentReason ?? '' : '',
+      bib: '',
     })
   }
 
   const handleCorrect = async () => {
     if (!raceId || !recordsCheckpoint || !correctionRecord) return
+    if (correctionForm.reason.trim().length < 5) {
+      toast.error(t('checkpoints:correction.reasonRequired'))
+      return
+    }
+    if (correctionMode === 'reassign' && !correctionForm.bib.trim()) {
+      toast.error(t('checkpoints:recordActions.bibRequired'))
+      return
+    }
     setCorrecting(true)
+    const reason = correctionForm.reason.trim()
     try {
-      await checkpointsApi.correctRecord(raceId, recordsCheckpoint.id, correctionRecord.id, {
-        adjustedRecordedAt: correctionForm.adjustedRecordedAt
-          ? new Date(correctionForm.adjustedRecordedAt).toISOString()
-          : undefined,
-        reason: correctionForm.reason.trim() || undefined,
-      })
-      toast.success('Record corrected')
+      if (correctionMode === 'void') {
+        await checkpointsApi.voidRecord(raceId, recordsCheckpoint.id, correctionRecord.id, reason)
+      } else if (correctionMode === 'restore') {
+        await checkpointsApi.restoreRecord(raceId, recordsCheckpoint.id, correctionRecord.id, reason)
+      } else if (correctionMode === 'reassign') {
+        await checkpointsApi.reassignRecord(raceId, recordsCheckpoint.id, correctionRecord.id, {
+          participantBibNumber: correctionForm.bib.trim(),
+          reason,
+        })
+      } else {
+        await checkpointsApi.correctRecord(raceId, recordsCheckpoint.id, correctionRecord.id, {
+          adjustedRecordedAt: correctionForm.adjustedRecordedAt
+            ? new Date(correctionForm.adjustedRecordedAt).toISOString()
+            : undefined,
+          reason,
+        })
+      }
+      toast.success(t(`checkpoints:recordActions.done.${correctionMode}`))
       setCorrectionRecord(null)
-      setRecords(await checkpointsApi.listRecords(raceId, recordsCheckpoint.id))
+      setRecords(await checkpointsApi.listRecords(raceId, recordsCheckpoint.id, canManageRaceConfiguration))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to correct record')
+      const code = error instanceof ApiError ? error.code : undefined
+      toast.error(code && RECORD_ACTION_ERRORS.has(code)
+        ? t(`checkpoints:recordActions.errors.${code}`)
+        : t(`checkpoints:recordActions.failed.${correctionMode}`))
     } finally {
       setCorrecting(false)
     }
@@ -157,7 +201,7 @@ export function CheckpointsPage() {
       const data = await checkpointsApi.list(raceId)
       setCheckpoints(data)
     } catch {
-      toast.error('Failed to load checkpoints')
+      toast.error(t('checkpoints:ui.failedToLoadCheckpoints'))
     }  }
 
   useEffect(() => {
@@ -182,13 +226,16 @@ export function CheckpointsPage() {
         cutoffTime: newCheckpoint.cutoffTime || undefined,
         hasRfidReader: newCheckpoint.hasRfidReader,
         hasQrScanner: newCheckpoint.hasQrScanner,
+        expectedPasses: Number(newCheckpoint.expectedPasses || 1),
+        minPassSeconds: Number(newCheckpoint.minPassSeconds || 60),
+        firstPassIsStart: newCheckpoint.checkpointType === 'FINISH' && newCheckpoint.firstPassIsStart,
       })
-      toast.success('Checkpoint added')
+      toast.success(t('checkpoints:ui.checkpointAdded'))
       setIsAddDialogOpen(false)
-      setNewCheckpoint({ name: '', checkpointType: 'INTERMEDIATE', distanceFromStartKm: '', latitude: '', longitude: '', orderIndex: '', cutoffTime: '', hasRfidReader: false, hasQrScanner: false })
+      setNewCheckpoint({ name: '', checkpointType: 'INTERMEDIATE', distanceFromStartKm: '', latitude: '', longitude: '', orderIndex: '', cutoffTime: '', hasRfidReader: false, hasQrScanner: false, expectedPasses: '1', minPassSeconds: '60', firstPassIsStart: false })
       await loadCheckpoints()
     } catch {
-      toast.error('Failed to add checkpoint')
+      toast.error(t('checkpoints:ui.failedToAddCheckpoint'))
     }
   }
 
@@ -205,7 +252,7 @@ export function CheckpointsPage() {
       setRecordMethod('MANUAL')
       await loadCheckpoints()
     } catch {
-      toast.error('Failed to record checkpoint')
+      toast.error(t('checkpoints:ui.failedToRecordCheckpoint'))
     }
   }
 
@@ -213,10 +260,10 @@ export function CheckpointsPage() {
     if (!raceId) return
     try {
       await checkpointsApi.delete(raceId, checkpointId)
-      toast.success('Checkpoint deleted')
+      toast.success(t('checkpoints:ui.checkpointDeleted'))
       await loadCheckpoints()
     } catch {
-      toast.error('Failed to delete checkpoint')
+      toast.error(t('checkpoints:ui.failedToDeleteCheckpoint'))
     }
   }
 
@@ -231,8 +278,8 @@ export function CheckpointsPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Checkpoints</h1>
-          <p className="text-muted-foreground">Manage timing points and records</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t('checkpoints:ui.checkpoints')}</h1>
+          <p className="text-muted-foreground">{t('checkpoints:ui.manageTimingPointsAndRecords')}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -241,7 +288,7 @@ export function CheckpointsPage() {
             disabled={!raceId || exporting}
           >
             <Download className="mr-2 h-4 w-4" />
-            Export CSV
+            {t('checkpoints:ui.exportCsv')}
           </Button>
           <Button
             variant="outline"
@@ -249,13 +296,13 @@ export function CheckpointsPage() {
             disabled={!raceId || exporting}
           >
             <Download className="mr-2 h-4 w-4" />
-            Export GPX
+            {t('checkpoints:ui.exportGpx')}
           </Button>
           {canManageRaceConfiguration && (
             <>
               <Button variant="outline" onClick={() => gpxInputRef.current?.click()}>
                 <Upload className="mr-2 h-4 w-4" />
-                Import GPX
+                {t('checkpoints:ui.importGpx')}
               </Button>
               <Button variant="outline" onClick={() => timingInputRef.current?.click()}>
                 <Upload className="mr-2 h-4 w-4" />
@@ -274,21 +321,23 @@ export function CheckpointsPage() {
           )}
           <Button onClick={() => setIsAddDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            Add Checkpoint
+            {t('checkpoints:ui.addCheckpoint')}
           </Button>
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Checkpoints</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{checkpoints.length}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">RFID Enabled</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{checkpoints.filter((cp) => cp.hasRfidReader).length}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">QR Enabled</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{checkpoints.filter((cp) => cp.hasQrScanner).length}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Records</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{totalRecords.toLocaleString()}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('checkpoints:ui.totalCheckpoints')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{checkpoints.length}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('checkpoints:ui.rfidEnabled')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{checkpoints.filter((cp) => cp.hasRfidReader).length}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('checkpoints:ui.qrEnabled')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{checkpoints.filter((cp) => cp.hasQrScanner).length}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('checkpoints:ui.totalRecords')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{totalRecords.toLocaleString()}</div></CardContent></Card>
       </div>
+
+      {canReviewSelfScans && raceId && <SelfScanClaimsPanel raceId={raceId} />}
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Search checkpoints..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input placeholder={t('checkpoints:ui.searchCheckpoints')} className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       <Card>
@@ -297,13 +346,13 @@ export function CheckpointsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>#</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Distance</TableHead>
-                <TableHead>Cutoff</TableHead>
-                <TableHead>Equipment</TableHead>
-                <TableHead>Records</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('checkpoints:ui.name')}</TableHead>
+                <TableHead>{t('checkpoints:ui.type')}</TableHead>
+                <TableHead>{t('checkpoints:ui.distance')}</TableHead>
+                <TableHead>{t('checkpoints:ui.cutoff')}</TableHead>
+                <TableHead>{t('checkpoints:ui.equipment')}</TableHead>
+                <TableHead>{t('checkpoints:ui.records')}</TableHead>
+                <TableHead>{t('checkpoints:ui.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -316,8 +365,8 @@ export function CheckpointsPage() {
                   <TableCell>{checkpoint.cutoffTime || '-'}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      {checkpoint.hasRfidReader && <Badge variant="outline" className="gap-1"><Wifi className="h-3 w-3" />RFID</Badge>}
-                      {checkpoint.hasQrScanner && <Badge variant="outline" className="gap-1"><QrCode className="h-3 w-3" />QR</Badge>}
+                      {checkpoint.hasRfidReader && <Badge variant="outline" className="gap-1"><Wifi className="h-3 w-3" />{t('checkpoints:ui.rfid')}</Badge>}
+                      {checkpoint.hasQrScanner && <Badge variant="outline" className="gap-1"><QrCode className="h-3 w-3" />{t('checkpoints:ui.qr')}</Badge>}
                     </div>
                   </TableCell>
                   <TableCell>{(checkpoint.recordCount || 0).toLocaleString()}</TableCell>
@@ -330,11 +379,16 @@ export function CheckpointsPage() {
                         <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openRecordDialog(checkpoint)}>Record Time</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => void openRecords(checkpoint)}>View Records</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openRecordDialog(checkpoint)}>{t('checkpoints:ui.recordTime')}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => void openRecords(checkpoint)}>{t('checkpoints:ui.viewRecords')}</DropdownMenuItem>
+                        {canReviewSelfScans && acceptsSelfScan(checkpoint) && (
+                          <DropdownMenuItem onClick={() => setSelfScanCheckpoint(checkpoint)}>
+                            <QrCode className="mr-2 h-4 w-4" aria-hidden="true" />{t('checkpoints:selfScan.menuItem')}
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive" onClick={() => void handleDelete(checkpoint.id)}>
-                          <Trash2 className="mr-2 h-4 w-4" />Delete
+                          <Trash2 className="mr-2 h-4 w-4" />{t('checkpoints:ui.delete')}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -348,42 +402,60 @@ export function CheckpointsPage() {
 
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add Checkpoint</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('checkpoints:ui.addCheckpoint')}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
-            <div><Label>Name</Label><Input value={newCheckpoint.name} onChange={(e) => setNewCheckpoint((v) => ({ ...v, name: e.target.value }))} /></div>
+            <div><Label>{t('checkpoints:ui.name')}</Label><Input value={newCheckpoint.name} onChange={(e) => setNewCheckpoint((v) => ({ ...v, name: e.target.value }))} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Type</Label><Select value={newCheckpoint.checkpointType} onValueChange={(value) => setNewCheckpoint((v) => ({ ...v, checkpointType: value as CheckpointType }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="START">Start</SelectItem><SelectItem value="INTERMEDIATE">Intermediate</SelectItem><SelectItem value="WATER_STATION">Water Station</SelectItem><SelectItem value="MEDICAL">Medical</SelectItem><SelectItem value="FINISH">Finish</SelectItem></SelectContent></Select></div>
-              <div><Label>Order Index</Label><Input type="number" value={newCheckpoint.orderIndex} onChange={(e) => setNewCheckpoint((v) => ({ ...v, orderIndex: e.target.value }))} /></div>
+              <div><Label>{t('checkpoints:ui.type')}</Label><Select value={newCheckpoint.checkpointType} onValueChange={(value) => setNewCheckpoint((v) => ({ ...v, checkpointType: value as CheckpointType }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="START">{t('checkpoints:ui.start')}</SelectItem><SelectItem value="INTERMEDIATE">{t('checkpoints:ui.intermediate')}</SelectItem><SelectItem value="WATER_STATION">{t('checkpoints:ui.waterStation')}</SelectItem><SelectItem value="MEDICAL">{t('checkpoints:ui.medical')}</SelectItem><SelectItem value="FINISH">{t('checkpoints:ui.finish')}</SelectItem></SelectContent></Select></div>
+              <div><Label>{t('checkpoints:ui.orderIndex')}</Label><Input type="number" value={newCheckpoint.orderIndex} onChange={(e) => setNewCheckpoint((v) => ({ ...v, orderIndex: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>Distance (km)</Label><Input type="number" value={newCheckpoint.distanceFromStartKm} onChange={(e) => setNewCheckpoint((v) => ({ ...v, distanceFromStartKm: e.target.value }))} /></div>
-              <div><Label>Lat</Label><Input type="number" value={newCheckpoint.latitude} onChange={(e) => setNewCheckpoint((v) => ({ ...v, latitude: e.target.value }))} /></div>
-              <div><Label>Lng</Label><Input type="number" value={newCheckpoint.longitude} onChange={(e) => setNewCheckpoint((v) => ({ ...v, longitude: e.target.value }))} /></div>
+              <div><Label>{t('checkpoints:ui.distanceKm')}</Label><Input type="number" value={newCheckpoint.distanceFromStartKm} onChange={(e) => setNewCheckpoint((v) => ({ ...v, distanceFromStartKm: e.target.value }))} /></div>
+              <div><Label>{t('checkpoints:ui.lat')}</Label><Input type="number" value={newCheckpoint.latitude} onChange={(e) => setNewCheckpoint((v) => ({ ...v, latitude: e.target.value }))} /></div>
+              <div><Label>{t('checkpoints:ui.lng')}</Label><Input type="number" value={newCheckpoint.longitude} onChange={(e) => setNewCheckpoint((v) => ({ ...v, longitude: e.target.value }))} /></div>
             </div>
-            <div><Label>Cutoff (HH:mm:ss)</Label><Input value={newCheckpoint.cutoffTime} onChange={(e) => setNewCheckpoint((v) => ({ ...v, cutoffTime: e.target.value }))} /></div>
+            <div><Label>{t('checkpoints:ui.cutoffHhMmSs')}</Label><Input value={newCheckpoint.cutoffTime} onChange={(e) => setNewCheckpoint((v) => ({ ...v, cutoffTime: e.target.value }))} /></div>
             <div className="flex gap-4">
-              <label className="text-sm flex items-center gap-2"><input type="checkbox" checked={newCheckpoint.hasRfidReader} onChange={(e) => setNewCheckpoint((v) => ({ ...v, hasRfidReader: e.target.checked }))} /> RFID</label>
-              <label className="text-sm flex items-center gap-2"><input type="checkbox" checked={newCheckpoint.hasQrScanner} onChange={(e) => setNewCheckpoint((v) => ({ ...v, hasQrScanner: e.target.checked }))} /> QR</label>
+              <label className="text-sm flex items-center gap-2"><input type="checkbox" checked={newCheckpoint.hasRfidReader} onChange={(e) => setNewCheckpoint((v) => ({ ...v, hasRfidReader: e.target.checked }))} /> {t('checkpoints:ui.rfid')}</label>
+              <label className="text-sm flex items-center gap-2"><input type="checkbox" checked={newCheckpoint.hasQrScanner} onChange={(e) => setNewCheckpoint((v) => ({ ...v, hasQrScanner: e.target.checked }))} /> {t('checkpoints:ui.qr')}</label>
+              <div>
+                <Label htmlFor="expected-passes">{t('checkpoints:passes.expected')}</Label>
+                <Input id="expected-passes" type="number" min={1} max={200} value={newCheckpoint.expectedPasses}
+                  onChange={(e) => setNewCheckpoint((v) => ({ ...v, expectedPasses: e.target.value }))} />
+                <p className="text-xs text-muted-foreground">{t('checkpoints:passes.expectedHelp')}</p>
+              </div>
+              <div>
+                <Label htmlFor="min-pass-seconds">{t('checkpoints:passes.minSeconds')}</Label>
+                <Input id="min-pass-seconds" type="number" min={1} value={newCheckpoint.minPassSeconds}
+                  onChange={(e) => setNewCheckpoint((v) => ({ ...v, minPassSeconds: e.target.value }))} />
+              </div>
+              {newCheckpoint.checkpointType === 'FINISH' && (
+                <label className="text-sm flex items-center gap-2 col-span-2">
+                  <input type="checkbox" checked={newCheckpoint.firstPassIsStart}
+                    onChange={(e) => setNewCheckpoint((v) => ({ ...v, firstPassIsStart: e.target.checked }))} />
+                  {t('checkpoints:passes.firstPassIsStart')}
+                </label>
+              )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => void handleAddCheckpoint()}>Add</Button>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>{t('checkpoints:ui.cancel')}</Button>
+            <Button onClick={() => void handleAddCheckpoint()}>{t('checkpoints:ui.add')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isRecordDialogOpen} onOpenChange={setIsRecordDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Record Checkpoint Time</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('checkpoints:ui.recordCheckpointTime')}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
-            <div><Label>Checkpoint</Label><Input value={selectedCheckpoint?.name || ''} disabled /></div>
-            <div><Label>Participant Bib Number</Label><Input value={recordBib} onChange={(e) => setRecordBib(e.target.value)} /></div>
-            <div><Label>Method</Label><Select value={recordMethod} onValueChange={setRecordMethod}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MANUAL">Manual</SelectItem><SelectItem value="RFID">RFID</SelectItem><SelectItem value="QR_CODE">QR Code</SelectItem><SelectItem value="GPS_AUTO">GPS</SelectItem></SelectContent></Select></div>
+            <div><Label>{t('checkpoints:ui.checkpoint')}</Label><Input value={selectedCheckpoint?.name || ''} disabled /></div>
+            <div><Label>{t('checkpoints:ui.participantBibNumber')}</Label><Input value={recordBib} onChange={(e) => setRecordBib(e.target.value)} /></div>
+            <div><Label>{t('checkpoints:ui.method')}</Label><Select value={recordMethod} onValueChange={setRecordMethod}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MANUAL">{t('checkpoints:ui.manual')}</SelectItem><SelectItem value="RFID">{t('checkpoints:ui.rfid')}</SelectItem><SelectItem value="QR_CODE">{t('checkpoints:ui.qrCode')}</SelectItem><SelectItem value="GPS_AUTO">{t('checkpoints:ui.gps')}</SelectItem></SelectContent></Select></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRecordDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => void handleRecordTime()}>Record</Button>
+            <Button variant="outline" onClick={() => setIsRecordDialogOpen(false)}>{t('checkpoints:ui.cancel')}</Button>
+            <Button onClick={() => void handleRecordTime()}>{t('checkpoints:ui.record')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -391,28 +463,57 @@ export function CheckpointsPage() {
       <Dialog open={recordsOpen} onOpenChange={(open) => { setRecordsOpen(open); if (!open) setCorrectionRecord(null) }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Records — {recordsCheckpoint?.name}</DialogTitle>
+            <DialogTitle>{t('checkpoints:recordActions.title', { name: recordsCheckpoint?.name ?? '' })}</DialogTitle>
           </DialogHeader>
           {recordsLoading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">{t('checkpoints:ui.loading')}</p>
           ) : records.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">No records for this checkpoint.</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">{t('checkpoints:ui.noRecordsForThisCheckpoint')}</p>
           ) : (
             <div className="space-y-2">
               {records.map((record) => (
-                <div key={record.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
+                <div key={record.id}
+                  className={`flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm ${record.voidedAt ? 'opacity-70' : ''}`}>
                   <div>
-                    <div className="font-medium">
-                      {record.participantName ?? record.participantId}
-                      {record.bibNumber ? ` · ${record.bibNumber}` : ''}
+                    <div className="flex flex-wrap items-center gap-2 font-medium">
+                      <span className={record.voidedAt ? 'line-through' : undefined}>
+                        {record.participantName ?? record.participantId}
+                        {record.bibNumber ? ` · ${record.bibNumber}` : ''}
+                      </span>
+                      {record.voidedAt && <Badge variant="destructive">{t('checkpoints:recordActions.voided')}</Badge>}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {new Date(record.recordedAt).toLocaleString()} · {record.recordMethod}
-                      {record.isCutoffMissed ? ' · cutoff missed' : ''}
-                      {record.adjustedRecordedAt ? ` · adjusted ${new Date(record.adjustedRecordedAt).toLocaleString()}` : ''}
+                      {formatDateTime(record.recordedAt)} · {record.recordMethod}
+                      {record.isCutoffMissed ? ` · ${t('checkpoints:recordActions.cutoffMissed')}` : ''}
+                      {record.adjustedRecordedAt
+                        ? ` · ${t('checkpoints:recordActions.adjustedTo', { time: formatDateTime(record.adjustedRecordedAt) })}`
+                        : ''}
                     </div>
+                    {record.voidedAt && (
+                      <div className="text-xs text-muted-foreground">
+                        {t('checkpoints:recordActions.voidedDetail', { time: formatDateTime(record.voidedAt), reason: record.voidReason ?? '' })}
+                      </div>
+                    )}
                   </div>
-                  {canManageRaceConfiguration && <Button variant="ghost" size="sm" onClick={() => beginCorrection(record)}>Adjust</Button>}
+                  {canManageRaceConfiguration && (
+                    <div className="flex flex-wrap gap-1">
+                      {record.voidedAt ? (
+                        <Button variant="ghost" size="sm" onClick={() => beginCorrection(record, 'restore')}>
+                          {t('checkpoints:recordActions.action.restore')}
+                        </Button>
+                      ) : (
+                        <>
+                          <Button variant="ghost" size="sm" onClick={() => beginCorrection(record, 'adjust')}>{t('checkpoints:ui.adjust')}</Button>
+                          <Button variant="ghost" size="sm" onClick={() => beginCorrection(record, 'reassign')}>
+                            {t('checkpoints:recordActions.action.reassign')}
+                          </Button>
+                          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => beginCorrection(record, 'void')}>
+                            {t('checkpoints:recordActions.action.void')}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -420,37 +521,71 @@ export function CheckpointsPage() {
 
           {correctionRecord && (
             <div className="mt-2 space-y-3 rounded-md border border-primary/30 bg-primary/5 p-3">
-              <p className="text-sm font-medium">Adjust {correctionRecord.participantName ?? correctionRecord.participantId}</p>
-              <div className="grid grid-cols-2 gap-3">
+              <p className="text-sm font-medium">
+                {t(`checkpoints:recordActions.heading.${correctionMode}`, {
+                  name: correctionRecord.participantName ?? correctionRecord.participantId,
+                })}
+              </p>
+              {correctionMode !== 'adjust' && (
+                <p className="text-xs text-muted-foreground">{t(`checkpoints:recordActions.help.${correctionMode}`)}</p>
+              )}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {correctionMode === 'adjust' && (
+                  <div>
+                    <Label htmlFor="record-adjusted-time">{t('checkpoints:ui.adjustedTime')}</Label>
+                    <Input
+                      id="record-adjusted-time"
+                      type="datetime-local"
+                      value={correctionForm.adjustedRecordedAt}
+                      onChange={(e) => setCorrectionForm((f) => ({ ...f, adjustedRecordedAt: e.target.value }))}
+                    />
+                  </div>
+                )}
+                {correctionMode === 'reassign' && (
+                  <div>
+                    <Label htmlFor="record-reassign-bib">{t('checkpoints:recordActions.bib')}</Label>
+                    <Input
+                      id="record-reassign-bib"
+                      value={correctionForm.bib}
+                      maxLength={50}
+                      onChange={(e) => setCorrectionForm((f) => ({ ...f, bib: e.target.value }))}
+                    />
+                  </div>
+                )}
                 <div>
-                  <Label>Adjusted time</Label>
+                  <Label htmlFor="record-action-reason">{t('checkpoints:ui.reason')}</Label>
                   <Input
-                    type="datetime-local"
-                    value={correctionForm.adjustedRecordedAt}
-                    onChange={(e) => setCorrectionForm((f) => ({ ...f, adjustedRecordedAt: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label>Reason</Label>
-                  <Input
+                    id="record-action-reason"
                     value={correctionForm.reason}
+                    maxLength={500}
                     onChange={(e) => setCorrectionForm((f) => ({ ...f, reason: e.target.value }))}
-                    placeholder="Optional"
                   />
                 </div>
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => setCorrectionRecord(null)} disabled={correcting}>Cancel</Button>
-                <Button size="sm" onClick={() => void handleCorrect()} disabled={correcting}>{correcting ? 'Saving…' : 'Apply'}</Button>
+                <Button variant="outline" size="sm" onClick={() => setCorrectionRecord(null)} disabled={correcting}>{t('checkpoints:ui.cancel')}</Button>
+                <Button size="sm" variant={correctionMode === 'void' ? 'destructive' : 'default'}
+                  onClick={() => void handleCorrect()} disabled={correcting}>
+                  {correcting ? t('checkpoints:recordActions.saving') : t(`checkpoints:recordActions.action.${correctionMode}`)}
+                </Button>
               </div>
             </div>
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRecordsOpen(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setRecordsOpen(false)}>{t('checkpoints:ui.close')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {raceId && (
+        <SelfScanQrDialog
+          raceId={raceId}
+          checkpoint={selfScanCheckpoint}
+          canRotate={canManageRaceConfiguration}
+          onOpenChange={(open) => { if (!open) setSelfScanCheckpoint(null) }}
+        />
+      )}
     </div>
   )
 }

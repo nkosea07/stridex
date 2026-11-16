@@ -27,6 +27,16 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByEmailIgnoreCase(String email);
 
     @Query("""
+        select count(u) from User u
+        where u.role = :role and u.id <> :excludedId and u.isActive = true
+          and u.deletedAt is null and u.deletionRequestedAt is null
+        """)
+    long countOtherActiveByRole(@Param("role") User.UserRole role, @Param("excludedId") UUID excludedId);
+
+    @Query(value = "SELECT 1 FROM pg_advisory_xact_lock(:lockKey)", nativeQuery = true)
+    Integer acquireTransactionLock(@Param("lockKey") long lockKey);
+
+    @Query("""
         select u from User u
         where u.deletionRequestedAt is not null
           and u.deletionScheduledFor is not null

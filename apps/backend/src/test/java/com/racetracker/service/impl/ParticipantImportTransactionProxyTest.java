@@ -70,13 +70,16 @@ class ParticipantImportTransactionProxyTest {
 
         ParticipantCredentialService credentialService = proxied(new ParticipantCredentialServiceImpl(
             credentials, participants), manager);
+        com.racetracker.repository.RaceRepository races = org.mockito.Mockito.mock(com.racetracker.repository.RaceRepository.class);
+        org.mockito.Mockito.when(races.findByIdForUpdate(org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(inv -> java.util.Optional.of(participant.getRace()));
         ParticipantImportRowService rows = proxied(new ParticipantImportRowService(
-            jobs, participants, credentialService, identity), manager);
+            jobs, participants, credentialService, identity, races), manager);
 
         assertThatThrownBy(() -> rows.importRow(jobId, 1, 1, participant))
             .isInstanceOf(ConflictException.class);
         assertThat(job.getProcessedRows()).isZero();
-        rows.skipRow(jobId, 1, 1);
+        rows.skipRow(jobId, 1, 1, "Duplicate credential");
 
         assertThat(job.getProcessedRows()).isEqualTo(1);
         assertThat(job.getErrorCount()).isEqualTo(1);

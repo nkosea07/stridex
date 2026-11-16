@@ -1,8 +1,11 @@
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react'
 import type { User, UserCapability, UserRole } from '@/types'
 import { authApi, type BrowserAuthResponse } from '@/lib/api'
+import { useTranslation } from 'react-i18next'
 
-export type LoginResult = { kind: 'authenticated'; user: User }
+export type LoginResult =
+  | { kind: 'authenticated'; user: User }
+  | { kind: 'mfa'; challengeToken: string; enrollmentRequired: boolean }
 
 interface AuthContextType {
   user: User | null
@@ -61,6 +64,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const sessionGeneration = useRef(0)
+  const { i18n } = useTranslation()
+  const language = i18n.resolvedLanguage ?? i18n.language
+  const syncedLanguage = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!user || !language || user.preferredLocale === language) return
+    const key = `${user.id}:${language}`
+    if (syncedLanguage.current === key) return
+    syncedLanguage.current = key
+    authApi.updateProfile({ preferredLocale: language })
+      .then((updated) => setUser((current) => (current?.id === updated.id ? updated : current)))
+      .catch(() => undefined)
+  }, [user, language])
 
   useEffect(() => {
     const generation = sessionGeneration.current
@@ -89,6 +105,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (response.token) {
         return { kind: 'authenticated' as const, user: completeSession(response) }
+      }
+      if (response.mfaRequired && response.mfaChallengeToken) {
+        return {
+          kind: 'mfa' as const,
+          challengeToken: response.mfaChallengeToken,
+          enrollmentRequired: Boolean(response.mfaEnrollmentRequired),
+        }
       }
       throw new Error(response.requiresEmailVerification ? 'Email verification required' : 'Login did not return a session')
     } finally {

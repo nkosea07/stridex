@@ -60,6 +60,20 @@ public class RequestRateLimiter {
         ));
     }
 
+    public void checkAccountDeletion(String accountIdentifier, String ipAddress) {
+        check("account_deletion", List.of(
+            bucket("account-deletion:account", hash(accountIdentifier), 5, 900),
+            bucket("account-deletion:ip", hash(ipAddress), 20, 900)
+        ));
+    }
+
+    public void checkVerificationResend(String email, String ipAddress) {
+        check("verification_resend", List.of(
+            bucket("verification-resend:ip", hash(ipAddress), 10, 3600),
+            bucket("verification-resend:account", hash(normalizeAccount(email)), 3, 3600)
+        ));
+    }
+
     public void checkRegistration(String ipAddress) {
         check("registration", List.of(bucket("registration:ip", hash(ipAddress), 10, 3600)));
     }
@@ -86,7 +100,7 @@ public class RequestRateLimiter {
 
     public void checkRfid(String readerKey, String ipAddress) {
         List<Bucket> buckets = new ArrayList<>();
-        buckets.add(bucket("rfid:ip", hash(ipAddress), 120, 60));
+        buckets.add(bucket("rfid:ip", hash(ipAddress), 1200, 60));
         if (readerKey != null && !readerKey.isBlank()) {
             buckets.add(bucket("rfid:reader", hash(readerKey), 600, 60));
         }

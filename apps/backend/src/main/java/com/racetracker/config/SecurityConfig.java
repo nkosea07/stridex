@@ -86,6 +86,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, apiPrefix + "/webhooks/whatsapp").permitAll()
                 .requestMatchers(HttpMethod.POST, apiPrefix + "/webhooks/whatsapp").permitAll()
                 .requestMatchers(HttpMethod.GET, apiPrefix + "/public/races/**").permitAll()
+                .requestMatchers(HttpMethod.GET, apiPrefix + "/public/app-config").permitAll()
                 .requestMatchers("/ws-tracking", "/ws-tracking/**").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/error").permitAll()

@@ -1,0 +1,44 @@
+{
+  "deletion": {
+    "title": "Delete account",
+    "description": "Your account is deactivated immediately and your personal data is permanently erased after {{days}} days.",
+    "consequencesTitle": "What happens",
+    "consequences": [
+      "You are signed out on every device and push notifications stop straight away.",
+      "After {{days}} days your profile, contact details, race entries' personal and medical details, GPS history, followed athletes, and notifications are erased.",
+      "Photos of you are removed from race galleries.",
+      "Race results and payment records are kept only in de-identified form where race integrity or the law requires it."
+    ],
+    "exportHint": "Download a copy of your data first if you need it.",
+    "recoveryHint": "Changed your mind? Until the erasure date, use \"Cancel a pending account deletion\" on the sign-in page with your email and password.",
+    "passwordLabel": "Your password",
+    "confirmLabel": "Type {{token}} to confirm",
+    "submit": "Delete my account",
+    "submitting": "Scheduling…",
+    "scheduledTitle": "Deletion scheduled",
+    "scheduledBody": "Your account is deactivated and scheduled for erasure on {{date}}. You can still cancel before then.",
+    "scheduledBodyNoDate": "Your account is deactivated and scheduled for erasure. You can still cancel before then.",
+    "successTitle": "Account scheduled for deletion",
+    "successBody": "Your account is deactivated and will be erased on {{date}}. You will now be signed out.",
+    "cancel": "Cancel deletion",
+    "cancelling": "Cancelling…",
+    "cancelledTitle": "Deletion cancelled",
+    "cancelledBody": "Your account has been reactivated.",
+    "cancelFailed": "We could not cancel the deletion. Please try again.",
+    "ok": "OK",
+    "blockedTitle": "Account deletion is unavailable right now",
+    "blockers": {
+      "ACCOUNT_DELETION_LAST_SUPER_ADMIN": "You are the only active super administrator. Make another user a super administrator before deleting this account.",
+      "ACCOUNT_DELETION_ACTIVE_RACES": "You are the only active organizer of a race that is open, closed for registration, or in progress. Add another race administrator, or complete or cancel the race first."
+    },
+    "errorTitle": "Unable to delete account",
+    "errors": {
+      "ACCOUNT_DELETION_PASSWORD_REQUIRED": "Enter your password to delete your account.",
+      "ACCOUNT_DELETION_PASSWORD_INVALID": "That password is incorrect.",
+      "ACCOUNT_DELETION_CONFIRMATION_REQUIRED": "Type {{token}} exactly to confirm.",
+      "ACCOUNT_ALREADY_DELETED": "This account has already been deleted.",
+      "TOO_MANY_REQUESTS": "Too many attempts. Please wait a few minutes and try again.",
+      "generic": "Something went wrong. Please try again."
+    }
+  }
+}

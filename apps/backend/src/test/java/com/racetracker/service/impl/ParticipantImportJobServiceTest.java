@@ -38,7 +38,7 @@ class ParticipantImportJobServiceTest {
         job.setAttempts(3);
         job.setUpdatedAt(OffsetDateTime.now());
         when(repository.findByIdForUpdate(jobId)).thenReturn(Optional.of(job));
-        ParticipantImportJobService service = new ParticipantImportJobService(repository);
+        ParticipantImportJobService service = new ParticipantImportJobService(repository, sourceStore(true));
         OffsetDateTime cutoff = OffsetDateTime.now().minusMinutes(10);
 
         assertThat(service.claim(jobId, cutoff)).isEmpty();
@@ -64,7 +64,7 @@ class ParticipantImportJobServiceTest {
         job.setAttempts(3);
         when(repository.findByIdForUpdate(jobId)).thenReturn(Optional.of(job));
 
-        assertThat(new ParticipantImportJobService(repository).claim(jobId,
+        assertThat(new ParticipantImportJobService(repository, sourceStore(true)).claim(jobId,
             OffsetDateTime.now().minusMinutes(10))).isEmpty();
 
         assertThat(job.getStatus()).isEqualTo(ImportJob.JobStatus.FAILED);
@@ -106,7 +106,7 @@ class ParticipantImportJobServiceTest {
             return job;
         });
         ParticipantImportJobService service = ParticipantImportTransactionProxyTest.proxied(
-            new ParticipantImportJobService(repository), manager);
+            new ParticipantImportJobService(repository, sourceStore(true)), manager);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService workers = Executors.newFixedThreadPool(2);
         try {
@@ -135,5 +135,11 @@ class ParticipantImportJobServiceTest {
         } finally {
             workers.shutdownNow();
         }
+    }
+
+    private ImportSourceStore sourceStore(boolean hasSource) {
+        ImportSourceStore store = org.mockito.Mockito.mock(ImportSourceStore.class);
+        org.mockito.Mockito.lenient().when(store.hasSource(org.mockito.ArgumentMatchers.any())).thenReturn(hasSource);
+        return store;
     }
 }

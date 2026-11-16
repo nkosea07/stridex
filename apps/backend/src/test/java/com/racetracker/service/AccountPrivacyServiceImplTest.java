@@ -62,6 +62,9 @@ class AccountPrivacyServiceImplTest {
     @Mock AccountErasureRepository accountErasureRepository;
     @Mock PrivacyObjectDeletionJobRepository deletionJobRepository;
     @Mock EmergencyAlertRepository emergencyAlertRepository;
+    @Mock com.racetracker.repository.UserMfaCredentialRepository mfaCredentialRepository;
+    @Mock com.racetracker.repository.MfaRecoveryCodeRepository mfaRecoveryCodeRepository;
+    @Mock com.racetracker.repository.MfaChallengeRepository mfaChallengeRepository;
     @Mock PasswordEncoder passwordEncoder;
     @Mock AuditEventService auditEventService;
     @Mock PlatformTransactionManager transactionManager;
@@ -77,6 +80,7 @@ class AccountPrivacyServiceImplTest {
             pushDeviceRepository, authTokenRepository, participantCredentialRepository, registrationAnswerRepository, gpsLocationRepository,
             notificationPreferenceRepository, athleteFollowRepository, raceMediaRepository, accountErasureRepository,
             deletionJobRepository, emergencyAlertRepository,
+            mfaCredentialRepository, mfaRecoveryCodeRepository, mfaChallengeRepository,
             passwordEncoder, auditEventService, transactionManager);
     }
 
@@ -192,6 +196,11 @@ class AccountPrivacyServiceImplTest {
         assertThat(participant.getClubName()).isNull();
 
         verify(pushDeviceRepository).deleteByUserId(userId);
+        verify(mfaCredentialRepository).deleteByUserId(userId);
+        verify(mfaRecoveryCodeRepository).deleteByUserId(userId);
+        verify(mfaChallengeRepository).deleteByUserId(userId);
+        verify(athleteFollowRepository).deleteByParticipantIdIn(List.of(participant.getId()));
+        verify(notificationRepository).deleteBySubjectParticipantIds(List.of(participant.getId()));
         verify(participantCredentialRepository).deleteByParticipantIdIn(List.of(participant.getId()));
         verify(registrationAnswerRepository).deleteByParticipantIdIn(List.of(participant.getId()));
         verify(gpsLocationRepository).deleteByParticipantIdIn(List.of(participant.getId()));
@@ -303,5 +312,61 @@ class AccountPrivacyServiceImplTest {
 
         assertThat(dto.getDataProcessingConsentAt()).isNotNull();
         assertThat(dto.isMarketingConsent()).isTrue();
+    }
+
+    @Test
+    void stagingKeepsStaffUploadedEventMediaButDetachesTheUploader() {
+        User user = user();
+        user.setDeletionScheduledFor(java.time.OffsetDateTime.now().minusMinutes(1));
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(java.util.Optional.of(user));
+        when(accountErasureRepository.existsById(userId)).thenReturn(false);
+
+        service.eraseAccount(userId);
+
+        org.mockito.Mockito.verify(raceMediaRepository).deletePersonalMediaForUser(userId);
+        org.mockito.Mockito.verify(raceMediaRepository).detachUploader(userId);
+    }
+
+    @Test
+    void requiredDataProcessingConsentCannotBeWithdrawnOutsideAccountDeletion() {
+        User user = user();
+        user.setDataProcessingConsentAt(java.time.OffsetDateTime.now().minusDays(3));
+        when(userRepository.findById(userId)).thenReturn(java.util.Optional.of(user));
+        com.racetracker.dto.privacy.ConsentUpdateRequest request = new com.racetracker.dto.privacy.ConsentUpdateRequest();
+        request.setDataProcessingConsent(false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.updateConsent(userId, request))
+            .isInstanceOf(com.racetracker.exception.ApiException.class)
+            .hasMessageContaining("delete your account");
+        assertThat(user.getDataProcessingConsentAt()).isNotNull();
+    }
+
+    @Test
+    void acceptingCurrentLegalDocumentsRecordsVersionsAndAudits() {
+        User user = user();
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
+        com.racetracker.dto.privacy.LegalAcceptanceRequest request = new com.racetracker.dto.privacy.LegalAcceptanceRequest();
+        request.setPrivacyPolicyVersion(com.racetracker.service.LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION);
+        request.setTermsVersion(com.racetracker.service.LegalDocuments.CURRENT_TERMS_VERSION);
+
+        var accepted = service.acceptLegalDocuments(userId, request);
+
+        assertThat(accepted.termsVersion()).isEqualTo(com.racetracker.service.LegalDocuments.CURRENT_TERMS_VERSION);
+        assertThat(user.getTermsAcceptedAt()).isNotNull();
+        assertThat(user.getPrivacyPolicyAcceptedAt()).isNotNull();
+        verify(auditEventService).recordInCurrentTransaction(org.mockito.ArgumentMatchers.eq("LEGAL_DOCUMENTS_ACCEPTED"),
+            org.mockito.ArgumentMatchers.eq(userId), any(), any(), any(), any());
+    }
+
+    @Test
+    void acceptingAStaleTermsVersionIsRejected() {
+        com.racetracker.dto.privacy.LegalAcceptanceRequest request = new com.racetracker.dto.privacy.LegalAcceptanceRequest();
+        request.setPrivacyPolicyVersion(com.racetracker.service.LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION);
+        request.setTermsVersion("2020-01-01");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.acceptLegalDocuments(userId, request))
+            .isInstanceOf(com.racetracker.exception.ApiException.class)
+            .hasMessageContaining("Terms and Conditions");
+        verify(userRepository, never()).save(any());
     }
 }

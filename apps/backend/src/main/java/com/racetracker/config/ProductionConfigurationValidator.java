@@ -26,6 +26,7 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
     private final boolean defaultAdminSeedEnabled;
     private final boolean localUsersSeedEnabled;
     private final RaceTrackerProperties raceTrackerProperties;
+    private final String mailHost;
 
     public ProductionConfigurationValidator(
         @Value("${jwt.secret:}") String jwtSecret,
@@ -38,7 +39,8 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
         @Value("${racetracker.push.service-account-json:}") String pushServiceAccountJson,
         @Value("${racetracker.seed.default-admin.enabled:false}") boolean defaultAdminSeedEnabled,
         @Value("${racetracker.seed.local-users.enabled:false}") boolean localUsersSeedEnabled,
-        RaceTrackerProperties raceTrackerProperties
+        RaceTrackerProperties raceTrackerProperties,
+        @Value("${spring.mail.host:}") String mailHost
     ) {
         this.jwtSecret = jwtSecret;
         this.browserCookieSecure = browserCookieSecure;
@@ -51,6 +53,7 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
         this.defaultAdminSeedEnabled = defaultAdminSeedEnabled;
         this.localUsersSeedEnabled = localUsersSeedEnabled;
         this.raceTrackerProperties = raceTrackerProperties;
+        this.mailHost = mailHost;
     }
 
     @PostConstruct
@@ -95,6 +98,21 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
 
         if (pushEnabled && (pushServiceAccountJson == null || pushServiceAccountJson.isBlank())) {
             throw new IllegalStateException("Production push notifications require FCM_SERVICE_ACCOUNT_JSON");
+        }
+        RaceTrackerProperties.Email email = raceTrackerProperties.getEmail();
+        if (email != null && email.isEnabled()
+            && (isBlank(mailHost) || isPlaceholder(mailHost) || isBlank(email.getFromAddress()) || isPlaceholder(email.getFromAddress()))) {
+            throw new IllegalStateException("Production email requires MAIL_HOST and MAIL_FROM when MAIL_ENABLED=true");
+        }
+        RaceTrackerProperties.Payments payments = raceTrackerProperties.getPayments();
+        if (payments != null && payments.isEnabled()
+            && (isBlank(payments.getBaseUrl())
+                || !payments.getBaseUrl().startsWith("https://")
+                || payments.getBaseUrl().toLowerCase(java.util.Locale.ROOT).contains("sandbox")
+                || isBlank(payments.getIntegrationKey()) || isPlaceholder(payments.getIntegrationKey())
+                || isBlank(payments.getEncryptionKey()) || isPlaceholder(payments.getEncryptionKey())
+                || isBlank(payments.getResultUrl()) || isBlank(payments.getReturnUrl()))) {
+            throw new IllegalStateException("Production payments require the live HTTPS PESEPAY_BASE_URL, Pesepay keys, and result/return URLs");
         }
         RaceTrackerProperties.Notifications notifications = raceTrackerProperties.getNotifications();
         if (notifications != null && notifications.isSmsEnabled()) {

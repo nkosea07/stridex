@@ -77,9 +77,13 @@ class RaceInsightsServiceImplTest {
     @Test
     void summaryProjectsLeaderFinishFromLivePace() {
         Race race = race();
+        OffsetDateTime gunStart = OffsetDateTime.now(java.time.ZoneOffset.UTC).minusHours(1);
+        race.setTimezone("UTC");
+        race.setRaceDate(gunStart.toLocalDate());
+        race.setStartTime(gunStart.toLocalTime());
         Participant runner = Participant.builder().id(UUID.randomUUID()).race(race)
             .firstName("Ada").lastName("Runner").status(Participant.ParticipantStatus.STARTED)
-            .registeredAt(OffsetDateTime.now().minusHours(1))
+            .registeredAt(OffsetDateTime.now().minusDays(30))
             .totalDistance(BigDecimal.valueOf(10))
             .build();
         when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));

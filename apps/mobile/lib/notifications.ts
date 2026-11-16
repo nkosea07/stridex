@@ -98,6 +98,22 @@ export const addNotificationResponseListener = (
   handler: (response: Notifications.NotificationResponse) => void
 ) => Notifications.addNotificationResponseReceivedListener(handler);
 
+const HANDLED_LAUNCH_NOTIFICATION_KEY = 'handled_launch_notification';
+
+export const takeLaunchNotificationData = async (): Promise<Record<string, unknown> | null> => {
+  try {
+    const response = await Notifications.getLastNotificationResponseAsync();
+    if (!response) return null;
+    const identifier = response.notification.request.identifier;
+    if (await AsyncStorage.getItem(HANDLED_LAUNCH_NOTIFICATION_KEY) === identifier) return null;
+    await AsyncStorage.setItem(HANDLED_LAUNCH_NOTIFICATION_KEY, identifier);
+    const data = response.notification.request.content.data;
+    return data && typeof data === 'object' ? data as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+};
+
 export const addNotificationReceivedListener = (
   handler: (notification: Notifications.Notification) => void
 ) => Notifications.addNotificationReceivedListener(handler);

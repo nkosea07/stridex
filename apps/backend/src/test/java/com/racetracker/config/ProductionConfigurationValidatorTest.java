@@ -26,7 +26,8 @@ class ProductionConfigurationValidatorTest {
             "",
             false,
             false,
-            productionStorage()
+            productionStorage(),
+            "smtp.example.com"
         );
 
         assertThatCode(() -> validator.run(new DefaultApplicationArguments())).doesNotThrowAnyException();
@@ -48,7 +49,8 @@ class ProductionConfigurationValidatorTest {
             "",
             false,
             false,
-            productionStorage()
+            productionStorage(),
+            "smtp.example.com"
         );
 
         assertThatThrownBy(() -> validator.run(new DefaultApplicationArguments()))
@@ -72,7 +74,8 @@ class ProductionConfigurationValidatorTest {
             "",
             false,
             false,
-            productionStorage()
+            productionStorage(),
+            "smtp.example.com"
         );
 
         assertThatThrownBy(() -> validator.run(new DefaultApplicationArguments()))
@@ -96,7 +99,8 @@ class ProductionConfigurationValidatorTest {
             "",
             false,
             false,
-            productionStorage()
+            productionStorage(),
+            "smtp.example.com"
         );
 
         assertThatThrownBy(() -> validator.run(new DefaultApplicationArguments()))
@@ -128,7 +132,8 @@ class ProductionConfigurationValidatorTest {
             "",
             false,
             true,
-            productionStorage()
+            productionStorage(),
+            "smtp.example.com"
         );
 
         assertThatThrownBy(() -> validator.run(new DefaultApplicationArguments()))
@@ -153,7 +158,8 @@ class ProductionConfigurationValidatorTest {
             "",
             false,
             false,
-            productionStorage()
+            productionStorage(),
+            "smtp.example.com"
         );
 
         assertThatThrownBy(() -> validator.run(new DefaultApplicationArguments()))
@@ -273,7 +279,8 @@ class ProductionConfigurationValidatorTest {
             "",
             false,
             false,
-            properties
+            properties,
+            "smtp.example.com"
         );
     }
 
@@ -281,6 +288,57 @@ class ProductionConfigurationValidatorTest {
         CorsProperties corsProperties = new CorsProperties();
         corsProperties.setAllowedOrigins(List.of("https://app.racetracker.example"));
         return corsProperties;
+    }
+
+    @Test
+    void run_rejectsEnabledEmailWithoutRelayOrSender() {
+        CorsProperties corsProperties = new CorsProperties();
+        corsProperties.setAllowedOrigins(List.of("https://app.racetracker.example"));
+        RaceTrackerProperties properties = productionStorage();
+        properties.getEmail().setEnabled(true);
+        properties.getEmail().setFromAddress("races@racetracker.example");
+
+        ProductionConfigurationValidator missingHost = new ProductionConfigurationValidator(
+            "a-strong-production-jwt-secret-with-more-than-thirty-two-characters", true, corsProperties,
+            "jdbc:postgresql://db.internal:5432/race_tracker", "unique-production-database-password",
+            false, false, "", false, false, properties, "");
+        assertThatThrownBy(() -> missingHost.run(new DefaultApplicationArguments()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("MAIL_HOST");
+
+        properties.getEmail().setFromAddress("CHANGE_ME_FROM_ADDRESS");
+        ProductionConfigurationValidator placeholderSender = new ProductionConfigurationValidator(
+            "a-strong-production-jwt-secret-with-more-than-thirty-two-characters", true, corsProperties,
+            "jdbc:postgresql://db.internal:5432/race_tracker", "unique-production-database-password",
+            false, false, "", false, false, properties, "smtp.example.com");
+        assertThatThrownBy(() -> placeholderSender.run(new DefaultApplicationArguments()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("MAIL_FROM");
+    }
+
+    @Test
+    void run_rejectsSandboxPaymentEndpointWhenPaymentsAreEnabled() {
+        CorsProperties corsProperties = new CorsProperties();
+        corsProperties.setAllowedOrigins(List.of("https://app.racetracker.example"));
+        RaceTrackerProperties properties = productionStorage();
+        RaceTrackerProperties.Payments payments = properties.getPayments();
+        payments.setEnabled(true);
+        payments.setIntegrationKey("live-integration-key");
+        payments.setEncryptionKey("live-encryption-key-0123456789abcdef");
+        payments.setResultUrl("https://app.racetracker.example/payments/result");
+        payments.setReturnUrl("https://app.racetracker.example/payments/return");
+        payments.setBaseUrl("https://api.test.sandbox.pesepay.com/payments-engine/v1");
+
+        ProductionConfigurationValidator validator = new ProductionConfigurationValidator(
+            "a-strong-production-jwt-secret-with-more-than-thirty-two-characters", true, corsProperties,
+            "jdbc:postgresql://db.internal:5432/race_tracker", "unique-production-database-password",
+            false, false, "", false, false, properties, "smtp.example.com");
+        assertThatThrownBy(() -> validator.run(new DefaultApplicationArguments()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("PESEPAY_BASE_URL");
+
+        payments.setBaseUrl("https://api.pesepay.com/api/payments-engine/v1");
+        assertThatCode(() -> validator.run(new DefaultApplicationArguments())).doesNotThrowAnyException();
     }
 
     private RaceTrackerProperties productionStorage() {

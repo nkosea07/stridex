@@ -9,7 +9,9 @@ import {
   Bell, 
   Key,
   Globe,
-  Save
+  Save,
+  FileText,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Dialog,
@@ -37,9 +40,17 @@ import { toast } from 'sonner'
 import { CapabilityModeSwitcher } from '@/components/auth/CapabilityModeSwitcher'
 import { getUserCapabilities, useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
-import { authApi, notificationsApi } from '@/lib/api'
+import { ApiError, authApi, notificationsApi } from '@/lib/api'
 import { enableWebPush, isWebPushConfigured } from '@/lib/push'
 import { formatDate } from '@/lib/format'
+import { asList } from '@/lib/legal'
+import {
+  DELETION_CONFIRMATION_TOKEN,
+  DELETION_GRACE_DAYS,
+  deletionErrorKey,
+  isDeletionBlocker,
+  knownBlockers,
+} from '@/lib/accountDeletion'
 import type { ConsentState, DeletionStatus, NotificationPreference } from '@/types'
 
 type SessionSnapshot = {
@@ -75,6 +86,11 @@ export function SettingsPage() {
   const [consentSaving, setConsentSaving] = useState(false)
   const [deletion, setDeletion] = useState<DeletionStatus | null>(null)
   const [deletionBusy, setDeletionBusy] = useState(false)
+  const deletionBlockers = deletion?.deletionRequested ? [] : knownBlockers(deletion?.blockers)
+  const deletionConsequences = asList<string>(t('account:deletion.consequences', {
+    returnObjects: true,
+    days: DELETION_GRACE_DAYS,
+  }))
   const [exporting, setExporting] = useState(false)
   const [profile, setProfile] = useState({
     firstName: user?.firstName || '',
@@ -156,8 +172,12 @@ export function SettingsPage() {
   }
 
   const handleDeleteAccount = async () => {
-    if (deleteConfirmation.trim().toUpperCase() !== 'DELETE') {
-      toast.error(t('nav:typeDeleteToConfirm', { token: 'DELETE' }))
+    if (!deletePassword) {
+      toast.error(t('account:deletion.errors.ACCOUNT_DELETION_PASSWORD_REQUIRED'))
+      return
+    }
+    if (deleteConfirmation.trim().toUpperCase() !== DELETION_CONFIRMATION_TOKEN) {
+      toast.error(t('account:deletion.errors.ACCOUNT_DELETION_CONFIRMATION_REQUIRED', { token: DELETION_CONFIRMATION_TOKEN }))
       return
     }
     const requestSession = sessionRef.current
@@ -175,7 +195,17 @@ export function SettingsPage() {
       navigate('/login', { replace: true })
     } catch (error) {
       if (isCurrentSession()) {
-        toast.error(error instanceof Error ? error.message : t('nav:unableDeleteAccount'))
+        toast.error(t(deletionErrorKey(error), { token: DELETION_CONFIRMATION_TOKEN }))
+        const code = error instanceof ApiError ? error.code : undefined
+        if (isDeletionBlocker(code)) {
+          setDeleteDialogOpen(false)
+          setDeletion((current) => ({
+            deletionRequested: current?.deletionRequested ?? false,
+            requestedAt: current?.requestedAt ?? null,
+            scheduledFor: current?.scheduledFor ?? null,
+            blockers: Array.from(new Set([...(current?.blockers ?? []), code])),
+          }))
+        }
       }
     } finally {
       if (isCurrentSession()) setDeleteBusy(false)
@@ -638,6 +668,12 @@ export function SettingsPage() {
                       {t('nav:readPrivacyPolicy')}
                     </Link>
                   </Button>
+                  <Button asChild variant="outline">
+                    <Link to={API_CONTRACT.legal.termsPath} target="_blank" rel="noreferrer">
+                      <FileText className="mr-2 h-4 w-4" />
+                      {t('legal:common.terms')}
+                    </Link>
+                  </Button>
                   <Button variant="outline" onClick={() => void handleExportData()} disabled={exporting}>
                     <Globe className="mr-2 h-4 w-4" />
                     {exporting ? t('nav:preparing') : t('nav:downloadMyData')}
@@ -655,12 +691,13 @@ export function SettingsPage() {
                             ? t('nav:grantedOn', { date: formatDate(consent.dataProcessingConsentAt) })
                             : '',
                         })}
+                        {consent?.dataProcessingConsentAt != null && ` ${t('nav:dataProcessingWithdrawHint')}`}
                       </p>
                     </div>
                     <Switch
                       id="consentProcessing"
                       checked={consent?.dataProcessingConsentAt != null}
-                      disabled={consentSaving || !consent}
+                      disabled={consentSaving || !consent || consent.dataProcessingConsentAt != null}
                       onCheckedChange={(checked) => void handleConsentChange({ dataProcessingConsent: checked })}
                     />
                   </div>
@@ -687,17 +724,31 @@ export function SettingsPage() {
                 <CardDescription>{t('nav:irreversibleActions')}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between">
+                {deletionBlockers.length > 0 && (
+                  <Alert variant="destructive" className="mb-4" role="status" aria-live="polite">
+                    <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                    <AlertTitle>{t('account:deletion.blockedTitle')}</AlertTitle>
+                    <AlertDescription>
+                      <ul className="list-disc space-y-1 pl-4">
+                        {deletionBlockers.map((code) => (
+                          <li key={code}>{t(`account:deletion.blockers.${code}`)}</li>
+                        ))}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm font-medium">{t('nav:deleteAccount')}</p>
                     <p className="text-xs text-muted-foreground">
-                      {t('nav:deleteAccountDescription')}
+                      {t('account:deletion.description', { days: DELETION_GRACE_DAYS })}
                     </p>
+                    <p className="text-xs text-muted-foreground">{t('account:deletion.recoveryHint')}</p>
                   </div>
                   <Button
                     variant="destructive"
                     onClick={() => setDeleteDialogOpen(true)}
-                    disabled={Boolean(deletion?.deletionRequested)}
+                    disabled={Boolean(deletion?.deletionRequested) || deletionBlockers.length > 0}
                   >
                     {deletion?.deletionRequested ? t('nav:deletionScheduled') : t('nav:deleteAccount')}
                   </Button>
@@ -712,9 +763,18 @@ export function SettingsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('nav:deleteYourAccount')}</DialogTitle>
-            <DialogDescription>{t('nav:deleteAccountDialogDescription')}</DialogDescription>
+            <DialogDescription>{t('account:deletion.description', { days: DELETION_GRACE_DAYS })}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2 text-sm">
+              <p className="font-medium">{t('account:deletion.consequencesTitle')}</p>
+              <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                {deletionConsequences.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              <p className="text-muted-foreground">{t('account:deletion.exportHint')}</p>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="delete-password">{t('nav:confirmYourPassword')}</Label>
               <Input
@@ -726,7 +786,7 @@ export function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="delete-confirmation">{t('nav:typeDeleteConfirmation', { token: 'DELETE' })}</Label>
+              <Label htmlFor="delete-confirmation">{t('account:deletion.confirmLabel', { token: DELETION_CONFIRMATION_TOKEN })}</Label>
               <Input
                 id="delete-confirmation"
                 value={deleteConfirmation}

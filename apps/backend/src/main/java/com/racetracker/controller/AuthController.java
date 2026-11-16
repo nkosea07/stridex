@@ -142,7 +142,9 @@ public class AuthController {
     }
 
     @PostMapping("/resend-verification")
-    public ResponseEntity<ApiMessageResponse> resendVerification(@Valid @RequestBody ResendVerificationRequest request) {
+    public ResponseEntity<ApiMessageResponse> resendVerification(@Valid @RequestBody ResendVerificationRequest request,
+                                                                 HttpServletRequest servletRequest) {
+        requestRateLimiter.checkVerificationResend(request.getEmail(), clientAddressResolver.resolve(servletRequest));
         authService.resendVerification(request);
         return ResponseEntity.ok(new ApiMessageResponse("If the email exists, a verification email has been sent"));
     }

@@ -56,34 +56,32 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
-    console.log('[Register] Attempting registration for:', email);
     
     if (!firstName || !lastName || !email || !password || !confirmPassword) {
       console.warn('[Register] Validation failed: missing required fields');
-      Alert.alert('Error', 'Please fill in all required fields');
+      Alert.alert(t('mobile:ui.register.error'), t('mobile:ui.register.pleaseFillInAllRequiredFields'));
       return;
     }
 
     if (password !== confirmPassword) {
       console.warn('[Register] Validation failed: password mismatch');
-      Alert.alert('Error', 'Passwords do not match');
+      Alert.alert(t('mobile:ui.register.error'), t('mobile:ui.register.passwordsDoNotMatch'));
       return;
     }
 
     if (password.length < 8) {
       console.warn('[Register] Validation failed: password too short');
-      Alert.alert('Error', 'Password must be at least 8 characters');
+      Alert.alert(t('mobile:ui.register.error'), t('mobile:ui.register.passwordMustBeAtLeast8'));
       return;
     }
 
     if (!acceptedPrivacy) {
-      Alert.alert('Error', 'Please accept the Privacy Policy to continue');
+      Alert.alert(t('legal:registration.errorTitle'), t('legal:registration.required'));
       return;
     }
 
     setIsLoading(true);
     try {
-      console.log('[Register] Calling authStore.register...');
       const response = await register({
         firstName: firstName.trim(), 
         lastName: lastName.trim(), 
@@ -92,29 +90,28 @@ export default function RegisterScreen() {
         password,
         privacyPolicyAccepted: true,
         privacyPolicyVersion: API_CONTRACT.legal.privacyPolicyVersion,
+        termsAccepted: true,
+        termsVersion: API_CONTRACT.legal.termsVersion,
         experiences,
       });
 
       if (response.requiresEmailVerification || !response.token) {
-        console.log('[Register] Verification required. Redirecting to login...');
         Alert.alert(
-          'Verify Your Email',
-          'Account created. Please verify your email before signing in.',
-          [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }],
+          t('mobile:login.verifyTitle'),
+          t('mobile:register.verifyEmailSent'),
+          [{ text: t('mobile:register.ok'), onPress: () => router.replace('/(auth)/login') }],
         );
         return;
       }
-
-      console.log('[Register] Registration successful. Navigating to (tabs)...');
       setTimeout(() => {
         router.replace('/(tabs)');
       }, 0);
       
     } catch (error: any) {
-      console.error('[Register] Registration failed:', error);
-      Alert.alert('Error', error?.message || 'Registration failed. Please try again.');
+      Alert.alert(t('mobile:ui.register.error'), error?.isNetworkError
+        ? t('mobile:login.failure.network')
+        : error?.status === 409 ? t('mobile:register.emailInUse') : t('mobile:register.failed'));
     } finally {
-      console.log('[Register] Registration process completed');
       setIsLoading(false);
     }
   };
@@ -134,8 +131,8 @@ export default function RegisterScreen() {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color="#1F2937" />
           </TouchableOpacity>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join thousands of athletes tracking their races</Text>
+          <Text style={styles.title}>{t('mobile:ui.register.createAccount')}</Text>
+          <Text style={styles.subtitle}>{t('mobile:ui.register.joinThousandsOfAthletesTrackingTheir')}</Text>
         </View>
 
         {/* Form */}
@@ -178,7 +175,7 @@ export default function RegisterScreen() {
               <Ionicons name="person-outline" size={20} color="#6B7280" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="First Name"
+                placeholder={t('mobile:ui.register.firstName')}
                 placeholderTextColor="#9CA3AF"
                 value={firstName}
                 onChangeText={setFirstName}
@@ -188,7 +185,7 @@ export default function RegisterScreen() {
             <View style={[styles.inputContainer, styles.halfInput]}>
               <TextInput
                 style={styles.input}
-                placeholder="Last Name"
+                placeholder={t('mobile:ui.register.lastName')}
                 placeholderTextColor="#9CA3AF"
                 value={lastName}
                 onChangeText={setLastName}
@@ -201,7 +198,7 @@ export default function RegisterScreen() {
             <Ionicons name="mail-outline" size={20} color="#6B7280" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Email address"
+              placeholder={t('mobile:ui.register.emailAddress')}
               placeholderTextColor="#9CA3AF"
               value={email}
               onChangeText={setEmail}
@@ -215,7 +212,7 @@ export default function RegisterScreen() {
             <Ionicons name="call-outline" size={20} color="#6B7280" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Phone number (optional)"
+              placeholder={t('mobile:ui.register.phoneNumberOptional')}
               placeholderTextColor="#9CA3AF"
               value={phone}
               onChangeText={setPhone}
@@ -227,7 +224,7 @@ export default function RegisterScreen() {
             <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Password"
+              placeholder={t('mobile:ui.register.password')}
               placeholderTextColor="#9CA3AF"
               value={password}
               onChangeText={setPassword}
@@ -246,7 +243,7 @@ export default function RegisterScreen() {
             <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Confirm Password"
+              placeholder={t('mobile:ui.register.confirmPassword')}
               placeholderTextColor="#9CA3AF"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
@@ -267,14 +264,23 @@ export default function RegisterScreen() {
                 color={acceptedPrivacy ? '#0F766E' : '#6B7280'}
               />
               <Text style={styles.termsText}>
-                {"I have read and accept the "}
+                {t('legal:registration.prefix')}
                 <Text
                   style={styles.termsLink}
+                  accessibilityRole="link"
+                  onPress={() => router.push('/terms')}
+                >
+                  {t('legal:common.terms')}
+                </Text>
+                {t('legal:registration.join')}
+                <Text
+                  style={styles.termsLink}
+                  accessibilityRole="link"
                   onPress={() => router.push('/privacy')}
                 >
-                  Privacy Policy
+                  {t('legal:common.privacyPolicy')}
                 </Text>
-                .
+                {t('legal:registration.suffix')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -285,17 +291,17 @@ export default function RegisterScreen() {
             disabled={isLoading}
           >
             <Text style={styles.signUpButtonText}>
-              {isLoading ? 'Creating Account...' : 'Create Account'}
+              {isLoading ? t('mobile:register.creatingAccount') : t('mobile:register.createAccount')}
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* Sign In Link */}
         <View style={styles.signInContainer}>
-          <Text style={styles.signInText}>Already have an account? </Text>
+          <Text style={styles.signInText}>{t('mobile:ui.register.alreadyHaveAnAccount')}</Text>
           <Link href="/(auth)/login" asChild>
             <TouchableOpacity>
-              <Text style={styles.signInLink}>Sign In</Text>
+              <Text style={styles.signInLink}>{t('mobile:ui.register.signIn')}</Text>
             </TouchableOpacity>
           </Link>
         </View>

@@ -42,7 +42,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = {OperationsCheckpointController.class, EmergencyAlertController.class})
-@Import({SecurityConfig.class, ApiSecurityExceptionHandler.class, RaceAccessGuard.class,
+@Import({SecurityConfig.class, com.racetracker.security.AdminMfaPolicy.class, ApiSecurityExceptionHandler.class, RaceAccessGuard.class,
     CheckpointEmergencyService.class})
 @EnableConfigurationProperties({RaceTrackerProperties.class, CorsProperties.class})
 @TestPropertySource(properties = {"server.servlet.context-path=", "racetracker.api.version=1",

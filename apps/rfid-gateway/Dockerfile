@@ -1,6 +1,7 @@
 FROM node:22-alpine
 ENV NODE_ENV=production \
     RFID_GATEWAY_PORT=8090 \
+    RFID_GATEWAY_HOST=0.0.0.0 \
     RFID_GATEWAY_SPOOL_DIR=/var/lib/rfid-gateway
 WORKDIR /app
 COPY --chown=node:node package.json ./

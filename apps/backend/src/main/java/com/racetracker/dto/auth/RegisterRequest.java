@@ -47,4 +47,9 @@ public class RegisterRequest {
 
     @Size(max = 40)
     private String privacyPolicyVersion;
+
+    private Boolean termsAccepted;
+
+    @Size(max = 40)
+    private String termsVersion;
 }

@@ -6,6 +6,7 @@ import Root from '../../app/root'
 import type { RouteConfigEntry } from '@react-router/dev/routes'
 import type { RouteObject } from 'react-router-dom'
 import { setAccessToken } from '@/lib/api'
+import { API_CONTRACT } from '@race-tracker/contracts'
 
 const routeModules = import.meta.glob('../../app/**/*.tsx', { eager: true }) as Record<
   string,
@@ -99,6 +100,8 @@ function getMockUser() {
     isActive: true,
     emailVerified: true,
     createdAt: new Date().toISOString(),
+    privacyPolicyVersion: API_CONTRACT.legal.privacyPolicyVersion,
+    termsVersion: API_CONTRACT.legal.termsVersion,
   }
 }
 

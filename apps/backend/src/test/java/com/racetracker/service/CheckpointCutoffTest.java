@@ -3,9 +3,12 @@ package com.racetracker.service;
 import com.racetracker.model.Checkpoint;
 import com.racetracker.model.CheckpointRecord;
 import com.racetracker.model.Participant;
+import com.racetracker.model.Race;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -36,34 +39,55 @@ class CheckpointCutoffTest {
     }
 
     @Test
-    void resolveStart_prefersCheckInInstant() {
+    void resolveStart_ignoresDeskCheckInAndRegistration() {
         Participant participant = Participant.builder()
-            .checkedInAt(start)
+            .race(new Race())
+            .checkedInAt(start.minusDays(1))
             .registeredAt(start.minusDays(30))
             .build();
 
-        assertThat(CheckpointCutoff.resolveStart(participant, List.of())).isEqualTo(start);
+        assertThat(CheckpointCutoff.resolveStart(participant, List.of())).isNull();
     }
 
     @Test
-    void resolveStart_usesEarliestStartCheckpointWhenNoCheckIn() {
-        OffsetDateTime startRecord = start.plusMinutes(2);
-        OffsetDateTime registered = start.minusDays(30);
-        Participant participant = Participant.builder().registeredAt(registered).build();
-        CheckpointRecord record = CheckpointRecord.builder()
+    void resolveStart_usesEarliestStartCheckpointRecord() {
+        OffsetDateTime later = start.plusMinutes(5);
+        OffsetDateTime earlier = start.plusMinutes(2);
+        Participant participant = Participant.builder().race(scheduledRace()).checkedInAt(start.minusDays(1)).build();
+
+        assertThat(CheckpointCutoff.resolveStart(participant, List.of(startRecord(later), startRecord(earlier))))
+            .isEqualTo(earlier);
+    }
+
+    @Test
+    void resolveStart_fallsBackToScheduledGunStartInRaceTimezone() {
+        Participant participant = Participant.builder().race(scheduledRace()).build();
+
+        assertThat(CheckpointCutoff.resolveStart(participant, List.of()))
+            .isEqualTo(OffsetDateTime.parse("2026-01-01T06:00:00Z").toInstant().atOffset(java.time.ZoneOffset.ofHours(2)));
+    }
+
+    @Test
+    void scheduledStart_fallsBackToUtcForUnknownTimezone() {
+        Race race = scheduledRace();
+        race.setTimezone("Not/AZone");
+
+        assertThat(CheckpointCutoff.scheduledStart(race)).isEqualTo(OffsetDateTime.parse("2026-01-01T08:00:00Z"));
+    }
+
+    private Race scheduledRace() {
+        Race race = new Race();
+        race.setTimezone("Africa/Harare");
+        race.setRaceDate(LocalDate.of(2026, 1, 1));
+        race.setStartTime(LocalTime.of(8, 0));
+        return race;
+    }
+
+    private CheckpointRecord startRecord(OffsetDateTime at) {
+        return CheckpointRecord.builder()
             .checkpoint(Checkpoint.builder().checkpointType(Checkpoint.CheckpointType.START).build())
-            .recordedAt(startRecord)
+            .recordedAt(at)
             .build();
-
-        assertThat(CheckpointCutoff.resolveStart(participant, List.of(record))).isEqualTo(startRecord);
-    }
-
-    @Test
-    void resolveStart_fallsBackToRegistration() {
-        OffsetDateTime registered = start.minusDays(30);
-        Participant participant = Participant.builder().registeredAt(registered).build();
-
-        assertThat(CheckpointCutoff.resolveStart(participant, List.of())).isEqualTo(registered);
     }
 
     @Test

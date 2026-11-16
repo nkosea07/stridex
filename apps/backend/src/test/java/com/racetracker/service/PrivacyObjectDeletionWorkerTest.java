@@ -33,7 +33,7 @@ class PrivacyObjectDeletionWorkerTest {
         UUID token = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         var job = new AccountPrivacyServiceImpl.ClaimedJob(id, "race/original.jpg", "scope-a", token);
-        var notification = new AccountPrivacyServiceImpl.NotificationClaim(userId, "runner@example.com", "Ada", token);
+        var notification = new AccountPrivacyServiceImpl.NotificationClaim(userId, "runner@example.com", "Ada", null, token);
         when(privacyService.claimJobs(50)).thenReturn(List.of(job));
         when(privacyService.finalizeReady(50)).thenReturn(1);
         when(privacyService.claimNotifications(50)).thenReturn(List.of(notification));
@@ -45,7 +45,7 @@ class PrivacyObjectDeletionWorkerTest {
         order.verify(mediaStorage).delete("race/original.jpg");
         order.verify(privacyService).completeJob(id, token);
         order.verify(privacyService).finalizeReady(50);
-        order.verify(authEmailService).sendAccountDeletionCompletedConfirmed("runner@example.com", "Ada");
+        order.verify(authEmailService).sendAccountDeletionCompletedConfirmed("runner@example.com", "Ada", null);
         order.verify(privacyService).completeNotification(userId, token);
     }
 
@@ -63,7 +63,7 @@ class PrivacyObjectDeletionWorkerTest {
         verify(privacyService).retryJob(id, token);
         verify(privacyService, never()).completeJob(id, token);
         verify(authEmailService, never()).sendAccountDeletionCompletedConfirmed(org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.any());
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -101,9 +101,9 @@ class PrivacyObjectDeletionWorkerTest {
         UUID userId = UUID.randomUUID();
         UUID token = UUID.randomUUID();
         when(privacyService.claimNotifications(50)).thenReturn(List.of(
-            new AccountPrivacyServiceImpl.NotificationClaim(userId, "runner@example.com", "Ada", token)));
+            new AccountPrivacyServiceImpl.NotificationClaim(userId, "runner@example.com", "Ada", null, token)));
         doThrow(new IllegalStateException("mail disabled")).when(authEmailService)
-            .sendAccountDeletionCompletedConfirmed("runner@example.com", "Ada");
+            .sendAccountDeletionCompletedConfirmed("runner@example.com", "Ada", null);
 
         new PrivacyObjectDeletionWorker(privacyService, mediaStorage, authEmailService, mediaStorageScope).processBatch();
 

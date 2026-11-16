@@ -50,6 +50,9 @@ class RfidReadEventProcessorTest {
     @Mock
     private SpectatorAlertService spectatorAlertService;
 
+    @Mock
+    private com.racetracker.service.TrackingService trackingService;
+
     private RfidReadEventProcessorImpl service;
 
     @BeforeEach
@@ -62,7 +65,10 @@ class RfidReadEventProcessorTest {
             participantCredentialService,
             rfidIngestMetrics,
             liveSummaryCacheInvalidator,
-            spectatorAlertService
+            new CheckpointProgression(spectatorAlertService),
+            new com.racetracker.service.CutoffReevaluation(checkpointRecordRepository, participantRepository),
+            trackingService,
+            new com.racetracker.config.RaceTrackerProperties()
         );
     }
 
@@ -85,7 +91,7 @@ class RfidReadEventProcessorTest {
             fixture.reader.getRace().getId(),
             "TAG-1"
         )).thenReturn(participant);
-        when(checkpointRecordRepository.findByParticipantIdAndCheckpointId(participant.getId(), fixture.reader.getCheckpoint().getId()))
+        when(checkpointRecordRepository.findFirstByParticipantIdAndCheckpointIdOrderByPassNumberAsc(participant.getId(), fixture.reader.getCheckpoint().getId()))
             .thenReturn(Optional.empty());
         when(checkpointRecordRepository.save(any(CheckpointRecord.class))).thenAnswer(invocation -> {
             CheckpointRecord record = invocation.getArgument(0);
@@ -151,5 +157,30 @@ class RfidReadEventProcessorTest {
     }
 
     private record Fixture(RfidReader reader, RfidReadEvent event) {
+    }
+
+    @Test
+    void failedProcessingBacksOffThenMarksTheEventErrorAfterTheAttemptLimit() {
+        UUID eventId = UUID.randomUUID();
+        RfidReadEvent event = new RfidReadEvent();
+        event.setId(eventId);
+        event.setStatus(RfidReadEvent.RfidReadEventStatus.RECEIVED);
+        event.setProcessingAttempts(0);
+        org.mockito.Mockito.when(rfidReadEventRepository.findById(eventId)).thenReturn(java.util.Optional.of(event));
+
+        boolean exhausted = service.recordProcessingFailure(eventId, new IllegalStateException("db"));
+
+        org.assertj.core.api.Assertions.assertThat(exhausted).isFalse();
+        org.assertj.core.api.Assertions.assertThat(event.getProcessingAttempts()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(event.getNextAttemptAt()).isAfter(java.time.OffsetDateTime.now());
+        org.assertj.core.api.Assertions.assertThat(event.getStatus()).isEqualTo(RfidReadEvent.RfidReadEventStatus.RECEIVED);
+
+        event.setProcessingAttempts(7);
+        exhausted = service.recordProcessingFailure(eventId, new IllegalStateException("db"));
+
+        org.assertj.core.api.Assertions.assertThat(exhausted).isTrue();
+        org.assertj.core.api.Assertions.assertThat(event.getStatus()).isEqualTo(RfidReadEvent.RfidReadEventStatus.ERROR);
+        org.assertj.core.api.Assertions.assertThat(event.getNextAttemptAt()).isNull();
+        org.assertj.core.api.Assertions.assertThat(event.getErrorMessage()).contains("8 attempts").contains("IllegalStateException");
     }
 }

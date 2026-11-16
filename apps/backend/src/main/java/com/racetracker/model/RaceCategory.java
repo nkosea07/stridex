@@ -63,4 +63,7 @@ public class RaceCategory {
     // Relationships
     @OneToMany(mappedBy = "category")
     private Set<Participant> participants = new HashSet<>();
+
+    @org.hibernate.annotations.Formula("(select count(*) from participants p where p.category_id = id)")
+    private Long participantTotal;
 }

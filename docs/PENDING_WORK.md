@@ -51,12 +51,12 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
   `isConnected`, gateway `eventOrigin`, RFID error metric, MapLibre fallback removed.
 - **Section 3 — deceptive UI: Done** (`388b774`): settings copy, no-op dashboard controls,
   random sparkline, phone seeding.
-- **Section 4 — contract / doc drift: Pending.**
-  - Many implemented controllers are absent from `packages/contracts/contract.json` (auth/MFA/
-    browser, admin, dashboard, registrations, participant/checkpoint CRUD, tracking admin,
-    results publish, media content, RFID bridge); clients call literal paths.
-  - `scripts/validate-contracts.mjs` does not compare controllers ↔ contract (drift ungated).
-  - READMEs stale (`apps/backend/README.md` "later phases" + API surface list).
+- **Section 4 — contract / doc drift: Done** (`b7c737f` and the 2026-11-08 audit).
+  - All controller routes are declared in `packages/contracts/contract.json`; both clients
+    resolve paths from the contract.
+  - `scripts/validate-contracts.mjs` fails on controller ↔ contract drift in either direction.
+  - `docs/api-contract.md`, the backend README WebSocket/timing sections, and the RFID runbook
+    were corrected in the 2026-11-08 audit.
 - **Section 5 — dead code: Pending.**
   - backend: unused `GeoTelemetryService` injection (`TrackingServiceImpl`),
     `ResultComputation.finishSeconds`, duplicate `toFieldDto` (`RaceServiceImpl`/
@@ -95,8 +95,8 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 | # | Item | Status |
 |---|---|---|
 | 1 | SMS/WhatsApp provider | Decided — WhatsApp via Meta Cloud API; SMS disabled for this release |
-| 2 | Object storage (S3 / MinIO) | Blocked — `MediaStorage` seam ready |
-| 3 | Apple OAuth (Services ID/team/key) | Blocked — Google only |
+| 2 | Object storage (S3 / MinIO) | Done in code — `AwsS3MediaStorage` / `MinioMediaStorage`; provider smoke evidence pending |
+| 3 | Apple OAuth (Services ID/team/key) | Deferred — production disables OAuth; Google OAuth is dev/test only |
 | 4 | `gps_locations` partitioning (window + cadence) | Blocked — ops migration |
 | 5 | Public-endpoint rate limiting (OAuth + RFID) | Done — OAuth 10/15m per IP; RFID 120/min per IP + 600/min per reader key; heartbeat excluded |
 | 6 | Client i18n | Decided — see §1 |
@@ -113,7 +113,7 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 
 - New CI jobs `load-smoke` (k6) and `e2e` (Cypress) have **not run on GitHub Actions** yet.
 - Docker image builds (CI `containers` job) not run locally.
-- Migrations are validated locally on PostGIS **V1–V42**, including a V36→V42 upgrade fixture; nothing is pushed and no PR is open.
+- Migrations V1–V43 were validated on PostGIS (2026-11-08) including the V36 upgrade fixture. V44–V49 were validated on PostgreSQL 16 against stand-in tables only (PostGIS unavailable locally); V50 (users.terms_version, terms_accepted_at) has not been run against PostGIS locally; V51 (checkpoint self-scan token and claims) and V52 (RFID timing integrity), V53 (result integrity), V54 (waves), V55 (checkpoint passes) were run against stand-in tables on PostgreSQL 16 only; V56 (result queries) has not been run against any database. Run the CI PostGIS smoke before release. Nothing is pushed and no PR is open.
 
 ## 7. Suggested sequencing
 
@@ -122,6 +122,6 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 2. **Push the branch and let CI run** (validates the new CI jobs, Docker builds, migration smoke).
 3. Verify the deployed Redis-backed rate limits and metrics, then complete **§2 Section 5
    dead-code removal** (low risk).
-4. Resolve **§4 #1–#4** decisions, then implement (SMS/WhatsApp, S3, Apple OAuth, partitioning).
-5. **§4 Section 4 contract-drift** cleanup + extend `validate-contracts.mjs`; **§2 Section 6**
-   product features (results depth, timing imports, AI depth, bibs, media).
+4. Resolve the remaining **§4** decisions (Apple OAuth, partitioning) and capture S3/MinIO and
+   WhatsApp provider evidence.
+5. **§2 Section 6** product features (results depth, timing imports, AI depth, bibs, media).

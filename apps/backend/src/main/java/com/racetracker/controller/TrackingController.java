@@ -39,9 +39,11 @@ public class TrackingController {
 
     @PostMapping("/v${racetracker.api.version}/tracking/{raceId}/checkpoint")
     @PreAuthorize("hasAuthority('CAP_ATHLETE')")
-    public ResponseEntity<ApiMessageResponse> recordCheckpoint(@PathVariable UUID raceId, @Valid @RequestBody TrackingCheckpointRequest request) {
-        trackingService.recordCheckpoint(raceId, request);
-        return ResponseEntity.ok(new ApiMessageResponse("Checkpoint recorded"));
+    public ResponseEntity<SelfScanResultDto> recordCheckpoint(@PathVariable UUID raceId, @Valid @RequestBody TrackingCheckpointRequest request) {
+        SelfScanResultDto result = trackingService.recordCheckpoint(raceId, request);
+        return "VERIFIED".equals(result.status())
+            ? ResponseEntity.ok(result)
+            : ResponseEntity.accepted().body(result);
     }
 
     @GetMapping("/v${racetracker.api.version}/races/{raceId}/tracking/live")

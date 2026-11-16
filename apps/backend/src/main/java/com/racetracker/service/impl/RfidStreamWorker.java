@@ -1,24 +1,28 @@
 package com.racetracker.service.impl;
 
 import com.racetracker.config.RaceTrackerProperties;
-import com.racetracker.model.RfidReadEvent;
 import com.racetracker.repository.RfidReadEventRepository;
 import com.racetracker.service.RfidEventPublisher;
 import com.racetracker.service.RfidReadEventProcessor;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.stream.*;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
 @Slf4j
 @Component
 public class RfidStreamWorker {
+
+    private static final Duration RECOVERY_SETTLE_DELAY = Duration.ofSeconds(2);
+    private static final int RECOVERY_BATCH_SIZE = 100;
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final RaceTrackerProperties raceTrackerProperties;
@@ -89,25 +93,52 @@ public class RfidStreamWorker {
 
     @Scheduled(fixedDelayString = "${racetracker.rfid.recovery-fixed-delay-millis:5000}")
     public void republishUnprocessedEvents() {
-        for (RfidReadEvent event : rfidReadEventRepository.findTop100ByStatusOrderByReceivedAtAsc(RfidReadEvent.RfidReadEventStatus.RECEIVED)) {
-            rfidEventPublisher.publish(event);
+        OffsetDateTime now = OffsetDateTime.now();
+        for (UUID eventId : rfidReadEventRepository.findRecoverableReceivedIds(
+            now.minus(RECOVERY_SETTLE_DELAY), now, PageRequest.of(0, RECOVERY_BATCH_SIZE))) {
+            rfidEventPublisher.publish(eventId);
         }
     }
 
     private void processRecord(MapRecord<String, Object, Object> record) {
+        UUID eventId = null;
         try {
             Object rawEventId = record.getValue().get("eventId");
             if (rawEventId != null) {
-                rfidReadEventProcessor.process(UUID.fromString(rawEventId.toString()));
+                eventId = UUID.fromString(rawEventId.toString());
+                rfidReadEventProcessor.process(eventId);
             }
+        } catch (Exception ex) {
+            rfidIngestMetrics.incrementError();
+            log.error("Failed to process RFID stream record {}: {}", record.getId(), ex.getMessage());
+            if (eventId != null && !recordFailure(eventId, ex)) {
+                return;
+            }
+        }
+        acknowledge(record);
+    }
+
+    private boolean recordFailure(UUID eventId, Exception failure) {
+        try {
+            if (rfidReadEventProcessor.recordProcessingFailure(eventId, failure)) {
+                log.error("RFID event {} exhausted processing attempts and was marked ERROR", eventId);
+            }
+            return true;
+        } catch (Exception ex) {
+            log.error("Failed to record RFID processing failure for event {}: {}", eventId, ex.getMessage());
+            return false;
+        }
+    }
+
+    private void acknowledge(MapRecord<String, Object, Object> record) {
+        try {
             redisTemplate.opsForStream().acknowledge(
                 raceTrackerProperties.getRfid().getStreamKey(),
                 raceTrackerProperties.getRfid().getConsumerGroup(),
                 record.getId()
             );
         } catch (Exception ex) {
-            rfidIngestMetrics.incrementError();
-            log.error("Failed to process RFID stream record {}: {}", record.getId(), ex.getMessage());
+            log.debug("RFID stream acknowledge skipped for {}: {}", record.getId(), ex.getMessage());
         }
     }
 }

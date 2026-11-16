@@ -19,6 +19,7 @@ import com.racetracker.repository.UserRepository;
 import com.racetracker.security.JwtService;
 import com.racetracker.service.AuthEmailService;
 import com.racetracker.service.AuthService;
+import com.racetracker.service.LegalDocuments;
 import com.racetracker.service.AuditEventService;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -40,12 +41,12 @@ import java.util.UUID;
 public class AuthServiceImpl implements AuthService {
 
     private static final int MAX_FAILED_LOGIN_ATTEMPTS = 5;
-    private static final String CURRENT_PRIVACY_POLICY_VERSION = "2026-10-11";
     private static final int MAX_ATTEMPTS_PER_WINDOW = 10;
     private static final Duration FAILED_ATTEMPT_WINDOW = Duration.ofMinutes(15);
     private static final Duration ACCOUNT_LOCK_DURATION = Duration.ofMinutes(15);
     private static final Duration PASSWORD_RESET_TOKEN_TTL = Duration.ofHours(1);
     private static final Duration EMAIL_VERIFICATION_TOKEN_TTL = Duration.ofHours(24);
+    private static final Duration REFRESH_REUSE_GRACE = Duration.ofSeconds(30);
     private static final Set<Participant.ParticipantStatus> ACTIVE_REGISTRATION_STATUSES = Set.of(
         Participant.ParticipantStatus.REGISTERED,
         Participant.ParticipantStatus.CONFIRMED,
@@ -67,6 +68,9 @@ public class AuthServiceImpl implements AuthService {
     private final UserCapabilityRepository userCapabilityRepository;
     private final ParticipantRepository participantRepository;
 
+    private final com.racetracker.security.AdminMfaPolicy adminMfaPolicy;
+    private final com.racetracker.service.UserLocales userLocales;
+
     public AuthServiceImpl(
         UserRepository userRepository,
         PasswordEncoder passwordEncoder,
@@ -78,7 +82,9 @@ public class AuthServiceImpl implements AuthService {
         MfaAuthenticationServiceImpl mfaAuthenticationService,
         AuditEventService auditEventService,
         UserCapabilityRepository userCapabilityRepository,
-        ParticipantRepository participantRepository
+        ParticipantRepository participantRepository,
+        com.racetracker.security.AdminMfaPolicy adminMfaPolicy,
+        com.racetracker.service.UserLocales userLocales
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -91,6 +97,8 @@ public class AuthServiceImpl implements AuthService {
         this.auditEventService = auditEventService;
         this.userCapabilityRepository = userCapabilityRepository;
         this.participantRepository = participantRepository;
+        this.adminMfaPolicy = adminMfaPolicy;
+        this.userLocales = userLocales;
     }
 
     @Override
@@ -118,8 +126,9 @@ public class AuthServiceImpl implements AuthService {
             .emailVerified(false)
             .failedLoginAttempts(0)
             .preferredCapability(initialCapability)
+            .preferredLocale(userLocales.fromCurrentRequest())
             .build();
-        applyPrivacyAcceptance(user, request.getPrivacyPolicyAccepted(), request.getPrivacyPolicyVersion());
+        applyLegalAcceptance(user, request);
 
         User saved = userRepository.save(user);
         if (request.isCreateNormalCapabilities()) {
@@ -139,7 +148,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = UnauthorizedException.class)
     public AuthResponse login(LoginRequest request) {
         String normalizedEmail = normalizeEmail(request.getEmail());
 
@@ -147,7 +156,9 @@ public class AuthServiceImpl implements AuthService {
         if (user != null) {
             ensureAccountNotLocked(user);
             ensureRateLimitNotExceeded(user);
-            ensureEmailVerified(user);
+            if (Boolean.TRUE.equals(user.getIsActive()) && !Boolean.TRUE.equals(user.getEmailVerified())) {
+                rejectUnverifiedLogin(user, request.getPassword());
+            }
         }
 
         try {
@@ -171,27 +182,40 @@ public class AuthServiceImpl implements AuthService {
         }
 
         resetFailedLoginState(user);
+        if (adminMfaPolicy.requiresMfa(user.getRole())) {
+            MfaAuthenticationServiceImpl.Challenge challenge = mfaAuthenticationService.createChallenge(user);
+            auditEventService.record("LOGIN_MFA_CHALLENGED", user.getId(), "USER", user.getId().toString(),
+                "SUCCESS", java.util.Map.of("enrollmentRequired", String.valueOf(challenge.enrollmentRequired())));
+            return AuthResponse.builder()
+                .requiresEmailVerification(false)
+                .mfaRequired(true)
+                .mfaEnrollmentRequired(challenge.enrollmentRequired())
+                .mfaChallengeToken(challenge.token())
+                .build();
+        }
         auditEventService.record("LOGIN", user.getId(), "USER", user.getId().toString(),
             "SUCCESS", java.util.Map.of("method", "password"));
-        return buildAuthenticatedResponse(user, false);
+        return buildAuthenticatedResponse(user, false, UUID.randomUUID());
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = UnauthorizedException.class)
     public AuthResponse refreshToken(String refreshToken) {
         if (!jwtService.hasTokenType(refreshToken, JwtService.TOKEN_TYPE_REFRESH)) {
             throw new UnauthorizedException("Invalid refresh token");
         }
 
-        AuthToken storedToken = authTokenRepository.findByTokenAndTokenTypeAndConsumedAtIsNull(
-                refreshToken,
-                AuthToken.TokenType.REFRESH
-            )
+        AuthToken storedToken = authTokenRepository.findByTokenAndTokenType(refreshToken, AuthToken.TokenType.REFRESH)
             .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
+        OffsetDateTime now = OffsetDateTime.now();
 
-        if (storedToken.getExpiresAt().isBefore(OffsetDateTime.now())) {
-            storedToken.setConsumedAt(OffsetDateTime.now());
-            authTokenRepository.save(storedToken);
+        if (storedToken.getConsumedAt() != null) {
+            handleConsumedRefreshTokenPresented(storedToken, now);
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+
+        if (storedToken.getExpiresAt().isBefore(now)) {
+            authTokenRepository.consumeIfActive(storedToken.getId(), now);
             throw new UnauthorizedException("Invalid refresh token");
         }
 
@@ -210,10 +234,35 @@ public class AuthServiceImpl implements AuthService {
         if (!jwtService.isTokenValid(refreshToken, userDetails)) {
             throw new UnauthorizedException("Invalid refresh token");
         }
+        boolean mfaVerified = jwtService.isMfaVerified(refreshToken);
+        if (adminMfaPolicy.requiresMfa(user.getRole()) && !mfaVerified) {
+            authTokenRepository.consumeIfActive(storedToken.getId(), now);
+            throw new UnauthorizedException("Sign in again with two-factor verification");
+        }
 
-        storedToken.setConsumedAt(OffsetDateTime.now());
-        authTokenRepository.save(storedToken);
-        return buildAuthenticatedResponse(user, false);
+        if (authTokenRepository.consumeIfActive(storedToken.getId(), now) != 1) {
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+        UUID familyId = storedToken.getFamilyId() != null ? storedToken.getFamilyId() : UUID.randomUUID();
+        return buildAuthenticatedResponse(user, mfaVerified, familyId);
+    }
+
+    /**
+     * A rotated token presented again shortly after rotation is a benign race (two tabs refreshing
+     * at once). Later reuse indicates a copied token, so every active token in that device's
+     * session family is revoked; the user's other devices are unaffected.
+     */
+    private void handleConsumedRefreshTokenPresented(AuthToken storedToken, OffsetDateTime now) {
+        if (storedToken.getConsumedAt().plus(REFRESH_REUSE_GRACE).isAfter(now)) {
+            return;
+        }
+        int revoked = storedToken.getFamilyId() == null
+            ? 0
+            : authTokenRepository.revokeFamily(storedToken.getFamilyId(), AuthToken.TokenType.REFRESH, now);
+        UUID userId = storedToken.getUser() != null ? storedToken.getUser().getId() : null;
+        auditEventService.record("REFRESH_TOKEN_REUSE", userId, "AUTH_TOKEN_FAMILY",
+            storedToken.getFamilyId() != null ? storedToken.getFamilyId().toString() : storedToken.getId().toString(),
+            "DENIED", java.util.Map.of("revokedTokens", revoked));
     }
 
     @Override
@@ -227,7 +276,7 @@ public class AuthServiceImpl implements AuthService {
         }
         auditEventService.recordInCurrentTransaction("PRIVILEGED_LOGIN", user.getId(), "USER", user.getId().toString(),
             "SUCCESS", java.util.Map.of("method", "mfa"));
-        return buildAuthenticatedResponse(user, true);
+        return buildAuthenticatedResponse(user, true, UUID.randomUUID());
     }
 
     @Override
@@ -303,6 +352,10 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public UserDto updateProfile(UpdateProfileRequest request) {
         User user = resolveCurrentUser();
+        if (request.getPreferredLocale() != null) {
+            request.setPreferredLocale(userLocales.normalize(request.getPreferredLocale())
+                .orElseThrow(() -> new ApiException("This language is not supported", "UNSUPPORTED_LOCALE")));
+        }
         userMapper.updateProfile(request, user);
         User saved = userRepository.save(user);
         return userMapper.toDto(saved);
@@ -374,12 +427,13 @@ public class AuthServiceImpl implements AuthService {
             .build();
     }
 
-    private AuthToken createRefreshToken(User user, String refreshToken) {
+    private AuthToken createRefreshToken(User user, String refreshToken, UUID familyId) {
         return AuthToken.builder()
             .user(user)
             .token(refreshToken)
             .tokenType(AuthToken.TokenType.REFRESH)
             .expiresAt(jwtService.extractExpiration(refreshToken))
+            .familyId(familyId)
             .build();
     }
 
@@ -414,10 +468,16 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    private void ensureEmailVerified(User user) {
-        if (!Boolean.TRUE.equals(user.getEmailVerified())) {
-            throw new UnauthorizedException("Email verification required", "EMAIL_VERIFICATION_REQUIRED");
+    /**
+     * Reveals that verification is pending only to a caller who proved the password, so login
+     * responses cannot be used to discover unverified accounts.
+     */
+    private void rejectUnverifiedLogin(User user, String password) {
+        if (password == null || user.getPasswordHash() == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
+            recordFailedLogin(user);
+            throw new UnauthorizedException("Invalid credentials");
         }
+        throw new UnauthorizedException("Email verification required", "EMAIL_VERIFICATION_REQUIRED");
     }
 
     private void ensureUserCanReceiveSession(User user) {
@@ -527,16 +587,26 @@ public class AuthServiceImpl implements AuthService {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 
-    private void applyPrivacyAcceptance(User user, Boolean accepted, String version) {
-        if (!Boolean.TRUE.equals(accepted)) {
+    private void applyLegalAcceptance(User user, RegisterRequest request) {
+        if (!Boolean.TRUE.equals(request.getPrivacyPolicyAccepted())) {
             throw new ApiException("Privacy policy acceptance is required", "PRIVACY_CONSENT_REQUIRED");
         }
-        if (!CURRENT_PRIVACY_POLICY_VERSION.equals(version)) {
+        if (!LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION.equals(request.getPrivacyPolicyVersion())) {
             throw new ApiException("The current privacy policy version must be accepted",
                 "PRIVACY_POLICY_VERSION_MISMATCH");
         }
-        user.setPrivacyPolicyAcceptedAt(OffsetDateTime.now());
-        user.setPrivacyPolicyVersion(CURRENT_PRIVACY_POLICY_VERSION);
+        if (!Boolean.TRUE.equals(request.getTermsAccepted())) {
+            throw new ApiException("The Terms and Conditions must be accepted", "TERMS_ACCEPTANCE_REQUIRED");
+        }
+        if (!LegalDocuments.CURRENT_TERMS_VERSION.equals(request.getTermsVersion())) {
+            throw new ApiException("The current Terms and Conditions version must be accepted",
+                "TERMS_VERSION_MISMATCH");
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        user.setPrivacyPolicyAcceptedAt(now);
+        user.setPrivacyPolicyVersion(LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION);
+        user.setTermsAcceptedAt(now);
+        user.setTermsVersion(LegalDocuments.CURRENT_TERMS_VERSION);
     }
 
     private AuthResponse buildVerificationRequiredResponse(User user) {
@@ -551,12 +621,11 @@ public class AuthServiceImpl implements AuthService {
             .build();
     }
 
-    private AuthResponse buildAuthenticatedResponse(User user, boolean mfaVerified) {
-        invalidateOutstandingTokens(user.getId(), AuthToken.TokenType.REFRESH);
+    private AuthResponse buildAuthenticatedResponse(User user, boolean mfaVerified, UUID familyId) {
         String refreshToken = mfaVerified
             ? jwtService.generateRefreshToken(user, true)
             : jwtService.generateRefreshToken(user);
-        authTokenRepository.save(createRefreshToken(user, refreshToken));
+        authTokenRepository.save(createRefreshToken(user, refreshToken, familyId));
 
         UserDto dto = userMapper.toDto(user);
         return AuthResponse.builder()

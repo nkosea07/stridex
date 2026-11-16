@@ -145,6 +145,47 @@ class RfidReaderServiceTest {
     }
 
     @Test
+    void heartbeatLivenessUsesServerTimeAndAGatewayClockOffIsReportedAsDegraded() {
+        RfidReader reader = new RfidReader();
+        reader.setId(UUID.randomUUID());
+        reader.setStatus(RfidReader.RfidReaderStatus.ACTIVE);
+        when(rfidApiKeyService.hashKey("api-key")).thenReturn("hashed");
+        when(rfidReaderRepository.findByApiKeyHash("hashed")).thenReturn(Optional.of(reader));
+        when(rfidReaderRepository.save(any(RfidReader.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RfidReaderHeartbeatRequest request = new RfidReaderHeartbeatRequest();
+        request.setGatewayStatus("ONLINE");
+        request.setObservedAt(java.time.OffsetDateTime.now().plusHours(1));
+
+        var response = service.heartbeat("api-key", request, "10.0.0.10");
+
+        assertThat(reader.getLastHeartbeatAt()).isBefore(java.time.OffsetDateTime.now().plusSeconds(5));
+        assertThat(response.getClockOffsetMs()).isBetween(3_590_000L, 3_610_000L);
+        assertThat(response.getGatewayStatus()).isEqualTo("DEGRADED");
+    }
+
+    @Test
+    void rotatingAReaderKeyReplacesTheStoredHashAndReturnsTheNewKeyOnce() {
+        UUID raceId = UUID.randomUUID();
+        RfidReader reader = new RfidReader();
+        reader.setId(UUID.randomUUID());
+        reader.setStatus(RfidReader.RfidReaderStatus.ACTIVE);
+        reader.setApiKeyHash("old-hash");
+        when(rfidReaderRepository.findByRaceIdAndId(raceId, reader.getId())).thenReturn(Optional.of(reader));
+        when(rfidApiKeyService.generateKey()).thenReturn("new-key");
+        when(rfidApiKeyService.hashKey("new-key")).thenReturn("new-hash");
+        when(rfidReaderRepository.save(any(RfidReader.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var rotated = service.rotateKey(raceId, reader.getId());
+
+        assertThat(rotated.getApiKey()).isEqualTo("new-key");
+        assertThat(reader.getApiKeyHash()).isEqualTo("new-hash");
+
+        reader.setStatus(RfidReader.RfidReaderStatus.REVOKED);
+        assertThrows(com.racetracker.exception.ConflictException.class, () -> service.rotateKey(raceId, reader.getId()));
+    }
+
+    @Test
     void heartbeatRejectsUnknownApiKey() {
         when(rfidApiKeyService.hashKey("api-key")).thenReturn("hashed");
         when(rfidReaderRepository.findByApiKeyHash("hashed")).thenReturn(Optional.empty());

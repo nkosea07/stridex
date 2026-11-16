@@ -1,6 +1,8 @@
 import { API_CONTRACT } from '@race-tracker/contracts'
 import commonEn from './locales/en/common.json'
 import statusEn from './locales/en/status.json'
+import legalEn from './locales/en/legal.json'
+import accountEn from './locales/en/account.json'
 
 // Locale configuration is sourced from the contract (single source of truth).
 export const SUPPORTED_LOCALES = API_CONTRACT.i18n.supportedLocales
@@ -9,7 +11,7 @@ export const FALLBACK_LOCALE = API_CONTRACT.i18n.fallbackLocale
 export const RTL_LOCALES = API_CONTRACT.i18n.rtlLocales
 
 // Namespaces owned by the shared package (domain terms used across web, mobile and backend).
-export const SHARED_NAMESPACES = ['common', 'status']
+export const SHARED_NAMESPACES = ['common', 'status', 'legal', 'account']
 
 export const LOCALE_LABELS = {
   en: 'English',
@@ -27,6 +29,8 @@ export const sharedResources = {
   en: {
     common: commonEn,
     status: statusEn,
+    legal: legalEn,
+    account: accountEn,
   },
 }
 

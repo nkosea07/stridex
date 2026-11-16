@@ -62,6 +62,21 @@ public class Checkpoint {
     @Column(name = "has_qr_scanner")
     private Boolean hasQrScanner = false;
 
+    @Column(name = "self_scan_token", nullable = false, length = 64)
+    private String selfScanToken;
+
+    @Builder.Default
+    @Column(name = "expected_passes", nullable = false)
+    private Integer expectedPasses = 1;
+
+    @Builder.Default
+    @Column(name = "min_pass_seconds", nullable = false)
+    private Integer minPassSeconds = 60;
+
+    @Builder.Default
+    @Column(name = "first_pass_is_start", nullable = false)
+    private Boolean firstPassIsStart = false;
+
     @CreationTimestamp
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
@@ -77,6 +92,21 @@ public class Checkpoint {
         inverseJoinColumns = @JoinColumn(name = "user_id")
     )
     private Set<User> volunteers = new HashSet<>();
+
+    @PrePersist
+    void assignSelfScanToken() {
+        if (selfScanToken == null || selfScanToken.isBlank()) {
+            selfScanToken = com.racetracker.service.SelfScanTokens.generate();
+        }
+    }
+
+    public boolean acceptsSelfScan() {
+        return checkpointType != CheckpointType.START && checkpointType != CheckpointType.FINISH && passes() == 1;
+    }
+
+    public int passes() {
+        return expectedPasses == null || expectedPasses < 1 ? 1 : expectedPasses;
+    }
 
     public enum CheckpointType {
         START, INTERMEDIATE, WATER_STATION, MEDICAL, FINISH

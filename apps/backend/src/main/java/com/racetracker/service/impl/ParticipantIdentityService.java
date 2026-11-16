@@ -54,7 +54,7 @@ public class ParticipantIdentityService {
         int sequence = race.getNextBibSequence() == null ? 1 : Math.max(1, race.getNextBibSequence());
         for (int attempts = 0; attempts < 100000; attempts++) {
             String candidate = prefix + String.format("%0" + width + "d", sequence);
-            if (!participantRepository.existsByBibNumber(candidate)) {
+            if (!participantRepository.existsByRaceIdAndBibNumber(race.getId(), candidate)) {
                 race.setNextBibSequence(sequence + 1);
                 raceRepository.save(race);
                 return candidate;

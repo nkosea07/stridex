@@ -1,0 +1,342 @@
+{
+  "common": {
+    "version": "Version {{version}}",
+    "back": "Back",
+    "contents": "Contents",
+    "privacyPolicy": "Privacy Policy",
+    "terms": "Terms and Conditions",
+    "contactLine": "Questions about this document: {{contactEmail}}",
+    "relatedPrivacy": "Read our Privacy Policy",
+    "relatedTerms": "Read our Terms and Conditions",
+    "footerLegal": "Legal"
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "summary": "This policy explains what personal information Race Tracker collects when you register for races, are timed and tracked, follow athletes, or organize events, why we use it, who can see it, how long we keep it, and the rights you have.",
+    "sections": [
+      {
+        "id": "who-we-are",
+        "title": "1. Who we are",
+        "paragraphs": [
+          "Race Tracker is a race registration, timing, results, and live-tracking platform operated by {{operatorName}} ({{operatorAddress}}) (\"we\", \"us\").",
+          "We process personal information in line with the Cyber and Data Protection Act [Chapter 12:07] of Zimbabwe and its regulations. Where we decide why and how your information is processed, we act as the data controller.",
+          "Race organizers decide what they ask for when you enter their event and how they use your entry data. For that event data the organizer is also responsible to you, and we process it on the organizer's behalf. Contact the organizer about event-specific questions."
+        ]
+      },
+      {
+        "id": "what-we-collect",
+        "title": "2. Information we collect",
+        "paragraphs": [
+          "Depending on how you use the platform, we collect:"
+        ],
+        "items": [
+          "Account information: your name, email address, phone number, password (stored only as a secure hash), account type (athlete, spectator, organizer, official, or volunteer), and your acceptance of these documents.",
+          "Race entry information: the races you enter, category, team, club, shirt size, date of birth, gender, nationality, answers to questions the organizer adds, waiver acceptance, and emergency contact details.",
+          "Health information you choose to provide: blood type, medical conditions, and allergies. This is sensitive information. We collect it only when you or the organizer enter it, so race staff can help you in an emergency.",
+          "Payment information: amounts, discounts, payment status, and provider references for registration fees. Card and mobile-money details are entered with our payment provider (Pesepay) and are not stored by us.",
+          "Timing information: bib numbers, RFID timing-chip reads, QR check-ins, checkpoint times, penalties, results, rankings, and certificates.",
+          "Location information: GPS positions from your phone while you have live tracking switched on during a race, including in the background. We never collect location when tracking is off.",
+          "Emergency (SOS) information: when you raise an SOS, your message, the time, and your most recent location (if available) are shared with the race staff responsible for the event.",
+          "Photos and videos: race gallery media uploaded by organizers or staff, including media in which you are tagged.",
+          "Spectator information: the athletes you follow and your notification preferences.",
+          "Device and security information: push notification tokens, IP addresses, sign-in sessions, and security and audit logs."
+        ]
+      },
+      {
+        "id": "how-we-use",
+        "title": "3. How we use your information and why",
+        "paragraphs": [
+          "We use personal information only for the purposes below, each with a lawful basis:"
+        ],
+        "items": [
+          "To create and secure your account and to provide registration, timing, results, certificates, and live tracking (to perform our agreement with you).",
+          "To share your entry with the organizer and race staff so they can run the event (to perform the agreement, and in the organizer's legitimate interest of running a safe event).",
+          "To publish results, rankings, and live race progress on public race pages (legitimate interest in providing public race results, as is customary for timed sporting events).",
+          "To show your live location to spectators only while you have tracking switched on (your consent, which you can withdraw by turning tracking off).",
+          "To respond to an SOS and protect participants' safety (vital interests).",
+          "To use health information only to support your safety during an event (your explicit consent, which you give when you provide it).",
+          "To publish gallery media of you only with your media publication consent (your consent, which you can withdraw at any time).",
+          "To process registration payments and keep financial records (to perform the agreement and to comply with tax and financial laws).",
+          "To send service messages such as confirmations, race updates, follower alerts, and safety alerts (to perform the agreement). We do not send marketing messages.",
+          "To prevent fraud and abuse, keep the platform secure, and comply with the law (legitimate interests and legal obligations)."
+        ]
+      },
+      {
+        "id": "public",
+        "title": "4. What is visible to the public",
+        "paragraphs": [
+          "Public race pages can be viewed without an account. For athletes in a published race they show your name, bib number, category, status, checkpoint splits, finishing time, and position, and finishers can download a certificate.",
+          "While you have tracking switched on, spectators can see your progress along the course. Course heatmaps are aggregated and exclude athletes who have tracking switched off.",
+          "Public pages never show your email address, phone number, emergency contact, health information, or payment details. Gallery media is shown publicly only after moderation and with your consent."
+        ]
+      },
+      {
+        "id": "sharing",
+        "title": "5. Who we share information with",
+        "paragraphs": [
+          "We do not sell personal information. We share it only with:"
+        ],
+        "items": [
+          "The organizer of each race you enter, and the officials and volunteers they assign to that race, limited to what they need for their role.",
+          "Service providers who process data for us under contract: cloud hosting and file storage, email delivery, push notifications (Google Firebase Cloud Messaging), WhatsApp messages (Meta) where enabled, payments (Pesepay), and map display (Mapbox).",
+          "Authorities or other parties when the law requires it, or when needed to protect someone's life or safety.",
+          "A successor organization if the platform is transferred, under terms that continue to protect your information."
+        ]
+      },
+      {
+        "id": "transfers",
+        "title": "6. Transfers outside Zimbabwe",
+        "paragraphs": [
+          "Some of our service providers store or process data outside Zimbabwe. When we transfer personal information across borders, we do so only as permitted by the Cyber and Data Protection Act and with safeguards that protect your information to a comparable standard."
+        ]
+      },
+      {
+        "id": "retention",
+        "title": "7. How long we keep information",
+        "items": [
+          "Account and race entry information: while your account is active.",
+          "Detailed GPS location traces: deleted {{gpsRetentionDays}} days after they are recorded. Checkpoint times and results are kept so race results stay accurate.",
+          "When you delete your account: it is deactivated immediately and your personal information is erased or anonymized after {{graceDays}} days, unless you cancel within that period. Results remain in anonymized form.",
+          "Payment records: kept for the period required by tax and financial laws.",
+          "SOS records and security audit logs: kept to meet safety and legal obligations, with personal details removed or de-identified where possible.",
+          "Uploaded participant import files: deleted when the import finishes."
+        ]
+      },
+      {
+        "id": "rights",
+        "title": "8. Your rights",
+        "paragraphs": [
+          "Subject to the law, you have the right to:"
+        ],
+        "items": [
+          "Be informed about how your information is used, which is the purpose of this policy.",
+          "Access your information and receive a copy. You can download it from Settings.",
+          "Correct inaccurate information. You can edit your profile, or ask the organizer to correct an entry.",
+          "Delete your account and personal information. You can do this from Settings, subject to the retention exceptions above.",
+          "Object to processing or restrict it, and withdraw consent at any time (for example by turning off live tracking, withdrawing media consent, or removing health information), without affecting processing done before you withdrew it.",
+          "Not be subject to decisions based solely on automated processing that significantly affect you. We do not make such decisions.",
+          "Complain to the Postal and Telecommunications Regulatory Authority of Zimbabwe (POTRAZ), the data protection authority, if you believe your rights have been infringed."
+        ],
+        "closing": "To exercise a right that is not available in the app, contact {{contactEmail}}. We may ask you to verify your identity before responding."
+      },
+      {
+        "id": "children",
+        "title": "9. Children",
+        "paragraphs": [
+          "You must be 18 or older to create an account. Athletes under 18 may only be entered with the consent of a parent or guardian, who is responsible for the entry. Organizers who enter minors must obtain and keep that consent."
+        ]
+      },
+      {
+        "id": "security",
+        "title": "10. Security",
+        "paragraphs": [
+          "We protect information with access controls, encrypted connections, hashed passwords, scoped sign-in sessions, race-level permissions for staff, and audit logging. No system is completely secure. If a breach affects your personal information, we will notify you and the regulator as the law requires."
+        ]
+      },
+      {
+        "id": "cookies",
+        "title": "11. Cookies and similar technologies",
+        "paragraphs": [
+          "The website uses only essential cookies: a secure sign-in session cookie and a security token that protects you against cross-site request forgery. It also stores your theme and language choice on your device. We do not use advertising or cross-site tracking cookies.",
+          "When you view maps, your device loads map images directly from our map provider, which receives your IP address."
+        ]
+      },
+      {
+        "id": "changes",
+        "title": "12. Changes to this policy",
+        "paragraphs": [
+          "We may update this policy as the platform or the law changes. Each update gets a new version shown at the top of this page. When we make an update, we ask you to review and acknowledge it the next time you sign in."
+        ]
+      },
+      {
+        "id": "contact",
+        "title": "13. Contact us",
+        "paragraphs": [
+          "For privacy questions or requests, contact {{operatorName}} at {{contactEmail}} or write to {{operatorAddress}}."
+        ]
+      }
+    ]
+  },
+  "terms": {
+    "title": "Terms and Conditions",
+    "summary": "These terms govern your use of Race Tracker as an athlete, spectator, organizer, official, or volunteer. Please read them carefully: they explain your responsibilities, the organizer's role, the limits of timing and tracking, and how safety alerts work.",
+    "sections": [
+      {
+        "id": "agreement",
+        "title": "1. Agreement",
+        "paragraphs": [
+          "These Terms and Conditions are an agreement between you and {{operatorName}} ({{operatorAddress}}), which operates Race Tracker (the \"platform\").",
+          "By creating an account, or by using the platform after you are asked to accept these terms, you agree to them and acknowledge our Privacy Policy. If you do not agree, do not use the platform."
+        ]
+      },
+      {
+        "id": "definitions",
+        "title": "2. Key terms",
+        "items": [
+          "Organizer: a person or organization approved to create and run events on the platform.",
+          "Event or race: an event published by an organizer, including its categories, stages, and checkpoints.",
+          "Athlete: a person entered in an event.",
+          "Spectator: a person who follows athletes or views race pages.",
+          "Staff: officials and volunteers assigned by an organizer to help run an event."
+        ]
+      },
+      {
+        "id": "accounts",
+        "title": "3. Your account",
+        "items": [
+          "You must be 18 or older to create an account. A parent or guardian must enter, or consent to the entry of, any athlete under 18 and is responsible for that entry.",
+          "Give accurate information and keep it up to date, including emergency contact and health details you choose to provide.",
+          "Keep your password secret and tell us at {{contactEmail}} if you believe your account has been misused. You are responsible for activity on your account.",
+          "Organizer accounts are subject to our approval, and we may ask for information to verify an organizer."
+        ]
+      },
+      {
+        "id": "role",
+        "title": "4. Our role and the organizer's role",
+        "paragraphs": [
+          "We provide the technology for registration, payments, timing, tracking, results, and communication. We do not organize, manage, or supervise events.",
+          "When you enter an event, your entry is an agreement between you and the organizer. The organizer is responsible for the event: its course, permits, safety arrangements, medical cover, rules, prizes, cancellation decisions, and any waiver they ask you to accept."
+        ]
+      },
+      {
+        "id": "payments",
+        "title": "5. Entry fees, payments, and refunds",
+        "items": [
+          "Entry fees, discounts, early-bird and team prices are set by the organizer and shown before you pay.",
+          "Payments are processed by our payment provider (Pesepay) and may be subject to its terms. A registration is paid only once the provider confirms the payment.",
+          "Refunds, transfers, and deferrals follow the organizer's policy. Unless the organizer's policy or the law requires otherwise, entry fees are not refundable, including if an event is cancelled or changed for reasons beyond the organizer's control.",
+          "Refunds that are approved are completed through the original payment provider and may take time to reach you."
+        ]
+      },
+      {
+        "id": "risk",
+        "title": "6. Taking part in events",
+        "paragraphs": [
+          "Running, cycling, and other endurance events carry inherent risks, including injury, illness, dehydration, falls, traffic, weather, and in rare cases death. By entering, you confirm that you are medically fit to take part and that you take part at your own risk, to the extent the law allows.",
+          "You must follow the organizer's rules and the instructions of officials, volunteers, marshals, and emergency services. Organizers may withdraw or disqualify athletes in line with their rules."
+        ]
+      },
+      {
+        "id": "timing",
+        "title": "7. Timing, live tracking, and results",
+        "items": [
+          "GPS positions, RFID chip reads, and other timing data can be delayed, incomplete, or inaccurate because of devices, signal, or network conditions.",
+          "Live tracking and predicted finish times are for information only. Do not rely on them for navigation, safety, or to locate a person in an emergency.",
+          "Official results are determined by the organizer and may be corrected after review, for example for timing errors or penalties.",
+          "Live tracking works only while you have it switched on and your phone has battery, location access, and a connection."
+        ]
+      },
+      {
+        "id": "sos",
+        "title": "8. Emergency SOS",
+        "paragraphs": [
+          "The SOS feature notifies the race staff responsible for an event. It is not an emergency service and does not contact police, ambulance, or fire services.",
+          "If you or someone else is in danger, contact local emergency services directly and alert the nearest official. SOS delivery depends on your device, network coverage, and staff availability, and we cannot guarantee that an alert will be received or acted on."
+        ]
+      },
+      {
+        "id": "acceptable-use",
+        "title": "9. Acceptable use",
+        "paragraphs": [
+          "You must not:"
+        ],
+        "items": [
+          "Give false information, impersonate anyone, or enter an event on someone else's behalf without permission.",
+          "Manipulate timing, tracking, or results, for example by sharing timing chips, spoofing GPS, or submitting false checkpoint records.",
+          "Access data you are not authorized to see, or use other people's personal information except to run or take part in an event.",
+          "Upload content that is unlawful, harmful, abusive, or that infringes anyone's rights or privacy.",
+          "Interfere with or overload the platform, probe its security, or scrape or copy data by automated means without our written permission.",
+          "Use RFID readers, reader keys, or staff access in ways other than those intended for the event."
+        ]
+      },
+      {
+        "id": "content",
+        "title": "10. Content and media",
+        "paragraphs": [
+          "You keep the rights to content you provide. You give us a non-exclusive licence to host, process, and display it as needed to operate the platform and the events you take part in.",
+          "Organizers and staff may upload event photos and videos. Media of a tagged athlete is published only with that athlete's media publication consent, which can be withdrawn at any time. Ask us or the organizer to remove media you believe is unlawful or infringes your rights."
+        ]
+      },
+      {
+        "id": "organizers",
+        "title": "11. Additional terms for organizers and staff",
+        "items": [
+          "Publish accurate event information, prices, rules, and refund policies, and hold all permits and insurance your event requires.",
+          "Collect only the participant information your event needs, have a lawful basis for it, and use it only to run your event, in line with the Cyber and Data Protection Act and our Privacy Policy.",
+          "Obtain consent from a parent or guardian before entering a minor.",
+          "Make sure staff you assign use their access only for your event, keep reader keys secure, and revoke access that is no longer needed.",
+          "Respond to SOS alerts and arrange emergency procedures that do not depend solely on the platform.",
+          "Handle refunds and participant queries for your events."
+        ]
+      },
+      {
+        "id": "ip",
+        "title": "12. Intellectual property",
+        "paragraphs": [
+          "The platform, its software, design, and branding belong to {{operatorName}} or its licensors. You may use the platform only as these terms allow."
+        ]
+      },
+      {
+        "id": "availability",
+        "title": "13. Availability and changes to the service",
+        "paragraphs": [
+          "We work to keep the platform available and accurate, but we do not guarantee that it will be uninterrupted or error-free, particularly during events where networks are congested. We may change, suspend, or discontinue features, and will give reasonable notice of significant changes where we can."
+        ]
+      },
+      {
+        "id": "liability",
+        "title": "14. Liability",
+        "paragraphs": [
+          "To the extent the law allows, we are not liable for indirect or consequential loss, or for loss arising from events, the acts or omissions of organizers, staff, or other users, or from inaccurate or delayed timing or tracking data. Our total liability to you for any claim relating to the platform is limited to the fees you paid through the platform for the event concerned.",
+          "Nothing in these terms limits liability that cannot be limited by law, including for death or personal injury caused by negligence, for fraud, or your rights under consumer protection law."
+        ]
+      },
+      {
+        "id": "suspension",
+        "title": "15. Suspension and ending your account",
+        "paragraphs": [
+          "We may suspend or close accounts that breach these terms, put others at risk, or where the law requires it. You can delete your account at any time from Settings; we then handle your information as described in the Privacy Policy."
+        ]
+      },
+      {
+        "id": "changes",
+        "title": "16. Changes to these terms",
+        "paragraphs": [
+          "We may update these terms. Each update gets a new version shown at the top of this page, and we ask you to review and accept it the next time you sign in. If you do not accept updated terms, you can stop using the platform and delete your account."
+        ]
+      },
+      {
+        "id": "law",
+        "title": "17. Governing law and disputes",
+        "paragraphs": [
+          "These terms are governed by the laws of Zimbabwe. We encourage you to contact us first so we can try to resolve any concern. Any dispute that cannot be resolved informally will be subject to the jurisdiction of the courts of Zimbabwe, without affecting any right you have to bring a claim where you live."
+        ]
+      },
+      {
+        "id": "contact",
+        "title": "18. Contact us",
+        "paragraphs": [
+          "Questions about these terms: {{contactEmail}}, or write to {{operatorName}}, {{operatorAddress}}."
+        ]
+      }
+    ]
+  },
+  "acceptance": {
+    "title": "Review our terms before you continue",
+    "body": "To use Race Tracker, please read and accept our Terms and Conditions and acknowledge our Privacy Policy.",
+    "updatedBody": "We have updated our Terms and Conditions or Privacy Policy. Please review and accept the current versions to continue.",
+    "checkbox": "I have read and agree to the Terms and Conditions and acknowledge the Privacy Policy.",
+    "accept": "Accept and continue",
+    "accepting": "Saving…",
+    "signOut": "Sign out",
+    "failed": "We could not record your acceptance. Please try again.",
+    "outdated": "These documents were updated after this app was loaded. Reload the page or update the app to review the latest version."
+  },
+  "registration": {
+    "prefix": "I have read and accept the ",
+    "join": " and ",
+    "suffix": ".",
+    "errorTitle": "Error",
+    "required": "Please accept the Terms and Conditions and Privacy Policy to continue."
+  }
+}

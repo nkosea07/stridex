@@ -146,6 +146,8 @@ public class MediaController {
     private ResponseEntity<byte[]> contentResponse(MediaService.MediaContent content) {
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
+            .header("Content-Security-Policy", "default-src 'none'; img-src 'self'; media-src 'self'; sandbox")
+            .header("X-Content-Type-Options", "nosniff")
             .contentType(MediaType.parseMediaType(content.contentType()))
             .body(content.bytes());
     }

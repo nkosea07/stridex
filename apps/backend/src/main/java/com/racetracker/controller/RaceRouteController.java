@@ -58,6 +58,8 @@ public class RaceRouteController {
     @GetMapping("/v${racetracker.api.version}/public/races/{raceId}/route")
     public ResponseEntity<List<RoutePointDto>> publicRoute(@PathVariable UUID raceId) {
         publicRaceVisibility.requireVisible(raceId);
-        return ResponseEntity.ok(raceRouteService.getRoute(raceId));
+        return ResponseEntity.ok()
+            .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofMinutes(5)).cachePublic())
+            .body(raceRouteService.getRoute(raceId));
     }
 }

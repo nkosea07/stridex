@@ -15,6 +15,8 @@ public interface ParticipantPenaltyRepository extends JpaRepository<ParticipantP
 
     List<ParticipantPenalty> findByParticipantIdIn(java.util.Collection<UUID> participantIds);
 
+    boolean existsByParticipantId(UUID participantId);
+
     Optional<ParticipantPenalty> findByRaceIdAndId(UUID raceId, UUID id);
 
     @Query("select coalesce(sum(pp.seconds), 0) from ParticipantPenalty pp where pp.participant.id = :participantId")

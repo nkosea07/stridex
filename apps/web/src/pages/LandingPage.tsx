@@ -2,6 +2,7 @@ import { Activity, ArrowRight, CheckCircle2, Radio, ShieldCheck, Timer, UsersRou
 import { Link } from 'react-router-dom'
 import { PRODUCT } from '@/config/product'
 import { Button } from '@/components/ui/button'
+import { LegalFooter } from '@/components/legal/LegalFooter'
 
 const capabilities = [
   ['Plan with certainty', 'Registrations, race setup, participant operations, and bibs in one operational workspace.', UsersRound],
@@ -89,6 +90,7 @@ export function LandingPage() {
           ))}
         </div>
       </section>
+      <LegalFooter className="relative border-slate-800 bg-transparent text-slate-400" />
     </main>
   )
 }

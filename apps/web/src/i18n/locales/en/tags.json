@@ -1,0 +1,22 @@
+{
+  "title": "Chip assignment",
+  "description": "Packet pickup: scan or type the bib, then read the chip with a desktop RFID reader. Each assignment is saved immediately and recorded in the audit log.",
+  "bib": "Bib number",
+  "tag": "Chip (RFID tag)",
+  "tagHelp": "Click here and read the chip. Most desktop readers type the number and press Enter.",
+  "find": "Find",
+  "save": "Assign chip",
+  "saving": "Saving…",
+  "notFound": "No participant with bib {{bib}} in this race.",
+  "assigned": "Chip assigned to {{name}} (bib {{bib}}).",
+  "replaced": "Replaced the previous chip {{previous}}.",
+  "inUse": "That chip is already assigned to another participant in this race.",
+  "failed": "The chip could not be assigned.",
+  "locked": "Results are certified, so chips can no longer be changed.",
+  "current": "Current chip: {{tag}}",
+  "noCurrent": "No chip assigned yet.",
+  "recent": "Assigned this session",
+  "loading": "Loading participants…",
+  "openTimingPage": "RFID timing",
+  "openTagPage": "Chip assignment"
+}

@@ -68,7 +68,8 @@ public class CertificateServiceImpl implements CertificateService {
             document.close();
             return baos.toByteArray();
         } catch (Exception e) {
-            throw new ApiException("Failed to generate certificate: " + e.getMessage());
+            throw new com.racetracker.exception.ServiceUnavailableException(
+                "The certificate could not be generated", "CERTIFICATE_GENERATION_FAILED", e);
         }
     }
 

@@ -2,7 +2,9 @@ import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl } fr
 import { Link, router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api } from '@/lib/api'
+import { api, getApiErrorKind, type ApiErrorKind } from '@/lib/api'
+import { useTranslation } from 'react-i18next'
+import { RequestErrorState } from '@/components/RequestErrorState'
 import { CapabilityGate } from '@/components/CapabilityGate'
 import { formatDate, formatDistanceKm } from '@/lib/format'
 
@@ -18,9 +20,12 @@ type MyRace = {
   category: string
   position?: number
   time?: string
+  amountDue?: number | null
 }
 
-const tabs = ['Upcoming', 'Completed', 'All']
+type MyRacesTab = 'upcoming' | 'completed' | 'all'
+const tabs: MyRacesTab[] = ['upcoming', 'completed', 'all']
+const UPCOMING_STATES = new Set(['pending', 'confirmed', 'pending_review', 'waitlisted'])
 
 export default function MyRacesScreen() {
   return (
@@ -31,11 +36,13 @@ export default function MyRacesScreen() {
 }
 
 function MyRacesScreenContent() {
-  const [activeTab, setActiveTab] = useState('Upcoming')
+  const { t } = useTranslation()
+  const [activeTab, setActiveTab] = useState<MyRacesTab>('upcoming')
   const [refreshing, setRefreshing] = useState(false)
   const [races, setRaces] = useState<MyRace[]>([])
+  const [errorKind, setErrorKind] = useState<ApiErrorKind | null>(null)
 
-  const load = async () => {
+  const loadRaces = useCallback(async () => {
     const [registrations, allRaces] = await Promise.all([api.getMyRaces(), api.getRaces()])
     const raceMap = new Map((allRaces as any[]).map((race) => [String(race.id), race]))
 
@@ -44,34 +51,44 @@ function MyRacesScreenContent() {
       return {
         id: String(reg.id),
         raceId: String(reg.raceId),
-        name: race?.name || 'Race',
+        name: race?.name || t('mobile:results.unknownRace'),
         date: race?.raceDate && !Number.isNaN(new Date(race.raceDate).getTime()) ? formatDate(race.raceDate) : '-',
         location: [race?.city, race?.country].filter(Boolean).join(', '),
         distance: Number(race?.distanceKm || 0),
         status: String(reg.status || 'pending').toLowerCase(),
         bibNumber: reg.bibNumber,
-        category: race?.raceType || 'Category',
+        category: race?.raceType || '-',
+        amountDue: reg.amountDue ?? null,
       }
     })
 
     setRaces(mapped)
-  }
+  }, [t])
+
+  const load = useCallback(async () => {
+    try {
+      setErrorKind(null)
+      await loadRaces()
+    } catch (error) {
+      setErrorKind(getApiErrorKind(error))
+    }
+  }, [loadRaces])
 
   useEffect(() => {
     void load()
-  }, [])
+  }, [load])
 
   const onRefresh = useCallback(() => {
     setRefreshing(true)
     load().finally(() => setRefreshing(false))
-  }, [])
+  }, [load])
 
   const filteredRaces = useMemo(
     () =>
       races.filter((race) => {
-        if (activeTab === 'All') return true
-        if (activeTab === 'Upcoming') return race.status === 'pending' || race.status === 'confirmed'
-        if (activeTab === 'Completed') return race.status === 'finished'
+        if (activeTab === 'all') return true
+        if (activeTab === 'upcoming') return UPCOMING_STATES.has(race.status)
+        if (activeTab === 'completed') return race.status === 'finished'
         return true
       }),
     [activeTab, races],
@@ -84,6 +101,10 @@ function MyRacesScreenContent() {
           <View style={[styles.statusIndicator, { backgroundColor: item.status === 'finished' ? '#6B7280' : '#22C55E' }]} />
           <Text style={styles.raceName}>{item.name}</Text>
         </View>
+        <Text style={styles.statusText}>
+          {t(`mobile:race.registrationStatus.${item.status}`, { defaultValue: t('mobile:race.registrationStatus.pending') })}
+          {Number(item.amountDue ?? 0) > 0 && UPCOMING_STATES.has(item.status) ? ` · ${t('mobile:myRacesScreen.paymentDue')}` : ''}
+        </Text>
 
         <View style={styles.raceInfo}>
           <View style={styles.infoRow}><Ionicons name="calendar-outline" size={16} color="#6B7280" /><Text style={styles.infoText}>{item.date}</Text></View>
@@ -92,9 +113,9 @@ function MyRacesScreenContent() {
         </View>
 
         <View style={styles.bibSection}>
-          <View><Text style={styles.bibLabel}>Bib Number</Text><Text style={styles.bibNumber}>{item.bibNumber || '-'}</Text></View>
+          <View><Text style={styles.bibLabel}>{t('mobile:myRacesScreen.bib')}</Text><Text style={styles.bibNumber}>{item.bibNumber || '-'}</Text></View>
           {item.status === 'finished' && item.position && (
-            <View style={styles.resultInfo}><Text style={styles.resultLabel}>Result</Text><Text style={styles.resultText}>#{item.position} - {item.time}</Text></View>
+            <View style={styles.resultInfo}><Text style={styles.resultLabel}>{t('mobile:myRacesScreen.result')}</Text><Text style={styles.resultText}>#{item.position} - {item.time}</Text></View>
           )}
         </View>
 
@@ -107,7 +128,7 @@ function MyRacesScreenContent() {
             }}
           >
             <Ionicons name="navigate" size={18} color="#FFFFFF" />
-            <Text style={styles.trackButtonText}>Start Tracking</Text>
+            <Text style={styles.trackButtonText}>{t('mobile:homeScreen.startTracking')}</Text>
           </TouchableOpacity>
         )}
       </TouchableOpacity>
@@ -118,11 +139,14 @@ function MyRacesScreenContent() {
     <View style={styles.container}>
       <View style={styles.tabsContainer}>
         {tabs.map((tab) => (
-          <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && styles.tabActive]} onPress={() => setActiveTab(tab)}>
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
+          <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && styles.tabActive]} onPress={() => setActiveTab(tab)}
+            accessibilityRole="tab" accessibilityState={{ selected: activeTab === tab }}>
+            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{t(`mobile:myRacesScreen.tabs.${tab}`)}</Text>
           </TouchableOpacity>
         ))}
       </View>
+
+      {errorKind && <RequestErrorState resource="race" kind={errorKind} onRetry={() => void load()} compact />}
 
       <FlatList
         data={filteredRaces}
@@ -131,7 +155,7 @@ function MyRacesScreenContent() {
         contentContainerStyle={styles.racesList}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyText}>No {activeTab.toLowerCase()} races</Text></View>}
+        ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyText}>{t(`mobile:myRacesScreen.empty.${activeTab}`)}</Text></View>}
       />
     </View>
   )
@@ -150,6 +174,7 @@ const styles = StyleSheet.create({
   statusIndicator: { width: 10, height: 10, borderRadius: 5 },
   raceName: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', flex: 1 },
   raceInfo: { gap: 8, marginBottom: 16 },
+  statusText: { fontSize: 13, fontWeight: '600', color: '#0F766E', marginBottom: 10 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   infoText: { fontSize: 14, color: '#6B7280' },
   bibSection: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#F0FDF4', padding: 12, borderRadius: 12, marginBottom: 12 },

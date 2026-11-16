@@ -30,6 +30,7 @@ public interface CheckpointMapper {
     @Mapping(target = "elapsedTime", expression = "java(formatDuration(entity.getElapsedTime()))")
     @Mapping(target = "adjustedRecordedAt", expression = "java(entity.getAdjustedRecordedAt() != null ? entity.getAdjustedRecordedAt().toString() : null)")
     @Mapping(target = "adjustedAt", expression = "java(entity.getAdjustedAt() != null ? entity.getAdjustedAt().toString() : null)")
+    @Mapping(target = "voidedAt", expression = "java(entity.getVoidedAt() != null ? entity.getVoidedAt().toString() : null)")
     CheckpointRecordDto toRecordDto(CheckpointRecord entity);
 
     default String formatDuration(Duration duration) {

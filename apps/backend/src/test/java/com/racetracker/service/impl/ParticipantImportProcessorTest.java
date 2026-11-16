@@ -54,13 +54,15 @@ class ParticipantImportProcessorTest {
 
     private ParticipantImportProcessor processor;
     private ParticipantImportJobService jobService;
+    private ImportSourceStore sourceStore;
     private final UUID jobId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        jobService = new ParticipantImportJobService(importJobRepository);
+        sourceStore = new ImportSourceStore(mock(com.racetracker.repository.ImportJobSourceRepository.class));
+        jobService = new ParticipantImportJobService(importJobRepository, sourceStore);
         processor = new ParticipantImportProcessor(importJobRepository, participantRepository,
-            raceCategoryRepository, rowService, jobService);
+            raceCategoryRepository, rowService, jobService, sourceStore);
     }
 
     private ImportJob job(Path csv) {
@@ -117,13 +119,13 @@ class ParticipantImportProcessorTest {
         ImportJob job = job(csv);
         when(importJobRepository.findByIdForUpdate(jobId)).thenReturn(Optional.of(job));
         when(importJobRepository.save(any(ImportJob.class))).thenAnswer(inv -> inv.getArgument(0));
-        doThrow(new ParticipantImportRowService.DuplicateValueException())
+        doThrow(new ParticipantImportRowService.DuplicateValueException("Duplicate email"))
             .when(rowService).importRow(eq(jobId), eq(1), eq(1), any(Participant.class));
         doAnswer(inv -> {
             job.setProcessedRows(inv.getArgument(2));
             job.setErrorCount(job.getErrorCount() + 1);
             return null;
-        }).when(rowService).skipRow(eq(jobId), eq(1), eq(1));
+        }).when(rowService).skipRow(eq(jobId), eq(1), eq(1), org.mockito.ArgumentMatchers.anyString());
         doAnswer(inv -> {
             job.setProcessedRows(inv.getArgument(2));
             job.setSuccessCount(job.getSuccessCount() + 1);
@@ -151,7 +153,7 @@ class ParticipantImportProcessorTest {
             job.setProcessedRows(1);
             job.setErrorCount(1);
             return null;
-        }).when(rowService).skipRow(jobId, 1, 1);
+        }).when(rowService).skipRow(eq(jobId), eq(1), eq(1), org.mockito.ArgumentMatchers.anyString());
 
         processor.runJob(jobId);
 
@@ -175,7 +177,7 @@ class ParticipantImportProcessorTest {
         assertThat(job.getStatus()).isEqualTo(ImportJob.JobStatus.PENDING);
         assertThat(job.getProcessedRows()).isZero();
         assertThat(job.getErrorCount()).isZero();
-        verify(rowService, never()).skipRow(eq(jobId), eq(1), eq(1));
+        verify(rowService, never()).skipRow(eq(jobId), eq(1), eq(1), org.mockito.ArgumentMatchers.anyString());
         assertThat(Files.exists(csv)).isTrue();
     }
 
@@ -190,7 +192,7 @@ class ParticipantImportProcessorTest {
             job.setProcessedRows(1);
             job.setErrorCount(1);
             return null;
-        }).when(rowService).skipRow(jobId, 1, 1);
+        }).when(rowService).skipRow(eq(jobId), eq(1), eq(1), org.mockito.ArgumentMatchers.anyString());
 
         processor.runJob(jobId);
 
@@ -211,7 +213,7 @@ class ParticipantImportProcessorTest {
             job.setProcessedRows(1);
             job.setErrorCount(1);
             return null;
-        }).when(rowService).skipRow(jobId, 1, 1);
+        }).when(rowService).skipRow(eq(jobId), eq(1), eq(1), org.mockito.ArgumentMatchers.anyString());
 
         processor.runJob(jobId);
 
@@ -241,7 +243,7 @@ class ParticipantImportProcessorTest {
             job.setProcessedRows(1);
             job.setErrorCount(1);
             return null;
-        }).when(rowService).skipRow(jobId, 1, 1);
+        }).when(rowService).skipRow(eq(jobId), eq(1), eq(1), org.mockito.ArgumentMatchers.anyString());
         doAnswer(inv -> {
             Participant participant = inv.getArgument(3);
             assertThat(participant.getEmail()).isEqualTo("valid@example.com");
@@ -285,7 +287,7 @@ class ParticipantImportProcessorTest {
             job.setProcessedRows(1);
             job.setErrorCount(1);
             return null;
-        }).when(rowService).skipRow(jobId, 1, 1);
+        }).when(rowService).skipRow(eq(jobId), eq(1), eq(1), org.mockito.ArgumentMatchers.anyString());
         doAnswer(inv -> {
             Participant participant = inv.getArgument(3);
             assertThat(participant.getEmail()).isEqualTo("runner@example.com");
@@ -395,7 +397,7 @@ class ParticipantImportProcessorTest {
         second.setId(secondId);
         ParticipantImportJobService claiming = mock(ParticipantImportJobService.class);
         ParticipantImportProcessor recovering = new ParticipantImportProcessor(importJobRepository,
-            participantRepository, raceCategoryRepository, rowService, claiming);
+            participantRepository, raceCategoryRepository, rowService, claiming, sourceStore);
         when(importJobRepository.findByStatusIn(any())).thenReturn(List.of(first, second), List.of(first));
         when(claiming.claim(eq(jobId), any(OffsetDateTime.class)))
             .thenThrow(new org.springframework.dao.CannotAcquireLockException("lock unavailable"))
@@ -432,5 +434,64 @@ class ParticipantImportProcessorTest {
 
         assertThat(output.getOut()).contains("Unable to scan participant import jobs",
             "scheduled recovery will retry");
+    }
+
+    @Test
+    void headersAreMatchedCaseInsensitivelyAndIgnoreAByteOrderMark() {
+        assertThat(ParticipantImportProcessor.canonicalHeader("\uFEFFfirstName"))
+            .isEqualTo(ParticipantImportProcessor.canonicalHeader("first_name"))
+            .isEqualTo(ParticipantImportProcessor.canonicalHeader("First Name"));
+    }
+
+    @Test
+    void previewReportsTheSameRowErrorsTheImportWouldApply() {
+        UUID raceId = UUID.randomUUID();
+        when(participantRepository.findEmailsByRaceId(raceId)).thenReturn(List.of("taken@example.com"));
+        String csv = "\uFEFFFirst Name,last_name,Email,dateOfBirth,gender\n"
+            + "Ada,Runner,ada@example.com,1990-02-30,FEMALE\n"
+            + "Bo,Runner,not-an-email,,MALE\n"
+            + "Cy,Runner,taken@example.com,,\n"
+            + ",,,,\n"
+            + "Di,Runner,di@example.com,1991-05-01,female\n";
+
+        var preview = processor.preview(new java.io.ByteArrayInputStream(csv.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+            "runners.csv", raceId);
+
+        assertThat(preview.totalRows()).isEqualTo(4);
+        assertThat(preview.validRows()).isEqualTo(1);
+        assertThat(preview.duplicateRows()).isEqualTo(1);
+        assertThat(preview.rows().get(0).errors()).containsExactly("Invalid dateOfBirth (use YYYY-MM-DD)");
+        assertThat(preview.rows().get(1).errors()).containsExactly("Invalid email");
+        assertThat(preview.rows().get(2).errors()).containsExactly("Duplicate email");
+        assertThat(preview.rows().get(3).errors()).isEmpty();
+    }
+
+    @Test
+    void runJobReadsADatabaseStoredSourceAndRemovesItOnCompletion() {
+        com.racetracker.repository.ImportJobSourceRepository sources =
+            mock(com.racetracker.repository.ImportJobSourceRepository.class);
+        ImportSourceStore store = new ImportSourceStore(sources);
+        ParticipantImportJobService storeAwareJobs = new ParticipantImportJobService(importJobRepository, store);
+        ParticipantImportProcessor storeAware = new ParticipantImportProcessor(importJobRepository, participantRepository,
+            raceCategoryRepository, rowService, storeAwareJobs, store);
+        ImportJob job = job(tempDir.resolve("unused.csv"));
+        job.setSourcePath(null);
+        com.racetracker.model.ImportJobSource source = new com.racetracker.model.ImportJobSource(jobId,
+            "email,firstName,lastName\nada@example.com,Ada,Runner\n".getBytes(StandardCharsets.UTF_8));
+        when(sources.existsById(jobId)).thenReturn(true);
+        when(sources.findById(jobId)).thenReturn(Optional.of(source));
+        when(importJobRepository.findByIdForUpdate(jobId)).thenReturn(Optional.of(job));
+        when(importJobRepository.save(any(ImportJob.class))).thenAnswer(inv -> inv.getArgument(0));
+        doAnswer(inv -> {
+            job.setProcessedRows(inv.getArgument(2));
+            job.setSuccessCount(job.getSuccessCount() + 1);
+            return null;
+        }).when(rowService).importRow(eq(jobId), eq(1), anyInt(), any(Participant.class));
+
+        storeAware.runJob(jobId);
+
+        assertThat(job.getStatus()).isEqualTo(ImportJob.JobStatus.COMPLETED);
+        assertThat(job.getSuccessCount()).isEqualTo(1);
+        org.mockito.Mockito.verify(sources).deleteById(jobId);
     }
 }

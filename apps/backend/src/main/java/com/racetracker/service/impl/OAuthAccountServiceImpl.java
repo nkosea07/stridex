@@ -19,8 +19,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -33,6 +31,7 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
     private final UserMapper userMapper;
     private final AuthTokenRepository authTokenRepository;
     private final UserCapabilityRepository userCapabilityRepository;
+    private final com.racetracker.service.UserLocales userLocales;
 
     public OAuthAccountServiceImpl(
         OAuthIdentityVerifier identityVerifier,
@@ -41,7 +40,8 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
         JwtService jwtService,
         UserMapper userMapper,
         AuthTokenRepository authTokenRepository,
-        UserCapabilityRepository userCapabilityRepository
+        UserCapabilityRepository userCapabilityRepository,
+        com.racetracker.service.UserLocales userLocales
     ) {
         this.identityVerifier = identityVerifier;
         this.userRepository = userRepository;
@@ -50,6 +50,7 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
         this.userMapper = userMapper;
         this.authTokenRepository = authTokenRepository;
         this.userCapabilityRepository = userCapabilityRepository;
+        this.userLocales = userLocales;
     }
 
     @Override
@@ -88,6 +89,7 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
             .isActive(true)
             .emailVerified(true)
             .failedLoginAttempts(0)
+            .preferredLocale(userLocales.fromCurrentRequest())
             .build();
         User saved = userRepository.save(user);
         UserCapability capability = UserCapability.builder()
@@ -102,21 +104,12 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
     }
 
     private AuthResponse issueSession(User user) {
-        List<AuthToken> active = authTokenRepository.findByUserIdAndTokenTypeAndConsumedAtIsNull(
-            user.getId(), AuthToken.TokenType.REFRESH);
-        OffsetDateTime now = OffsetDateTime.now();
-        for (AuthToken token : active) {
-            token.setConsumedAt(now);
-        }
-        if (!active.isEmpty()) {
-            authTokenRepository.saveAll(active);
-        }
-
         String refreshToken = jwtService.generateRefreshToken(user);
         authTokenRepository.save(AuthToken.builder()
             .user(user)
             .token(refreshToken)
             .tokenType(AuthToken.TokenType.REFRESH)
+            .familyId(UUID.randomUUID())
             .expiresAt(jwtService.extractExpiration(refreshToken))
             .build());
 

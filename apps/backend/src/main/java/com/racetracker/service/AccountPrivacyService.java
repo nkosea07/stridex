@@ -15,4 +15,7 @@ public interface AccountPrivacyService {
     ConsentDto updateConsent(UUID userId, ConsentUpdateRequest request);
 
     void eraseAccount(UUID userId);
+
+    com.racetracker.dto.privacy.LegalAcceptanceDto acceptLegalDocuments(
+        UUID userId, com.racetracker.dto.privacy.LegalAcceptanceRequest request);
 }

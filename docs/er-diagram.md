@@ -10,7 +10,7 @@ erDiagram
     RACES ||--o{ CHECKPOINTS : has
     RACES ||--o{ PARTICIPANTS : has
     RACES ||--o{ RACE_ROUTE_POINTS : route
-    RACCE_CATEGORIES ||--o{ PARTICIPANTS : categorizes
+    RACE_CATEGORIES ||--o{ PARTICIPANTS : categorizes
     PARTICIPANTS ||--o{ GPS_LOCATIONS : emits
     PARTICIPANTS ||--o{ CHECKPOINT_RECORDS : records
     PARTICIPANTS ||--o{ PARTICIPANT_PENALTIES : incurs

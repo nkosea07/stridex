@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { clearOfflineCaptures } from '@/lib/offlineCaptures';
 import { api, setSessionInvalidatedHandler } from '@/lib/api';
 import { unregisterCurrentPushDevice } from '@/lib/notifications';
 import { createSessionCleanup } from '@/lib/session-cleanup';
@@ -10,7 +11,10 @@ import type { AuthState } from '@/types';
 
 const cleanupSessionArtifacts = createSessionCleanup({
   unregisterPushDevice: unregisterCurrentPushDevice,
-  clearTracking: () => useTrackingStore.getState().clearTrackingData(),
+  clearTracking: async () => {
+    await useTrackingStore.getState().clearTrackingData();
+    await clearOfflineCaptures();
+  },
 });
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -106,6 +110,15 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
 
     const user = await api.updateCapabilities({ capabilities, preferredCapability: data.preferredCapability });
+    await AsyncStorage.setItem('user', JSON.stringify(user));
+    set({ user });
+  },
+
+  acceptLegalDocuments: async () => {
+    const accepted = await api.acceptLegalDocuments();
+    const currentUser = useAuthStore.getState().user;
+    if (!currentUser) return;
+    const user = { ...currentUser, ...accepted, legalAcceptanceRequired: false };
     await AsyncStorage.setItem('user', JSON.stringify(user));
     set({ user });
   },

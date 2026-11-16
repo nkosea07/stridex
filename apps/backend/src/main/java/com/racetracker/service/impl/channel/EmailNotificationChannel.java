@@ -33,7 +33,7 @@ public class EmailNotificationChannel implements NotificationChannel {
     public void send(NotificationMessage message) {
         String recipient = message.recipientEmail();
         if (recipient == null || recipient.isBlank()) {
-            return;
+            throw new com.racetracker.notification.RecipientUnreachableException("no email address");
         }
         SimpleMailMessage mail = new SimpleMailMessage();
         String from = properties.getEmail().getFromAddress();

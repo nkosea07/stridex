@@ -43,7 +43,8 @@ class OAuthAccountServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new OAuthAccountServiceImpl(identityVerifier, userRepository, passwordEncoder,
-            jwtService, userMapper, authTokenRepository, userCapabilityRepository);
+            jwtService, userMapper, authTokenRepository, userCapabilityRepository,
+            com.racetracker.support.TestMessages.locales());
     }
 
     private void stubTokenIssuance() {

@@ -154,6 +154,7 @@ public class RfidReaderServiceImpl implements RfidReaderService {
         OffsetDateTime lastHeartbeatAt = reader.getLastHeartbeatAt();
         breakdown.setLastHeartbeatAgeSeconds(lastHeartbeatAt == null ? null
             : Math.max(Duration.between(lastHeartbeatAt, OffsetDateTime.now()).getSeconds(), 0));
+        breakdown.setClockOffsetMs(reader.getClockOffsetMs());
         breakdown.setFirmwareVersion(reader.getFirmwareVersion());
         breakdown.setHardwareModel(reader.getHardwareModel());
         breakdown.setHardwareProfile(reader.getHardwareProfile());
@@ -179,6 +180,23 @@ public class RfidReaderServiceImpl implements RfidReaderService {
 
     @Override
     @Transactional
+    public RfidReaderCreateResponse rotateKey(UUID raceId, UUID readerId) {
+        RfidReader reader = rfidReaderRepository.findByRaceIdAndId(raceId, readerId)
+            .orElseThrow(() -> new ResourceNotFoundException("RFID reader not found"));
+        if (reader.getStatus() != RfidReader.RfidReaderStatus.ACTIVE) {
+            throw new ConflictException("A revoked reader cannot be given a new key; register a new reader", "RFID_READER_REVOKED");
+        }
+        String apiKey = rfidApiKeyService.generateKey();
+        reader.setApiKeyHash(rfidApiKeyService.hashKey(apiKey));
+        RfidReader saved = rfidReaderRepository.save(reader);
+        RfidReaderCreateResponse response = new RfidReaderCreateResponse();
+        copyReader(saved, response);
+        response.setApiKey(apiKey);
+        return response;
+    }
+
+    @Override
+    @Transactional
     public RfidReaderDto revoke(UUID raceId, UUID readerId) {
         RfidReader reader = rfidReaderRepository.findByRaceIdAndId(raceId, readerId)
             .orElseThrow(() -> new ResourceNotFoundException("RFID reader not found"));
@@ -198,9 +216,11 @@ public class RfidReaderServiceImpl implements RfidReaderService {
             throw new UnauthorizedException("RFID reader is not active");
         }
 
-        OffsetDateTime observedAt = request.getObservedAt() != null ? request.getObservedAt() : OffsetDateTime.now();
-        reader.setLastSeenAt(observedAt);
-        reader.setLastHeartbeatAt(observedAt);
+        OffsetDateTime receivedAt = OffsetDateTime.now();
+        reader.setLastSeenAt(receivedAt);
+        reader.setLastHeartbeatAt(receivedAt);
+        reader.setClockOffsetMs(request.getObservedAt() == null ? null
+            : Duration.between(receivedAt, request.getObservedAt()).toMillis());
         reader.setLastIp(sourceIp);
         reader.setGatewayName(trimToNull(request.getGatewayName()));
         reader.setGatewayBacklog(request.getGatewayBacklog() != null ? request.getGatewayBacklog() : 0);
@@ -239,6 +259,7 @@ public class RfidReaderServiceImpl implements RfidReaderService {
         dto.setLastError(reader.getLastError());
         dto.setLastHeartbeatAt(reader.getLastHeartbeatAt() != null ? reader.getLastHeartbeatAt().toString() : null);
         dto.setLastProcessedAt(reader.getLastProcessedAt() != null ? reader.getLastProcessedAt().toString() : null);
+        dto.setClockOffsetMs(reader.getClockOffsetMs());
         dto.setCreatedAt(reader.getCreatedAt() != null ? reader.getCreatedAt().toString() : null);
         dto.setUpdatedAt(reader.getUpdatedAt() != null ? reader.getUpdatedAt().toString() : null);
     }
@@ -251,6 +272,10 @@ public class RfidReaderServiceImpl implements RfidReaderService {
         long silenceSeconds = raceTrackerProperties.getRfid().getReaderSilenceTimeoutSeconds();
         if (Duration.between(lastHeartbeatAt, OffsetDateTime.now()).getSeconds() > silenceSeconds) {
             return RfidReader.GatewayStatus.OFFLINE;
+        }
+        if (reader.getClockOffsetMs() != null
+            && Math.abs(reader.getClockOffsetMs()) > raceTrackerProperties.getRfid().getClockSkewDegradedThresholdMs()) {
+            return RfidReader.GatewayStatus.DEGRADED;
         }
         return reader.getGatewayStatus() != null ? reader.getGatewayStatus() : RfidReader.GatewayStatus.ONLINE;
     }

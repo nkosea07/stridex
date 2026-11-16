@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
 <head>
     <meta charset="UTF-8">
-    <title>Registration approved</title>
+    <title th:text="#{email.registrationApproved.subject(${raceName})}">Race Tracker</title>
     <style>
         body { font-family: sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
@@ -17,15 +17,13 @@
             <h1>Race Tracker</h1>
         </div>
         <div class="content">
-            <p>Hello <span th:text="${firstName}">Athlete</span>,</p>
-            <p>Your registration for <strong th:text="${raceName}">the race</strong> is confirmed.</p>
-            <p th:if="${bibNumber}">Your bib number is <strong th:text="${bibNumber}">-</strong>.</p>
-            <p>We look forward to seeing you on race day.</p>
-            <p>Thank you,<br/>The Race Tracker Team</p>
+            <p th:text="#{email.common.greeting(${firstName})}">Hello</p>
+            <p th:text="#{email.registrationApproved.intro(${raceName})}">Approved</p>
+            <p th:if="${bibNumber}" th:text="#{email.registrationApproved.bib(${bibNumber})}">Bib</p>
+            <p th:text="#{email.registrationApproved.closing}">See you</p>
+            <p><span th:text="#{email.common.thanks}">Thank you,</span><br/><span th:text="#{email.common.team}">The Race Tracker Team</span></p>
         </div>
-        <div class="footer">
-            &copy; 2026 Race Tracker Platform. All rights reserved.
-        </div>
+        <div class="footer" th:text="#{email.common.footer}">Race Tracker Platform</div>
     </div>
 </body>
 </html>

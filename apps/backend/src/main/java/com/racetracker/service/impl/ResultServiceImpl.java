@@ -26,6 +26,7 @@ import com.racetracker.repository.RaceResultRevisionRepository;
 import com.racetracker.security.CapabilityAuthorizationService;
 import com.racetracker.model.UserCapabilityType;
 import org.springframework.data.domain.PageRequest;
+import com.racetracker.service.CheckpointCutoff;
 import com.racetracker.service.ResultService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -56,6 +57,10 @@ public class ResultServiceImpl implements ResultService {
     private final RaceResultRepository raceResultRepository;
     private final RaceCategoryRepository raceCategoryRepository;
     private final CapabilityAuthorizationService capabilityAuthorizationService;
+    private final com.racetracker.service.ResultVersioning resultVersioning;
+    private final com.racetracker.service.ResultLock resultLock;
+    private final com.racetracker.repository.RaceResultVersionRepository resultVersionRepository;
+    private final com.racetracker.repository.ResultQueryRepository resultQueryRepository;
 
     public ResultServiceImpl(
         RaceRepository raceRepository,
@@ -67,7 +72,11 @@ public class ResultServiceImpl implements ResultService {
         ParticipantPenaltyRepository penaltyRepository,
         RaceResultRepository raceResultRepository,
         RaceCategoryRepository raceCategoryRepository,
-        CapabilityAuthorizationService capabilityAuthorizationService
+        CapabilityAuthorizationService capabilityAuthorizationService,
+        com.racetracker.service.ResultVersioning resultVersioning,
+        com.racetracker.service.ResultLock resultLock,
+        com.racetracker.repository.RaceResultVersionRepository resultVersionRepository,
+        com.racetracker.repository.ResultQueryRepository resultQueryRepository
     ) {
         this.raceRepository = raceRepository;
         this.participantRepository = participantRepository;
@@ -79,6 +88,10 @@ public class ResultServiceImpl implements ResultService {
         this.raceResultRepository = raceResultRepository;
         this.raceCategoryRepository = raceCategoryRepository;
         this.capabilityAuthorizationService = capabilityAuthorizationService;
+        this.resultVersioning = resultVersioning;
+        this.resultLock = resultLock;
+        this.resultVersionRepository = resultVersionRepository;
+        this.resultQueryRepository = resultQueryRepository;
     }
 
     @Override
@@ -226,23 +239,137 @@ public class ResultServiceImpl implements ResultService {
 
     @Override
     @Transactional
-    public void publish(UUID raceId) {
-        Race race = raceRepository.findById(raceId)
+    public int publish(UUID raceId) {
+        Race race = raceRepository.findByIdForUpdate(raceId)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
 
         if (race.getStatus() != Race.RaceStatus.COMPLETED) {
             throw new ConflictException("Race must be completed before results can be published");
         }
+        resultLock.assertOpen(race);
 
         List<RaceResultDto> computed = computeAllResults(raceId);
         raceResultRepository.deleteByRaceId(raceId);
         List<RaceResult> snapshots = computed.stream().map(dto -> toSnapshot(race, dto)).toList();
         raceResultRepository.saveAll(snapshots);
+        com.racetracker.model.RaceResultVersion version =
+            resultVersioning.record(raceId, snapshots, currentUserIdOrNull());
 
         if (race.getResultsPublishedAt() == null) {
             race.setResultsPublishedAt(OffsetDateTime.now());
             raceRepository.save(race);
         }
+        return version.getVersion();
+    }
+
+    @Override
+    @Transactional
+    public com.racetracker.dto.result.ResultVersionDto certify(UUID raceId) {
+        Race race = raceRepository.findByIdForUpdate(raceId)
+            .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        resultLock.assertOpen(race);
+        com.racetracker.model.RaceResultVersion latest = resultVersionRepository.findTopByRaceIdOrderByVersionDesc(raceId)
+            .orElseThrow(() -> new ConflictException("Publish the results before certifying them", "RESULTS_NOT_PUBLISHED"));
+        String persisted = resultVersioning.contentHash(resultVersioning.lines(raceResultRepository.findByRaceIdOrderByOverallPositionAsc(raceId)));
+        if (!persisted.equals(latest.getContentSha256())) {
+            throw new ConflictException("The published results no longer match their recorded version", "RESULTS_INTEGRITY_FAILED");
+        }
+        if (!currentComputedHash(race).equals(latest.getContentSha256())) {
+            throw new ConflictException("Timing changed after the last publish. Publish again, review, then certify.",
+                "RESULTS_CHANGED_SINCE_PUBLISH");
+        }
+        if (resultQueryRepository.countByRaceIdAndStatus(raceId, com.racetracker.model.ResultQuery.Status.OPEN) > 0) {
+            throw new ConflictException("Answer every open result query before certifying the results", "RESULT_QUERIES_OPEN");
+        }
+        UUID actor = currentUserIdOrNull();
+        OffsetDateTime now = OffsetDateTime.now();
+        latest.setStatus(com.racetracker.model.RaceResultVersion.Status.OFFICIAL);
+        latest.setCertifiedAt(now);
+        latest.setCertifiedBy(actor);
+        resultVersionRepository.save(latest);
+        race.setResultsCertifiedAt(now);
+        race.setResultsCertifiedBy(actor);
+        raceRepository.save(race);
+        return toVersionDto(latest);
+    }
+
+    @Override
+    @Transactional
+    public void reopen(UUID raceId, String reason) {
+        Race race = raceRepository.findByIdForUpdate(raceId)
+            .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        if (race.getResultsCertifiedAt() == null) {
+            throw new ConflictException("Results are not certified", "RESULTS_NOT_CERTIFIED");
+        }
+        race.setResultsCertifiedAt(null);
+        race.setResultsCertifiedBy(null);
+        raceRepository.save(race);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.racetracker.dto.result.ResultIntegrityDto integrity(UUID raceId) {
+        Race race = raceRepository.findById(raceId)
+            .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
+        List<com.racetracker.model.RaceResultVersion> versions = resultVersionRepository.findByRaceIdOrderByVersionAsc(raceId);
+        if (versions.isEmpty()) {
+            return new com.racetracker.dto.result.ResultIntegrityDto(null, null, null, null, null, null, true, true, false);
+        }
+        boolean chainValid = true;
+        String previousChain = null;
+        for (com.racetracker.model.RaceResultVersion version : versions) {
+            String content = resultVersioning.contentHash(resultVersioning.snapshotLines(version));
+            String chain = com.racetracker.service.ResultVersioning.chainHash(previousChain, content, version.getVersion(), raceId);
+            chainValid &= content.equals(version.getContentSha256())
+                && chain.equals(version.getChainSha256())
+                && java.util.Objects.equals(previousChain, version.getPreviousChainSha256());
+            previousChain = version.getChainSha256();
+        }
+        com.racetracker.model.RaceResultVersion latest = versions.get(versions.size() - 1);
+        String persisted = resultVersioning.contentHash(resultVersioning.lines(raceResultRepository.findByRaceIdOrderByOverallPositionAsc(raceId)));
+        boolean changed = race.getStatus() == Race.RaceStatus.COMPLETED
+            && !currentComputedHash(race).equals(latest.getContentSha256());
+        return new com.racetracker.dto.result.ResultIntegrityDto(
+            latest.getVersion(),
+            latest.getStatus().name(),
+            latest.getPublishedAt().toString(),
+            latest.getCertifiedAt() == null ? null : latest.getCertifiedAt().toString(),
+            latest.getContentSha256(),
+            latest.getChainSha256(),
+            chainValid,
+            persisted.equals(latest.getContentSha256()),
+            changed);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.racetracker.dto.result.ResultVersionDto> versions(UUID raceId) {
+        return resultVersionRepository.findByRaceIdOrderByVersionAsc(raceId).stream().map(this::toVersionDto).toList();
+    }
+
+    private String currentComputedHash(Race race) {
+        List<RaceResult> recomputed = computeAllResults(race.getId()).stream().map(dto -> toSnapshot(race, dto)).toList();
+        return resultVersioning.contentHash(resultVersioning.lines(recomputed));
+    }
+
+    private com.racetracker.dto.result.ResultVersionDto toVersionDto(com.racetracker.model.RaceResultVersion version) {
+        return new com.racetracker.dto.result.ResultVersionDto(
+            version.getVersion(),
+            version.getStatus().name(),
+            version.getResultCount(),
+            version.getContentSha256(),
+            version.getChainSha256(),
+            version.getPublishedAt().toString(),
+            version.getCertifiedAt() == null ? null : version.getCertifiedAt().toString());
+    }
+
+    private UUID currentUserIdOrNull() {
+        org.springframework.security.core.Authentication authentication =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            return null;
+        }
+        return userRepository.findByEmailIgnoreCase(authentication.getName()).map(com.racetracker.model.User::getId).orElse(null);
     }
 
     private List<RaceResultDto> computeAllResults(UUID raceId) {
@@ -460,24 +587,26 @@ public class ResultServiceImpl implements ResultService {
         dto.setCategory(participant.getCategory() != null ? participant.getCategory().getName() : null);
         dto.setStatus(mapStatus(participant.getStatus()));
         dto.setDisqualified(participant.getStatus() == Participant.ParticipantStatus.DISQUALIFIED);
-        dto.setDisqualificationReason(dto.isDisqualified() ? "Disqualified" : null);
+        dto.setDisqualificationReason(dto.isDisqualified()
+            ? (participant.getStatusReason() != null && !participant.getStatusReason().isBlank()
+                ? participant.getStatusReason() : "Disqualified")
+            : null);
         dto.setPenaltySeconds(penaltySeconds);
 
-        OffsetDateTime start = resolveStart(participant, records);
+        OffsetDateTime start = CheckpointCutoff.resolveStart(participant, records);
+        OffsetDateTime gunStart = CheckpointCutoff.gunStart(participant);
         OffsetDateTime finish = resolveFinish(records);
 
         dto.setStartTime(start != null ? start.toString() : null);
         dto.setFinishTime(finish != null ? finish.toString() : null);
 
-        Duration rawDuration = (start != null && finish != null && !finish.isBefore(start))
-            ? Duration.between(start, finish)
-            : null;
-        Duration duration = rawDuration != null ? rawDuration.plusSeconds(penaltySeconds) : null;
+        Duration duration = elapsedWithPenalty(start, finish, penaltySeconds);
+        Duration gunDuration = elapsedWithPenalty(gunStart, finish, penaltySeconds);
 
         String durationStr = formatDuration(duration);
         dto.setTotalTime(durationStr);
-        dto.setGunTime(durationStr);
         dto.setChipTime(durationStr);
+        dto.setGunTime(gunDuration != null ? formatDuration(gunDuration) : durationStr);
 
         if (duration != null && race.getDistanceKm() != null && race.getDistanceKm().doubleValue() > 0) {
             double hours = duration.toSeconds() / 3600.0;
@@ -511,27 +640,20 @@ public class ResultServiceImpl implements ResultService {
     }
 
     private OffsetDateTime effectiveTime(CheckpointRecord record) {
-        return record.getAdjustedRecordedAt() != null ? record.getAdjustedRecordedAt() : record.getRecordedAt();
+        return CheckpointCutoff.effectiveTime(record);
     }
 
-    private OffsetDateTime resolveStart(Participant participant, List<CheckpointRecord> records) {
-        if (participant.getCheckedInAt() != null) {
-            return participant.getCheckedInAt();
+    private Duration elapsedWithPenalty(OffsetDateTime start, OffsetDateTime finish, int penaltySeconds) {
+        if (start == null || finish == null || finish.isBefore(start)) {
+            return null;
         }
-
-        for (CheckpointRecord record : records) {
-            if (record.getCheckpoint() != null && record.getCheckpoint().getCheckpointType() == Checkpoint.CheckpointType.START) {
-                return effectiveTime(record);
-            }
-        }
-
-        return participant.getRegisteredAt();
+        return Duration.between(start, finish).plusSeconds(penaltySeconds);
     }
 
     private OffsetDateTime resolveFinish(List<CheckpointRecord> records) {
         for (int i = records.size() - 1; i >= 0; i--) {
             CheckpointRecord record = records.get(i);
-            if (record.getCheckpoint() != null && record.getCheckpoint().getCheckpointType() == Checkpoint.CheckpointType.FINISH) {
+            if (com.racetracker.service.CheckpointPasses.isFinish(record)) {
                 return effectiveTime(record);
             }
         }

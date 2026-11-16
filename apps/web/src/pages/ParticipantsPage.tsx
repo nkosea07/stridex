@@ -39,6 +39,11 @@ const paymentColors: Record<string, string> = {
   REFUNDED: 'bg-info/20 text-info',
 }
 
+const IMPORT_POLL_INTERVAL_MS = 2000
+const IMPORT_POLL_MAX_ATTEMPTS = 150
+
+const OFFICIAL_STATUS_DECISIONS: ParticipantStatus[] = ['DISQUALIFIED', 'DNF', 'DNS', 'FINISHED']
+
 export function ParticipantsPage() {
   const { raceId } = useParams()
   const { user } = useAuth()
@@ -56,6 +61,8 @@ export function ParticipantsPage() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [preview, setPreview] = useState<import('@/types').ImportPreview | null>(null)
+  const [importSubmitting, setImportSubmitting] = useState(false)
+  const importPollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [newParticipant, setNewParticipant] = useState({
     firstName: '',
     lastName: '',
@@ -77,6 +84,8 @@ export function ParticipantsPage() {
     bibNumber: '',
     categoryId: '',
     status: '' as ParticipantStatus | '',
+    originalStatus: '' as ParticipantStatus | '',
+    statusReason: '',
   })
   const [penaltyOpen, setPenaltyOpen] = useState(false)
   const [penaltyParticipant, setPenaltyParticipant] = useState<Participant | null>(null)
@@ -142,7 +151,7 @@ export function ParticipantsPage() {
       setParticipants(data)
       setRefundEligibleIds(eligibleIds)
     } catch {
-      toast.error('Failed to load participants')
+      toast.error(t('participants:ui.failedToLoadParticipants'))
     } finally {
       setIsLoading(false)
     }
@@ -189,24 +198,51 @@ export function ParticipantsPage() {
       setPreview(await participantsApi.previewImport(raceId, file))
       setPreviewOpen(true)
     } catch {
-      toast.error('Failed to preview import file')
+      toast.error(t('participants:ui.failedToPreviewImportFile'))
     } finally {
       setPreviewLoading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
+  const watchImportJob = (jobId: string, attempt = 0) => {
+    if (!raceId || attempt > IMPORT_POLL_MAX_ATTEMPTS) return
+    importPollRef.current = setTimeout(async () => {
+      const job = await participantsApi.getImportJob(raceId, jobId).catch(() => null)
+      if (job && (job.status === 'COMPLETED' || job.status === 'FAILED')) {
+        importPollRef.current = null
+        void loadImportJobs()
+        if (job.status === 'COMPLETED') {
+          void loadParticipants()
+          toast.success(t('common:importCompleted', { success: job.successCount ?? 0, skipped: job.errorCount ?? 0 }))
+        } else {
+          toast.error(t('common:importFailed'))
+        }
+        return
+      }
+      watchImportJob(jobId, attempt + 1)
+    }, IMPORT_POLL_INTERVAL_MS)
+  }
+
+  useEffect(() => () => {
+    if (importPollRef.current) clearTimeout(importPollRef.current)
+  }, [])
+
   const confirmImport = async () => {
-    if (!raceId || !previewFileRef.current) return
+    if (!raceId || !previewFileRef.current || importSubmitting) return
+    setImportSubmitting(true)
     try {
-      await participantsApi.importCsv(raceId, previewFileRef.current)
+      const job = await participantsApi.importCsv(raceId, previewFileRef.current)
       toast.success(t('common:importStarted'))
       setPreviewOpen(false)
       setPreview(null)
       previewFileRef.current = null
       void loadImportJobs()
+      if (job?.id) watchImportJob(job.id)
     } catch {
       toast.error(t('common:importStartFailed'))
+    } finally {
+      setImportSubmitting(false)
     }
   }
 
@@ -221,7 +257,7 @@ export function ParticipantsPage() {
       a.click()
       URL.revokeObjectURL(url)
     } catch {
-      toast.error('Failed to download Bib')
+      toast.error(t('participants:ui.failedToDownloadBib'))
     }
   }
 
@@ -236,7 +272,7 @@ export function ParticipantsPage() {
       a.click()
       URL.revokeObjectURL(url)
     } catch {
-      toast.error('Failed to export participants')
+      toast.error(t('participants:ui.failedToExportParticipants'))
     }
   }
 
@@ -244,10 +280,10 @@ export function ParticipantsPage() {
     if (!raceId) return
     try {
       await participantsApi.checkIn(raceId, participantId)
-      toast.success('Participant checked in')
+      toast.success(t('participants:ui.participantCheckedIn'))
       await loadParticipants()
     } catch {
-      toast.error('Failed to check in participant')
+      toast.error(t('participants:ui.failedToCheckInParticipant'))
     }
   }
 
@@ -255,10 +291,10 @@ export function ParticipantsPage() {
     if (!raceId) return
     try {
       await participantsApi.delete(raceId, participantId)
-      toast.success('Participant deleted')
+      toast.success(t('participants:ui.participantDeleted'))
       await loadParticipants()
     } catch {
-      toast.error('Failed to delete participant')
+      toast.error(t('participants:ui.failedToDeleteParticipant'))
     }
   }
 
@@ -281,10 +317,10 @@ export function ParticipantsPage() {
     if (!raceId) return
     try {
       await participantsApi.verifyPayment(raceId, participantId, { status: 'PAID' })
-      toast.success('Payment marked as verified')
+      toast.success(t('participants:ui.paymentMarkedAsVerified'))
       await loadParticipants()
     } catch {
-      toast.error('Failed to verify payment')
+      toast.error(t('participants:ui.failedToVerifyPayment'))
     }
   }
 
@@ -295,9 +331,9 @@ export function ParticipantsPage() {
       const payment = await participantsApi.startCheckout(raceId, participantId, promoCode || undefined)
       if (payment.checkoutUrl) {
         window.open(payment.checkoutUrl, '_blank', 'noopener')
-        toast.success('Payment checkout opened in a new tab')
+        toast.success(t('participants:ui.paymentCheckoutOpenedInANew'))
       } else {
-        toast.error('No checkout URL returned')
+        toast.error(t('participants:ui.noCheckoutUrlReturned'))
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to start payment')
@@ -348,6 +384,8 @@ export function ParticipantsPage() {
       bibNumber: participant.bibNumber ?? '',
       categoryId: participant.categoryId ?? '',
       status: participant.status,
+      originalStatus: participant.status,
+      statusReason: '',
     })
     setEditOpen(true)
   }
@@ -355,7 +393,13 @@ export function ParticipantsPage() {
   const handleSaveEdit = async () => {
     if (!raceId) return
     if (!editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.email.trim()) {
-      toast.error('First name, last name, and email are required')
+      toast.error(t('participants:ui.firstNameLastNameAndEmail'))
+      return
+    }
+    const officialDecision = editForm.status !== editForm.originalStatus
+      && OFFICIAL_STATUS_DECISIONS.includes(editForm.status as ParticipantStatus)
+    if (officialDecision && editForm.statusReason.trim().length < 3) {
+      toast.error(t('participants:statusReasonRequired'))
       return
     }
     setEditSaving(true)
@@ -368,8 +412,9 @@ export function ParticipantsPage() {
         bibNumber: editForm.bibNumber.trim() || undefined,
         categoryId: editForm.categoryId || undefined,
         status: editForm.status || undefined,
+        statusReason: officialDecision ? editForm.statusReason.trim() : undefined,
       })
-      toast.success('Participant updated')
+      toast.success(t('participants:ui.participantUpdated'))
       setEditOpen(false)
       await loadParticipants()
     } catch (error) {
@@ -384,7 +429,7 @@ export function ParticipantsPage() {
     try {
       setPenalties(await participantsApi.listPenalties(raceId, participantId))
     } catch {
-      toast.error('Failed to load penalties')
+      toast.error(t('participants:ui.failedToLoadPenalties'))
     }
   }
 
@@ -401,21 +446,25 @@ export function ParticipantsPage() {
     if (!raceId || !penaltyParticipant) return
     const seconds = Number(penaltySeconds)
     if (!Number.isFinite(seconds) || seconds === 0) {
-      toast.error('Enter a non-zero number of seconds')
+      toast.error(t('participants:ui.enterANonZeroNumberOf'))
+      return
+    }
+    if (penaltyReason.trim().length < 5) {
+      toast.error(t('participants:penaltyReasonRequired'))
       return
     }
     setPenaltyBusy(true)
     try {
       await participantsApi.addPenalty(raceId, penaltyParticipant.id, {
         seconds,
-        reason: penaltyReason.trim() || undefined,
+        reason: penaltyReason.trim(),
       })
-      toast.success('Penalty added')
+      toast.success(t('participants:ui.penaltyAdded'))
       setPenaltySeconds('')
       setPenaltyReason('')
       await loadPenalties(penaltyParticipant.id)
     } catch {
-      toast.error('Failed to add penalty')
+      toast.error(t('participants:ui.failedToAddPenalty'))
     } finally {
       setPenaltyBusy(false)
     }
@@ -425,10 +474,10 @@ export function ParticipantsPage() {
     if (!raceId || !penaltyParticipant) return
     try {
       await participantsApi.removePenalty(raceId, penaltyParticipant.id, penaltyId)
-      toast.success('Penalty removed')
+      toast.success(t('participants:ui.penaltyRemoved'))
       await loadPenalties(penaltyParticipant.id)
     } catch {
-      toast.error('Failed to remove penalty')
+      toast.error(t('participants:ui.failedToRemovePenalty'))
     }
   }
 
@@ -444,12 +493,12 @@ export function ParticipantsPage() {
         gender: (newParticipant.gender || undefined) as Participant['gender'],
         nationality: newParticipant.nationality || undefined,
       })
-      toast.success('Participant added')
+      toast.success(t('participants:ui.participantAdded'))
       setIsAddDialogOpen(false)
       setNewParticipant({ firstName: '', lastName: '', email: '', phone: '', dateOfBirth: '', gender: '', nationality: '' })
       await loadParticipants()
     } catch {
-      toast.error('Failed to add participant')
+      toast.error(t('participants:ui.failedToAddParticipant'))
     }
   }
 
@@ -462,18 +511,18 @@ export function ParticipantsPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Participants</h1>
-          <p className="text-muted-foreground">Manage race participants and registrations</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t('participants:ui.participants')}</h1>
+          <p className="text-muted-foreground">{t('participants:ui.manageRaceParticipantsAndRegistrations')}</p>
         </div>
         <div className="flex items-center gap-2">
           <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
           <Button variant="outline" onClick={() => setIsJobsOpen(true)}>
             <History className="mr-2 h-4 w-4" />
-            Imports
+            {t('participants:ui.imports')}
           </Button>
           <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
             <Upload className="mr-2 h-4 w-4" />
-            Import CSV
+            {t('participants:ui.importCsv')}
           </Button>
           <Button variant="outline" onClick={() => void handleExportParticipants('csv')}>
             <Download className="mr-2 h-4 w-4" />
@@ -485,37 +534,37 @@ export function ParticipantsPage() {
           </Button>
           <Button onClick={() => setIsAddDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            Add Participant
+            {t('participants:ui.addParticipant')}
           </Button>
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Registered</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{total.toLocaleString()}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Checked In</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{checkedIn.toLocaleString()}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">On Course</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{onCourse.toLocaleString()}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Finished</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finished.toLocaleString()}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('participants:ui.totalRegistered')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{total.toLocaleString()}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('participants:ui.checkedIn')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{checkedIn.toLocaleString()}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('participants:ui.onCourse')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{onCourse.toLocaleString()}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('participants:ui.finished')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finished.toLocaleString()}</div></CardContent></Card>
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search by name, email, or bib..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input placeholder={t('participants:ui.searchByNameEmailOrBib')} className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]"><Filter className="mr-2 h-4 w-4" /><SelectValue placeholder="Filter by status" /></SelectTrigger>
+          <SelectTrigger className="w-[180px]"><Filter className="mr-2 h-4 w-4" /><SelectValue placeholder={t('participants:ui.filterByStatus')} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="REGISTERED">Registered</SelectItem>
-            <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-            <SelectItem value="CHECKED_IN">Checked In</SelectItem>
-            <SelectItem value="STARTED">Started</SelectItem>
-            <SelectItem value="FINISHED">Finished</SelectItem>
-            <SelectItem value="DNF">DNF</SelectItem>
-            <SelectItem value="DNS">DNS</SelectItem>
-            <SelectItem value="PENDING_REVIEW">Pending Review</SelectItem>
-            <SelectItem value="WAITLISTED">Waitlisted</SelectItem>
-            <SelectItem value="REJECTED">Rejected</SelectItem>
+            <SelectItem value="all">{t('participants:ui.allStatuses')}</SelectItem>
+            <SelectItem value="REGISTERED">{t('participants:ui.registered')}</SelectItem>
+            <SelectItem value="CONFIRMED">{t('participants:ui.confirmed')}</SelectItem>
+            <SelectItem value="CHECKED_IN">{t('participants:ui.checkedIn')}</SelectItem>
+            <SelectItem value="STARTED">{t('participants:ui.started')}</SelectItem>
+            <SelectItem value="FINISHED">{t('participants:ui.finished')}</SelectItem>
+            <SelectItem value="DNF">{t('participants:ui.dnf')}</SelectItem>
+            <SelectItem value="DNS">{t('participants:ui.dns')}</SelectItem>
+            <SelectItem value="PENDING_REVIEW">{t('participants:ui.pendingReview')}</SelectItem>
+            <SelectItem value="WAITLISTED">{t('participants:ui.waitlisted')}</SelectItem>
+            <SelectItem value="REJECTED">{t('participants:ui.rejected')}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -525,13 +574,13 @@ export function ParticipantsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Bib</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Payment</TableHead>
-                <TableHead>Checked In</TableHead>
-                <TableHead className="w-[120px]">Actions</TableHead>
+                <TableHead>{t('participants:ui.name')}</TableHead>
+                <TableHead>{t('participants:ui.bib')}</TableHead>
+                <TableHead>{t('participants:ui.email')}</TableHead>
+                <TableHead>{t('participants:ui.status')}</TableHead>
+                <TableHead>{t('participants:ui.payment')}</TableHead>
+                <TableHead>{t('participants:ui.checkedIn')}</TableHead>
+                <TableHead className="w-[120px]">{t('participants:ui.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -557,15 +606,15 @@ export function ParticipantsPage() {
                           <>
                             <DropdownMenuItem onClick={() => void handleReview(p.id, 'APPROVE')}>
                               <CheckCircle className="mr-2 h-4 w-4" />
-                              Approve
+                              {t('participants:ui.approve')}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => void handleReview(p.id, 'WAITLIST')}>
                               <Clock className="mr-2 h-4 w-4" />
-                              Waitlist
+                              {t('participants:ui.waitlist')}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => void handleReview(p.id, 'REJECT')}>
                               <XCircle className="mr-2 h-4 w-4" />
-                              Reject
+                              {t('participants:ui.reject')}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                           </>
@@ -574,12 +623,12 @@ export function ParticipantsPage() {
                           <>
                             <DropdownMenuItem onClick={() => void handleStartPayment(p.id)}>
                               <CreditCard className="mr-2 h-4 w-4" />
-                              Start Online Payment
+                              {t('participants:ui.startOnlinePayment')}
                             </DropdownMenuItem>
                             {canManageAdminActions && (
                               <DropdownMenuItem onClick={() => void handleVerifyPayment(p.id)}>
                                 <CheckCircle className="mr-2 h-4 w-4" />
-                                Verify Payment
+                                {t('participants:ui.verifyPayment')}
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
@@ -596,25 +645,25 @@ export function ParticipantsPage() {
                         )}
                         <DropdownMenuItem onClick={() => void handleCheckIn(p.id)}>
                           <CheckCircle className="mr-2 h-4 w-4" />
-                          Check In
+                          {t('participants:ui.checkIn')}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => void handleDownloadBib(p.id, `${p.firstName} ${p.lastName}`)}>
                           <Printer className="mr-2 h-4 w-4" />
-                          Print Bib
+                          {t('participants:ui.printBib')}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => openEdit(p)}>
                           <Timer className="mr-2 h-4 w-4" />
-                          Edit Participant
+                          {t('participants:ui.editParticipant')}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => void openPenalties(p)}>
                           <Timer className="mr-2 h-4 w-4" />
-                          Manage Penalties
+                          {t('participants:ui.managePenalties')}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive" onClick={() => void handleDelete(p.id)}>
                           <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
+                          {t('participants:ui.delete')}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -623,22 +672,22 @@ export function ParticipantsPage() {
               ))}
             </TableBody>
           </Table>
-          {!isLoading && filteredParticipants.length === 0 && <p className="p-4 text-sm text-muted-foreground">No participants found.</p>}
+          {!isLoading && filteredParticipants.length === 0 && <p className="p-4 text-sm text-muted-foreground">{t('participants:ui.noParticipantsFound')}</p>}
         </CardContent>
       </Card>
 
       <Dialog open={isJobsOpen} onOpenChange={setIsJobsOpen}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>Recent Imports</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('participants:ui.recentImports')}</DialogTitle></DialogHeader>
           <div className="max-h-[400px] overflow-y-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>File</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Progress</TableHead>
-                  <TableHead>Result</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>{t('participants:ui.file')}</TableHead>
+                  <TableHead>{t('participants:ui.status')}</TableHead>
+                  <TableHead>{t('participants:ui.progress')}</TableHead>
+                  <TableHead>{t('participants:ui.result')}</TableHead>
+                  <TableHead>{t('participants:ui.date')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -655,6 +704,25 @@ export function ParticipantsPage() {
                     </TableCell>
                     <TableCell className="text-xs">
                       <span className="text-success">{job.successCount}</span> / <span className="text-destructive">{job.errorCount}</span>
+                      {job.rowErrors && job.rowErrors.length > 0 && (
+                        <details className="mt-1">
+                          <summary className="cursor-pointer text-muted-foreground">
+                            {t('common:importRowErrorsSummary', { count: job.errorCount ?? job.rowErrors.length })}
+                          </summary>
+                          <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
+                            {job.rowErrors.map((rowError) => (
+                              <li key={`${job.id}-${rowError.row}`}>
+                                {t('common:importRowError', { row: rowError.row, reason: rowError.reason })}
+                              </li>
+                            ))}
+                          </ul>
+                          {(job.errorCount ?? 0) > job.rowErrors.length && (
+                            <p className="mt-1 text-muted-foreground">
+                              {t('common:importRowErrorsTruncated', { count: job.rowErrors.length })}
+                            </p>
+                          )}
+                        </details>
+                      )}
                     </TableCell>
                     <TableCell className="text-xs">
                       {new Date(job.createdAt).toLocaleString()}
@@ -662,59 +730,59 @@ export function ParticipantsPage() {
                   </TableRow>
                 ))}
                 {importJobs.length === 0 && (
-                  <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-4">No import history.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-4">{t('participants:ui.noImportHistory')}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => void loadImportJobs()}>Refresh</Button>
-            <Button onClick={() => setIsJobsOpen(false)}>Close</Button>
+            <Button variant="outline" onClick={() => void loadImportJobs()}>{t('participants:ui.refresh')}</Button>
+            <Button onClick={() => setIsJobsOpen(false)}>{t('participants:ui.close')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add Participant</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('participants:ui.addParticipant')}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>First Name</Label><Input value={newParticipant.firstName} onChange={(e) => setNewParticipant((v) => ({ ...v, firstName: e.target.value }))} /></div>
-              <div><Label>Last Name</Label><Input value={newParticipant.lastName} onChange={(e) => setNewParticipant((v) => ({ ...v, lastName: e.target.value }))} /></div>
+              <div><Label>{t('participants:ui.firstName')}</Label><Input value={newParticipant.firstName} onChange={(e) => setNewParticipant((v) => ({ ...v, firstName: e.target.value }))} /></div>
+              <div><Label>{t('participants:ui.lastName')}</Label><Input value={newParticipant.lastName} onChange={(e) => setNewParticipant((v) => ({ ...v, lastName: e.target.value }))} /></div>
             </div>
-            <div><Label>Email</Label><Input type="email" value={newParticipant.email} onChange={(e) => setNewParticipant((v) => ({ ...v, email: e.target.value }))} /></div>
-            <div><Label>Phone</Label><Input value={newParticipant.phone} onChange={(e) => setNewParticipant((v) => ({ ...v, phone: e.target.value }))} /></div>
+            <div><Label>{t('participants:ui.email')}</Label><Input type="email" value={newParticipant.email} onChange={(e) => setNewParticipant((v) => ({ ...v, email: e.target.value }))} /></div>
+            <div><Label>{t('participants:ui.phone')}</Label><Input value={newParticipant.phone} onChange={(e) => setNewParticipant((v) => ({ ...v, phone: e.target.value }))} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Date of Birth</Label><Input type="date" value={newParticipant.dateOfBirth} onChange={(e) => setNewParticipant((v) => ({ ...v, dateOfBirth: e.target.value }))} /></div>
-              <div><Label>Gender</Label><Select value={newParticipant.gender} onValueChange={(value) => setNewParticipant((v) => ({ ...v, gender: value }))}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent><SelectItem value="MALE">Male</SelectItem><SelectItem value="FEMALE">Female</SelectItem><SelectItem value="OTHER">Other</SelectItem><SelectItem value="PREFER_NOT_TO_SAY">Prefer not to say</SelectItem></SelectContent></Select></div>
+              <div><Label>{t('participants:ui.dateOfBirth')}</Label><Input type="date" value={newParticipant.dateOfBirth} onChange={(e) => setNewParticipant((v) => ({ ...v, dateOfBirth: e.target.value }))} /></div>
+              <div><Label>{t('participants:ui.gender')}</Label><Select value={newParticipant.gender} onValueChange={(value) => setNewParticipant((v) => ({ ...v, gender: value }))}><SelectTrigger><SelectValue placeholder={t('participants:ui.select')} /></SelectTrigger><SelectContent><SelectItem value="MALE">{t('participants:ui.male')}</SelectItem><SelectItem value="FEMALE">{t('participants:ui.female')}</SelectItem><SelectItem value="OTHER">{t('participants:ui.other')}</SelectItem><SelectItem value="PREFER_NOT_TO_SAY">{t('participants:ui.preferNotToSay')}</SelectItem></SelectContent></Select></div>
             </div>
-            <div><Label>Nationality</Label><Input value={newParticipant.nationality} onChange={(e) => setNewParticipant((v) => ({ ...v, nationality: e.target.value }))} /></div>
+            <div><Label>{t('participants:ui.nationality')}</Label><Input value={newParticipant.nationality} onChange={(e) => setNewParticipant((v) => ({ ...v, nationality: e.target.value }))} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => void handleAddParticipant()}>Add</Button>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>{t('participants:ui.cancel')}</Button>
+            <Button onClick={() => void handleAddParticipant()}>{t('participants:ui.add')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Edit Participant</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('participants:ui.editParticipant')}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>First Name</Label><Input value={editForm.firstName} onChange={(e) => setEditForm((v) => ({ ...v, firstName: e.target.value }))} /></div>
-              <div><Label>Last Name</Label><Input value={editForm.lastName} onChange={(e) => setEditForm((v) => ({ ...v, lastName: e.target.value }))} /></div>
+              <div><Label>{t('participants:ui.firstName')}</Label><Input value={editForm.firstName} onChange={(e) => setEditForm((v) => ({ ...v, firstName: e.target.value }))} /></div>
+              <div><Label>{t('participants:ui.lastName')}</Label><Input value={editForm.lastName} onChange={(e) => setEditForm((v) => ({ ...v, lastName: e.target.value }))} /></div>
             </div>
-            <div><Label>Email</Label><Input type="email" value={editForm.email} onChange={(e) => setEditForm((v) => ({ ...v, email: e.target.value }))} /></div>
+            <div><Label>{t('participants:ui.email')}</Label><Input type="email" value={editForm.email} onChange={(e) => setEditForm((v) => ({ ...v, email: e.target.value }))} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Phone</Label><Input value={editForm.phone} onChange={(e) => setEditForm((v) => ({ ...v, phone: e.target.value }))} /></div>
-              <div><Label>Bib Number</Label><Input value={editForm.bibNumber} onChange={(e) => setEditForm((v) => ({ ...v, bibNumber: e.target.value }))} /></div>
+              <div><Label>{t('participants:ui.phone')}</Label><Input value={editForm.phone} onChange={(e) => setEditForm((v) => ({ ...v, phone: e.target.value }))} /></div>
+              <div><Label>{t('participants:ui.bibNumber')}</Label><Input value={editForm.bibNumber} onChange={(e) => setEditForm((v) => ({ ...v, bibNumber: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Category</Label>
+                <Label>{t('participants:ui.category')}</Label>
                 <Select value={editForm.categoryId} onValueChange={(value) => setEditForm((v) => ({ ...v, categoryId: value }))}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('participants:ui.select')} /></SelectTrigger>
                   <SelectContent>
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
@@ -723,9 +791,9 @@ export function ParticipantsPage() {
                 </Select>
               </div>
               <div>
-                <Label>Status</Label>
+                <Label>{t('participants:ui.status')}</Label>
                 <Select value={editForm.status} onValueChange={(value) => setEditForm((v) => ({ ...v, status: value as ParticipantStatus }))}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('participants:ui.select')} /></SelectTrigger>
                   <SelectContent>
                     {(['REGISTERED', 'CONFIRMED', 'CHECKED_IN', 'STARTED', 'DNF', 'DNS', 'DISQUALIFIED', 'FINISHED'] as ParticipantStatus[]).map((status) => (
                       <SelectItem key={status} value={status}>{status.replace('_', ' ')}</SelectItem>
@@ -733,10 +801,18 @@ export function ParticipantsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {editForm.status !== editForm.originalStatus
+                && OFFICIAL_STATUS_DECISIONS.includes(editForm.status as ParticipantStatus) && (
+                <div className="col-span-2">
+                  <Label htmlFor="status-reason">{t('participants:statusReason')}</Label>
+                  <Input id="status-reason" value={editForm.statusReason} maxLength={500}
+                    onChange={(e) => setEditForm((v) => ({ ...v, statusReason: e.target.value }))} />
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>Cancel</Button>
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>{t('participants:ui.cancel')}</Button>
             <Button onClick={() => void handleSaveEdit()} disabled={editSaving}>{editSaving ? 'Saving…' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
@@ -750,7 +826,7 @@ export function ParticipantsPage() {
           <div className="space-y-4">
             <div className="space-y-2">
               {penalties.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No penalties recorded.</p>
+                <p className="text-sm text-muted-foreground">{t('participants:ui.noPenaltiesRecorded')}</p>
               ) : (
                 penalties.map((penalty) => (
                   <div key={penalty.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
@@ -760,7 +836,7 @@ export function ParticipantsPage() {
                     </span>
                     {canManageAdminActions && (
                       <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void handleRemovePenalty(penalty.id)}>
-                        Remove
+                        {t('participants:ui.remove')}
                       </Button>
                     )}
                   </div>
@@ -769,13 +845,13 @@ export function ParticipantsPage() {
             </div>
             {canManageAdminActions && (
               <div className="grid grid-cols-3 gap-3">
-                <div><Label>Seconds</Label><Input type="number" value={penaltySeconds} onChange={(e) => setPenaltySeconds(e.target.value)} /></div>
-                <div className="col-span-2"><Label>Reason</Label><Input value={penaltyReason} onChange={(e) => setPenaltyReason(e.target.value)} placeholder="Optional" /></div>
+                <div><Label>{t('participants:ui.seconds')}</Label><Input type="number" value={penaltySeconds} onChange={(e) => setPenaltySeconds(e.target.value)} /></div>
+                <div className="col-span-2"><Label>{t('participants:ui.reason')}</Label><Input value={penaltyReason} onChange={(e) => setPenaltyReason(e.target.value)} placeholder={t('participants:penaltyReasonPlaceholder')} /></div>
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPenaltyOpen(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setPenaltyOpen(false)}>{t('participants:ui.close')}</Button>
             {canManageAdminActions && (
               <Button onClick={() => void handleAddPenalty()} disabled={penaltyBusy}>{penaltyBusy ? 'Adding…' : 'Add penalty'}</Button>
             )}
@@ -888,7 +964,7 @@ export function ParticipantsPage() {
           {preview && (
             <div className="max-h-[50vh] overflow-auto rounded-md border">
               <Table>
-                <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Email</TableHead><TableHead>Name</TableHead><TableHead>Issues</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>#</TableHead><TableHead>{t('participants:ui.email')}</TableHead><TableHead>{t('participants:ui.name')}</TableHead><TableHead>{t('participants:ui.issues')}</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {preview.rows.map((row) => (
                     <TableRow key={row.rowNumber}>
@@ -906,8 +982,8 @@ export function ParticipantsPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setPreviewOpen(false)}>{t('common:actions.cancel')}</Button>
-            <Button disabled={!preview || preview.validRows === 0} onClick={() => void confirmImport()}>
-              {t('common:importPreviewConfirm')}
+            <Button disabled={!preview || preview.validRows === 0 || importSubmitting} onClick={() => void confirmImport()}>
+              {importSubmitting ? t('common:importSubmitting') : t('common:importPreviewConfirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

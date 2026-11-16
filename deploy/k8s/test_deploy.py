@@ -145,7 +145,7 @@ class DeploymentPreflightTest(unittest.TestCase):
     @staticmethod
     def encoded_secret(**overrides):
         keys = {key: "real-value" for key in (
-            "DB_USERNAME", "DB_PASSWORD", "JWT_SECRET", "AWS_S3_ACCESS_KEY", "AWS_S3_SECRET_KEY")}
+            "DB_USERNAME", "DB_PASSWORD", "JWT_SECRET", "MFA_ENCRYPTION_KEY", "REDIS_PASSWORD", "AWS_S3_ACCESS_KEY", "AWS_S3_SECRET_KEY")}
         keys.update(overrides)
         return json.dumps({"data": {key: base64.b64encode(value.encode()).decode()
                                     for key, value in keys.items()}})
@@ -316,6 +316,15 @@ class DeploymentPreflightTest(unittest.TestCase):
                 with self.assertRaisesRegex(deployment.DeploymentError, "MAIL_USERNAME"):
                     deployment.preflight(manifest_dir)
             self.assertEqual(len(calls), 2)
+
+    def test_missing_redis_password_stops_preflight(self):
+        secret = json.loads(self.encoded_secret())
+        del secret["data"]["REDIS_PASSWORD"]
+        calls, fake = self.mock_kubectl(secret=json.dumps(secret))
+        with patch.object(deployment, "kubectl", side_effect=fake):
+            with self.assertRaisesRegex(deployment.DeploymentError, "REDIS_PASSWORD"):
+                deployment.preflight(self.manifest_dir)
+        self.assertFalse(any("--dry-run=client" in call for call in calls))
 
     def test_workflows_gate_apply_and_run_tests_on_push_and_pr(self):
         workflow = WORKFLOW.read_text()

@@ -57,6 +57,24 @@ class RequestRateLimiterTest {
     }
 
     @Test
+    void verificationResendIsLimitedPerAccountAndIpWithoutStoringTheEmail() {
+        doReturn(0L).when(redisTemplate).execute(any(RedisScript.class), anyList(), any(Object[].class));
+
+        limiter.checkVerificationResend("Runner@Example.com", "203.0.113.20");
+
+        org.mockito.ArgumentCaptor<List<String>> keys = org.mockito.ArgumentCaptor.forClass(List.class);
+        org.mockito.ArgumentCaptor<Object[]> arguments = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        org.mockito.Mockito.verify(redisTemplate).execute(any(RedisScript.class), keys.capture(), arguments.capture());
+        assertEquals(2, keys.getValue().size());
+        assertTrue(keys.getValue().get(0).startsWith("rt:limit:verification-resend:ip:"));
+        assertTrue(keys.getValue().get(1).startsWith("rt:limit:verification-resend:account:"));
+        assertTrue(keys.getValue().stream().noneMatch(key -> key.contains("runner@example.com") || key.contains("203.0.113.20")));
+        List<String> values = List.of(arguments.getValue()).stream().map(String::valueOf).toList();
+        assertEquals("10", values.get(0));
+        assertEquals("3", values.get(2));
+    }
+
+    @Test
     void oauthUsesOneHashedIpBucket() {
         doReturn(0L).when(redisTemplate).execute(any(RedisScript.class), anyList(), any(Object[].class));
 
@@ -87,7 +105,7 @@ class RequestRateLimiterTest {
         assertTrue(keys.getValue().get(1).startsWith("rt:limit:rfid:reader:"));
         assertTrue(keys.getValue().stream().noneMatch(key -> key.contains("reader-secret") || key.contains("203.0.113.20")));
         List<String> values = List.of(arguments.getValue()).stream().map(String::valueOf).toList();
-        assertEquals("120", values.get(0));
+        assertEquals("1200", values.get(0));
         assertEquals("600", values.get(2));
     }
 

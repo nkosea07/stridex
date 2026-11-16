@@ -16,6 +16,8 @@ public interface ParticipantService {
     void delete(UUID raceId, UUID participantId);
     ParticipantDto checkIn(UUID raceId, UUID participantId);
 
+    java.util.List<com.racetracker.dto.participant.StaffParticipantSearchResultDto> searchForStaff(UUID raceId, String query);
+
     ParticipantDto checkInByQr(UUID raceId, String code);
 
     ImportJobDto importCsv(UUID raceId, MultipartFile file);

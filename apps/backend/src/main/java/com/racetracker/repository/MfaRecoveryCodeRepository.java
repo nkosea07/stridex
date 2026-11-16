@@ -11,6 +11,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface MfaRecoveryCodeRepository extends JpaRepository<MfaRecoveryCode, UUID> {
+    void deleteByUserId(UUID userId);
+
 
     Optional<MfaRecoveryCode> findByUserIdAndCodeHashAndUsedAtIsNull(UUID userId, String codeHash);
 

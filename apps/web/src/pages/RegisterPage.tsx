@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ApiError, authApi } from '@/lib/api'
 import type { UserCapability } from '@/types'
 import { toast } from 'sonner'
+import { LegalFooter } from '@/components/legal/LegalFooter'
 
 type ExperienceChoice = UserCapability | 'BOTH'
 
@@ -44,6 +45,8 @@ export function RegisterPage() {
   const [experienceChoice, setExperienceChoice] = useState<ExperienceChoice | null>(null)
   const privacyPolicyPath = API_CONTRACT.legal?.privacyPolicyPath ?? '/privacy'
   const privacyPolicyVersion = API_CONTRACT.legal.privacyPolicyVersion
+  const termsPath = API_CONTRACT.legal.termsPath
+  const termsVersion = API_CONTRACT.legal.termsVersion
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -71,7 +74,7 @@ export function RegisterPage() {
     }
 
     if (!acceptedPrivacy) {
-      toast.error(t('register:errorPrivacy'))
+      toast.error(t('register:errorLegal'))
       return
     }
 
@@ -90,6 +93,8 @@ export function RegisterPage() {
         password: form.password,
         privacyPolicyAccepted: true,
         privacyPolicyVersion,
+        termsAccepted: true,
+        termsVersion,
       }
       if (organizerIntent) {
         await authApi.registerOrganizer({ ...commonData, organizationName: form.organizationName.trim() })
@@ -116,7 +121,7 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="flex flex-col items-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
@@ -259,7 +264,11 @@ export function RegisterPage() {
                   required
                 />
                 <span>
-                  {t('register:privacyPrefix')}{' '}
+                  {t('register:legalPrefix')}{' '}
+                  <Link to={termsPath} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
+                    {t('register:termsLink')}
+                  </Link>{' '}
+                  {t('register:legalJoin')}{' '}
                   <Link to={privacyPolicyPath} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
                     {t('register:privacyLink')}
                   </Link>
@@ -292,6 +301,7 @@ export function RegisterPage() {
           </CardContent>
         </Card>
       </div>
+      <LegalFooter className="mt-8 w-full max-w-md border-0 bg-transparent" />
     </div>
   )
 }

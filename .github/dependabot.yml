@@ -1,0 +1,39 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: maven
+    directory: "/apps/backend"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+  - package-ecosystem: maven
+    directory: "/apps/rfid-reader-impinj"
+    schedule:
+      interval: monthly
+  - package-ecosystem: maven
+    directory: "/apps/rfid-reader-demo"
+    schedule:
+      interval: monthly
+  - package-ecosystem: docker
+    directory: "/apps/backend"
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: "/apps/web"
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: "/apps/rfid-gateway"
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly

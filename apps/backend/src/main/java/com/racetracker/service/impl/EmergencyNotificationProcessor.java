@@ -100,6 +100,10 @@ public class EmergencyNotificationProcessor {
             alertIds.add(claim.alertId());
             try {
                 deliver(claim);
+            } catch (com.racetracker.notification.RecipientUnreachableException ex) {
+                log.info("Emergency notification skipped; jobId={}, channel={}, reason={}",
+                    claim.jobId(), claim.channel(), ex.getMessage());
+                transactionTemplate.executeWithoutResult(status -> markSkipped(claim));
             } catch (Exception ex) {
                 log.warn("Emergency notification delivery failed; jobId={}, channel={}, errorType={}",
                     claim.jobId(), claim.channel(), ex.getClass().getSimpleName());
@@ -124,7 +128,8 @@ public class EmergencyNotificationProcessor {
             job.setLeaseToken(leaseToken);
             job.setLeaseUntil(now.plus(LEASE_DURATION));
             job.setAttempts(job.getAttempts() + 1);
-            claims.add(new Claim(job.getId(), job.getAlert().getId(), job.getChannel(), leaseToken, message(job)));
+            claims.add(new Claim(job.getId(), job.getAlert().getId(), job.getChannel(), leaseToken, message(job),
+                isReachableAccount(job.getRecipient())));
         }
         return claims;
     }
@@ -137,7 +142,16 @@ public class EmergencyNotificationProcessor {
             && job.getLeaseUntil() != null && !job.getLeaseUntil().isAfter(now);
     }
 
+    private boolean isReachableAccount(User recipient) {
+        return recipient != null
+            && Boolean.TRUE.equals(recipient.getIsActive())
+            && recipient.getDeletedAt() == null;
+    }
+
     private void deliver(Claim claim) throws Exception {
+        if (!claim.recipientReachable()) {
+            throw new com.racetracker.notification.RecipientUnreachableException("recipient account is inactive or erased");
+        }
         if (claim.channel() == NotificationDelivery.Channel.IN_APP) {
             Notification saved = transactionTemplate.execute(status -> persistInApp(claim));
             if (saved != null) {
@@ -192,6 +206,16 @@ public class EmergencyNotificationProcessor {
         job.setLeaseUntil(null);
     }
 
+    private void markSkipped(Claim claim) {
+        EmergencyNotificationJob job = jobRepository.findByIdForUpdate(claim.jobId()).orElse(null);
+        if (job == null || !claim.leaseToken().equals(job.getLeaseToken())) {
+            return;
+        }
+        job.setStatus(EmergencyNotificationJob.Status.SKIPPED);
+        job.setLeaseToken(null);
+        job.setLeaseUntil(null);
+    }
+
     private void markFailure(Claim claim, UUID leaseToken) {
         EmergencyNotificationJob job = jobRepository.findByIdForUpdate(claim.jobId()).orElse(null);
         if (job == null || !leaseToken.equals(job.getLeaseToken())) {
@@ -224,8 +248,8 @@ public class EmergencyNotificationProcessor {
         if (alert == null) {
             return;
         }
-        long dispatched = jobRepository.countByAlertIdAndStatus(alertId,
-            EmergencyNotificationJob.Status.DISPATCHED);
+        long dispatched = jobRepository.countByAlertIdAndStatusAndChannelNot(alertId,
+            EmergencyNotificationJob.Status.DISPATCHED, NotificationDelivery.Channel.IN_APP);
         alert.setDeliveryStatus(exhausted == 0 && dispatched > 0
             ? EmergencyAlert.DeliveryStatus.DISPATCHED
             : EmergencyAlert.DeliveryStatus.ESCALATION_REQUIRED);
@@ -265,6 +289,7 @@ public class EmergencyNotificationProcessor {
     }
 
     private record Claim(UUID jobId, UUID alertId, NotificationDelivery.Channel channel,
-                         UUID leaseToken, NotificationMessage message) {
+                         UUID leaseToken, NotificationMessage message,
+                         boolean recipientReachable) {
     }
 }

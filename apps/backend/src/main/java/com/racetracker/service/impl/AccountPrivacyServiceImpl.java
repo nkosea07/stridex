@@ -21,6 +21,9 @@ import com.racetracker.repository.ParticipantRepository;
 import com.racetracker.repository.PushDeviceRepository;
 import com.racetracker.repository.PrivacyObjectDeletionJobRepository;
 import com.racetracker.repository.RaceMediaRepository;
+import com.racetracker.repository.MfaChallengeRepository;
+import com.racetracker.repository.MfaRecoveryCodeRepository;
+import com.racetracker.repository.UserMfaCredentialRepository;
 import com.racetracker.repository.UserRepository;
 import com.racetracker.service.AccountPrivacyService;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -57,6 +60,9 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
     private final AccountErasureRepository accountErasureRepository;
     private final PrivacyObjectDeletionJobRepository deletionJobRepository;
     private final EmergencyAlertRepository emergencyAlertRepository;
+    private final UserMfaCredentialRepository mfaCredentialRepository;
+    private final MfaRecoveryCodeRepository mfaRecoveryCodeRepository;
+    private final MfaChallengeRepository mfaChallengeRepository;
     private final PasswordEncoder passwordEncoder;
     private final com.racetracker.service.AuditEventService auditEventService;
     private final TransactionTemplate isolatedTransaction;
@@ -76,6 +82,9 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         AccountErasureRepository accountErasureRepository,
         PrivacyObjectDeletionJobRepository deletionJobRepository,
         EmergencyAlertRepository emergencyAlertRepository,
+        UserMfaCredentialRepository mfaCredentialRepository,
+        MfaRecoveryCodeRepository mfaRecoveryCodeRepository,
+        MfaChallengeRepository mfaChallengeRepository,
         PasswordEncoder passwordEncoder,
         com.racetracker.service.AuditEventService auditEventService,
         PlatformTransactionManager transactionManager
@@ -94,6 +103,9 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         this.accountErasureRepository = accountErasureRepository;
         this.deletionJobRepository = deletionJobRepository;
         this.emergencyAlertRepository = emergencyAlertRepository;
+        this.mfaCredentialRepository = mfaCredentialRepository;
+        this.mfaRecoveryCodeRepository = mfaRecoveryCodeRepository;
+        this.mfaChallengeRepository = mfaChallengeRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditEventService = auditEventService;
         this.isolatedTransaction = new TransactionTemplate(transactionManager);
@@ -121,21 +133,69 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
             entry.put("raceId", participant.getRace() != null ? participant.getRace().getId() : null);
             entry.put("raceName", participant.getRace() != null ? participant.getRace().getName() : null);
             entry.put("bibNumber", participant.getBibNumber());
+            entry.put("athleteCode", participant.getAthleteCode());
             entry.put("status", participant.getStatus() != null ? participant.getStatus().name() : null);
             entry.put("registeredAt", participant.getRegisteredAt());
+            entry.put("checkedInAt", participant.getCheckedInAt());
+            entry.put("firstName", participant.getFirstName());
+            entry.put("lastName", participant.getLastName());
+            entry.put("email", participant.getEmail());
+            entry.put("phone", participant.getPhone());
+            entry.put("dateOfBirth", participant.getDateOfBirth());
+            entry.put("gender", participant.getGender() != null ? participant.getGender().name() : null);
+            entry.put("nationality", participant.getNationality());
+            entry.put("clubName", participant.getClubName());
+            entry.put("teamName", participant.getTeamName());
+            entry.put("shirtSize", participant.getShirtSize());
+            entry.put("emergencyContactName", participant.getEmergencyContactName());
+            entry.put("emergencyContactPhone", participant.getEmergencyContactPhone());
+            entry.put("emergencyContactRelation", participant.getEmergencyContactRelation());
+            entry.put("bloodType", participant.getBloodType());
+            entry.put("medicalConditions", participant.getMedicalConditions());
+            entry.put("allergies", participant.getAllergies());
+            entry.put("waiverAcceptedAt", participant.getWaiverAcceptedAt());
+            entry.put("waiverVersion", participant.getWaiverVersion());
+            entry.put("mediaPublicationConsentAt", participant.getMediaPublicationConsentAt());
+            entry.put("mediaPublicationConsentVersion", participant.getMediaPublicationConsentVersion());
+            entry.put("trackingEnabled", participant.getIsTrackingEnabled());
+            entry.put("paymentStatus", participant.getPaymentStatus() != null ? participant.getPaymentStatus().name() : null);
             registrations.add(entry);
         }
 
         Map<String, Object> consent = new LinkedHashMap<>();
         consent.put("dataProcessingConsentAt", user.getDataProcessingConsentAt());
         consent.put("marketingConsent", Boolean.TRUE.equals(user.getMarketingConsent()));
+        consent.put("privacyPolicyVersion", user.getPrivacyPolicyVersion());
+        consent.put("privacyPolicyAcceptedAt", user.getPrivacyPolicyAcceptedAt());
+        consent.put("termsVersion", user.getTermsVersion());
+        consent.put("termsAcceptedAt", user.getTermsAcceptedAt());
+
+        Map<String, Object> notificationPreferences = new LinkedHashMap<>();
+        notificationPreferenceRepository.findById(userId).ifPresent(preference -> {
+            notificationPreferences.put("email", preference.getEmailEnabled());
+            notificationPreferences.put("push", preference.getPushEnabled());
+            notificationPreferences.put("sms", preference.getSmsEnabled());
+            notificationPreferences.put("whatsapp", preference.getWhatsappEnabled());
+        });
+
+        List<Map<String, Object>> follows = new ArrayList<>();
+        athleteFollowRepository.findByUserIdOrderByCreatedAtDesc(userId).forEach(follow -> {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("raceId", follow.getRace() != null ? follow.getRace().getId() : null);
+            entry.put("participantId", follow.getParticipant() != null ? follow.getParticipant().getId() : null);
+            entry.put("followedAt", follow.getCreatedAt());
+            follows.add(entry);
+        });
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("generatedAt", OffsetDateTime.now());
         result.put("profile", profile);
         result.put("consent", consent);
         result.put("registrations", registrations);
+        result.put("notificationPreferences", notificationPreferences);
+        result.put("follows", follows);
         result.put("notificationCount", notificationRepository.countByUserId(userId));
+        result.put("registeredPushDevices", pushDeviceRepository.countByUserId(userId));
         return result;
     }
 
@@ -158,7 +218,9 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
                 user.setDataProcessingConsentAt(OffsetDateTime.now());
             }
         } else if (Boolean.FALSE.equals(request.getDataProcessingConsent())) {
-            user.setDataProcessingConsentAt(null);
+            throw new com.racetracker.exception.ApiException(
+                "Data processing is required to use the platform; delete your account to withdraw it",
+                "DATA_PROCESSING_CONSENT_REQUIRED");
         }
         if (request.getMarketingConsent() != null) {
             user.setMarketingConsent(request.getMarketingConsent());
@@ -168,6 +230,42 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         dto.setDataProcessingConsentAt(saved.getDataProcessingConsentAt());
         dto.setMarketingConsent(Boolean.TRUE.equals(saved.getMarketingConsent()));
         return dto;
+    }
+
+    @Override
+    @Transactional
+    public com.racetracker.dto.privacy.LegalAcceptanceDto acceptLegalDocuments(
+        UUID userId, com.racetracker.dto.privacy.LegalAcceptanceRequest request) {
+        if (!com.racetracker.service.LegalDocuments.CURRENT_PRIVACY_POLICY_VERSION.equals(request.getPrivacyPolicyVersion())) {
+            throw new com.racetracker.exception.ApiException("The current privacy policy version must be accepted",
+                "PRIVACY_POLICY_VERSION_MISMATCH");
+        }
+        if (!com.racetracker.service.LegalDocuments.CURRENT_TERMS_VERSION.equals(request.getTermsVersion())) {
+            throw new com.racetracker.exception.ApiException("The current Terms and Conditions version must be accepted",
+                "TERMS_VERSION_MISMATCH");
+        }
+        User user = userRepository.findByIdForUpdate(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        OffsetDateTime now = OffsetDateTime.now();
+        boolean changed = false;
+        if (!request.getPrivacyPolicyVersion().equals(user.getPrivacyPolicyVersion())) {
+            user.setPrivacyPolicyVersion(request.getPrivacyPolicyVersion());
+            user.setPrivacyPolicyAcceptedAt(now);
+            changed = true;
+        }
+        if (!request.getTermsVersion().equals(user.getTermsVersion())) {
+            user.setTermsVersion(request.getTermsVersion());
+            user.setTermsAcceptedAt(now);
+            changed = true;
+        }
+        if (changed) {
+            userRepository.save(user);
+            auditEventService.recordInCurrentTransaction("LEGAL_DOCUMENTS_ACCEPTED", userId, "USER", userId.toString(),
+                "SUCCESS", Map.of("privacyPolicyVersion", user.getPrivacyPolicyVersion(),
+                    "termsVersion", user.getTermsVersion()));
+        }
+        return new com.racetracker.dto.privacy.LegalAcceptanceDto(user.getPrivacyPolicyVersion(),
+            user.getPrivacyPolicyAcceptedAt(), user.getTermsVersion(), user.getTermsAcceptedAt());
     }
 
     @Override
@@ -188,10 +286,12 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         erasure.setStagedAt(now);
         erasure.setNotificationEmail(user.getEmail());
         erasure.setNotificationFirstName(user.getFirstName());
+        erasure.setNotificationLocale(user.getPreferredLocale());
         accountErasureRepository.saveAndFlush(erasure);
         deletionJobRepository.stageOriginals(userId, now);
         deletionJobRepository.stageThumbnails(userId, now);
         raceMediaRepository.deletePersonalMediaForUser(userId);
+        raceMediaRepository.detachUploader(userId);
         auditEventService.recordInCurrentTransaction("ACCOUNT_ERASURE_STAGED", userId, "USER", userId.toString(),
             "SUCCESS", Map.of());
     }
@@ -310,7 +410,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         }
     }
 
-    public record NotificationClaim(UUID userId, String email, String firstName, UUID leaseToken) {}
+    public record NotificationClaim(UUID userId, String email, String firstName, String locale, UUID leaseToken) {}
 
     @Transactional
     public List<NotificationClaim> claimNotifications(int limit) {
@@ -322,7 +422,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
             erasure.setNotificationLeaseToken(token);
             erasure.setNotificationLeaseUntil(now.plusMinutes(5));
             claimed.add(new NotificationClaim(userId, erasure.getNotificationEmail(),
-                erasure.getNotificationFirstName(), token));
+                erasure.getNotificationFirstName(), erasure.getNotificationLocale(), token));
         }
         return claimed;
     }
@@ -336,6 +436,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         erasure.setNotificationDispatchedAt(OffsetDateTime.now());
         erasure.setNotificationEmail(null);
         erasure.setNotificationFirstName(null);
+        erasure.setNotificationLocale(null);
         erasure.setNotificationLeaseToken(null);
         erasure.setNotificationLeaseUntil(null);
     }
@@ -360,6 +461,9 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         notificationRepository.deleteByUserId(userId);
         notificationPreferenceRepository.deleteByUserId(userId);
         authTokenRepository.deleteByUserId(userId);
+        mfaChallengeRepository.deleteByUserId(userId);
+        mfaRecoveryCodeRepository.deleteByUserId(userId);
+        mfaCredentialRepository.deleteByUserId(userId);
         // Safety records are retained but de-identified.
         emergencyAlertRepository.anonymizeReporterByUserId(userId);
 
@@ -376,6 +480,8 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         user.setDataProcessingConsentAt(null);
         user.setPrivacyPolicyVersion(null);
         user.setPrivacyPolicyAcceptedAt(null);
+        user.setTermsVersion(null);
+        user.setTermsAcceptedAt(null);
         user.setDeletedAt(now);
         userRepository.save(user);
 
@@ -392,6 +498,8 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
         if (!participants.isEmpty()) {
             participantRepository.saveAll(participants);
             registrationAnswerRepository.deleteByParticipantIdIn(participantIds);
+            athleteFollowRepository.deleteByParticipantIdIn(participantIds);
+            notificationRepository.deleteBySubjectParticipantIds(participantIds);
             participantCredentialRepository.deleteByParticipantIdIn(participantIds);
             gpsLocationRepository.deleteByParticipantIdIn(participantIds);
         }

@@ -22,6 +22,8 @@ public class RaceTrackerProperties {
     private Notifications notifications = new Notifications();
     private OAuth oauth = new OAuth();
     private Privacy privacy = new Privacy();
+    private Mobile mobile = new Mobile();
+    private I18n i18n = new I18n();
 
     @Getter
     @Setter
@@ -81,6 +83,12 @@ public class RaceTrackerProperties {
         private int maxTrackPoints = 1000;
         private int heatmapScale = 3;
         private int retentionDays = 0;
+        private int maxClockSkewSeconds = 120;
+        private int selfScanMaxFixAgeSeconds = 120;
+        private int selfScanAccuracyAllowanceMeters = 50;
+        private double maxPlausibleSplitSpeedKmh = 30;
+        private int retentionBatchSize = 5000;
+        private int retentionMaxBatchesPerRun = 200;
     }
 
     @Getter
@@ -107,6 +115,8 @@ public class RaceTrackerProperties {
         private long recoveryFixedDelayMillis = 5000;
         private int readerSilenceTimeoutSeconds = 120;
         private int gatewayBacklogDegradedThreshold = 100;
+        private long clockSkewDegradedThresholdMs = 2000;
+        private long maxFutureReadSkewMs = 5000;
     }
 
     @Getter
@@ -155,5 +165,20 @@ public class RaceTrackerProperties {
     @Setter
     public static class Privacy {
         private int deletionGraceDays = 30;
+    }
+
+    @Getter
+    @Setter
+    public static class I18n {
+        private java.util.List<String> supportedLocales = new java.util.ArrayList<>(java.util.List.of("en"));
+    }
+
+    @Getter
+    @Setter
+    public static class Mobile {
+        private String minimumVersion = "";
+        private String latestVersion = "";
+        private String iosStoreUrl = "";
+        private String androidStoreUrl = "";
     }
 }

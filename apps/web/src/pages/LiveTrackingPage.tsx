@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { connectLiveTracking, trackingApi, checkpointsApi, racesApi, routeApi } from '@/lib/api'
 import { getMapAccessToken, resolveMapStyleUrl } from '@/lib/map-provider'
+import { STALE_FIX_MS, lastFixMillis } from '@/lib/liveTracking'
 import type { LiveTrackingData, Checkpoint, Race, RoutePoint } from '@/types'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
 import { CommandBar, TrackingMode } from '@/components/dashboard/CommandBar'
 import { Sidebar } from '@/components/dashboard/Sidebar'
@@ -21,6 +23,7 @@ const MAPBOX_TOKEN = getMapAccessToken()
 type LiveTrackingViewModel = LiveTrackingData & { lastSeen?: number }
 
 export function LiveTrackingPage() {
+  const { t } = useTranslation()
   const { raceId } = useParams()
   const [race, setRace] = useState<Race | null>(null)
   const [data, setData] = useState<LiveTrackingViewModel[]>([])
@@ -28,7 +31,7 @@ export function LiveTrackingPage() {
   // Security/Config Check
   useEffect(() => {
     if (!MAPBOX_TOKEN) {
-      toast.error('Mapbox token is missing. Please check your configuration.')
+      toast.error(t('liveTracking:ui.mapboxTokenIsMissingPleaseCheck'))
     }
   }, [])
 
@@ -57,12 +60,13 @@ export function LiveTrackingPage() {
         racesApi.get(raceId),
         routeApi.get(raceId).catch(() => [] as RoutePoint[]),
       ])
-      setData(rows.map(r => ({ ...r, lastSeen: Date.now() })))
+      const fetchedAt = Date.now()
+      setData(rows.map(r => ({ ...r, lastSeen: lastFixMillis(r, fetchedAt) })))
       setCheckpoints(cps.sort((a, b) => a.orderIndex - b.orderIndex))
       setRace(raceData)
       setRoute(routePoints)
     } catch {
-      toast.error('Failed to load race data')
+      toast.error(t('liveTracking:ui.failedToLoadRaceData'))
     }
   }
 
@@ -73,7 +77,7 @@ export function LiveTrackingPage() {
     const disconnect = connectLiveTracking(raceId, (incoming) => {
       setData((prev) => {
         const index = prev.findIndex((row) => row.participantId === incoming.participantId)
-        const updatedParticipant = { ...incoming, lastSeen: Date.now() }
+        const updatedParticipant = { ...incoming, lastSeen: lastFixMillis(incoming, Date.now()) }
         if (index === -1) return [...prev, updatedParticipant]
         const next = [...prev]
         next[index] = updatedParticipant
@@ -196,7 +200,7 @@ export function LiveTrackingPage() {
                 <div className={cn(
                   "h-4 w-4 rounded-full border-2 border-white shadow-[0_0_10px_rgba(239,68,68,0.5)] cursor-pointer transition-all duration-300 hover:scale-125",
                   participant.status === 'FINISHED' ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-live',
-                  participant.lastSeen && now - participant.lastSeen > 60000 && "grayscale opacity-50 shadow-none border-muted-foreground"
+                  participant.lastSeen && now - participant.lastSeen > STALE_FIX_MS && "grayscale opacity-50 shadow-none border-muted-foreground"
                 )} />
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-background border border-border px-1.5 py-0.5 rounded text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl">
                   #{participant.bibNumber}

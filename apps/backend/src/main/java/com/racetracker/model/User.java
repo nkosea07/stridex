@@ -71,6 +71,15 @@ public class User {
     @Column(name = "privacy_policy_accepted_at")
     private OffsetDateTime privacyPolicyAcceptedAt;
 
+    @Column(name = "terms_version", length = 40)
+    private String termsVersion;
+
+    @Column(name = "terms_accepted_at")
+    private OffsetDateTime termsAcceptedAt;
+
+    @Column(name = "preferred_locale", length = 10)
+    private String preferredLocale;
+
     @Enumerated(EnumType.STRING)
     @JdbcType(PostgreSQLEnumJdbcType.class)
     @Column(name = "preferred_capability", columnDefinition = "user_capability")

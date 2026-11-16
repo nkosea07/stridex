@@ -29,7 +29,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = PublicTrackingController.class)
-@Import({SecurityConfig.class, ApiSecurityExceptionHandler.class})
+@Import({SecurityConfig.class, com.racetracker.security.AdminMfaPolicy.class, ApiSecurityExceptionHandler.class})
 @EnableConfigurationProperties({RaceTrackerProperties.class, CorsProperties.class})
 @TestPropertySource(properties = {
     "server.servlet.context-path=",

@@ -27,43 +27,31 @@ public class AuthEmailServiceImpl implements AuthEmailService {
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
     private final RaceTrackerProperties raceTrackerProperties;
+    private final com.racetracker.service.LocalizedMessages localizedMessages;
+    private final com.racetracker.service.UserLocales userLocales;
 
     @Async
     @Override
     public void sendEmailVerification(User user, String token) {
         String link = buildLink(raceTrackerProperties.getEmail().getVerificationPath(), token);
-        
-        Context context = new Context();
+        java.util.Locale locale = userLocales.of(user);
+        Context context = new Context(locale);
         context.setVariable("firstName", user.getFirstName());
         context.setVariable("verificationLink", link);
-        
         String htmlContent = templateEngine.process("email-verification", context);
-        
-        send(
-            user.getEmail(),
-            "Verify your Race Tracker account",
-            htmlContent,
-            true
-        );
+        send(user.getEmail(), localizedMessages.get(locale, "email.verify.subject"), htmlContent, true);
     }
 
     @Async
     @Override
     public void sendPasswordReset(User user, String token) {
         String link = buildLink(raceTrackerProperties.getEmail().getResetPasswordPath(), token);
-        
-        Context context = new Context();
+        java.util.Locale locale = userLocales.of(user);
+        Context context = new Context(locale);
         context.setVariable("firstName", user.getFirstName());
         context.setVariable("resetLink", link);
-        
         String htmlContent = templateEngine.process("password-reset", context);
-        
-        send(
-            user.getEmail(),
-            "Reset your Race Tracker password",
-            htmlContent,
-            true
-        );
+        send(user.getEmail(), localizedMessages.get(locale, "email.reset.subject"), htmlContent, true);
     }
 
     @Async
@@ -72,25 +60,30 @@ public class AuthEmailServiceImpl implements AuthEmailService {
         if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
             return;
         }
-        Context context = new Context();
+        java.util.Locale locale = userLocales.of(user);
+        Context context = new Context(locale);
         context.setVariable("firstName", user.getFirstName());
         context.setVariable("scheduledDate", scheduledFor == null ? ""
-            : scheduledFor.format(DateTimeFormatter.ofPattern("d MMMM yyyy")));
+            : scheduledFor.format(DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.LONG).withLocale(locale)));
+        context.setVariable("signInUrl",
+            trimTrailingSlash(raceTrackerProperties.getEmail().getFrontendBaseUrl()) + "/login");
 
         String htmlContent = templateEngine.process("account-deletion-scheduled", context);
-        send(user.getEmail(), "Your Race Tracker account is scheduled for deletion", htmlContent, true);
+        send(user.getEmail(), localizedMessages.get(locale, "email.deletionScheduled.subject"), htmlContent, true);
     }
 
     @Override
-    public void sendAccountDeletionCompletedConfirmed(String email, String firstName) {
+    public void sendAccountDeletionCompletedConfirmed(String email, String firstName, String preferredLocale) {
         if (email == null || email.isBlank()) {
             throw new com.racetracker.exception.ServiceUnavailableException(
                 "Account deletion notice address is unavailable", "ACCOUNT_DELETION_NOTICE_UNAVAILABLE");
         }
-        Context context = new Context();
+        java.util.Locale locale = userLocales.normalize(preferredLocale).map(java.util.Locale::forLanguageTag)
+            .orElse(com.racetracker.service.UserLocales.DEFAULT);
+        Context context = new Context(locale);
         context.setVariable("firstName", firstName);
         String htmlContent = templateEngine.process("account-deletion-completed", context);
-        sendConfirmed(email, "Your Race Tracker account has been deleted", htmlContent);
+        sendConfirmed(email, localizedMessages.get(locale, "email.deletionCompleted.subject"), htmlContent);
     }
 
     private void sendConfirmed(String to, String subject, String body) {

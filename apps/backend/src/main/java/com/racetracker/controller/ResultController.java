@@ -42,6 +42,10 @@ public class ResultController {
     private final RaceAccessGuard raceAccessGuard;
     private final PublicRaceVisibility publicRaceVisibility;
 
+    private final com.racetracker.service.impl.TimingAnomalyService timingAnomalyService;
+
+    private final com.racetracker.service.ResultNotifier resultNotifier;
+
     public ResultController(
         ResultService resultService,
         AuditEventService auditEventService,
@@ -52,9 +56,13 @@ public class ResultController {
         CertificateTokenService certificateTokenService,
         RankingService rankingService,
         RaceAccessGuard raceAccessGuard,
-        PublicRaceVisibility publicRaceVisibility
+        PublicRaceVisibility publicRaceVisibility,
+        com.racetracker.service.impl.TimingAnomalyService timingAnomalyService,
+        com.racetracker.service.ResultNotifier resultNotifier
     ) {
         this.resultService = resultService;
+        this.timingAnomalyService = timingAnomalyService;
+        this.resultNotifier = resultNotifier;
         this.auditEventService = auditEventService;
         this.requestRateLimiter = requestRateLimiter;
         this.clientAddressResolver = clientAddressResolver;
@@ -166,7 +174,7 @@ public class ResultController {
     @GetMapping("/v${racetracker.api.version}/results/my")
     @PreAuthorize("hasAuthority('CAP_ATHLETE')")
     public ResponseEntity<List<RaceResultDto>> myResults() {
-        return ResponseEntity.ok(resultService.getMyResults());
+        return ResponseEntity.ok(withCertificateTokens(resultService.getMyResults()));
     }
 
     @GetMapping("/v${racetracker.api.version}/results/my/history")
@@ -187,17 +195,74 @@ public class ResultController {
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "50") int size
     ) {
-        return ResponseEntity.ok(resultService.getMyResultsPage(page, size));
+        RaceResultPageDto results = resultService.getMyResultsPage(page, size);
+        withCertificateTokens(results.items());
+        return ResponseEntity.ok(results);
+    }
+
+    private List<RaceResultDto> withCertificateTokens(List<RaceResultDto> ownResults) {
+        for (RaceResultDto result : ownResults) {
+            if (result.isCertificateAvailable() && result.getRaceId() != null && result.getParticipantId() != null) {
+                result.setCertificateToken(certificateTokenService.issue(result.getRaceId(), result.getParticipantId()));
+            }
+        }
+        return ownResults;
     }
 
     @PostMapping("/v${racetracker.api.version}/races/{raceId}/results/publish")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
     public ResponseEntity<ApiMessageResponse> publish(@PathVariable UUID raceId, Authentication authentication) {
         raceAccessGuard.assertCanManage(raceId);
-        resultService.publish(raceId);
+        int version = resultService.publish(raceId);
         auditEventService.recordForActor("RESULTS_PUBLISHED", authentication.getName(), "RACE", raceId.toString(),
-            "SUCCESS", java.util.Map.of());
+            "SUCCESS", java.util.Map.of("version", String.valueOf(version)));
+        resultNotifier.resultsPublished(raceId, version, false);
         return ResponseEntity.ok(new ApiMessageResponse("Results published"));
+    }
+
+    @PostMapping("/v${racetracker.api.version}/races/{raceId}/results/certify")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    public ResponseEntity<com.racetracker.dto.result.ResultVersionDto> certify(@PathVariable UUID raceId,
+                                                                               Authentication authentication) {
+        raceAccessGuard.assertCanManage(raceId);
+        com.racetracker.dto.result.ResultVersionDto certified = resultService.certify(raceId);
+        auditEventService.recordForActor("RESULTS_CERTIFIED", authentication.getName(), "RACE", raceId.toString(),
+            "SUCCESS", java.util.Map.of("version", String.valueOf(certified.version()),
+                "contentSha256", certified.contentSha256()));
+        resultNotifier.resultsPublished(raceId, certified.version(), true);
+        return ResponseEntity.ok(certified);
+    }
+
+    @PostMapping("/v${racetracker.api.version}/races/{raceId}/results/reopen")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN')")
+    public ResponseEntity<ApiMessageResponse> reopen(@PathVariable UUID raceId,
+                                                     @jakarta.validation.Valid @RequestBody com.racetracker.dto.result.ResultReopenRequest request,
+                                                     Authentication authentication) {
+        raceAccessGuard.assertCanManage(raceId);
+        resultService.reopen(raceId, request.getReason().trim());
+        auditEventService.recordForActor("RESULTS_REOPENED", authentication.getName(), "RACE", raceId.toString(),
+            "SUCCESS", java.util.Map.of("reason", request.getReason().trim()));
+        return ResponseEntity.ok(new ApiMessageResponse("Results reopened"));
+    }
+
+    @GetMapping("/v${racetracker.api.version}/races/{raceId}/results/integrity")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
+    public ResponseEntity<com.racetracker.dto.result.ResultIntegrityDto> integrity(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanReadStaff(raceId);
+        return ResponseEntity.ok(resultService.integrity(raceId));
+    }
+
+    @GetMapping("/v${racetracker.api.version}/races/{raceId}/results/anomalies")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
+    public ResponseEntity<java.util.List<com.racetracker.dto.result.TimingAnomalyDto>> anomalies(@PathVariable UUID raceId) {
+        return ResponseEntity.ok(timingAnomalyService.anomalies(raceId));
+    }
+
+    @GetMapping("/v${racetracker.api.version}/races/{raceId}/results/versions")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL')")
+    public ResponseEntity<java.util.List<com.racetracker.dto.result.ResultVersionDto>> versions(@PathVariable UUID raceId) {
+        raceAccessGuard.assertCanReadStaff(raceId);
+        return ResponseEntity.ok(resultService.versions(raceId));
     }
 
     private ResponseEntity<byte[]> fileResponse(ExportedFile file) {
@@ -216,7 +281,12 @@ public class ResultController {
 
     private PublicRaceResultDto toPublicResult(RaceResultDto result) {
         String participantName = result.getParticipant() == null ? null
-            : (String.valueOf(result.getParticipant().getFirstName()) + " " + String.valueOf(result.getParticipant().getLastName())).trim();
+            : java.util.stream.Stream.of(result.getParticipant().getFirstName(), result.getParticipant().getLastName())
+                .filter(part -> part != null && !part.isBlank())
+                .collect(java.util.stream.Collectors.joining(" "));
+        if (participantName != null && participantName.isBlank()) {
+            participantName = null;
+        }
         String certificateToken = result.isCertificateAvailable()
             ? certificateTokenService.issue(result.getRaceId(), result.getParticipantId())
             : null;

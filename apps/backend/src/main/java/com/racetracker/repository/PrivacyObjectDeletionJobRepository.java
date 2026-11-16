@@ -22,8 +22,7 @@ public interface PrivacyObjectDeletionJobRepository extends JpaRepository<Privac
         SELECT uuid_generate_v4(), :userId, storage_key,
                COALESCE(storage_scope, 'UNVERIFIED_LEGACY'), :now, :now
         FROM race_media
-        WHERE uploaded_by = :userId
-           OR participant_id IN (SELECT id FROM participants WHERE user_id = :userId)
+        WHERE participant_id IN (SELECT id FROM participants WHERE user_id = :userId)
         ON CONFLICT (user_id, storage_key) DO NOTHING
     """, nativeQuery = true)
     int stageOriginals(@Param("userId") UUID userId, @Param("now") OffsetDateTime now);
@@ -34,8 +33,7 @@ public interface PrivacyObjectDeletionJobRepository extends JpaRepository<Privac
         SELECT uuid_generate_v4(), :userId, thumbnail_key,
                COALESCE(storage_scope, 'UNVERIFIED_LEGACY'), :now, :now
         FROM race_media
-        WHERE (uploaded_by = :userId
-            OR participant_id IN (SELECT id FROM participants WHERE user_id = :userId))
+        WHERE participant_id IN (SELECT id FROM participants WHERE user_id = :userId)
           AND thumbnail_key IS NOT NULL AND thumbnail_key <> ''
         ON CONFLICT (user_id, storage_key) DO NOTHING
     """, nativeQuery = true)

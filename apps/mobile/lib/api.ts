@@ -15,6 +15,16 @@ import type {
   GpsLocation,
   RaceResult,
   RaceResultPage,
+  ResultQuery,
+  NotificationPreferences,
+  ConsentState,
+  PersonalBest,
+  StaffParticipant,
+  StationRecord,
+  RaceWave,
+  PublicAthleteTracking,
+  AthleteHistoryEntry,
+  PaymentCheckout,
   Notification,
   BackendCheckpointDto,
   DeletionStatus,
@@ -22,6 +32,7 @@ import type {
   UserRole,
 } from '@/types';
 import { normalizeUser } from './capabilities';
+import { toCoordinates, type Coordinate, type TrackPoint } from './routeGeometry';
 import { API_CONTRACT, getVersionedApiBase } from '@race-tracker/contracts';
 
 const API_ROOT = process.env.EXPO_PUBLIC_API_URL || API_CONTRACT.mobile.defaultApiRoot;
@@ -90,6 +101,42 @@ export function setSessionInvalidatedHandler(handler: SessionInvalidatedHandler 
   sessionInvalidatedHandler = handler;
 }
 
+export const APP_UPDATE_REQUIRED = 'APP_UPDATE_REQUIRED';
+
+type UpdateRequiredHandler = () => void;
+
+let updateRequiredHandler: UpdateRequiredHandler | null = null;
+let appIdentity: { version: string | null; platform: string | null } = { version: null, platform: null };
+
+export function setUpdateRequiredHandler(handler: UpdateRequiredHandler | null): void {
+  updateRequiredHandler = handler;
+}
+
+export function setAppIdentity(identity: { version: string | null; platform: string | null }): void {
+  appIdentity = identity;
+}
+
+export type AppConfig = {
+  minimumVersion: string | null;
+  latestVersion: string | null;
+  iosStoreUrl: string | null;
+  androidStoreUrl: string | null;
+};
+
+function optionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+export function parseAppConfig(raw: unknown): AppConfig {
+  const value = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  return {
+    minimumVersion: optionalString(value.minimumVersion),
+    latestVersion: optionalString(value.latestVersion),
+    iosStoreUrl: optionalString(value.iosStoreUrl),
+    androidStoreUrl: optionalString(value.androidStoreUrl),
+  };
+}
+
 export type ApiErrorKind = 'network' | 'not_found' | 'unknown';
 
 export class ApiRequestError extends Error {
@@ -97,6 +144,7 @@ export class ApiRequestError extends Error {
     message: string,
     public readonly status?: number,
     public readonly isNetworkError = false,
+    public readonly code?: string,
   ) {
     super(message);
     this.name = 'ApiRequestError';
@@ -204,6 +252,10 @@ function parseUser(value: unknown): User {
     emailVerified: parseOptionalBoolean(user.emailVerified, 'User response contained an invalid email verification state.'),
     createdAt: parseOptionalString(user.createdAt, 'User response contained an invalid createdAt value.'),
     profileImage: parseOptionalString(user.profileImage, 'User response contained an invalid profile image.'),
+    privacyPolicyVersion: parseOptionalString(user.privacyPolicyVersion, 'User response contained an invalid privacy policy version.') ?? null,
+    termsVersion: parseOptionalString(user.termsVersion, 'User response contained an invalid terms version.') ?? null,
+    legalAcceptanceRequired: parseOptionalBoolean(user.legalAcceptanceRequired, 'User response contained an invalid legal acceptance state.') ?? null,
+    preferredLocale: parseOptionalString(user.preferredLocale, 'User response contained an invalid preferred locale.') ?? null,
   });
 }
 
@@ -225,6 +277,14 @@ function parseAuthResponse(value: unknown): AuthResponse {
   return { token, refreshToken, requiresEmailVerification, user: parseUser(response.user) };
 }
 
+export type SelfScanOutcome = { status: 'VERIFIED' | 'PROVISIONAL'; reason: string | null };
+
+function parseSelfScanOutcome(value: unknown): SelfScanOutcome {
+  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const status = record.status === 'VERIFIED' ? 'VERIFIED' : 'PROVISIONAL';
+  return { status, reason: typeof record.reason === 'string' ? record.reason : null };
+}
+
 function parseDeletionStatus(value: unknown): DeletionStatus {
   const status = parseRequiredRecord(value, 'Account deletion response was malformed.');
   if (typeof status.deletionRequested !== 'boolean') {
@@ -234,6 +294,19 @@ function parseDeletionStatus(value: unknown): DeletionStatus {
     deletionRequested: status.deletionRequested,
     requestedAt: status.requestedAt === null ? null : parseOptionalString(status.requestedAt, 'Account deletion response contained an invalid request date.'),
     scheduledFor: status.scheduledFor === null ? null : parseOptionalString(status.scheduledFor, 'Account deletion response contained an invalid schedule date.'),
+    blockers: Array.isArray(status.blockers)
+      ? status.blockers.filter((code): code is string => typeof code === 'string')
+      : [],
+  };
+}
+
+function parseNotificationPreferences(value: unknown): NotificationPreferences {
+  const raw = parseRequiredRecord(value, 'Notification preferences response was malformed.');
+  return {
+    emailEnabled: raw.emailEnabled !== false,
+    pushEnabled: raw.pushEnabled !== false,
+    smsEnabled: raw.smsEnabled !== false,
+    whatsappEnabled: raw.whatsappEnabled !== false,
   };
 }
 
@@ -303,6 +376,23 @@ function parseRegistration(value: unknown): Registration {
     throw new Error('Registration response was missing required fields.');
   }
   return registration as unknown as Registration;
+}
+
+function parseResultQuery(value: unknown): ResultQuery {
+  const query = parseRequiredRecord(value, 'Result query response was malformed.');
+  if (typeof query.id !== 'string' || typeof query.raceId !== 'string' || typeof query.status !== 'string') {
+    throw new Error('Result query response was missing required fields.');
+  }
+  return query as unknown as ResultQuery;
+}
+
+export function certificateUrl(result: Pick<RaceResult, 'raceId' | 'participantId' | 'certificateToken'>): string | null {
+  if (!result.certificateToken) return null;
+  const path = buildContractPath(API_CONTRACT.endpoints.publicRaceResultCertificate, {
+    raceId: result.raceId,
+    participantId: result.participantId,
+  });
+  return `${API_BASE_URL}${path}?token=${encodeURIComponent(result.certificateToken)}`;
 }
 
 function parseRaceResult(value: unknown): RaceResult {
@@ -426,6 +516,8 @@ class ApiClient {
     }
     return {
       'Content-Type': 'application/json',
+      ...(appIdentity.version ? { 'X-App-Version': appIdentity.version } : {}),
+      ...(appIdentity.platform ? { 'X-App-Platform': appIdentity.platform } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
   }
@@ -465,7 +557,15 @@ class ApiClient {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Request failed' }));
-      throw new ApiRequestError(error.message || `HTTP error! status: ${response.status}`, response.status);
+      if (response.status === 426 && error.code === APP_UPDATE_REQUIRED) {
+        updateRequiredHandler?.();
+      }
+      throw new ApiRequestError(
+        error.message || `HTTP error! status: ${response.status}`,
+        response.status,
+        false,
+        typeof error.code === 'string' ? error.code : undefined,
+      );
     }
 
     const text = await response.text();
@@ -522,11 +622,19 @@ class ApiClient {
   }
 
   // Auth endpoints
+  async getAppConfig(): Promise<AppConfig> {
+    return parseAppConfig(await this.request<unknown>(API_CONTRACT.endpoints.publicAppConfig, {}, false));
+  }
+
   async login(email: string, password: string): Promise<AuthResponse> {
-    const response = parseAuthResponse(await this.request<unknown>(API_CONTRACT.endpoints.authLogin, {
+    const raw = await this.request<unknown>(API_CONTRACT.endpoints.authLogin, {
       method: 'POST',
       body: JSON.stringify({ email, password }),
-    }));
+    });
+    if (raw && typeof raw === 'object' && (raw as Record<string, unknown>).mfaRequired === true) {
+      throw new ApiRequestError('Administrator accounts sign in on the web dashboard', 403, false, 'ADMIN_MFA_WEB_ONLY');
+    }
+    const response = parseAuthResponse(raw);
     if (response.token && response.refreshToken) {
       await SecureStore.setItemAsync('auth_token', response.token);
       await SecureStore.setItemAsync('refresh_token', response.refreshToken);
@@ -550,6 +658,8 @@ class ApiClient {
       phone: userData.phone?.trim() || undefined,
       privacyPolicyAccepted: userData.privacyPolicyAccepted,
       privacyPolicyVersion: userData.privacyPolicyVersion,
+      termsAccepted: userData.termsAccepted,
+      termsVersion: userData.termsVersion,
       experiences: userData.experiences,
     };
 
@@ -588,6 +698,24 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify(data),
     }));
+  }
+
+  async acceptLegalDocuments(): Promise<{ privacyPolicyVersion: string; termsVersion: string }> {
+    const response = await this.request<unknown>(API_CONTRACT.endpoints.myLegalAcceptance, {
+      method: 'POST',
+      body: JSON.stringify({
+        privacyPolicyVersion: API_CONTRACT.legal.privacyPolicyVersion,
+        termsVersion: API_CONTRACT.legal.termsVersion,
+      }),
+    });
+    if (!response || typeof response !== 'object') {
+      throw new Error('Legal acceptance response was invalid.');
+    }
+    const record = response as Record<string, unknown>;
+    return {
+      privacyPolicyVersion: parseRequiredString(record.privacyPolicyVersion, 'Legal acceptance response contained an invalid privacy policy version.'),
+      termsVersion: parseRequiredString(record.termsVersion, 'Legal acceptance response contained an invalid terms version.'),
+    };
   }
 
   // Race endpoints
@@ -755,25 +883,69 @@ class ApiClient {
     checkpointId: string,
     participantBibNumber: string,
     method: 'MANUAL' | 'QR_CODE' | 'RFID' = 'MANUAL',
+    capturedOfflineAt?: string,
   ): Promise<void> {
     return this.request<void>(buildContractPath(API_CONTRACT.endpoints.checkpointRecord, { raceId, checkpointId }), {
       method: 'POST',
-      body: JSON.stringify({ participantBibNumber, method }),
+      body: JSON.stringify({ participantBibNumber, method, capturedOfflineAt }),
     });
   }
 
-  async qrCheckIn(raceId: string, code: string): Promise<void> {
-    return this.request<void>(buildContractPath(API_CONTRACT.endpoints.raceParticipantQrCheckIn, { raceId }), {
+  async qrCheckIn(raceId: string, code: string): Promise<StaffParticipant> {
+    return this.request<StaffParticipant>(buildContractPath(API_CONTRACT.endpoints.raceParticipantQrCheckIn, { raceId }), {
       method: 'POST',
       body: JSON.stringify({ code }),
     });
   }
 
-  async recordCheckpoint(raceId: string, checkpointId: string, method: 'qr_code' | 'gps'): Promise<void> {
-    return this.request<void>(buildContractPath(API_CONTRACT.endpoints.trackingCheckpoint, { raceId }), {
+  async checkInParticipant(raceId: string, participantId: string): Promise<StaffParticipant> {
+    return this.request<StaffParticipant>(
+      buildContractPath(API_CONTRACT.endpoints.raceParticipantCheckIn, { raceId, id: participantId }),
+      { method: 'POST' },
+    );
+  }
+
+  async searchParticipants(raceId: string, query: string): Promise<StaffParticipant[]> {
+    const path = buildContractPath(API_CONTRACT.endpoints.raceParticipantSearch, { raceId });
+    const response = await this.request<unknown>(`${path}?q=${encodeURIComponent(query.trim())}`);
+    return parseRecordArray<StaffParticipant>(response, 'Participant search response was malformed.');
+  }
+
+  async getRecentStationRecords(raceId: string, checkpointId: string, limit = 20): Promise<StationRecord[]> {
+    const path = buildContractPath(API_CONTRACT.endpoints.checkpointRecords, { raceId, checkpointId });
+    const response = await this.request<unknown>(`${path}?limit=${limit}`);
+    return parseRecordArray<StationRecord>(response, 'Checkpoint records response was malformed.');
+  }
+
+  async undoStationRecord(raceId: string, checkpointId: string, recordId: string, reason: string): Promise<void> {
+    await this.request(buildContractPath(API_CONTRACT.endpoints.checkpointRecordVoid, { raceId, checkpointId, recordId }), {
       method: 'POST',
-      body: JSON.stringify({ checkpointId, method, timestamp: new Date().toISOString() }),
+      body: JSON.stringify({ reason }),
     });
+  }
+
+  async getRaceWaves(raceId: string): Promise<RaceWave[]> {
+    const response = await this.request<unknown>(buildContractPath(API_CONTRACT.endpoints.raceWaves, { raceId }));
+    return parseRecordArray<RaceWave>(response, 'Waves response was malformed.');
+  }
+
+  async startWave(raceId: string, waveId: string): Promise<RaceWave> {
+    return this.request<RaceWave>(buildContractPath(API_CONTRACT.endpoints.raceWaveStart, { raceId, waveId }), {
+      method: 'POST',
+    });
+  }
+
+  async recordCheckpoint(
+    raceId: string,
+    checkpointId: string,
+    scanToken: string,
+    location?: GpsLocation,
+  ): Promise<SelfScanOutcome> {
+    const response = await this.request<unknown>(buildContractPath(API_CONTRACT.endpoints.trackingCheckpoint, { raceId }), {
+      method: 'POST',
+      body: JSON.stringify({ checkpointId, method: 'qr_code', scanToken, location }),
+    });
+    return parseSelfScanOutcome(response);
   }
 
   // Results endpoints
@@ -840,6 +1012,125 @@ class ApiClient {
 
   async cancelDeletion(): Promise<DeletionStatus> {
     return parseDeletionStatus(await this.request<unknown>(API_CONTRACT.endpoints.myDeletionCancel, { method: 'POST' }));
+  }
+
+  async forgotPassword(email: string): Promise<void> {
+    await this.request(API_CONTRACT.endpoints.authForgotPassword, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }, false);
+  }
+
+  async resendVerification(email: string): Promise<void> {
+    await this.request(API_CONTRACT.endpoints.authResendVerification, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }, false);
+  }
+
+  async startPaymentCheckout(raceId: string, participantId: string, promoCode?: string): Promise<PaymentCheckout> {
+    const path = buildContractPath(API_CONTRACT.endpoints.raceParticipantPaymentCheckout, { raceId, id: participantId });
+    const query = promoCode?.trim() ? `?promoCode=${encodeURIComponent(promoCode.trim())}` : '';
+    const checkout = parseRequiredRecord(await this.request<unknown>(`${path}${query}`, { method: 'POST' }),
+      'Payment response was malformed.');
+    return {
+      ...checkout,
+      checkoutUrl: parseOptionalString(checkout.checkoutUrl, 'Payment checkout link was malformed.') ?? null,
+    } as PaymentCheckout;
+  }
+
+  async getMyHistory(): Promise<AthleteHistoryEntry[]> {
+    const response = await this.request<unknown>(API_CONTRACT.endpoints.myResultsHistory);
+    return parseRecordArray<AthleteHistoryEntry>(response, 'Race history response was malformed.');
+  }
+
+  async getPublicRaceRoute(raceId: string): Promise<Coordinate[]> {
+    const response = await this.request<unknown>(buildContractPath(API_CONTRACT.endpoints.publicRaceRoute, { raceId }));
+    const points = parseRecordArray<Record<string, unknown>>(response, 'Race route response was malformed.')
+      .sort((a, b) => Number(a.sequence ?? 0) - Number(b.sequence ?? 0));
+    return toCoordinates(points, (point) => ({ latitude: point.latitude, longitude: point.longitude }));
+  }
+
+  async getPublicAthleteTracking(raceId: string, participantId: string): Promise<PublicAthleteTracking> {
+    const raw = parseRequiredRecord(await this.request<unknown>(
+      buildContractPath(API_CONTRACT.endpoints.publicAthleteTracking, { raceId, participantId }),
+    ), 'Athlete tracking response was malformed.');
+    return { ...raw, splits: Array.isArray(raw.splits) ? raw.splits : [] } as unknown as PublicAthleteTracking;
+  }
+
+  async getPublicAthleteTrack(raceId: string, participantId: string, since?: string | null): Promise<TrackPoint[]> {
+    const path = buildContractPath(API_CONTRACT.endpoints.publicAthleteTrack, { raceId, participantId });
+    const query = since ? `?since=${encodeURIComponent(since)}` : '';
+    const raw = parseRequiredRecord(await this.request<unknown>(`${path}${query}`), 'Athlete track response was malformed.');
+    const points = Array.isArray(raw.points) ? raw.points as Record<string, unknown>[] : [];
+    return points
+      .map((point) => ({
+        latitude: Number(point.lat),
+        longitude: Number(point.lng),
+        time: typeof point.time === 'string' ? point.time : null,
+      }))
+      .filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude)
+        && !(point.latitude === 0 && point.longitude === 0));
+  }
+
+  async getNotificationPreferences(): Promise<NotificationPreferences> {
+    return parseNotificationPreferences(await this.request<unknown>(API_CONTRACT.endpoints.notificationPreferences));
+  }
+
+  async updateNotificationPreferences(preferences: NotificationPreferences): Promise<NotificationPreferences> {
+    return parseNotificationPreferences(await this.request<unknown>(API_CONTRACT.endpoints.notificationPreferences, {
+      method: 'PUT',
+      body: JSON.stringify(preferences),
+    }));
+  }
+
+  async getConsent(): Promise<ConsentState> {
+    const raw = parseRequiredRecord(await this.request<unknown>(API_CONTRACT.endpoints.myConsent), 'Consent response was malformed.');
+    return {
+      dataProcessingConsentAt: typeof raw.dataProcessingConsentAt === 'string' ? raw.dataProcessingConsentAt : null,
+      marketingConsent: raw.marketingConsent === true,
+    };
+  }
+
+  async updateMarketingConsent(marketingConsent: boolean): Promise<ConsentState> {
+    const raw = parseRequiredRecord(await this.request<unknown>(API_CONTRACT.endpoints.myConsent, {
+      method: 'PUT',
+      body: JSON.stringify({ marketingConsent }),
+    }), 'Consent response was malformed.');
+    return {
+      dataProcessingConsentAt: typeof raw.dataProcessingConsentAt === 'string' ? raw.dataProcessingConsentAt : null,
+      marketingConsent: raw.marketingConsent === true,
+    };
+  }
+
+  async exportMyData(): Promise<string> {
+    const data = await this.request<unknown>(API_CONTRACT.endpoints.myDataExport);
+    return JSON.stringify(data, null, 2);
+  }
+
+  async getMyPersonalBests(): Promise<PersonalBest[]> {
+    const response = await this.request<unknown>(API_CONTRACT.endpoints.myPersonalBests);
+    return parseRecordArray<Record<string, unknown>>(response, 'Personal bests response was malformed.')
+      .map((row) => ({
+        distanceKm: Number(row.distanceKm),
+        chipTime: typeof row.chipTime === 'string' ? row.chipTime : null,
+        raceId: typeof row.raceId === 'string' ? row.raceId : null,
+        raceName: typeof row.raceName === 'string' ? row.raceName : null,
+        resultCount: Number(row.resultCount ?? 0),
+      }))
+      .filter((row) => Number.isFinite(row.distanceKm) && row.distanceKm > 0);
+  }
+
+  async submitResultQuery(raceId: string, message: string, checkpointId?: string): Promise<ResultQuery> {
+    return parseResultQuery(await this.request<unknown>(buildContractPath(API_CONTRACT.endpoints.myResultQuery, { raceId }), {
+      method: 'POST',
+      body: JSON.stringify({ message, ...(checkpointId ? { checkpointId } : {}) }),
+    }));
+  }
+
+  async getMyResultQueries(): Promise<ResultQuery[]> {
+    const response = await this.request<unknown>(API_CONTRACT.endpoints.myResultQueries);
+    return parseRecordArray<ResultQuery>(response, 'Result queries response was malformed.').map(parseResultQuery);
   }
 
   async cancelDeletionWithPassword(email: string, password: string): Promise<void> {

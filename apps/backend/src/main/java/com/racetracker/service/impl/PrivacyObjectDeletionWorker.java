@@ -63,7 +63,8 @@ public class PrivacyObjectDeletionWorker {
         }
         for (AccountPrivacyServiceImpl.NotificationClaim notification : privacyService.claimNotifications(50)) {
             try {
-                authEmailService.sendAccountDeletionCompletedConfirmed(notification.email(), notification.firstName());
+                authEmailService.sendAccountDeletionCompletedConfirmed(notification.email(), notification.firstName(),
+                    notification.locale());
                 privacyService.completeNotification(notification.userId(), notification.leaseToken());
             } catch (RuntimeException ex) {
                 privacyService.retryNotification(notification.userId(), notification.leaseToken());

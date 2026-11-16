@@ -23,4 +23,8 @@ public class UserDto {
     private Boolean isActive;
     private Boolean emailVerified;
     private OffsetDateTime createdAt;
+    private String privacyPolicyVersion;
+    private String termsVersion;
+    private Boolean legalAcceptanceRequired;
+    private String preferredLocale;
 }

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
 <head>
     <meta charset="UTF-8">
-    <title>Account deletion scheduled</title>
+    <title th:text="#{email.deletionScheduled.subject}">Race Tracker</title>
     <style>
         body { font-family: sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; }
@@ -17,18 +17,17 @@
             <h1>Race Tracker</h1>
         </div>
         <div class="content">
-            <p>Hello <span th:text="${firstName}">User</span>,</p>
-            <p>We have scheduled your Race Tracker account for deletion. Your account is now deactivated and will be
-                permanently erased on <strong th:text="${scheduledDate}">the scheduled date</strong>.</p>
-            <p>Your results and timing records are retained in anonymized form where required for race integrity, and
-                financial or safety records may be kept to meet legal obligations.</p>
-            <p>If you did not request this, you can cancel before the scheduled date by signing in and choosing
-                <em>Cancel deletion</em>.</p>
-            <p>Thank you,<br/>The Race Tracker Team</p>
+            <p th:text="#{email.common.greeting(${firstName})}">Hello</p>
+            <p th:text="#{email.deletionScheduled.intro(${scheduledDate})}">Scheduled</p>
+            <p th:text="#{email.deletionScheduled.retention}">Retention</p>
+            <p>
+                <span th:text="#{email.deletionScheduled.cancel}">Cancel</span>
+                <a th:href="${signInUrl}" href="#" th:text="#{email.deletionScheduled.signIn}">Sign in</a>
+            </p>
+            <p th:text="#{email.deletionScheduled.notYou}">Not you</p>
+            <p><span th:text="#{email.common.thanks}">Thank you,</span><br/><span th:text="#{email.common.team}">The Race Tracker Team</span></p>
         </div>
-        <div class="footer">
-            &copy; 2026 Race Tracker Platform. All rights reserved.
-        </div>
+        <div class="footer" th:text="#{email.common.footer}">Race Tracker Platform</div>
     </div>
 </body>
 </html>

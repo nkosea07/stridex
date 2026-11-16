@@ -9,6 +9,7 @@ import Animated, {
   Extrapolate,
 } from 'react-native-reanimated';
 import { useTheme } from '@/contexts/theme';
+import { useTranslation } from 'react-i18next';
 
 const DRAWER_MIN_HEIGHT = 120;
 const DRAWER_MAX_HEIGHT = 350;
@@ -36,6 +37,7 @@ export const BottomDrawer: React.FC<BottomDrawerProps> = ({
   onStartTracking,
   raceName,
 }) => {
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const translateY = useSharedValue(0);
   const gestureStartY = useSharedValue(0);
@@ -84,26 +86,26 @@ export const BottomDrawer: React.FC<BottomDrawerProps> = ({
         </View>
 
         <View style={styles.header}>
-          <Text style={[styles.raceName, { color: colors.text }]}>{raceName || 'Race Tracking'}</Text>
+          <Text style={[styles.raceName, { color: colors.text }]}>{raceName || t('mobile:trackingScreen.title')}</Text>
           <Text style={[styles.timer, { color: colors.primary }]}>{elapsedTime}</Text>
         </View>
 
         <Animated.View style={[styles.content, contentOpacity]}>
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Text style={[styles.statLabel, { color: colors.subText }]}>DISTANCE</Text>
-              <Text style={[styles.statValue, { color: colors.text }]}>{distance} km</Text>
+              <Text style={[styles.statLabel, { color: colors.subText }]}>{t('mobile:trackingScreen.distance')}</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{t('mobile:trackingScreen.distanceValue', { distance })}</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={[styles.statLabel, { color: colors.subText }]}>PACE</Text>
-              <Text style={[styles.statValue, { color: colors.text }]}>{pace} /km</Text>
+              <Text style={[styles.statLabel, { color: colors.subText }]}>{t('mobile:trackingScreen.pace')}</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{t('mobile:trackingScreen.paceValue', { pace })}</Text>
             </View>
           </View>
 
           {/* Race Progress Chart */}
           <View style={styles.progressContainer}>
             <View style={styles.progressHeader}>
-              <Text style={[styles.statLabel, { color: colors.subText }]}>RACE PROGRESS</Text>
+              <Text style={[styles.statLabel, { color: colors.subText }]}>{t('mobile:trackingScreen.progress')}</Text>
               <Text style={[styles.progressText, { color: colors.text }]}>{Math.round(progress * 100)}%</Text>
             </View>
             <View style={[styles.progressBarBase, { backgroundColor: colors.border }]}>
@@ -122,8 +124,8 @@ export const BottomDrawer: React.FC<BottomDrawerProps> = ({
           {/* Settings Row */}
           <View style={styles.settingsRow}>
              <View style={styles.settingsLabelContainer}>
-                <Text style={[styles.statLabel, { color: colors.subText, marginBottom: 0 }]}>BATTERY SAVER</Text>
-                <Text style={[styles.settingsSubtext, { color: colors.subText }]}>Reduces GPS frequency</Text>
+                <Text style={[styles.statLabel, { color: colors.subText, marginBottom: 0 }]}>{t('mobile:trackingScreen.batterySaver')}</Text>
+                <Text style={[styles.settingsSubtext, { color: colors.subText }]}>{t('mobile:trackingScreen.batterySaverHint')}</Text>
              </View>
              <Switch
                 value={batterySaver}

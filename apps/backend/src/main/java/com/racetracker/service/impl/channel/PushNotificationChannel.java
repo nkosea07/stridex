@@ -1,5 +1,7 @@
 package com.racetracker.service.impl.channel;
 
+import com.racetracker.notification.RecipientUnreachableException;
+
 import com.racetracker.config.RaceTrackerProperties;
 import com.racetracker.model.NotificationDelivery;
 import com.racetracker.model.PushDevice;
@@ -35,7 +37,7 @@ public class PushNotificationChannel implements NotificationChannel {
 
     @Override
     public boolean isEnabled() {
-        return properties.getPush() != null && properties.getPush().isEnabled();
+        return properties.getPush() != null && properties.getPush().isEnabled() && pushNotificationService.isAvailable();
     }
 
     @Override
@@ -44,8 +46,11 @@ public class PushNotificationChannel implements NotificationChannel {
             .map(PushDevice::getToken)
             .toList();
         if (tokens.isEmpty()) {
-            return;
+            throw new RecipientUnreachableException("no registered push devices");
         }
-        pushNotificationService.sendToTokens(tokens, message.title(), message.body(), message.data());
+        int accepted = pushNotificationService.sendToTokens(tokens, message.title(), message.body(), message.data());
+        if (accepted == 0) {
+            throw new IllegalStateException("Push provider accepted none of " + tokens.size() + " device token(s)");
+        }
     }
 }

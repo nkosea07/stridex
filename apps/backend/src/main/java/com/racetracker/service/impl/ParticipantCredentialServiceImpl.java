@@ -49,7 +49,7 @@ public class ParticipantCredentialServiceImpl implements ParticipantCredentialSe
 
         if (legacyRfidTag != null) {
             upsertCredential(participant, ParticipantCredential.CredentialType.RFID_UHF_TIMING, legacyRfidTag);
-            participant.setRfidTag(normalizeValue(legacyRfidTag));
+            participant.setRfidTag(com.racetracker.service.RfidTagValues.canonical(legacyRfidTag));
             participantRepository.save(participant);
         }
     }
@@ -62,7 +62,9 @@ public class ParticipantCredentialServiceImpl implements ParticipantCredentialSe
         UUID raceId,
         String credentialValue
     ) {
-        String normalizedValue = normalizeValue(credentialValue);
+        String normalizedValue = credentialType == ParticipantCredential.CredentialType.RFID_UHF_TIMING
+            ? com.racetracker.service.RfidTagValues.canonical(credentialValue)
+            : normalizeValue(credentialValue);
         if (normalizedValue == null) {
             throw new ResourceNotFoundException("Credential value is required");
         }
@@ -85,7 +87,9 @@ public class ParticipantCredentialServiceImpl implements ParticipantCredentialSe
         ParticipantCredential.CredentialType type,
         String rawValue
     ) {
-        String normalizedValue = normalizeValue(rawValue);
+        String normalizedValue = type == ParticipantCredential.CredentialType.RFID_UHF_TIMING
+            ? com.racetracker.service.RfidTagValues.canonical(rawValue)
+            : normalizeValue(rawValue);
         List<ParticipantCredential> existing = participantCredentialRepository.findByParticipantIdAndCredentialTypeOrderByAssignedAtAsc(
             participant.getId(),
             type

@@ -60,7 +60,11 @@ class ResultServiceImplParticipantProjectionTest {
     void setUp() {
         resultService = new ResultServiceImpl(raceRepository, participantRepository, checkpointRecordRepository,
             userRepository, participantMapper, resultRevisionRepository, penaltyRepository,
-            raceResultRepository, raceCategoryRepository, capabilityAuthorizationService);
+            raceResultRepository, raceCategoryRepository, capabilityAuthorizationService,
+            org.mockito.Mockito.mock(com.racetracker.service.ResultVersioning.class, org.mockito.Mockito.RETURNS_DEEP_STUBS),
+            org.mockito.Mockito.mock(com.racetracker.service.ResultLock.class),
+            org.mockito.Mockito.mock(com.racetracker.repository.RaceResultVersionRepository.class),
+            org.mockito.Mockito.mock(com.racetracker.repository.ResultQueryRepository.class));
 
         race = new Race();
         race.setId(raceId);

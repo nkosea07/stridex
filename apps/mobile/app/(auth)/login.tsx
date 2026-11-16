@@ -3,7 +3,7 @@ import { Link, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/auth';
-import { api } from '@/lib/api';
+import { api, ApiRequestError } from '@/lib/api';
 import { useTranslation } from 'react-i18next';
 
 export default function LoginScreen() {
@@ -31,9 +31,20 @@ export default function LoginScreen() {
     }
   };
 
+  const resendVerification = async () => {
+    try {
+      await api.resendVerification(email.trim());
+      Alert.alert(t('mobile:login.verifyTitle'), t('mobile:login.verificationSent'));
+    } catch (error: any) {
+      Alert.alert(t('mobile:login.verifyTitle'), error?.status === 429
+        ? t('mobile:login.failure.tooManyAttempts')
+        : t('mobile:login.verificationFailed'));
+    }
+  };
+
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert(t('mobile:ui.login.error'), t('mobile:ui.login.pleaseFillInAllFields'));
       return;
     }
 
@@ -42,10 +53,21 @@ export default function LoginScreen() {
       const result = await login(email.trim(), password);
       if (result.kind === 'authenticated') router.replace('/(tabs)');
     } catch (error: any) {
-      const errorMessage = error?.message || 'Invalid email or password';
-      Alert.alert('Login Failed', errorMessage === 'Email verification required'
-        ? 'Verify your email before signing in.'
-        : errorMessage);
+      if (error?.code === 'ADMIN_MFA_WEB_ONLY') {
+        Alert.alert(t('mobile:login.adminWebOnlyTitle'), t('mobile:login.adminWebOnly'));
+        return;
+      }
+      if (error?.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        Alert.alert(t('mobile:login.verifyTitle'), t('mobile:login.verifyBody'), [
+          { text: t('mobile:login.verifyLater'), style: 'cancel' },
+          { text: t('mobile:login.resendVerification'), onPress: () => void resendVerification() },
+        ]);
+        return;
+      }
+      const reason = error instanceof ApiRequestError && error.isNetworkError
+        ? 'network'
+        : error?.status === 429 ? 'tooManyAttempts' : 'invalidCredentials';
+      Alert.alert(t('mobile:ui.login.loginFailed'), t(`mobile:login.failure.${reason}`));
     } finally {
       setIsLoading(false);
     }
@@ -61,8 +83,8 @@ export default function LoginScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Ionicons name="walk" size={60} color="#0F766E" />
-          <Text style={styles.title}>Race Tracker</Text>
-          <Text style={styles.subtitle}>Sign in to continue</Text>
+          <Text style={styles.title}>{t('mobile:ui.login.raceTracker')}</Text>
+          <Text style={styles.subtitle}>{t('mobile:ui.login.signInToContinue')}</Text>
         </View>
 
         {/* Form */}
@@ -71,7 +93,7 @@ export default function LoginScreen() {
             <Ionicons name="mail-outline" size={20} color="#6B7280" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Email address"
+              placeholder={t('mobile:ui.login.emailAddress')}
               placeholderTextColor="#9CA3AF"
               value={email}
               onChangeText={setEmail}
@@ -85,7 +107,7 @@ export default function LoginScreen() {
             <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Password"
+              placeholder={t('mobile:ui.login.password')}
               placeholderTextColor="#9CA3AF"
               value={password}
               onChangeText={setPassword}
@@ -101,9 +123,11 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-          </TouchableOpacity>
+          <Link href={{ pathname: '/(auth)/forgot-password', params: email.trim() ? { email: email.trim() } : {} }} asChild>
+            <TouchableOpacity style={styles.forgotPassword} accessibilityRole="link">
+              <Text style={styles.forgotPasswordText}>{t('mobile:ui.login.forgotPassword')}</Text>
+            </TouchableOpacity>
+          </Link>
 
           <TouchableOpacity 
             style={[
@@ -115,7 +139,7 @@ export default function LoginScreen() {
             activeOpacity={0.8}
           >
             <Text style={styles.signInButtonText}>
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {isLoading ? t('mobile:login.signingIn') : t('mobile:login.signIn')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleRecovery} disabled={isLoading || isRecovering}
@@ -128,10 +152,10 @@ export default function LoginScreen() {
 
         {/* Sign Up Link */}
         <View style={styles.signUpContainer}>
-          <Text style={styles.signUpText}>{"Don't have an account? "}</Text>
+          <Text style={styles.signUpText}>{t('mobile:login.noAccount')} </Text>
           <Link href="/(auth)/register" asChild>
             <TouchableOpacity>
-              <Text style={styles.signUpLink}>Sign Up</Text>
+              <Text style={styles.signUpLink}>{t('mobile:ui.login.signUp')}</Text>
             </TouchableOpacity>
           </Link>
         </View>

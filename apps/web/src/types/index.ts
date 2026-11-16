@@ -14,6 +14,17 @@ export interface User {
   isActive: boolean
   emailVerified: boolean
   createdAt: string
+  privacyPolicyVersion?: string | null
+  termsVersion?: string | null
+  legalAcceptanceRequired?: boolean | null
+  preferredLocale?: string | null
+}
+
+export interface LegalAcceptance {
+  privacyPolicyVersion: string
+  privacyPolicyAcceptedAt: string
+  termsVersion: string
+  termsAcceptedAt: string
 }
 
 export type OrganizerApplicationStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
@@ -196,6 +207,7 @@ export interface ParticipantCredential {
 }
 
 export interface Participant {
+  statusReason?: string | null
   id: string
   raceId: string
   categoryId?: string
@@ -246,9 +258,15 @@ export interface ImportJob {
   successCount?: number
   errorCount?: number
   errorMessage?: string
+  rowErrors?: ImportRowError[]
   createdAt: string
   startedAt?: string
   completedAt?: string
+}
+
+export interface ImportRowError {
+  row: number
+  reason: string
 }
 
 export type CheckpointType = 'START' | 'INTERMEDIATE' | 'WATER_STATION' | 'MEDICAL' | 'FINISH'
@@ -265,10 +283,30 @@ export interface Checkpoint {
   cutoffTime?: string
   hasRfidReader: boolean
   hasQrScanner: boolean
+  expectedPasses?: number
+  minPassSeconds?: number
+  firstPassIsStart?: boolean
   recordCount?: number
 }
 
 export type RecordMethod = 'RFID' | 'QR_CODE' | 'MANUAL' | 'GPS_AUTO'
+
+export type SelfScanClaimReason = 'NO_RECENT_FIX' | 'OUT_OF_RANGE' | 'CHECKPOINT_NOT_LOCATED'
+export type SelfScanClaimStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUPERSEDED'
+
+export interface SelfScanClaim {
+  id: string
+  participantId: string
+  participantName: string | null
+  bibNumber: string | null
+  checkpointId: string
+  checkpointName: string | null
+  claimedAt: string
+  reason: SelfScanClaimReason
+  distanceMeters: number | null
+  fixAgeSeconds: number | null
+  status: SelfScanClaimStatus
+}
 
 export interface CheckpointRecord {
   id: string
@@ -287,6 +325,9 @@ export interface CheckpointRecord {
   adjustedRecordedAt?: string
   adjustmentReason?: string
   isCutoffMissed?: boolean
+  passNumber?: number
+  voidedAt?: string | null
+  voidReason?: string | null
   participant?: Participant
 }
 
@@ -312,9 +353,24 @@ export interface RfidReader {
   lastError?: string
   lastHeartbeatAt?: string
   lastProcessedAt?: string
+  clockOffsetMs?: number | null
   createdAt?: string
   updatedAt?: string
 }
+
+export interface RfidUnmatchedTag {
+  rfidTag: string
+  reads: number
+  firstReadAt: string | null
+  lastReadAt: string | null
+}
+
+export interface GunTime {
+  startedAt: string | null
+  scheduledStart: string | null
+}
+
+export type RfidReprocessScope = 'UNKNOWN_TAG' | 'IGNORED' | 'ERROR'
 
 export interface RfidRaceOverview {
   totalReaders: number
@@ -592,6 +648,7 @@ export interface LiveTrackingData {
   speed: number
   lastCheckpoint?: string
   elapsedTime?: string
+  recordedAt?: string | null
   status: ParticipantStatus
   predictedFinishTime?: string
   distanceRemaining?: number
@@ -750,6 +807,7 @@ export interface DeletionStatus {
   deletionRequested: boolean
   requestedAt?: string | null
   scheduledFor?: string | null
+  blockers?: string[]
 }
 
 export interface NotificationPreference {
@@ -786,4 +844,60 @@ export interface ParticipantAnomaly {
 
 export interface RfidReaderCreateResponse extends RfidReader {
   apiKey: string
+}
+
+export interface ResultIntegrity {
+  latestVersion: number | null
+  status: 'PROVISIONAL' | 'OFFICIAL' | 'SUPERSEDED' | null
+  publishedAt: string | null
+  certifiedAt: string | null
+  contentSha256: string | null
+  chainSha256: string | null
+  chainValid: boolean
+  publishedResultsIntact: boolean
+  changedSincePublish: boolean
+}
+
+export interface ResultVersion {
+  version: number
+  status: 'PROVISIONAL' | 'OFFICIAL' | 'SUPERSEDED'
+  resultCount: number
+  contentSha256: string
+  chainSha256: string
+  publishedAt: string
+  certifiedAt: string | null
+}
+
+export interface RaceWave {
+  id: string
+  name: string
+  sortOrder: number
+  scheduledStart: string | null
+  startedAt: string | null
+  participants: number
+}
+
+export interface TimingAnomaly {
+  participantId: string
+  participantName: string | null
+  bibNumber: string | null
+  type: 'MISSING_SPLIT' | 'IMPLAUSIBLE_SPLIT' | 'OUT_OF_ORDER'
+  checkpointId: string
+  checkpointName: string | null
+  speedKmh: number | null
+}
+
+export interface ResultQuery {
+  id: string
+  raceId: string
+  participantId: string
+  participantName: string | null
+  bibNumber: string | null
+  checkpointId: string | null
+  checkpointName: string | null
+  message: string
+  status: 'OPEN' | 'RESOLVED' | 'REJECTED'
+  resolutionNote: string | null
+  createdAt: string | null
+  resolvedAt: string | null
 }

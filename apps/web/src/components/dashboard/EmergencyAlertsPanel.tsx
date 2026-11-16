@@ -2,8 +2,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, CheckCheck, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { emergencyApi } from '@/lib/api'
-import { formatDateTime } from '@/lib/format'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { ApiError, emergencyApi } from '@/lib/api'
+import { formatDateTime, formatNumber } from '@/lib/format'
 import type { EmergencyAlert } from '@/types'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
@@ -17,6 +25,7 @@ export function EmergencyAlertsPanel({ raceId }: { raceId: string }) {
   const canView = Boolean(user?.role && ['SUPER_ADMIN', 'RACE_ADMIN', 'OFFICIAL'].includes(user.role))
   const [alerts, setAlerts] = useState<EmergencyAlert[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [pendingResolve, setPendingResolve] = useState<EmergencyAlert | null>(null)
 
   const load = useCallback(async () => {
     if (!canView) return
@@ -42,11 +51,22 @@ export function EmergencyAlertsPanel({ raceId }: { raceId: string }) {
       toast.success(status === 'RESOLVED'
         ? t('common:emergency.resolvedToast')
         : t('common:emergency.acknowledgedToast'))
-    } catch {
-      toast.error(t('common:emergency.updateFailed'))
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'EMERGENCY_ALREADY_RESOLVED') {
+        toast.info(t('common:emergency.alreadyResolved'))
+        await load()
+      } else {
+        toast.error(t('common:emergency.updateFailed'))
+      }
     } finally {
       setBusyId(null)
     }
+  }
+
+  const confirmResolve = async () => {
+    const alert = pendingResolve
+    setPendingResolve(null)
+    if (alert) await updateStatus(alert, 'RESOLVED')
   }
 
   if (!canView || alerts.length === 0) return null
@@ -72,11 +92,21 @@ export function EmergencyAlertsPanel({ raceId }: { raceId: string }) {
               {alert.participantName || t('common:emergency.unknownAthlete')}
               {alert.message ? ` — ${alert.message}` : ''}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {alert.latitude != null && alert.longitude != null
-                ? t('common:emergency.locationShared')
-                : t('common:emergency.noLocation')}
-            </p>
+            {alert.latitude != null && alert.longitude != null ? (
+              <p className="mt-1 text-xs">
+                {t('common:emergency.coordinates', {
+                  latitude: formatNumber(alert.latitude, { maximumFractionDigits: 5 }),
+                  longitude: formatNumber(alert.longitude, { maximumFractionDigits: 5 }),
+                })}{' '}
+                <a className="font-medium underline underline-offset-2"
+                  href={`https://www.openstreetmap.org/?mlat=${alert.latitude}&mlon=${alert.longitude}#map=17/${alert.latitude}/${alert.longitude}`}
+                  target="_blank" rel="noopener noreferrer">
+                  {t('common:emergency.openMap')}
+                </a>
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">{t('common:emergency.noLocation')}</p>
+            )}
             {alert.createdAt && (
               <p className="text-xs text-muted-foreground">
                 {t('common:emergency.raisedAt', { time: formatDateTime(alert.createdAt) })}
@@ -90,13 +120,25 @@ export function EmergencyAlertsPanel({ raceId }: { raceId: string }) {
                 </Button>
               )}
               <Button size="sm" disabled={busyId === alert.id}
-                onClick={() => void updateStatus(alert, 'RESOLVED')}>
+                onClick={() => setPendingResolve(alert)}>
                 <CheckCheck className="mr-1 h-3 w-3" /> {t('common:emergency.resolve')}
               </Button>
             </div>
           </div>
         )
       })}
+      <Dialog open={pendingResolve !== null} onOpenChange={(open) => { if (!open) setPendingResolve(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('common:emergency.resolveConfirmTitle')}</DialogTitle>
+            <DialogDescription>{t('common:emergency.resolveConfirmBody')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingResolve(null)}>{t('common:actions.cancel')}</Button>
+            <Button variant="destructive" onClick={() => void confirmResolve()}>{t('common:emergency.resolve')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }

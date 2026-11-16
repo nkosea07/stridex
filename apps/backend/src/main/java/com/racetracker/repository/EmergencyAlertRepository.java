@@ -13,6 +13,9 @@ public interface EmergencyAlertRepository extends JpaRepository<EmergencyAlert, 
 
     List<EmergencyAlert> findByRaceIdOrderByCreatedAtDesc(UUID raceId);
 
+    java.util.Optional<EmergencyAlert> findFirstByRaceIdAndReportedByIdAndStatusNotAndCreatedAtAfterOrderByCreatedAtDesc(
+        UUID raceId, UUID reporterId, EmergencyAlert.EmergencyStatus status, java.time.OffsetDateTime after);
+
     List<EmergencyAlert> findByRaceIdAndStatusOrderByCreatedAtDesc(UUID raceId, EmergencyAlert.EmergencyStatus status);
 
     long countByDeliveryStatus(EmergencyAlert.DeliveryStatus deliveryStatus);

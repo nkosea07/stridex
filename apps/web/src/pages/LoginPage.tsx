@@ -9,6 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { isOperationsRole, isPersonalUser, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { authApi } from '@/lib/api'
+import { LegalFooter } from '@/components/legal/LegalFooter'
+import { MfaChallenge } from '@/components/auth/MfaChallenge'
+import type { BrowserAuthResponse } from '@/lib/api'
+import type { User } from '@/types'
 
 function getSafePublicReturnPath(value: unknown) {
   if (typeof value !== 'string') return undefined
@@ -27,12 +31,28 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isRecovering, setIsRecovering] = useState(false)
-  const { login } = useAuth()
+  const { login, completeSession } = useAuth()
+  const [mfa, setMfa] = useState<{ challengeToken: string; enrollmentRequired: boolean } | null>(null)
   const navigate = useNavigate()
   const location = useLocation()
   const locationState = location.state as { from?: string; reason?: string } | null
   const unauthorizedReason = locationState?.reason === 'unauthorized'
   const returnTo = getSafePublicReturnPath(locationState?.from)
+
+  const enterApp = (user: User) => {
+    const defaultPath = isOperationsRole(user.role)
+      ? '/admin'
+      : isPersonalUser(user)
+        ? '/app'
+        : '/unauthorized'
+    navigate(returnTo ?? defaultPath)
+    toast.success(t('auth:welcomeBack'))
+  }
+
+  const handleMfaAuthenticated = (response: BrowserAuthResponse) => {
+    setMfa(null)
+    enterApp(completeSession(response))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,13 +61,10 @@ export function LoginPage() {
     try {
       const result = await login(email, password)
       if (result.kind === 'authenticated') {
-        const defaultPath = isOperationsRole(result.user.role)
-          ? '/admin'
-          : isPersonalUser(result.user)
-            ? '/app'
-            : '/unauthorized'
-        navigate(returnTo ?? defaultPath)
-        toast.success(t('auth:welcomeBack'))
+        enterApp(result.user)
+      } else {
+        setPassword('')
+        setMfa({ challengeToken: result.challengeToken, enrollmentRequired: result.enrollmentRequired })
       }
     } catch (error) {
       toast.error(error instanceof Error && error.message === 'Email verification required'
@@ -75,7 +92,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-8">
         {/* Logo */}
         <div className="flex flex-col items-center">
@@ -100,6 +117,14 @@ export function LoginPage() {
             )}
           </CardHeader>
           <CardContent>
+            {mfa ? (
+              <MfaChallenge
+                challengeToken={mfa.challengeToken}
+                enrollmentRequired={mfa.enrollmentRequired}
+                onAuthenticated={handleMfaAuthenticated}
+                onCancel={() => setMfa(null)}
+              />
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">{t('auth:emailLabel')}</Label>
@@ -136,6 +161,7 @@ export function LoginPage() {
                 )}
               </Button>
             </form>
+            )}
 
             <Button type="button" variant="link" className="mt-2 w-full" disabled={isLoading || isRecovering}
               onClick={handleRecovery}>
@@ -166,6 +192,7 @@ export function LoginPage() {
           {t('auth:secureLoginNote')}
         </p>
       </div>
+      <LegalFooter className="mt-8 w-full max-w-md border-0 bg-transparent" />
     </div>
   )
 }

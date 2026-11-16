@@ -411,11 +411,12 @@ class PaymentServiceImplRefundTest {
         User athlete = new User();
         athlete.setEmail("athlete@example.com");
         participant.setUser(athlete);
+        participant.setPaymentStatus(Participant.PaymentStatus.UNPAID);
         participant.getRace().setRegistrationFee(BigDecimal.valueOf(100));
         participant.getRace().setCurrency("USD");
 
         when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
-        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        java.util.concurrent.atomic.AtomicReference<Payment> staged = stagePaymentsInMemory();
         when(pesepayClient.initiate(any(Double.class), eq("USD"), any(), any(), any(), any()))
             .thenReturn(new PesepayClient.InitiateResult("PROV-1", "https://pay.example/checkout", null));
         RaceTrackerProperties.Payments payments = new RaceTrackerProperties.Payments();
@@ -429,6 +430,85 @@ class PaymentServiceImplRefundTest {
 
         assertThat(result.getCheckoutUrl()).isEqualTo("https://pay.example/checkout");
         verify(pesepayClient).initiate(any(Double.class), eq("USD"), any(), any(), any(), any());
+        assertThat(staged.get().getProviderRef()).isEqualTo("PROV-1");
+        assertThat(participant.getPaymentStatus()).isEqualTo(Participant.PaymentStatus.PENDING);
+    }
+
+    @Test
+    void providerFailureMarksTheStagedPaymentFailedWithoutChangingTheParticipant() {
+        Participant participant = participant();
+        User athlete = new User();
+        athlete.setEmail("athlete@example.com");
+        participant.setUser(athlete);
+        participant.setPaymentStatus(Participant.PaymentStatus.UNPAID);
+        participant.getRace().setRegistrationFee(BigDecimal.valueOf(100));
+        participant.getRace().setCurrency("USD");
+        when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
+        java.util.concurrent.atomic.AtomicReference<Payment> staged = stagePaymentsInMemory();
+        when(pesepayClient.initiate(any(Double.class), eq("USD"), any(), any(), any(), any()))
+            .thenThrow(new ServiceUnavailableException("The payment provider is unavailable", "PAYMENT_PROVIDER_UNAVAILABLE"));
+        RaceTrackerProperties.Payments payments = new RaceTrackerProperties.Payments();
+        payments.setResultUrl("https://app.example/payment/result");
+        payments.setReturnUrl("https://app.example/payment/return");
+        service = new PaymentServiceImpl(paymentRepository, participantRepository, pesepayClient,
+            propertiesWithPayments(payments), new ObjectMapper(), promoCodeService, notificationService,
+            paymentRefundRepository, userRepository, reversalCaseRepository, transactionManager);
+
+        assertThatThrownBy(() -> service.startCheckout(raceId, participantId, null, "athlete@example.com", true))
+            .isInstanceOf(ServiceUnavailableException.class);
+
+        assertThat(staged.get().getStatus()).isEqualTo(Payment.PaymentStatus.FAILED);
+        assertThat(participant.getPaymentStatus()).isEqualTo(Participant.PaymentStatus.UNPAID);
+    }
+
+    private java.util.concurrent.atomic.AtomicReference<Payment> stagePaymentsInMemory() {
+        java.util.concurrent.atomic.AtomicReference<Payment> staged = new java.util.concurrent.atomic.AtomicReference<>();
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> {
+            Payment payment = invocation.getArgument(0);
+            if (payment.getId() == null) {
+                payment.setId(UUID.randomUUID());
+            }
+            staged.set(payment);
+            return payment;
+        });
+        when(paymentRepository.findById(any(UUID.class)))
+            .thenAnswer(invocation -> Optional.ofNullable(staged.get()));
+        return staged;
+    }
+
+    @Test
+    void checkoutIsRejectedForAlreadyPaidRegistration() {
+        Participant participant = participant();
+        User athlete = new User();
+        athlete.setEmail("athlete@example.com");
+        participant.setUser(athlete);
+        participant.getRace().setRegistrationFee(BigDecimal.valueOf(100));
+        when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
+
+        assertThatThrownBy(() -> service.startCheckout(raceId, participantId, null, "athlete@example.com", true))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageContaining("already been paid");
+        verifyNoInteractions(pesepayClient);
+    }
+
+    @Test
+    void waitlistedAndRejectedEntriesCannotStartCheckout() {
+        Participant participant = participant();
+        User athlete = new User();
+        athlete.setEmail("athlete@example.com");
+        participant.setUser(athlete);
+        participant.setPaymentStatus(Participant.PaymentStatus.UNPAID);
+        participant.getRace().setRegistrationFee(BigDecimal.valueOf(100));
+        when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
+
+        for (Participant.ParticipantStatus status : java.util.List.of(Participant.ParticipantStatus.WAITLISTED,
+            Participant.ParticipantStatus.REJECTED)) {
+            participant.setStatus(status);
+            assertThatThrownBy(() -> service.startCheckout(raceId, participantId, null, "athlete@example.com", true))
+                .isInstanceOf(ConflictException.class)
+                .extracting("code").isEqualTo("PAYMENT_NOT_AVAILABLE_FOR_STATUS");
+        }
+        verifyNoInteractions(pesepayClient);
     }
 
     @Test

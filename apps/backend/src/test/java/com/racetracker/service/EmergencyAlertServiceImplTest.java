@@ -118,6 +118,51 @@ class EmergencyAlertServiceImplTest {
     }
 
     @Test
+    void repeatedAthleteActivationReturnsTheOpenAlertWithoutNotifyingStaffAgain() {
+        Race race = new Race();
+        race.setId(raceId);
+        User athlete = User.builder().id(UUID.randomUUID()).email("athlete@example.com").build();
+        Participant participant = Participant.builder().id(UUID.randomUUID()).race(race).build();
+        EmergencyAlert open = EmergencyAlert.builder().id(UUID.randomUUID()).race(race).participant(participant)
+            .reportedBy(athlete).status(EmergencyAlert.EmergencyStatus.ACTIVE)
+            .deliveryStatus(EmergencyAlert.DeliveryStatus.QUEUED).build();
+        when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+        when(userRepository.findByEmailIgnoreCaseForUpdate(athlete.getEmail())).thenReturn(Optional.of(athlete));
+        when(participantRepository.findByRaceIdAndUserId(raceId, athlete.getId())).thenReturn(Optional.of(participant));
+        when(emergencyAlertRepository.findFirstByRaceIdAndReportedByIdAndStatusNotAndCreatedAtAfterOrderByCreatedAtDesc(
+            org.mockito.ArgumentMatchers.eq(raceId), org.mockito.ArgumentMatchers.eq(athlete.getId()),
+            org.mockito.ArgumentMatchers.eq(EmergencyAlert.EmergencyStatus.RESOLVED), any()))
+            .thenReturn(Optional.of(open));
+        EmergencyAlertRequest retry = new EmergencyAlertRequest();
+        retry.setLatitude(java.math.BigDecimal.valueOf(-17.8));
+        retry.setLongitude(java.math.BigDecimal.valueOf(31.0));
+
+        EmergencyAlertDto dto = service.raiseForAthlete(raceId, retry, athlete.getEmail());
+
+        assertThat(dto.getId()).isEqualTo(open.getId());
+        assertThat(open.getLatitude()).isEqualByComparingTo("-17.8");
+        verify(jobRepository, never()).save(any());
+        verify(staffRepository, never()).findActiveStaff(any());
+    }
+
+    @Test
+    void resolvedAlertCannotBeReopenedAndKeepsTheFirstAcknowledger() {
+        Race race = new Race();
+        race.setId(raceId);
+        UUID firstResponder = UUID.randomUUID();
+        EmergencyAlert alert = EmergencyAlert.builder().id(UUID.randomUUID()).race(race)
+            .status(EmergencyAlert.EmergencyStatus.RESOLVED).acknowledgedBy(firstResponder)
+            .acknowledgedAt(java.time.OffsetDateTime.now().minusMinutes(5)).build();
+        when(emergencyAlertRepository.findById(alert.getId())).thenReturn(Optional.of(alert));
+
+        assertThatThrownBy(() -> service.updateStatus(raceId, alert.getId(), "ACKNOWLEDGED", "official@example.com"))
+            .isInstanceOf(com.racetracker.exception.ConflictException.class);
+        assertThat(service.updateStatus(raceId, alert.getId(), "RESOLVED", "official@example.com").getStatus())
+            .isEqualTo("RESOLVED");
+        assertThat(alert.getAcknowledgedBy()).isEqualTo(firstResponder);
+    }
+
+    @Test
     void sosWithoutRecipientsIsMarkedForEscalation() {
         Race race = new Race();
         race.setId(raceId);
@@ -125,7 +170,7 @@ class EmergencyAlertServiceImplTest {
         Participant participant = Participant.builder().id(UUID.randomUUID()).race(race)
             .firstName("Ada").lastName("Runner").build();
         when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
-        when(userRepository.findByEmailIgnoreCase(athlete.getEmail())).thenReturn(Optional.of(athlete));
+        when(userRepository.findByEmailIgnoreCaseForUpdate(athlete.getEmail())).thenReturn(Optional.of(athlete));
         when(participantRepository.findByRaceIdAndUserId(raceId, athlete.getId())).thenReturn(Optional.of(participant));
         when(staffRepository.findActiveStaff(raceId)).thenReturn(List.of());
         when(emergencyAlertRepository.save(any(EmergencyAlert.class))).thenAnswer(inv -> {
@@ -172,7 +217,7 @@ class EmergencyAlertServiceImplTest {
         race.setId(raceId);
         User athlete = User.builder().id(UUID.randomUUID()).email("athlete@example.com").build();
         when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
-        when(userRepository.findByEmailIgnoreCase(athlete.getEmail())).thenReturn(Optional.of(athlete));
+        when(userRepository.findByEmailIgnoreCaseForUpdate(athlete.getEmail())).thenReturn(Optional.of(athlete));
 
         assertThatThrownBy(() -> service.raiseForAthlete(raceId, new EmergencyAlertRequest(), athlete.getEmail()))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);

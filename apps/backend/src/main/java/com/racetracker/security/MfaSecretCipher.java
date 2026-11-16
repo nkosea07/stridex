@@ -56,6 +56,10 @@ public class MfaSecretCipher {
         }
     }
 
+    public void assertConfigured() {
+        keyBytes();
+    }
+
     private byte[] keyBytes() {
         try {
             byte[] bytes = Base64.getDecoder().decode(configuredKey);

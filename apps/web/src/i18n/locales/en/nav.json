@@ -108,9 +108,7 @@
   "pushEnableFailed": "Failed to enable push notifications",
   "passwordResetSent": "If the email exists, password reset instructions have been sent.",
   "unableStartPasswordReset": "Unable to start password reset",
-  "typeDeleteToConfirm": "Type {{token}} to confirm.",
   "accountDeletionScheduledSuccess": "Your account is scheduled for deletion and you have been signed out.",
-  "unableDeleteAccount": "Unable to delete account",
   "dataExportDownloaded": "Your data export has been downloaded.",
   "dataExportFailed": "Failed to export your data",
   "consentUpdated": "Consent updated.",
@@ -172,12 +170,9 @@
   "dangerZone": "Danger Zone",
   "irreversibleActions": "Irreversible actions",
   "deleteAccount": "Delete Account",
-  "deleteAccountDescription": "Deactivates your account immediately and erases your personal data after a grace period. You can cancel during the grace period by signing back in.",
   "deletionScheduled": "Deletion scheduled",
   "deleteYourAccount": "Delete your account",
-  "deleteAccountDialogDescription": "This deactivates your account and schedules your personal data for erasure after a grace period. Export any data you need first.",
   "confirmYourPassword": "Confirm your password",
-  "typeDeleteConfirmation": "Type {{token}} to confirm",
   "deleteToken": "DELETE",
   "scheduling": "Scheduling…",
   "deleteMyAccount": "Delete my account",
@@ -209,5 +204,6 @@
   "privacyObjects": "Privacy object scopes",
   "financeReversals": "Payment reversals",
   "smsUnavailable": "SMS is unavailable in this release.",
-  "raceSetup": "Stages & sponsors"
+  "raceSetup": "Stages & sponsors",
+  "dataProcessingWithdrawHint": "To withdraw it, delete your account below."
 }

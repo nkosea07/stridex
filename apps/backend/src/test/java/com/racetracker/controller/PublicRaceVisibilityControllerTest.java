@@ -61,7 +61,9 @@ class PublicRaceVisibilityControllerTest {
                     visibility, rateLimiter, addressResolver),
                 new ResultController(resultService, auditEvents, rateLimiter, addressResolver,
                     mock(ResultExportService.class), certificateService, mock(CertificateTokenService.class),
-                    mock(RankingService.class), accessGuard, visibility)
+                    mock(RankingService.class), accessGuard, visibility,
+                    mock(com.racetracker.service.impl.TimingAnomalyService.class),
+                    mock(com.racetracker.service.ResultNotifier.class))
             )
             .setControllerAdvice(new GlobalExceptionHandler())
             .addPlaceholderValue("racetracker.api.version", "1")

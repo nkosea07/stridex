@@ -91,21 +91,24 @@ function createLocation(id, raceId, timestamp) {
 function connectPersistentQueue(rows) {
   mocks.database.execAsync.mockResolvedValue(undefined)
   mocks.database.getAllAsync.mockImplementation(async (_query, parameters) =>
-    rows.filter((row) => row.raceId === parameters[0] && row.synced === 0).slice(0, 100),
+    rows.filter((row) => row.raceId === parameters[0] && row.synced === (parameters[1] ?? 0)).slice(0, 100),
   )
   mocks.database.runAsync.mockImplementation(async (query, parameters) => {
-    if (query.includes('SET synced = 1')) {
-      for (const id of parameters.slice(1)) {
+    const match = /^UPDATE locations SET ([\s\S]*) WHERE id IN/.exec(query.trim())
+    if (match) {
+      let parameterIndex = 0
+      const assignments = match[1].split(',').map((assignment) => {
+        const [field, expression] = assignment.split('=').map((part) => part.trim())
+        if (expression === '?') return { field, value: parameters[parameterIndex++] }
+        return { field, expression }
+      })
+      for (const id of parameters.slice(parameterIndex)) {
         const row = rows.find((candidate) => candidate.id === id)
-        if (row) row.synced = 1
-      }
-    }
-    if (query.includes('syncAttempts = syncAttempts + 1')) {
-      for (const id of parameters.slice(2)) {
-        const row = rows.find((candidate) => candidate.id === id)
-        if (row) {
-          row.syncAttempts += 1
-          row.lastSyncError = parameters[0]
+        if (!row) continue
+        for (const { field, value, expression } of assignments) {
+          if (field === 'syncAttempts' && expression === 'syncAttempts + 1') row.syncAttempts += 1
+          else if (expression === 'NULL') row[field] = null
+          else if (expression === undefined) row[field] = value
         }
       }
     }
@@ -339,7 +342,7 @@ describe('offline location queue', () => {
 
     await syncPendingLocations('race-a')
 
-    expect(mocks.database.getAllAsync).toHaveBeenCalledWith(expect.stringContaining('raceId = ?'), ['race-a'])
+    expect(mocks.database.getAllAsync).toHaveBeenCalledWith(expect.stringContaining('raceId = ?'), ['race-a', 0])
     expect(rows[0].synced).toBe(0)
     expect(rows[0].syncAttempts).toBe(1)
     expect(rows[0].lastSyncError).toBe('offline')
@@ -363,7 +366,148 @@ describe('offline location queue', () => {
     await tracking.syncPendingLocations('race-b')
 
     expect(mocks.sendLocationsBatch).toHaveBeenCalledTimes(1)
-    expect(mocks.database.getAllAsync).toHaveBeenCalledWith(expect.stringContaining('raceId = ?'), ['race-b'])
+    expect(mocks.database.getAllAsync).toHaveBeenCalledWith(expect.stringContaining('raceId = ?'), ['race-b', 0])
+  })
+})
+
+describe('location upload failures', () => {
+  async function loadTracking(rows, error) {
+    connectPersistentQueue(rows)
+    const { api, ApiRequestError } = await import('../lib/api.ts')
+    mocks.sendLocationsBatch.mockRejectedValue(error(ApiRequestError))
+    vi.spyOn(api, 'sendLocationsBatch').mockImplementation(mocks.sendLocationsBatch)
+    return import('../lib/tracking-service.ts')
+  }
+
+  it('sets aside a batch the server permanently rejects so newer points can upload', async () => {
+    const rows = [
+      createLocation(31, 'race-c', '2026-10-05T10:00:00.000Z'),
+      createLocation(32, 'race-c', '2026-10-05T10:05:00.000Z'),
+    ]
+    const tracking = await loadTracking(rows, (ApiRequestError) => new ApiRequestError('Invalid timestamp format', 400))
+
+    await tracking.syncPendingLocations('race-c')
+
+    expect(rows.map((row) => row.synced)).toEqual([2, 2])
+    expect(rows[0].lastSyncError).toBe('Invalid timestamp format')
+
+    rows.push(createLocation(33, 'race-c', '2026-10-05T10:10:00.000Z'))
+    mocks.sendLocationsBatch.mockReset()
+    mocks.sendLocationsBatch.mockResolvedValue(undefined)
+    await tracking.syncPendingLocations('race-c')
+
+    expect(mocks.sendLocationsBatch).toHaveBeenCalledTimes(1)
+    expect(mocks.sendLocationsBatch.mock.calls[0][1]).toHaveLength(1)
+    expect(rows[2].synced).toBe(1)
+  })
+
+  it('keeps points queued for retry on server errors and rate limits', async () => {
+    const rows = [createLocation(41, 'race-d', '2026-10-05T10:00:00.000Z')]
+    const tracking = await loadTracking(rows, (ApiRequestError) => new ApiRequestError('busy', 503))
+
+    await tracking.syncPendingLocations('race-d')
+
+    expect(rows[0].synced).toBe(0)
+    expect(rows[0].syncAttempts).toBe(1)
+    expect(tracking.classifySyncFailure(new (await import('../lib/api.ts')).ApiRequestError('slow down', 429))).toBe('retry')
+  })
+
+  it('stops tracking and records why when the athlete is no longer registered', async () => {
+    const rows = [createLocation(51, 'race-e', '2026-10-05T10:00:00.000Z')]
+    mocks.hasStartedLocationUpdates.mockResolvedValue(true)
+    mocks.isTaskRegistered.mockResolvedValue(false)
+    const tracking = await loadTracking(rows, (ApiRequestError) => new ApiRequestError('You are not registered for this race', 404))
+    mocks.database.getFirstAsync.mockResolvedValue({ raceId: 'race-e', status: 'active', stopReason: null, quarantined: 0 })
+    const notices = []
+    tracking.subscribeTrackingStopped((notice) => notices.push(notice))
+
+    await tracking.syncPendingLocations('race-e')
+
+    expect(rows[0].synced).toBe(2)
+    expect(mocks.stopLocationUpdates).toHaveBeenCalledOnce()
+    expect(notices).toEqual([{ raceId: 'race-e', reason: 'not_registered' }])
+    expect(mocks.database.runAsync.mock.calls.some(([sql, params]) => (
+      String(sql).includes("status = 'rejected'") && params[0] === 'not_registered' && params[2] === 'race-e'
+    ))).toBe(true)
+  })
+
+  it('stops tracking when the server says the race entry is closed', async () => {
+    const rows = [createLocation(61, 'race-f', '2026-10-05T10:00:00.000Z')]
+    mocks.hasStartedLocationUpdates.mockResolvedValue(true)
+    mocks.isTaskRegistered.mockResolvedValue(false)
+    const tracking = await loadTracking(rows, (ApiRequestError) => new ApiRequestError('Live tracking has ended', 409, false, 'TRACKING_CLOSED'))
+    mocks.database.getFirstAsync.mockResolvedValue({ raceId: 'race-f', status: 'active', stopReason: null, quarantined: 0 })
+    const notices = []
+    tracking.subscribeTrackingStopped((notice) => notices.push(notice))
+
+    await tracking.syncPendingLocations('race-f')
+
+    expect(rows[0].synced).toBe(2)
+    expect(mocks.stopLocationUpdates).toHaveBeenCalledOnce()
+    expect(notices).toEqual([{ raceId: 'race-f', reason: 'closed' }])
+    const { ApiRequestError } = await import('../lib/api.ts')
+    expect(tracking.classifySyncFailure(new ApiRequestError('conflict', 409))).toBe('retry')
+  })
+})
+
+describe('checkpoint self-scan', () => {
+  const checkpointId = '6f1c0b0e-1111-4c4c-8888-123456789abc'
+  const raceId = '7a2d1c0f-2222-4d4d-9999-abcdef012345'
+  const token = 'ab'.repeat(32)
+
+  it('reads the secret self-scan code and flags printed codes from before the change', async () => {
+    const { parseSelfScanCode } = await import('../lib/selfScan.ts')
+
+    expect(parseSelfScanCode(`${checkpointId}:${raceId}:${token}`)).toEqual({ kind: 'ok', code: { checkpointId, raceId, token } })
+    expect(parseSelfScanCode(`${checkpointId}:${raceId}`)).toEqual({ kind: 'outdated' })
+    expect(parseSelfScanCode(`${checkpointId}:${raceId}:not-hex`)).toEqual({ kind: 'unreadable' })
+    expect(parseSelfScanCode(42)).toEqual({ kind: 'unreadable' })
+  })
+
+  it('sends the scan code and current fix, and reports provisional scans', async () => {
+    mocks.secureValues.set('auth_token', 'access-token')
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: 'PROVISIONAL', reason: 'OUT_OF_RANGE' }), { status: 202 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { api } = await import('../lib/api.ts')
+    const fix = { latitude: -17.83, longitude: 31.05, accuracy: 8, timestamp: '2026-11-15T09:00:00.000Z' }
+
+    await expect(api.recordCheckpoint(raceId, checkpointId, token, fix)).resolves.toEqual({
+      status: 'PROVISIONAL',
+      reason: 'OUT_OF_RANGE',
+    })
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({
+      checkpointId, method: 'qr_code', scanToken: token, location: fix,
+    })
+  })
+
+  it('maps refusal codes to localized messages and hides raw server text', async () => {
+    const { selfScanErrorKey } = await import('../lib/selfScan.ts')
+    const { ApiRequestError } = await import('../lib/api.ts')
+
+    expect(selfScanErrorKey(new ApiRequestError('x', 409, false, 'SELF_SCAN_NOT_ALLOWED'))).toBe('mobile:scanner.errors.SELF_SCAN_NOT_ALLOWED')
+    expect(selfScanErrorKey(new ApiRequestError('stack trace', 500, false, 'INTERNAL_ERROR'))).toBe('mobile:scanner.failedBody')
+  })
+})
+
+describe('local location history retention', () => {
+  it('prunes only uploaded or rejected points older than a week outside active sessions', async () => {
+    connectPersistentQueue([])
+    mocks.database.getFirstAsync.mockResolvedValue({ quarantined: 0 })
+    const { initDb } = await import('../lib/tracking-service.ts')
+
+    await initDb()
+
+    const prune = mocks.database.runAsync.mock.calls.find(([sql]) => String(sql).includes('DELETE FROM locations'))
+    expect(prune).toBeDefined()
+    const [sql, params] = prune
+    expect(sql).toContain('synced IN (?, ?)')
+    expect(sql).toContain("status = 'active'")
+    expect(params.slice(0, 2)).toEqual([1, 2])
+    const cutoffAgeMs = Date.now() - Date.parse(params[2])
+    expect(cutoffAgeMs).toBeGreaterThan(6.9 * 24 * 60 * 60 * 1000)
+    expect(cutoffAgeMs).toBeLessThan(7.1 * 24 * 60 * 60 * 1000)
   })
 })
 
@@ -436,6 +580,8 @@ describe('account capabilities', () => {
       password: 'password-123',
       privacyPolicyAccepted: true,
       privacyPolicyVersion: '2026-01',
+      termsAccepted: true,
+      termsVersion: '2026-02',
       experiences: ['SPECTATOR'],
     })
 
@@ -446,7 +592,75 @@ describe('account capabilities', () => {
       email: 'runner@example.com',
       experiences: ['SPECTATOR'],
       privacyPolicyAccepted: true,
+      termsAccepted: true,
+      termsVersion: '2026-02',
     })
+  })
+
+  it('records acceptance of the current legal documents', async () => {
+    mocks.secureValues.set('auth_token', 'access-token')
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        privacyPolicyVersion: '2026-11-10',
+        privacyPolicyAcceptedAt: '2026-11-10T08:00:00Z',
+        termsVersion: '2026-11-10',
+        termsAcceptedAt: '2026-11-10T08:00:00Z',
+      }), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { api } = await import('../lib/api.ts')
+    const { API_CONTRACT } = await import('@race-tracker/contracts')
+
+    await expect(api.acceptLegalDocuments()).resolves.toEqual({
+      privacyPolicyVersion: '2026-11-10',
+      termsVersion: '2026-11-10',
+    })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain(API_CONTRACT.endpoints.myLegalAcceptance)
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(String(init.body))).toEqual({
+      privacyPolicyVersion: API_CONTRACT.legal.privacyPolicyVersion,
+      termsVersion: API_CONTRACT.legal.termsVersion,
+    })
+  })
+
+  it('surfaces stable deletion error codes and parses blockers', async () => {
+    mocks.secureValues.set('auth_token', 'access-token')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        deletionRequested: false,
+        requestedAt: null,
+        scheduledFor: null,
+        blockers: ['ACCOUNT_DELETION_ACTIVE_RACES', 7],
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        message: 'Password is incorrect',
+        code: 'ACCOUNT_DELETION_PASSWORD_INVALID',
+      }), { status: 400 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { api } = await import('../lib/api.ts')
+    const { deletionErrorKey, knownBlockers } = await import('../lib/accountDeletion.ts')
+
+    const status = await api.deletionStatus()
+    expect(knownBlockers(status.blockers)).toEqual(['ACCOUNT_DELETION_ACTIVE_RACES'])
+
+    const failure = await api.deleteAccount('wrong', 'DELETE').catch((error) => error)
+    expect(failure.code).toBe('ACCOUNT_DELETION_PASSWORD_INVALID')
+    expect(deletionErrorKey(failure)).toBe('account:deletion.errors.ACCOUNT_DELETION_PASSWORD_INVALID')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(mocks.secureValues.get('auth_token')).toBe('access-token')
+  })
+
+  it('requires acceptance until both stored versions match the contract', async () => {
+    const { needsLegalAcceptance, LEGAL_VERSIONS } = await import('../lib/legal.ts')
+
+    expect(needsLegalAcceptance(null)).toBe(false)
+    expect(needsLegalAcceptance({ privacyPolicyVersion: LEGAL_VERSIONS.privacy, termsVersion: null })).toBe(true)
+    expect(needsLegalAcceptance({ privacyPolicyVersion: 'old', termsVersion: LEGAL_VERSIONS.terms })).toBe(true)
+    expect(needsLegalAcceptance({ privacyPolicyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms })).toBe(false)
+    expect(needsLegalAcceptance({ privacyPolicyVersion: '2099-01-01', termsVersion: '2099-01-01', legalAcceptanceRequired: false })).toBe(false)
+    expect(needsLegalAcceptance({ privacyPolicyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms, legalAcceptanceRequired: true })).toBe(true)
   })
 
   it('uses the additive profile capabilities endpoint and preserves the full account capability set', async () => {

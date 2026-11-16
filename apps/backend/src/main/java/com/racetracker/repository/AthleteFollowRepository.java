@@ -21,4 +21,6 @@ public interface AthleteFollowRepository extends JpaRepository<AthleteFollow, UU
     List<AthleteFollow> findByRaceIdAndParticipantId(UUID raceId, UUID participantId);
 
     void deleteByUserId(UUID userId);
+
+    void deleteByParticipantIdIn(java.util.Collection<UUID> participantIds);
 }

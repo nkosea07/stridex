@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -15,18 +16,29 @@ public interface GpsLocationRepository extends JpaRepository<GpsLocation, UUID> 
 
     List<GpsLocation> findByParticipantIdAndRaceIdOrderByRecordedAtAsc(UUID participantId, UUID raceId);
 
-    Optional<GpsLocation> findTopByParticipantIdAndRaceIdOrderByRecordedAtDesc(UUID participantId, UUID raceId);
+    List<GpsLocation> findByParticipantIdAndRaceIdAndRecordedAtAfterOrderByRecordedAtAsc(UUID participantId, UUID raceId,
+                                                                                        OffsetDateTime since);
+
+    Optional<GpsLocation> findTopByParticipantIdAndRaceIdAndFilteredFalseOrderByRecordedAtDesc(UUID participantId, UUID raceId);
+
+    Optional<GpsLocation> findTopByParticipantIdAndRaceIdAndFilteredFalseAndRecordedAtLessThanEqualOrderByRecordedAtDesc(
+        UUID participantId, UUID raceId, OffsetDateTime latestAcceptable);
+
+    @Query(value = "SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(:streamKey, 0))", nativeQuery = true)
+    Integer lockLocationStream(@Param("streamKey") String streamKey);
 
     @Query("""
         select g
         from GpsLocation g
         where g.race.id = :raceId
           and g.participant.id in :participantIds
+          and g.filtered = false
           and g.recordedAt = (
             select max(g2.recordedAt)
             from GpsLocation g2
             where g2.race.id = :raceId
               and g2.participant.id = g.participant.id
+              and g2.filtered = false
           )
     """)
     List<GpsLocation> findLatestByRaceIdAndParticipantIds(
@@ -39,22 +51,45 @@ public interface GpsLocationRepository extends JpaRepository<GpsLocation, UUID> 
     @Query("select count(distinct g.participant.id) from GpsLocation g where g.recordedAt >= :since")
     long countDistinctParticipantsActiveSince(@Param("since") OffsetDateTime since);
 
+    @Query("""
+        select count(distinct g.participant.id) from GpsLocation g
+        where g.recordedAt >= :since
+          and g.race.id in (select managed.id from Race managed
+              left join managed.createdBy owner
+              left join managed.admins assignedAdmin
+              where lower(owner.email) = lower(:email) or lower(assignedAdmin.email) = lower(:email))
+        """)
+    long countDistinctParticipantsActiveSinceInRacesManagedBy(@Param("email") String email,
+                                                              @Param("since") OffsetDateTime since);
+
     @Query("select g.participant.id, count(g) from GpsLocation g where g.race.id = :raceId and g.filtered = true group by g.participant.id")
     List<Object[]> countFilteredByRace(@Param("raceId") UUID raceId);
 
+    @Transactional
     @Modifying
-    @Query("delete from GpsLocation g where g.recordedAt < :cutoff")
-    int deleteByRecordedAtBefore(@Param("cutoff") OffsetDateTime cutoff);
+    @Query(value = """
+        DELETE FROM gps_locations
+        WHERE id IN (
+            SELECT id FROM gps_locations
+            WHERE recorded_at < :cutoff
+            ORDER BY recorded_at
+            LIMIT :batchSize
+            FOR UPDATE SKIP LOCKED
+        )
+        """, nativeQuery = true)
+    int deleteBatchRecordedBefore(@Param("cutoff") OffsetDateTime cutoff, @Param("batchSize") int batchSize);
 
     @Query(value = """
-        select round(coalesce(smoothed_latitude, latitude)::numeric, :scale)::double precision as latitude,
-               round(coalesce(smoothed_longitude, longitude)::numeric, :scale)::double precision as longitude,
+        select round(coalesce(g.smoothed_latitude, g.latitude)::numeric, :scale)::double precision as latitude,
+               round(coalesce(g.smoothed_longitude, g.longitude)::numeric, :scale)::double precision as longitude,
                count(*) as weight
-        from gps_locations
-        where race_id = :raceId
-          and filtered = false
-          and (:from is null or recorded_at >= :from)
-          and (:to is null or recorded_at <= :to)
+        from gps_locations g
+        join participants p on p.id = g.participant_id
+        where g.race_id = :raceId
+          and g.filtered = false
+          and coalesce(p.is_tracking_enabled, true) = true
+          and (:from is null or g.recorded_at >= :from)
+          and (:to is null or g.recorded_at <= :to)
         group by 1, 2
         order by weight desc
         """, nativeQuery = true)

@@ -16,23 +16,19 @@ and the web settings surface marks SMS unavailable.
 
 ## 2. Object storage (S3 / MinIO)
 
-**State.** `MediaStorage` interface with `LocalMediaStorage`; `racetracker.storage.provider`
-(default `local`) is the selection seam.
+**Implemented.** `MediaStorage` has `LocalMediaStorage` (development only), `AwsS3MediaStorage`,
+and `MinioMediaStorage`, selected by `racetracker.storage.provider` (`STORAGE_PROVIDER`). The
+production validator rejects local storage and requires a private bucket plus credentials.
+Media is served through the backend (`no-store`), not public bucket URLs.
 
-**Decision.** AWS S3 vs MinIO vs another S3-compatible store.
-
-**Steps.**
-1. Add `software.amazon.awssdk:s3` to `apps/backend/pom.xml`.
-2. Implement `S3MediaStorage` (`store`/`storeBytes`/`load`/`delete`); return object keys (or
-   full URLs) consistently with `MediaServiceImpl.publicUrl`.
-3. Select the bean by `racetracker.storage.provider=s3` (`@ConditionalOnProperty`); add bucket,
-   region, endpoint, and credentials to config + production validation.
-4. Serve via presigned URLs or a CDN; update `MediaController` if content is redirected.
+**Remaining.** Run the AWS S3 and MinIO provider smoke tests in staging and record the evidence
+(`docs/RELEASE_READINESS.md`, Media storage gate).
 
 ## 3. Apple OAuth
 
-**State.** Google OAuth is implemented via tokeninfo (`GoogleOAuthIdentityVerifier`); privileged
-accounts are rejected from OAuth sessions (must use verified-email password authentication).
+**State.** Deferred for this release: the `prod` profile disables OAuth and the production
+validator rejects enabling it. Google OAuth (`GoogleOAuthIdentityVerifier`, tokeninfo) remains
+for development and test; privileged accounts are rejected from OAuth sessions.
 
 **Decision.** Apple Services ID / team / key credentials.
 

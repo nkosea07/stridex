@@ -22,6 +22,7 @@ import com.racetracker.repository.RaceFeedRevisionRepository;
 import com.racetracker.service.PublicTrackingService;
 import com.racetracker.service.PublicRaceVisibility;
 import com.racetracker.service.GpsDriftFilter;
+import com.racetracker.service.CheckpointCutoff;
 import com.racetracker.service.LastCheckpointNameCache;
 import io.micrometer.observation.annotation.Observed;
 import org.springframework.data.domain.Page;
@@ -48,6 +49,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     private static final int HUB_LEADERBOARD_LIMIT = 10;
     private static final int DEFAULT_FEED_LIMIT = 25;
     private static final int MAX_FEED_LIMIT = 100;
+    private static final int MAX_PUBLIC_HEATMAP_SCALE = 4;
 
     private final PublicRaceVisibility publicRaceVisibility;
     private final ParticipantRepository participantRepository;
@@ -210,6 +212,13 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     @Observed(name = "tracking.public.athlete_track")
     @Transactional(readOnly = true)
     public PublicParticipantTrackResponse getAthleteTrack(UUID raceId, UUID participantId) {
+        return getAthleteTrack(raceId, participantId, null);
+    }
+
+    @Override
+    @Observed(name = "tracking.public.athlete_track")
+    @Transactional(readOnly = true)
+    public PublicParticipantTrackResponse getAthleteTrack(UUID raceId, UUID participantId, OffsetDateTime since) {
         publicRaceVisibility.requireVisible(raceId);
         Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
@@ -218,7 +227,9 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
             return new PublicParticipantTrackResponse(List.of());
         }
 
-        List<GpsLocation> locations = gpsLocationRepository.findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participantId, raceId)
+        List<GpsLocation> locations = (since == null
+            ? gpsLocationRepository.findByParticipantIdAndRaceIdOrderByRecordedAtAsc(participantId, raceId)
+            : gpsLocationRepository.findByParticipantIdAndRaceIdAndRecordedAtAfterOrderByRecordedAtAsc(participantId, raceId, since))
             .stream()
             .filter(location -> !Boolean.TRUE.equals(location.getFiltered()))
             .toList();
@@ -253,7 +264,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     public List<HeatCellDto> getRaceHeatmap(UUID raceId, OffsetDateTime from, OffsetDateTime to, Integer scale) {
         publicRaceVisibility.requireVisible(raceId);
         int boundedScale = scale == null ? raceTrackerProperties.getTracking().getHeatmapScale()
-            : Math.max(1, Math.min(scale, 6));
+            : Math.max(1, Math.min(scale, MAX_PUBLIC_HEATMAP_SCALE));
         return gpsLocationRepository.heatCells(raceId, from, to, boundedScale).stream()
             .map(cell -> new HeatCellDto(cell.getLatitude(), cell.getLongitude(), cell.getWeight()))
             .toList();
@@ -308,40 +319,19 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
         response.setStatus(participant.getStatus() != null ? participant.getStatus().name() : null);
         response.setLastCheckpoint(resolveLastCheckpoint(participant, records, raceId));
 
-        OffsetDateTime latestTimestamp = latest != null ? latest.getRecordedAt() : null;
-        OffsetDateTime start = participant.getCheckedInAt() != null ? participant.getCheckedInAt() : participant.getRegisteredAt();
-        Duration elapsed = null;
-        if (start != null && latestTimestamp != null && latestTimestamp.isAfter(start)) {
-            elapsed = Duration.between(start, latestTimestamp);
-            response.setElapsedTime(formatDuration(elapsed));
+        com.racetracker.service.RaceProgress.Snapshot progress =
+            com.racetracker.service.RaceProgress.compute(participant, latest, records);
+        if (progress.elapsed() != null) {
+            response.setElapsedTime(formatDuration(progress.elapsed()));
         }
-
-        BigDecimal distanceCovered = participant.getTotalDistance() != null ? participant.getTotalDistance() : BigDecimal.ZERO;
-        Race race = participant.getRace();
-        if (race != null && race.getDistanceKm() != null) {
-            BigDecimal remaining = race.getDistanceKm().subtract(distanceCovered).max(BigDecimal.ZERO);
-            response.setDistanceRemaining(remaining);
-
-            if (elapsed != null && distanceCovered.compareTo(BigDecimal.ZERO) > 0) {
-                double paceMinutes = (elapsed.toSeconds() / 60.0) / distanceCovered.doubleValue();
-                int minutes = (int) paceMinutes;
-                int seconds = (int) ((paceMinutes - minutes) * 60);
-                response.setAveragePace(String.format("%d:%02d", minutes, seconds));
-
-                if (latestTimestamp != null && paceMinutes > 0) {
-                    double avgSpeedKmH = 60.0 / paceMinutes;
-                    double remainingHours = remaining.doubleValue() / avgSpeedKmH;
-                    OffsetDateTime eta = latestTimestamp.plus(Duration.ofMinutes((long) (remainingHours * 60)));
-                    response.setPredictedFinishTime(eta.toString());
-                }
-            }
-        }
-
+        response.setDistanceRemaining(progress.distanceRemainingKm());
+        response.setAveragePace(progress.averagePace());
+        response.setPredictedFinishTime(progress.predictedFinish() != null ? progress.predictedFinish().toString() : null);
         return response;
     }
 
     private List<CheckpointSplitDto> buildSplits(Participant participant, List<CheckpointRecord> records) {
-        OffsetDateTime start = participant.getCheckedInAt() != null ? participant.getCheckedInAt() : participant.getRegisteredAt();
+        OffsetDateTime start = CheckpointCutoff.resolveStart(participant, records);
         List<CheckpointSplitDto> splits = new ArrayList<>(records.size());
         for (CheckpointRecord record : records) {
             Integer distanceMeters = null;
@@ -355,8 +345,9 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
             String time = "---";
             Long durationSeconds = null;
             Long paceSecondsPerKm = null;
-            if (start != null && record.getRecordedAt() != null) {
-                Duration duration = Duration.between(start, record.getRecordedAt());
+            OffsetDateTime effective = CheckpointCutoff.effectiveTime(record);
+            if (start != null && effective != null && !effective.isBefore(start)) {
+                Duration duration = Duration.between(start, effective);
                 durationSeconds = duration.getSeconds();
                 time = formatDuration(duration);
                 if (distanceMeters != null && distanceMeters > 0) {

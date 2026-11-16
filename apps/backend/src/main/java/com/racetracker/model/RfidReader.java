@@ -86,6 +86,9 @@ public class RfidReader {
     @Column(name = "last_processed_at")
     private OffsetDateTime lastProcessedAt;
 
+    @Column(name = "clock_offset_ms")
+    private Long clockOffsetMs;
+
     @CreationTimestamp
     @Column(name = "created_at")
     private OffsetDateTime createdAt;

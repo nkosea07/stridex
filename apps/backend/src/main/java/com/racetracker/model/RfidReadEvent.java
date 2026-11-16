@@ -75,7 +75,14 @@ public class RfidReadEvent {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
+    @Builder.Default
+    @Column(name = "processing_attempts", nullable = false)
+    private Integer processingAttempts = 0;
+
+    @Column(name = "next_attempt_at")
+    private OffsetDateTime nextAttemptAt;
+
     public enum RfidReadEventStatus {
-        RECEIVED, ACCEPTED, DUPLICATE, UNKNOWN_TAG, INVALID_READER, ERROR
+        RECEIVED, ACCEPTED, DUPLICATE, UNKNOWN_TAG, INVALID_READER, ERROR, IGNORED, VOIDED
     }
 }

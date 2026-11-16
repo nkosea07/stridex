@@ -52,25 +52,30 @@ import java.util.UUID;
 public class ParticipantImportProcessor {
 
     private static final Duration STALE_THRESHOLD = Duration.ofMinutes(10);
+    private static final java.util.regex.Pattern EMAIL =
+        java.util.regex.Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
 
     private final ImportJobRepository importJobRepository;
     private final ParticipantRepository participantRepository;
     private final RaceCategoryRepository raceCategoryRepository;
     private final ParticipantImportRowService rowService;
     private final ParticipantImportJobService jobService;
+    private final ImportSourceStore sourceStore;
 
     public ParticipantImportProcessor(
         ImportJobRepository importJobRepository,
         ParticipantRepository participantRepository,
         RaceCategoryRepository raceCategoryRepository,
         ParticipantImportRowService rowService,
-        ParticipantImportJobService jobService
+        ParticipantImportJobService jobService,
+        ImportSourceStore sourceStore
     ) {
         this.importJobRepository = importJobRepository;
         this.participantRepository = participantRepository;
         this.raceCategoryRepository = raceCategoryRepository;
         this.rowService = rowService;
         this.jobService = jobService;
+        this.sourceStore = sourceStore;
     }
 
     @Async
@@ -93,7 +98,7 @@ public class ParticipantImportProcessor {
         }
         OffsetDateTime cutoff = OffsetDateTime.now().minus(STALE_THRESHOLD);
         for (ImportJob job : candidates) {
-            if (job.getSourcePath() == null || job.getSourcePath().isBlank()) {
+            if (!sourceStore.hasSource(job)) {
                 continue;
             }
             if (job.getStatus() == ImportJob.JobStatus.PROCESSING
@@ -113,43 +118,39 @@ public class ParticipantImportProcessor {
                 return new com.racetracker.dto.participant.ImportPreviewDto(0, 0, 0, List.of());
             }
             Map<String, Integer> index = headerIndex(rows.get(0));
-            Set<String> existingEmails = new HashSet<>(participantRepository.findEmailsByRaceId(raceId));
+            Race previewRace = new Race();
+            previewRace.setId(raceId);
+            Set<String> seenEmails = new HashSet<>(participantRepository.findEmailsByRaceId(raceId));
+            Set<String> seenBibs = new HashSet<>();
+            Set<String> seenTags = new HashSet<>();
             List<com.racetracker.dto.participant.ImportPreviewDto.Row> previewRows = new ArrayList<>();
             int valid = 0;
             int duplicates = 0;
+            int dataRows = 0;
             for (int rowIndex = 1; rowIndex < rows.size(); rowIndex++) {
                 String[] row = rows.get(rowIndex);
+                if (isBlankRow(row)) {
+                    continue;
+                }
+                dataRows++;
                 List<String> errors = new ArrayList<>();
                 Map<String, String> values = new java.util.LinkedHashMap<>();
                 for (String key : List.of("firstName", "lastName", "email", "phone", "bibNumber",
                     "categoryId", "dateOfBirth", "gender", "nationality", "rfidTag")) {
                     values.put(key, cell(row, index, key));
                 }
-                String email = cell(row, index, "email");
-                if (cell(row, index, "firstName") == null || cell(row, index, "firstName").isBlank()) {
-                    errors.add("Missing required field: firstName");
-                }
-                if (cell(row, index, "lastName") == null || cell(row, index, "lastName").isBlank()) {
-                    errors.add("Missing required field: lastName");
-                }
-                if (email == null || email.isBlank()) {
-                    errors.add("Missing required field: email");
-                }
+                Participant parsed = null;
                 try {
-                    validateImportedFieldLengths(row, index);
-                } catch (IllegalArgumentException invalidLength) {
-                    errors.add(invalidLength.getMessage());
+                    parsed = parseParticipant(row, index, previewRace);
+                } catch (IllegalArgumentException invalidRow) {
+                    errors.add(invalidRow.getMessage());
                 }
-                if (cell(row, index, "categoryId") != null && !cell(row, index, "categoryId").isBlank()) {
-                    try {
-                        resolveCategory(raceId, UUID.fromString(cell(row, index, "categoryId")));
-                    } catch (RuntimeException ex) {
-                        errors.add("Invalid categoryId");
+                if (parsed != null) {
+                    String duplicate = duplicateReason(parsed, seenEmails, seenBibs, seenTags);
+                    if (duplicate != null) {
+                        duplicates++;
+                        errors.add(duplicate);
                     }
-                }
-                if (errors.isEmpty() && !existingEmails.add(email.toLowerCase(Locale.ROOT))) {
-                    duplicates++;
-                    errors.add("Duplicate email");
                 }
                 if (errors.isEmpty()) {
                     valid++;
@@ -159,11 +160,38 @@ public class ParticipantImportProcessor {
                         rowIndex, values, errors));
                 }
             }
-            return new com.racetracker.dto.participant.ImportPreviewDto(rows.size() - 1, valid, duplicates,
-                previewRows);
+            return new com.racetracker.dto.participant.ImportPreviewDto(dataRows, valid, duplicates, previewRows);
         } catch (IOException ex) {
-            throw new com.racetracker.exception.ApiException("Could not read import file");
+            throw new com.racetracker.exception.ApiException("Could not read import file", "IMPORT_FILE_UNREADABLE");
         }
+    }
+
+    private String duplicateReason(Participant parsed, Set<String> seenEmails, Set<String> seenBibs, Set<String> seenTags) {
+        UUID raceId = parsed.getRace().getId();
+        if (!seenEmails.add(parsed.getEmail())) {
+            return "Duplicate email";
+        }
+        if (parsed.getBibNumber() != null
+            && (!seenBibs.add(parsed.getBibNumber()) || participantRepository.existsByRaceIdAndBibNumber(raceId, parsed.getBibNumber()))) {
+            return "Duplicate bibNumber";
+        }
+        if (parsed.getRfidTag() != null
+            && (!seenTags.add(parsed.getRfidTag()) || participantRepository.existsByRaceIdAndRfidTag(raceId, parsed.getRfidTag()))) {
+            return "Duplicate rfidTag";
+        }
+        return null;
+    }
+
+    private boolean isBlankRow(String[] row) {
+        if (row == null) {
+            return true;
+        }
+        for (String value : row) {
+            if (value != null && !value.isBlank()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     void runJob(UUID jobId) {
@@ -183,7 +211,10 @@ public class ParticipantImportProcessor {
 
         try {
             Race race = job.getRace();
-            List<String[]> rows = readImportRows(job.getSourcePath());
+            Optional<byte[]> storedSource = sourceStore.read(jobId);
+            List<String[]> rows = storedSource.isPresent()
+                ? readImportRows(new java.io.ByteArrayInputStream(storedSource.get()), job.getFileName())
+                : readImportRows(job.getSourcePath());
             if (!jobService.setTotalRows(jobId, attempt, Math.max(0, rows.size() - 1))) {
                 return;
             }
@@ -192,30 +223,34 @@ public class ParticipantImportProcessor {
                 for (int rowIndex = Math.max(1, count(job.getProcessedRows()) + 1);
                      rowIndex < rows.size(); rowIndex++) {
                     String[] row = rows.get(rowIndex);
+                    if (isBlankRow(row)) {
+                        rowService.skipRow(jobId, attempt, rowIndex, "Empty row");
+                        continue;
+                    }
                     Participant participant;
                     try {
                         participant = parseParticipant(row, index, race);
                     } catch (IllegalArgumentException invalidRow) {
-                        rowService.skipRow(jobId, attempt, rowIndex);
+                        rowService.skipRow(jobId, attempt, rowIndex, invalidRow.getMessage());
                         continue;
                     }
                     try {
                         rowService.importRow(jobId, attempt, rowIndex, participant);
                     } catch (ParticipantImportRowService.DuplicateValueException duplicate) {
-                        rowService.skipRow(jobId, attempt, rowIndex);
+                        rowService.skipRow(jobId, attempt, rowIndex, duplicate.getMessage());
                     } catch (ConflictException duplicateCredential) {
                         if (!"CONFLICT".equals(duplicateCredential.getCode())) {
                             throw duplicateCredential;
                         }
-                        rowService.skipRow(jobId, attempt, rowIndex);
+                        rowService.skipRow(jobId, attempt, rowIndex, "Duplicate credential");
                     }
                 }
             }
-            if (jobService.complete(jobId, attempt)) {
+            if (jobService.complete(jobId, attempt) && job.getSourcePath() != null && !job.getSourcePath().isBlank()) {
                 try {
                     Files.deleteIfExists(Paths.get(job.getSourcePath()));
                 } catch (IOException cleanupError) {
-                    log.warn("Could not clean completed import source for job {}", jobId, cleanupError);
+                    log.warn("Could not clean completed legacy import source for job {}", jobId, cleanupError);
                 }
             }
         } catch (Exception ex) {
@@ -235,25 +270,48 @@ public class ParticipantImportProcessor {
         participant.setRace(race);
         participant.setFirstName(requiredCell(row, index, "firstName"));
         participant.setLastName(requiredCell(row, index, "lastName"));
-        participant.setEmail(requiredCell(row, index, "email").toLowerCase(Locale.ROOT));
+        String email = requiredCell(row, index, "email").toLowerCase(Locale.ROOT);
+        if (!EMAIL.matcher(email).matches()) {
+            throw new IllegalArgumentException("Invalid email");
+        }
+        participant.setEmail(email);
         participant.setPhone(cell(row, index, "phone"));
         participant.setNationality(cell(row, index, "nationality"));
         participant.setBibNumber(cell(row, index, "bibNumber"));
-        participant.setRfidTag(cell(row, index, "rfidTag"));
+        participant.setRfidTag(com.racetracker.service.RfidTagValues.canonical(cell(row, index, "rfidTag")));
         participant.setRegistrationSource(
             Optional.ofNullable(cell(row, index, "registrationSource")).orElse("CSV_IMPORT"));
         participant.setStatus(parseStatusNullable(cell(row, index, "status"),
             Participant.ParticipantStatus.REGISTERED));
         participant.setGender(parseGenderNullable(cell(row, index, "gender")));
-        participant.setIsTrackingEnabled(parseBoolean(cell(row, index, "isTrackingEnabled"), true));
+        try {
+            participant.setIsTrackingEnabled(parseBoolean(cell(row, index, "isTrackingEnabled"), true));
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("Invalid isTrackingEnabled (use true/false)");
+        }
         participant.setPaymentStatus(defaultPaymentStatus(race));
         String dob = cell(row, index, "dateOfBirth");
         if (dob != null && !dob.isBlank()) {
-            participant.setDateOfBirth(LocalDate.parse(dob));
+            LocalDate dateOfBirth;
+            try {
+                dateOfBirth = LocalDate.parse(dob);
+            } catch (java.time.DateTimeException invalidDate) {
+                throw new IllegalArgumentException("Invalid dateOfBirth (use YYYY-MM-DD)");
+            }
+            if (dateOfBirth.isAfter(LocalDate.now())) {
+                throw new IllegalArgumentException("Invalid dateOfBirth (in the future)");
+            }
+            participant.setDateOfBirth(dateOfBirth);
         }
         String categoryId = cell(row, index, "categoryId");
         if (categoryId != null && !categoryId.isBlank()) {
-            participant.setCategory(resolveCategory(race.getId(), UUID.fromString(categoryId)));
+            UUID parsedCategoryId;
+            try {
+                parsedCategoryId = UUID.fromString(categoryId);
+            } catch (IllegalArgumentException invalidId) {
+                throw new IllegalArgumentException("Invalid categoryId");
+            }
+            participant.setCategory(resolveCategory(race.getId(), parsedCategoryId));
         }
         participant.setRegisteredAt(OffsetDateTime.now());
         return participant;
@@ -302,14 +360,19 @@ public class ParticipantImportProcessor {
         Map<String, Integer> map = new HashMap<>();
         for (int i = 0; i < headers.length; i++) {
             if (headers[i] != null) {
-                map.put(headers[i].trim(), i);
+                map.putIfAbsent(canonicalHeader(headers[i]), i);
             }
         }
         return map;
     }
 
+    static String canonicalHeader(String header) {
+        String value = header.startsWith("\uFEFF") ? header.substring(1) : header;
+        return value.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+    }
+
     private String cell(String[] row, Map<String, Integer> index, String key) {
-        Integer i = index.get(key);
+        Integer i = index.get(canonicalHeader(key));
         if (i == null || i < 0 || i >= row.length) return null;
         String value = row[i];
         return value == null ? null : value.trim();
@@ -346,14 +409,22 @@ public class ParticipantImportProcessor {
         if (input == null || input.isBlank()) {
             return fallback;
         }
-        return Participant.ParticipantStatus.valueOf(input.trim().toUpperCase(Locale.ROOT));
+        try {
+            return Participant.ParticipantStatus.valueOf(input.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("Invalid status");
+        }
     }
 
     private Participant.Gender parseGenderNullable(String input) {
         if (input == null || input.isBlank()) {
             return null;
         }
-        return Participant.Gender.valueOf(input.trim().toUpperCase(Locale.ROOT));
+        try {
+            return Participant.Gender.valueOf(input.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("Invalid gender");
+        }
     }
 
     private boolean parseBoolean(String input, boolean fallback) {

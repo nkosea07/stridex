@@ -39,7 +39,7 @@ class PenaltyServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new PenaltyServiceImpl(penaltyRepository, participantRepository, userRepository);
+        service = new PenaltyServiceImpl(penaltyRepository, participantRepository, userRepository, org.mockito.Mockito.mock(com.racetracker.service.ResultLock.class));
         lenient().when(penaltyRepository.save(any(ParticipantPenalty.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -81,7 +81,7 @@ class PenaltyServiceImplTest {
     void removeRejectsUnknownPenalty() {
         when(penaltyRepository.findByRaceIdAndId(any(), any())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.remove(raceId, UUID.randomUUID()))
+        assertThatThrownBy(() -> service.remove(raceId, UUID.randomUUID(), UUID.randomUUID()))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 }

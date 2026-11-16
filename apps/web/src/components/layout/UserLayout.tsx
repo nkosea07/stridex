@@ -9,6 +9,7 @@ import { getPreferredCapability, useAuth } from '@/contexts/AuthContext'
 import { connectUserAlerts } from '@/lib/api'
 import { toast } from 'sonner'
 import { ThemeSelect } from '@/components/theme/ThemeSelect'
+import { LegalFooter } from '@/components/legal/LegalFooter'
 
 export function UserLayout() {
   const { t } = useTranslation()
@@ -78,6 +79,7 @@ export function UserLayout() {
           <Outlet />
         </main>
       </div>
+      <LegalFooter />
     </div>
   )
 }

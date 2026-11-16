@@ -45,6 +45,25 @@ class GpsDriftFilterTest {
     }
 
     @Test
+    void pointDatedBeyondTheClockSkewAllowanceIsFilteredAndNeverBecomesAnAnchor() {
+        GpsDriftFilter.FilterResult result = filter.filter(
+            null, BigDecimal.valueOf(-33.9), BigDecimal.valueOf(18.4), BigDecimal.valueOf(5),
+            OffsetDateTime.now().plusYears(4));
+
+        assertThat(result.filtered()).isTrue();
+        assertThat(result.reason()).isEqualTo("FUTURE_TIMESTAMP");
+    }
+
+    @Test
+    void pointWithinTheClockSkewAllowanceIsAccepted() {
+        GpsDriftFilter.FilterResult result = filter.filter(
+            null, BigDecimal.valueOf(-33.9), BigDecimal.valueOf(18.4), BigDecimal.valueOf(5),
+            OffsetDateTime.now().plusSeconds(30));
+
+        assertThat(result.filtered()).isFalse();
+    }
+
+    @Test
     void lowAccuracyPointIsFiltered() {
         GpsDriftFilter.FilterResult result = filter.filter(
             null, BigDecimal.valueOf(-33.9), BigDecimal.valueOf(18.4), BigDecimal.valueOf(250), OffsetDateTime.now());

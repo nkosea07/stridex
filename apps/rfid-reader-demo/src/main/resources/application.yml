@@ -10,6 +10,7 @@ management:
 adapter:
   gateway:
     base-url: ${RFID_GATEWAY_BASE_URL:http://localhost:8090}
+    local-token: ${RFID_GATEWAY_LOCAL_TOKEN:}
     reads-path: ${RFID_GATEWAY_READS_PATH:/reads}
     batch-size: ${RFID_GATEWAY_BATCH_SIZE:25}
     flush-interval-ms: ${RFID_GATEWAY_FLUSH_INTERVAL_MS:500}

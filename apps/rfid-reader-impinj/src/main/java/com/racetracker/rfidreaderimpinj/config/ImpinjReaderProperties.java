@@ -32,6 +32,8 @@ public class ImpinjReaderProperties {
         @NotBlank
         private String baseUrl = "http://localhost:8090";
 
+        private String localToken;
+
         @NotBlank
         private String readsPath = "/reads";
 
@@ -56,6 +58,14 @@ public class ImpinjReaderProperties {
 
         public void setBaseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
+        }
+
+        public String getLocalToken() {
+            return localToken;
+        }
+
+        public void setLocalToken(String localToken) {
+            this.localToken = localToken;
         }
 
         public String getReadsPath() {
@@ -136,6 +146,8 @@ public class ImpinjReaderProperties {
 
         @Min(1000)
         private int keepaliveIntervalMs = 5000;
+
+        private long maxReaderClockOffsetMs = 2000;
 
         @Min(100)
         private int connectRetryInitialDelayMs = 1000;
@@ -228,6 +240,14 @@ public class ImpinjReaderProperties {
 
         public int getKeepaliveIntervalMs() {
             return keepaliveIntervalMs;
+        }
+
+        public long getMaxReaderClockOffsetMs() {
+            return maxReaderClockOffsetMs;
+        }
+
+        public void setMaxReaderClockOffsetMs(long maxReaderClockOffsetMs) {
+            this.maxReaderClockOffsetMs = maxReaderClockOffsetMs;
         }
 
         public void setKeepaliveIntervalMs(int keepaliveIntervalMs) {

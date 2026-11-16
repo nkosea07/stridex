@@ -19,31 +19,31 @@ import java.util.UUID;
 
 public interface RaceRepository extends JpaRepository<Race, UUID> {
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     Page<Race> findAll(Pageable pageable);
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     Page<Race> findByStatus(Race.RaceStatus status, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     Page<Race> findByRaceDateGreaterThanEqual(LocalDate raceDate, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     Page<Race> findByStatusAndRaceDateGreaterThanEqual(Race.RaceStatus status, LocalDate raceDate, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     Page<Race> findAllByArchivedAtIsNull(Pageable pageable);
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     Page<Race> findByStatusAndArchivedAtIsNull(Race.RaceStatus status, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     Page<Race> findByRaceDateGreaterThanEqualAndArchivedAtIsNull(LocalDate raceDate, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     Page<Race> findByStatusAndRaceDateGreaterThanEqualAndArchivedAtIsNull(Race.RaceStatus status, LocalDate raceDate, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     @Query("""
         select r from Race r
         where r.isPublicRegistration = true
@@ -58,7 +58,7 @@ public interface RaceRepository extends JpaRepository<Race, UUID> {
         Pageable pageable
     );
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     @Query("""
         select r from Race r
         where r.isPublicRegistration = true
@@ -77,12 +77,58 @@ public interface RaceRepository extends JpaRepository<Race, UUID> {
 
     long countByStatusIn(Collection<Race.RaceStatus> statuses);
 
-    List<Race> findByStatusAndRaceDateBefore(Race.RaceStatus status, LocalDate raceDate);
+    List<Race> findByStatusAndRaceDateLessThanEqual(Race.RaceStatus status, LocalDate raceDate);
 
     long countByRaceDateBetween(LocalDate from, LocalDate to);
 
+    @Query("""
+        select count(r) from Race r
+        where r.id in (select managed.id from Race managed
+              left join managed.createdBy owner
+              left join managed.admins assignedAdmin
+              where lower(owner.email) = lower(:email) or lower(assignedAdmin.email) = lower(:email))
+        """)
+    long countManagedBy(@Param("email") String email);
+
+    @Query("""
+        select count(r) from Race r
+        where r.status in :statuses
+          and r.id in (select managed.id from Race managed
+              left join managed.createdBy owner
+              left join managed.admins assignedAdmin
+              where lower(owner.email) = lower(:email) or lower(assignedAdmin.email) = lower(:email))
+        """)
+    long countManagedByStatusIn(@Param("email") String email, @Param("statuses") Collection<Race.RaceStatus> statuses);
+
+    @Query("""
+        select count(distinct r) from Race r
+        left join r.createdBy owner
+        where r.status in :statuses
+          and (owner.id = :userId
+               or exists (select managed.id from Race managed join managed.admins admin
+                          where managed.id = r.id and admin.id = :userId))
+          and not (owner is not null and owner.id <> :userId and owner.isActive = true
+                   and owner.deletedAt is null and owner.deletionRequestedAt is null)
+          and not exists (select other.id from Race shared join shared.admins other
+                          where shared.id = r.id and other.id <> :userId and other.isActive = true
+                            and other.deletedAt is null and other.deletionRequestedAt is null)
+        """)
+    long countActiveWithoutOtherManager(@Param("userId") UUID userId,
+                                        @Param("statuses") Collection<Race.RaceStatus> statuses);
+
+    @Query("""
+        select count(r) from Race r
+        where r.raceDate between :from and :to
+          and r.id in (select managed.id from Race managed
+              left join managed.createdBy owner
+              left join managed.admins assignedAdmin
+              where lower(owner.email) = lower(:email) or lower(assignedAdmin.email) = lower(:email))
+        """)
+    long countManagedByRaceDateBetween(@Param("email") String email, @Param("from") LocalDate from,
+                                       @Param("to") LocalDate to);
+
     @Override
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     Optional<Race> findById(UUID id);
 
     @Query("select r from Race r where r.id = :id")
@@ -96,7 +142,7 @@ public interface RaceRepository extends JpaRepository<Race, UUID> {
     """)
     Optional<Race> findByIdForAuthorization(@Param("id") UUID id);
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     @Query("""
         select r from Race r
         where (r.createdBy.id = :ownerId
@@ -112,7 +158,7 @@ public interface RaceRepository extends JpaRepository<Race, UUID> {
         Pageable pageable
     );
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     @Query("""
         select r from Race r
         where (r.createdBy.id = :ownerId
@@ -130,7 +176,7 @@ public interface RaceRepository extends JpaRepository<Race, UUID> {
         Pageable pageable
     );
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     @Query("""
         select r from Race r
         where exists (
@@ -152,7 +198,7 @@ public interface RaceRepository extends JpaRepository<Race, UUID> {
         Pageable pageable
     );
 
-    @EntityGraph(attributePaths = {"categories", "participants"})
+    @EntityGraph(attributePaths = {"categories"})
     @Query("""
         select r from Race r
         where exists (

@@ -124,6 +124,15 @@ public class Race {
     @Column(name = "results_published_at")
     private OffsetDateTime resultsPublishedAt;
 
+    @Column(name = "started_at")
+    private OffsetDateTime startedAt;
+
+    @Column(name = "results_certified_at")
+    private OffsetDateTime resultsCertifiedAt;
+
+    @Column(name = "results_certified_by")
+    private UUID resultsCertifiedBy;
+
     @Column(name = "completed_at")
     private OffsetDateTime completedAt;
 
@@ -185,6 +194,9 @@ public class Race {
 
     @OneToMany(mappedBy = "race", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Participant> participants = new HashSet<>();
+
+    @org.hibernate.annotations.Formula("(select count(*) from participants p where p.race_id = id)")
+    private Long participantTotal;
 
     @ManyToMany
     @JoinTable(

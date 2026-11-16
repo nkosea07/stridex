@@ -29,6 +29,8 @@ public class DemoReaderProperties {
         @NotBlank
         private String baseUrl = "http://localhost:8090";
 
+        private String localToken;
+
         @NotBlank
         private String readsPath = "/reads";
 
@@ -47,6 +49,14 @@ public class DemoReaderProperties {
 
         public void setBaseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
+        }
+
+        public String getLocalToken() {
+            return localToken;
+        }
+
+        public void setLocalToken(String localToken) {
+            this.localToken = localToken;
         }
 
         public String getReadsPath() {

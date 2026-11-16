@@ -20,5 +20,8 @@ public class CheckpointDto {
     private String cutoffTime;
     private Boolean hasRfidReader;
     private Boolean hasQrScanner;
+    private Integer expectedPasses;
+    private Integer minPassSeconds;
+    private Boolean firstPassIsStart;
     private Long recordCount;
 }

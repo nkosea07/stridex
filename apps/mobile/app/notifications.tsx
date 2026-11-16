@@ -10,8 +10,11 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
 import { registerForPushNotifications } from '@/lib/notifications';
+import { routeForNotification } from '@/lib/notificationRoutes';
+import { router } from 'expo-router';
 import { useTheme } from '@/contexts/theme';
 import { AuthenticatedGate } from '@/components/CapabilityGate';
 import type { Notification } from '@/types';
@@ -33,6 +36,7 @@ export default function NotificationsScreen() {
 }
 
 function NotificationsScreenContent() {
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
@@ -44,12 +48,12 @@ function NotificationsScreenContent() {
     try {
       const items = await api.getNotifications();
       setNotifications(items);
-    } catch (error) {
-      Alert.alert('Unable to load notifications', error instanceof Error ? error.message : 'Please try again.');
+    } catch {
+      Alert.alert(t('mobile:ui.notifications.unableToLoadNotifications'), t('mobile:notificationsScreen.tryAgain'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load();
@@ -66,14 +70,20 @@ function NotificationsScreenContent() {
     try {
       const token = await registerForPushNotifications();
       Alert.alert(
-        token ? 'Push enabled' : 'Push unavailable',
+        token ? t('mobile:notificationsScreen.pushEnabled') : t('mobile:notificationsScreen.pushUnavailable'),
         token
-          ? 'This device will receive race alerts.'
-          : 'Notifications could not be enabled. Check device permissions and try again.',
+          ? t('mobile:notificationsScreen.pushEnabledBody')
+          : t('mobile:notificationsScreen.pushUnavailableBody'),
       );
     } finally {
       setEnablingPush(false);
     }
+  };
+
+  const openNotification = (notification: Notification) => {
+    void markRead(notification);
+    const route = routeForNotification(notification.data);
+    if (route.pathname !== '/notifications') router.push(route);
   };
 
   const markRead = async (notification: Notification) => {
@@ -100,7 +110,7 @@ function NotificationsScreenContent() {
         ) : (
           <>
             <Ionicons name="notifications" size={18} color="#FFFFFF" />
-            <Text style={styles.pushButtonText}>Enable push notifications</Text>
+            <Text style={styles.pushButtonText}>{t('mobile:ui.notifications.enablePushNotifications')}</Text>
           </>
         )}
       </TouchableOpacity>
@@ -116,11 +126,12 @@ function NotificationsScreenContent() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           contentContainerStyle={notifications.length === 0 ? styles.empty : undefined}
           ListEmptyComponent={
-            <Text style={[styles.emptyText, { color: colors.subText }]}>No notifications yet.</Text>
+            <Text style={[styles.emptyText, { color: colors.subText }]}>{t('mobile:ui.notifications.noNotificationsYet')}</Text>
           }
           renderItem={({ item }) => (
             <TouchableOpacity
-              onPress={() => markRead(item)}
+              onPress={() => openNotification(item)}
+              accessibilityRole="button"
               style={[
                 styles.row,
                 {

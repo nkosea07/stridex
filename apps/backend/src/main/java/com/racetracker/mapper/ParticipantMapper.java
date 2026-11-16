@@ -21,6 +21,7 @@ public interface ParticipantMapper {
     @Mapping(target = "status", expression = "java(entity.getStatus() != null ? entity.getStatus().name() : null)")
     @Mapping(target = "paymentStatus", expression = "java(entity.getPaymentStatus() != null ? entity.getPaymentStatus().name() : null)")
     @Mapping(target = "teamId", expression = "java(entity.getTeam() != null ? entity.getTeam().getId() : null)")
+    @Mapping(target = "waveId", expression = "java(entity.getWave() != null ? entity.getWave().getId() : null)")
     @Mapping(target = "answers", ignore = true)
     @Mapping(target = "credentials", expression = "java(mapCredentials(entity.getCredentials()))")
     ParticipantDto toDto(Participant entity);

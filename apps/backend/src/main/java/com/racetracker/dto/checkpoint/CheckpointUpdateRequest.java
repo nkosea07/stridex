@@ -17,4 +17,7 @@ public class CheckpointUpdateRequest {
     private String cutoffTime;
     private Boolean hasRfidReader;
     private Boolean hasQrScanner;
+    private Integer expectedPasses;
+    private Integer minPassSeconds;
+    private Boolean firstPassIsStart;
 }

@@ -1,4 +1,24 @@
+import crypto from 'node:crypto';
 import { chunkReads, validateBatchPayload } from './payload.mjs';
+import { ReadDeduplicator } from './dedupe.mjs';
+
+const RETRYABLE_CLIENT_STATUSES = new Set([401, 403, 408, 409, 425, 429]);
+
+export function isPermanentRejection(status) {
+  return status >= 400 && status < 500 && !RETRYABLE_CLIENT_STATUSES.has(status);
+}
+
+// A stable identity for reads the adapter sent without one, so a batch retried after a lost
+// response is recognised by the backend as the same reads instead of new ones.
+export function deriveSourceEventId(config, read) {
+  const identity = [config.gatewayName, config.readerSerial ?? '', read.rfidTag, read.readAt, read.antenna ?? ''].join('|');
+  return `gw-${crypto.createHash('sha256').update(identity).digest('hex').slice(0, 40)}`;
+}
+
+function describeBackendError(response) {
+  const message = typeof response.body?.message === 'string' ? response.body.message : null;
+  return message ? `Backend returned ${response.status}: ${message}` : `Backend returned ${response.status}`;
+}
 
 export class GatewayService {
   constructor({ config, store, backendClient, logger = console }) {
@@ -6,7 +26,8 @@ export class GatewayService {
     this.store = store;
     this.backendClient = backendClient;
     this.logger = logger;
-    this.lastError = null;
+    this.flushError = null;
+    this.heartbeatError = null;
     this.flushInProgress = false;
     this.lastFlushAttemptAt = null;
     this.lastFlushSuccessAt = null;
@@ -16,17 +37,28 @@ export class GatewayService {
     this.nextHeartbeatRetryAt = null;
     this.flushFailureCount = 0;
     this.heartbeatFailureCount = 0;
+    this.rejectedBatchCount = 0;
     this.currentFlushRetryDelayMs = config.retryInitialDelayMs;
     this.currentHeartbeatRetryDelayMs = config.retryInitialDelayMs;
+    this.deduplicator = new ReadDeduplicator(config.dedupeWindowMs ?? 0);
+  }
+
+  get lastError() {
+    return this.flushError ?? this.heartbeatError;
   }
 
   async ingest(payload) {
     const normalized = validateBatchPayload(payload);
     const reads = normalized.reads.map((read) => ({
       ...read,
-      eventOrigin: read.eventOrigin ?? this.config.eventOrigin,
+      sourceEventId: read.sourceEventId ?? deriveSourceEventId(this.config, read),
+      eventOrigin: this.config.eventOrigin,
     }));
-    const chunks = chunkReads(reads, this.config.batchSize);
+    if (typeof this.store.appendRawLog === 'function') {
+      await this.store.appendRawLog(reads);
+    }
+    const accepted = this.deduplicator.filter(reads);
+    const chunks = chunkReads(accepted, this.config.batchSize);
 
     for (const reads of chunks) {
       await this.store.enqueue({ reads });
@@ -34,7 +66,8 @@ export class GatewayService {
 
     return {
       queuedBatches: chunks.length,
-      queuedReads: normalized.reads.length,
+      queuedReads: accepted.length,
+      suppressedReads: reads.length - accepted.length,
       backlogFiles: await this.store.countPendingFiles()
     };
   }
@@ -48,42 +81,61 @@ export class GatewayService {
     }
 
     this.flushInProgress = true;
+    let leased = null;
     try {
       this.lastFlushAttemptAt = new Date().toISOString();
-      const leased = await this.store.leaseNext();
+      leased = await this.store.leaseNext();
       if (!leased) {
+        this.flushError = null;
         return { skipped: false, delivered: 0 };
       }
 
       const response = await this.backendClient.submitReads(leased.payload);
       if (!response.ok) {
-        this.lastError = `Backend returned ${response.status}`;
+        const message = describeBackendError(response);
+        if (isPermanentRejection(response.status)) {
+          await this.store.reject(leased.filename);
+          leased = null;
+          this.rejectedBatchCount += 1;
+          this.flushError = `Batch rejected and moved to failed spool. ${message}`;
+          this.logger.error(this.flushError);
+          return { skipped: false, delivered: 0, failed: true, rejected: true, status: response.status };
+        }
         await this.store.requeue(leased.filename);
-        this.recordFlushFailure(this.lastError);
+        leased = null;
+        this.recordFlushFailure(message);
         return { skipped: false, delivered: 0, failed: true, status: response.status };
       }
 
       if ((response.body?.invalidReader ?? 0) > 0) {
-        this.lastError = 'Backend rejected reader heartbeat key';
         await this.store.requeue(leased.filename);
-        this.recordFlushFailure(this.lastError);
+        leased = null;
+        this.recordFlushFailure('Backend reports this reader key is revoked; reads are retained until a new key is configured');
         return { skipped: false, delivered: 0, failed: true, status: response.status };
       }
 
-      this.lastError = null;
+      const delivered = Array.isArray(leased.payload?.reads) ? leased.payload.reads.length : 0;
+      await this.store.ack(leased.filename);
+      leased = null;
+      this.flushError = null;
       this.lastFlushSuccessAt = new Date().toISOString();
       this.flushFailureCount = 0;
       this.nextFlushRetryAt = null;
       this.currentFlushRetryDelayMs = this.config.retryInitialDelayMs;
-      await this.store.ack(leased.filename);
       return {
         skipped: false,
-        delivered: leased.payload.reads.length,
+        delivered,
         response: response.body
       };
     } catch (error) {
-      this.lastError = error instanceof Error ? error.message : String(error);
-      this.recordFlushFailure(this.lastError);
+      if (leased) {
+        try {
+          await this.store.requeue(leased.filename);
+        } catch (requeueError) {
+          this.logger.error('Gateway failed to requeue leased batch', requeueError);
+        }
+      }
+      this.recordFlushFailure(error instanceof Error ? error.message : String(error));
       this.logger.error('Gateway flush failed', error);
       return { skipped: false, delivered: 0, failed: true };
     } finally {
@@ -96,33 +148,51 @@ export class GatewayService {
       return { ok: false, skipped: true, retryAt: new Date(this.nextHeartbeatRetryAt).toISOString() };
     }
     this.lastHeartbeatAttemptAt = new Date().toISOString();
-    const backlog = await this.store.countPendingReads();
-    const payload = {
-      gatewayName: this.config.gatewayName,
-      gatewayStatus: this.lastError ? 'DEGRADED' : 'ONLINE',
-      gatewayBacklog: backlog,
-      firmwareVersion: this.config.firmwareVersion,
-      hardwareModel: this.config.hardwareModel,
-      hardwareProfile: this.config.hardwareProfile,
-      readerClass: this.config.readerClass,
-      readerSerial: this.config.readerSerial,
-      mode: this.config.mode,
-      lastError: this.lastError,
-      observedAt: new Date().toISOString()
-    };
 
-    const response = await this.backendClient.sendHeartbeat(payload);
+    let response;
+    try {
+      const backlog = await this.store.countPendingReads();
+      const rejectedFiles = await this.countFailedFiles();
+      const degraded = Boolean(this.flushError || this.heartbeatError) || rejectedFiles > 0;
+      const payload = {
+        gatewayName: this.config.gatewayName,
+        gatewayStatus: degraded ? 'DEGRADED' : 'ONLINE',
+        gatewayBacklog: backlog,
+        firmwareVersion: this.config.firmwareVersion,
+        hardwareModel: this.config.hardwareModel,
+        hardwareProfile: this.config.hardwareProfile,
+        readerClass: this.config.readerClass,
+        readerSerial: this.config.readerSerial,
+        mode: this.config.mode,
+        lastError: this.lastError ?? (rejectedFiles > 0 ? `${rejectedFiles} rejected batch file(s) need operator review` : null),
+        observedAt: new Date().toISOString()
+      };
+      response = await this.backendClient.sendHeartbeat(payload);
+    } catch (error) {
+      this.recordHeartbeatFailure(error instanceof Error ? error.message : String(error));
+      this.logger.error('Gateway heartbeat failed', error);
+      return { ok: false, error: this.heartbeatError };
+    }
+
     if (!response.ok) {
-      this.lastError = `Heartbeat failed with ${response.status}`;
-      this.recordHeartbeatFailure(this.lastError);
+      this.recordHeartbeatFailure(`Heartbeat failed with ${response.status}`);
       return { ok: false, status: response.status, body: response.body };
     }
 
+    this.heartbeatError = null;
     this.lastHeartbeatSuccessAt = new Date().toISOString();
     this.heartbeatFailureCount = 0;
     this.nextHeartbeatRetryAt = null;
     this.currentHeartbeatRetryDelayMs = this.config.retryInitialDelayMs;
     return { ok: true, status: response.status, body: response.body };
+  }
+
+  async requeueRejected() {
+    const requeued = await this.store.requeueFailed();
+    if (requeued > 0) {
+      this.nextFlushRetryAt = null;
+    }
+    return { requeuedFiles: requeued };
   }
 
   async health() {
@@ -133,27 +203,38 @@ export class GatewayService {
       readerClass: this.config.readerClass,
       pendingFiles: await this.store.countPendingFiles(),
       pendingReads: await this.store.countPendingReads(),
+      failedFiles: await this.countFailedFiles(),
+      corruptFiles: typeof this.store.countCorruptFiles === 'function' ? await this.store.countCorruptFiles() : 0,
+      dedupeWindowMs: this.config.dedupeWindowMs ?? 0,
+      suppressedDuplicateReads: this.deduplicator.suppressedCount,
       lastError: this.lastError,
+      lastFlushError: this.flushError,
+      lastHeartbeatError: this.heartbeatError,
       lastFlushAttemptAt: this.lastFlushAttemptAt,
       lastFlushSuccessAt: this.lastFlushSuccessAt,
       lastHeartbeatAttemptAt: this.lastHeartbeatAttemptAt,
       lastHeartbeatSuccessAt: this.lastHeartbeatSuccessAt,
       flushFailureCount: this.flushFailureCount,
       heartbeatFailureCount: this.heartbeatFailureCount,
+      rejectedBatchCount: this.rejectedBatchCount,
       nextFlushRetryAt: this.nextFlushRetryAt ? new Date(this.nextFlushRetryAt).toISOString() : null,
       nextHeartbeatRetryAt: this.nextHeartbeatRetryAt ? new Date(this.nextHeartbeatRetryAt).toISOString() : null
     };
   }
 
+  async countFailedFiles() {
+    return typeof this.store.countFailedFiles === 'function' ? this.store.countFailedFiles() : 0;
+  }
+
   recordFlushFailure(message) {
-    this.lastError = message;
+    this.flushError = message;
     this.flushFailureCount += 1;
     this.nextFlushRetryAt = Date.now() + this.currentFlushRetryDelayMs;
     this.currentFlushRetryDelayMs = Math.min(this.currentFlushRetryDelayMs * 2, this.config.retryMaxDelayMs);
   }
 
   recordHeartbeatFailure(message) {
-    this.lastError = message;
+    this.heartbeatError = message;
     this.heartbeatFailureCount += 1;
     this.nextHeartbeatRetryAt = Date.now() + this.currentHeartbeatRetryDelayMs;
     this.currentHeartbeatRetryDelayMs = Math.min(this.currentHeartbeatRetryDelayMs * 2, this.config.retryMaxDelayMs);

@@ -12,5 +12,5 @@ public interface PenaltyService {
 
     PenaltyDto add(UUID raceId, UUID participantId, PenaltyRequest request, String actorEmail);
 
-    void remove(UUID raceId, UUID penaltyId);
+    void remove(UUID raceId, UUID participantId, UUID penaltyId);
 }
