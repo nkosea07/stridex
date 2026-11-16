@@ -31,7 +31,16 @@ class ReaderTimestampsTest {
 
         assertThat(resolved.source()).isEqualTo("READER");
         assertThat(resolved.readAt().toInstant()).isEqualTo(Instant.parse("2026-11-15T09:12:30.460123Z"));
-        assertThat(resolved.readerClockOffsetMs()).isEqualTo(-39);
+        assertThat(resolved.readerClockOffsetMs()).isEqualTo(-40);
+    }
+
+    @Test
+    void readerClockOffsetIsRoundedToTheNearestMillisecondInBothDirections() {
+        long ahead = adapterNow.getEpochSecond() * 1_000_000L + 500_000L + 1_499L;
+        long behind = adapterNow.getEpochSecond() * 1_000_000L + 500_000L - 1_501L;
+
+        assertThat(ReaderTimestamps.resolve(ahead, adapterNow, 2000).readerClockOffsetMs()).isEqualTo(1);
+        assertThat(ReaderTimestamps.resolve(behind, adapterNow, 2000).readerClockOffsetMs()).isEqualTo(-2);
     }
 
     @Test

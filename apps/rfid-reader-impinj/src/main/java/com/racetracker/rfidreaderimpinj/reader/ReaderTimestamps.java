@@ -1,10 +1,10 @@
 package com.racetracker.rfidreaderimpinj.reader;
 
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
 import java.util.Date;
 
 /**
@@ -27,7 +27,7 @@ public final class ReaderTimestamps {
         if (readerTime == null) {
             return new Resolved(fallback, "ADAPTER_CLOCK", null);
         }
-        long offsetMs = ChronoUnit.MILLIS.between(adapterNow, readerTime);
+        long offsetMs = Math.round(Duration.between(adapterNow, readerTime).toNanos() / 1_000_000.0);
         if (Math.abs(offsetMs) > Math.max(maxReaderClockOffsetMs, 0)) {
             return new Resolved(fallback, "ADAPTER_CLOCK", offsetMs);
         }
