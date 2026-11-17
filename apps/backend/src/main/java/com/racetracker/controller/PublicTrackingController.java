@@ -80,6 +80,16 @@ public class PublicTrackingController {
         return ResponseEntity.ok(publicTrackingService.getLiveFeed(raceId, query, cursor, limit));
     }
 
+    @GetMapping("/tracking/leaderboard")
+    public ResponseEntity<List<PublicRaceAthleteSummaryResponse>> getLeaderboard(
+        @PathVariable UUID raceId,
+        @RequestParam(value = "limit", defaultValue = "50") int limit,
+        HttpServletRequest request
+    ) {
+        rateLimit(raceId, request);
+        return ResponseEntity.ok(publicTrackingService.getLeaderboard(raceId, limit));
+    }
+
     @GetMapping("/tracking/search")
     public ResponseEntity<List<PublicRaceAthleteSummaryResponse>> searchAthletes(
         @PathVariable UUID raceId,

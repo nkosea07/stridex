@@ -19,6 +19,8 @@ public interface PublicTrackingService {
 
     PublicRaceLiveFeedResponse getLiveFeed(UUID raceId, String query, String cursor, int limit);
 
+    List<PublicRaceAthleteSummaryResponse> getLeaderboard(UUID raceId, int limit);
+
     PublicAthleteTrackingResponse getAthleteTracking(UUID raceId, UUID participantId);
 
     PublicParticipantTrackResponse getAthleteTrack(UUID raceId, UUID participantId);

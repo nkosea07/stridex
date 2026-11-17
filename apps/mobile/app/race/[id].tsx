@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, Modal, TextInput, Switch } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -430,6 +430,17 @@ function RaceDetailScreenContent() {
           </View>
 
           <Text style={styles.title}>{race.name}</Text>
+
+          <TouchableOpacity style={styles.liveButton} accessibilityRole="button"
+            accessibilityLabel={t('mobile:raceLive.open')}
+            onPress={() => router.push({ pathname: '/race-live/[id]', params: { id: String(race.id) } })}>
+            <Ionicons name="podium-outline" size={20} color="#0F766E" />
+            <View style={styles.liveButtonText}>
+              <Text style={styles.liveButtonTitle}>{t('mobile:raceLive.open')}</Text>
+              <Text style={styles.liveButtonHint}>{t('mobile:raceLive.openHint')}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#6B7280" />
+          </TouchableOpacity>
 
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}>
@@ -1065,6 +1076,30 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  liveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    backgroundColor: '#F0FDFA',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  liveButtonText: {
+    flex: 1,
+  },
+  liveButtonTitle: {
+    color: '#0F766E',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  liveButtonHint: {
+    color: '#475569',
+    fontSize: 13,
+    marginTop: 2,
   },
   registrationSummary: {
     gap: 10,

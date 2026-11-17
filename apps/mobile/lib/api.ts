@@ -16,6 +16,7 @@ import type {
   RaceResult,
   RaceResultPage,
   ResultQuery,
+  PublicAthleteSummary,
   NotificationPreferences,
   ConsentState,
   PersonalBest,
@@ -376,6 +377,17 @@ function parseRegistration(value: unknown): Registration {
     throw new Error('Registration response was missing required fields.');
   }
   return registration as unknown as Registration;
+}
+
+function parsePublicAthletes(value: unknown): PublicAthleteSummary[] {
+  return parseRecordArray<Record<string, unknown>>(value, 'Athletes response was malformed.')
+    .filter((row) => typeof row.participantId === 'string' && row.participantId.length > 0)
+    .map((row) => ({
+      ...row,
+      distanceRemaining: row.distanceRemaining === null || row.distanceRemaining === undefined
+        ? null : Number(row.distanceRemaining),
+      rank: typeof row.rank === 'number' ? row.rank : null,
+    }) as PublicAthleteSummary);
 }
 
 function parseResultQuery(value: unknown): ResultQuery {
@@ -1042,6 +1054,16 @@ class ApiClient {
   async getMyHistory(): Promise<AthleteHistoryEntry[]> {
     const response = await this.request<unknown>(API_CONTRACT.endpoints.myResultsHistory);
     return parseRecordArray<AthleteHistoryEntry>(response, 'Race history response was malformed.');
+  }
+
+  async getRaceLeaderboard(raceId: string, limit = 50): Promise<PublicAthleteSummary[]> {
+    const path = buildContractPath(API_CONTRACT.endpoints.publicRaceLeaderboard, { raceId });
+    return parsePublicAthletes(await this.request<unknown>(`${path}?limit=${limit}`));
+  }
+
+  async searchRaceAthletes(raceId: string, query: string): Promise<PublicAthleteSummary[]> {
+    const path = buildContractPath(API_CONTRACT.endpoints.publicRaceSearch, { raceId });
+    return parsePublicAthletes(await this.request<unknown>(`${path}?q=${encodeURIComponent(query.trim())}`));
   }
 
   async getPublicRaceRoute(raceId: string): Promise<Coordinate[]> {
