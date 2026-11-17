@@ -18,4 +18,5 @@ public class PublicRaceAthleteSummaryResponse {
     private String averagePace;
     private String predictedFinishTime;
     private BigDecimal distanceRemaining;
+    private Integer rank;
 }

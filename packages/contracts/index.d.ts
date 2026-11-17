@@ -87,6 +87,7 @@ export type EndpointKey =
   | 'raceMediaDelete'
   | 'publicRaceMedia'
   | 'publicRaceSearch'
+  | 'publicRaceLeaderboard'
   | 'publicAthleteTracking'
   | 'publicAthleteTrack'
   | 'publicRaceHeatmap'

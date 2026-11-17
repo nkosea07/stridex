@@ -677,5 +677,29 @@
     "exportTitle": "Your data",
     "exportShareTitle": "My Race Tracker data",
     "exportFailed": "Your data could not be prepared. Please try again."
+  },
+  "raceLive": {
+    "title": "Live race",
+    "open": "Live race: leaderboard and search",
+    "openHint": "See who is leading and find any athlete by name or bib.",
+    "tabs": {
+      "leaderboard": "Leaderboard",
+      "search": "Find athlete"
+    },
+    "loading": "Loading the leaderboard",
+    "leaderboardHelp": "Athletes still on course, ranked by distance covered. Finishers appear in the results.",
+    "updatedAt": "Updated {{time}} · refreshes every 30 seconds",
+    "noneOnCourse": "No athletes are on course yet.",
+    "searchPlaceholder": "Name or bib number",
+    "searchHelp": "Search every athlete in this race by name or bib number.",
+    "noMatches": "No athletes match.",
+    "lastCheckpoint": "Last: {{checkpoint}}",
+    "elapsed": "Elapsed {{time}}",
+    "remaining": "{{distance}} to go",
+    "openAthlete": "Open live view for {{name}}",
+    "followName": "Follow {{name}}",
+    "unfollowName": "Unfollow {{name}}",
+    "followFailedTitle": "Not saved",
+    "followFailed": "Following could not be updated. Please try again."
   }
 }

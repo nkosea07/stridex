@@ -235,6 +235,7 @@ Location ingest rules:
 - Staff captures may include `capturedOfflineAt` (≤ 24 h old, not future, not before the athlete's gun); they are noted and audited.
 
 ### Public Spectator Tracking
+- `GET /api/v1/public/races/{raceId}/tracking/leaderboard?limit=50` (max 100) ranks every athlete on course (status STARTED with a GPS fix or a checkpoint time, so RFID-only runners are included) by distance remaining, then elapsed time. The ranking is computed in batches of 500 (up to 5,000 athletes) and cached per race for 15 seconds; the race hub's top 10 uses the same ranking.
 - `GET /api/v1/public/races/{raceId}/tracking/athletes/{participantId}/track?since=<ISO-8601>` returns only points recorded after `since` (used by the mobile live view for incremental refresh); without `since` it returns the whole downsampled track. Athletes with tracking disabled always return no points.
 - `GET /api/v1/public/races/{raceId}/route` is cacheable for 5 minutes.
 - `GET /api/v1/public/races/{raceId}/hub`

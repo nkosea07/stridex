@@ -115,6 +115,7 @@ export const API_CONTRACT = {
     raceMediaDelete: '/races/:raceId/media/:mediaId',
     publicRaceMedia: '/public/races/:raceId/media',
     publicRaceSearch: '/public/races/:raceId/tracking/search',
+    publicRaceLeaderboard: '/public/races/:raceId/tracking/leaderboard',
     publicAthleteTracking: '/public/races/:raceId/tracking/athletes/:participantId',
     publicAthleteTrack: '/public/races/:raceId/tracking/athletes/:participantId/track',
     publicRaceHeatmap: '/public/races/:raceId/tracking/heatmap',

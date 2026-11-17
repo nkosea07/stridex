@@ -47,6 +47,21 @@ import java.util.stream.Collectors;
 public class PublicTrackingServiceImpl implements PublicTrackingService {
 
     private static final int HUB_LEADERBOARD_LIMIT = 10;
+    private static final int LEADERBOARD_BATCH_SIZE = 500;
+    private static final int LEADERBOARD_MAX_ATHLETES = 5000;
+    private static final Duration LEADERBOARD_TTL = Duration.ofSeconds(15);
+    static final Comparator<PublicRaceAthleteSummaryResponse> LEADERBOARD_ORDER = Comparator
+        .comparing((PublicRaceAthleteSummaryResponse row) -> row.getDistanceRemaining() == null
+            ? BigDecimal.valueOf(Double.MAX_VALUE) : row.getDistanceRemaining())
+        .thenComparing(row -> row.getElapsedTime() == null ? "~" : row.getElapsedTime())
+        .thenComparing(row -> row.getParticipantName() == null ? "" : row.getParticipantName())
+        .thenComparing(row -> row.getParticipantId() == null ? "" : row.getParticipantId().toString());
+
+    private record CachedLeaderboard(java.time.Instant expiresAt, List<PublicRaceAthleteSummaryResponse> rows) {
+    }
+
+    private final java.util.concurrent.ConcurrentMap<UUID, CachedLeaderboard> leaderboardCache =
+        new java.util.concurrent.ConcurrentHashMap<>();
     private static final int DEFAULT_FEED_LIMIT = 25;
     private static final int MAX_FEED_LIMIT = 100;
     private static final int MAX_PUBLIC_HEATMAP_SCALE = 4;
@@ -122,13 +137,48 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
                 return dto;
             })
             .toList());
-        response.setLeaderboard(getLiveFeed(raceId, null, null, HUB_LEADERBOARD_LIMIT).getItems().stream()
-            .sorted(Comparator
-                .comparing((PublicRaceAthleteSummaryResponse row) -> row.getDistanceRemaining() == null
-                    ? BigDecimal.valueOf(Double.MAX_VALUE) : row.getDistanceRemaining())
-                .thenComparing(row -> row.getParticipantName() == null ? "" : row.getParticipantName()))
-            .toList());
+        List<PublicRaceAthleteSummaryResponse> ranked = rankedLeaderboard(raceId);
+        response.setLeaderboard(ranked.subList(0, Math.min(HUB_LEADERBOARD_LIMIT, ranked.size())));
         return response;
+    }
+
+    @Override
+    @Observed(name = "tracking.public.leaderboard")
+    @Transactional(readOnly = true)
+    public List<PublicRaceAthleteSummaryResponse> getLeaderboard(UUID raceId, int limit) {
+        publicRaceVisibility.requireVisible(raceId);
+        int bounded = Math.max(1, Math.min(limit <= 0 ? DEFAULT_FEED_LIMIT : limit, MAX_FEED_LIMIT));
+        List<PublicRaceAthleteSummaryResponse> ranked = rankedLeaderboard(raceId);
+        return ranked.subList(0, Math.min(bounded, ranked.size()));
+    }
+
+    private List<PublicRaceAthleteSummaryResponse> rankedLeaderboard(UUID raceId) {
+        java.time.Instant now = java.time.Instant.now();
+        CachedLeaderboard cached = leaderboardCache.get(raceId);
+        if (cached != null && cached.expiresAt().isAfter(now)) {
+            return cached.rows();
+        }
+        List<PublicRaceAthleteSummaryResponse> onCourse = new ArrayList<>();
+        for (int page = 0; page * LEADERBOARD_BATCH_SIZE < LEADERBOARD_MAX_ATHLETES; page++) {
+            Page<Participant> batch = participantRepository.findPublicOnCourseByRaceId(raceId,
+                PageRequest.of(page, LEADERBOARD_BATCH_SIZE));
+            onCourse.addAll(buildAthleteSummaries(raceId, batch.getContent(), false));
+            if (!batch.hasNext()) {
+                break;
+            }
+        }
+        List<PublicRaceAthleteSummaryResponse> ranked = rank(onCourse);
+        leaderboardCache.values().removeIf(entry -> !entry.expiresAt().isAfter(now));
+        leaderboardCache.put(raceId, new CachedLeaderboard(now.plus(LEADERBOARD_TTL), ranked));
+        return ranked;
+    }
+
+    static List<PublicRaceAthleteSummaryResponse> rank(List<PublicRaceAthleteSummaryResponse> athletes) {
+        List<PublicRaceAthleteSummaryResponse> ranked = athletes.stream().sorted(LEADERBOARD_ORDER).toList();
+        for (int index = 0; index < ranked.size(); index++) {
+            ranked.get(index).setRank(index + 1);
+        }
+        return ranked;
     }
 
     @Override

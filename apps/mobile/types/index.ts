@@ -77,6 +77,19 @@ export interface PublicRaceResult {
   overallPosition?: number;
 }
 
+export interface PublicAthleteSummary {
+  participantId: string;
+  participantName?: string | null;
+  bibNumber?: string | null;
+  status?: string | null;
+  lastCheckpoint?: string | null;
+  elapsedTime?: string | null;
+  averagePace?: string | null;
+  predictedFinishTime?: string | null;
+  distanceRemaining?: number | null;
+  rank?: number | null;
+}
+
 export interface PublicRaceResultPage {
   items: PublicRaceResult[];
   page: number;

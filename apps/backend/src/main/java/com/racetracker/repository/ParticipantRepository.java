@@ -87,6 +87,29 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
     );
 
     @EntityGraph(attributePaths = {"race", "category"})
+    @Query(value = """
+        select p
+        from Participant p
+        where p.race.id = :raceId
+          and p.status = 'STARTED'
+          and (
+            exists (select 1 from GpsLocation g where g.participant.id = p.id and g.race.id = :raceId)
+            or exists (select 1 from CheckpointRecord r where r.participant.id = p.id and r.race.id = :raceId)
+          )
+        order by p.id asc
+    """, countQuery = """
+        select count(p)
+        from Participant p
+        where p.race.id = :raceId
+          and p.status = 'STARTED'
+          and (
+            exists (select 1 from GpsLocation g where g.participant.id = p.id and g.race.id = :raceId)
+            or exists (select 1 from CheckpointRecord r where r.participant.id = p.id and r.race.id = :raceId)
+          )
+    """)
+    Page<Participant> findPublicOnCourseByRaceId(@Param("raceId") UUID raceId, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"race", "category"})
     @Query("""
         select p
         from Participant p

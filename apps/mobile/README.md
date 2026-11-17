@@ -22,6 +22,7 @@ A cross-platform React Native mobile application built with Expo for athletes to
 - **Incidents**: report an emergency from a checkpoint
 
 ### For Spectators
+- **Live race**: race-wide leaderboard of athletes on course (ranked by distance covered, refreshed every 30 seconds) and search for any athlete by name or bib, with follow from either list
 - **Following**: Follow public athletes and see their status, last checkpoint, and distance remaining
 - **Live athlete view**: Map with the course route, the athlete's track and latest position, checkpoint pins, splits, and "last updated" time. Refreshes every 30 seconds while the screen is open and the app is in the foreground, fetching only new track points (`?since=`)
 
