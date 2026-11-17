@@ -1,4 +1,4 @@
-FROM node:22-alpine
+FROM node:26-alpine
 ENV NODE_ENV=production \
     RFID_GATEWAY_PORT=8090 \
     RFID_GATEWAY_HOST=0.0.0.0 \
