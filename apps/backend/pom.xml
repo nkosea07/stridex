@@ -22,7 +22,7 @@
         <java.version>17</java.version>
         <lombok.version>1.18.32</lombok.version>
         <jjwt.version>0.12.3</jjwt.version>
-        <aws.sdk.version>2.25.55</aws.sdk.version>
+        <aws.sdk.version>2.59.1</aws.sdk.version>
         <tomcat.version>10.1.61</tomcat.version>
         <netty.version>4.1.139.Final</netty.version>
         <jackson-bom.version>2.21.8</jackson-bom.version>
