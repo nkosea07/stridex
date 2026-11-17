@@ -79,7 +79,7 @@ CI runs `pnpm audit --prod --audit-level high`. Transitive fixes are pnpm `overr
 | CVE-2026-47884 (critical) | `spring-webmvc` 6.2.19 | Remote code execution through `XsltView`. The backend is a JSON API and never uses XSLT views. | 2027-02-17 |
 | CVE-2026-47890 (critical) | `spring-webmvc` 6.2.19 | Stream corruption for Server-Sent Events rendered with views. The backend has no SSE endpoints. | 2027-02-17 |
 
-Both are fixed only in Spring Framework 7 (Spring Boot 4); 6.2.19 is the last 6.2 release. `UnreachableSpringCveGuardTest` fails the build if XSLT views or SSE are introduced. Before the expiry, migrate to Spring Boot 4 or re-review and renew the exception.
+Both are fixed only in Spring Framework 7 (Spring Boot 4); 6.2.19 is the last 6.2 release. `UnreachableSpringCveGuardTest` fails the build if XSLT views or SSE are introduced. Before the expiry, migrate to Spring Boot 4 (plan: `docs/plans/2026-11-17-spring-boot-4-migration.md`) or re-review and renew the exception. `.github/workflows/security-exception-expiry.yml` opens an alert issue 45 days before any `.trivyignore` expiry.
 
 Install with a release-age guard when changing dependencies: `pnpm install --config.minimum-release-age=20160` (14 days).
 

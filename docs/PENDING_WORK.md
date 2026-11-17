@@ -111,9 +111,12 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 
 ## 6. Environment / CI caveats
 
-- New CI jobs `load-smoke` (k6) and `e2e` (Cypress) have **not run on GitHub Actions** yet.
-- Docker image builds (CI `containers` job) not run locally.
-- Migrations V1–V43 were validated on PostGIS (2026-11-08) including the V36 upgrade fixture. V44–V49 were validated on PostgreSQL 16 against stand-in tables only (PostGIS unavailable locally); V50 (users.terms_version, terms_accepted_at) has not been run against PostGIS locally; V51 (checkpoint self-scan token and claims) and V52 (RFID timing integrity), V53 (result integrity), V54 (waves), V55 (checkpoint passes) were run against stand-in tables on PostgreSQL 16 only; V56 (result queries) has not been run against any database. Run the CI PostGIS smoke before release. Nothing is pushed and no PR is open.
+- As of 2026-11-17 every CI job runs on GitHub Actions (PRs #8, #30, #42): `backend` (including the
+  PostGIS Flyway smoke test for V1–V58), `javascript`, `load-smoke`, `containers` (Docker builds +
+  Trivy image scans), `dependency-security`, and `deployment-preflight`. `e2e` (Cypress) is still
+  skipped in CI.
+- Accepted dependency advisories and their expiry dates are listed in
+  `docs/RELEASE_READINESS.md` → *Dependency audit exceptions* and in `.trivyignore`.
 
 ## 7. Suggested sequencing
 
@@ -125,3 +128,15 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 4. Resolve the remaining **§4** decisions (Apple OAuth, partitioning) and capture S3/MinIO and
    WhatsApp provider evidence.
 5. **§2 Section 6** product features (results depth, timing imports, AI depth, bibs, media).
+
+## 8. Dated security to-dos
+
+| Due | Item | Status |
+| --- | --- | --- |
+| **2027-02-17** | **Migrate the backend to Spring Boot 4** (Spring Framework ≥ 7.0.9) and remove the CVE-2026-47884 / CVE-2026-47890 lines from `.trivyignore`. Plan: `docs/plans/2026-11-17-spring-boot-4-migration.md`. | **Pending** |
+| **2027-05-16** | Re-review the three accepted JavaScript advisories (`image-size` via Metro, `decode-uri-component` via React Navigation): upgrade Expo/React Navigation if fixed versions are compatible, otherwise renew with a new review date. | **Pending** |
+
+Reminders are automatic: `.github/workflows/security-exception-expiry.yml` runs every Monday and,
+from 45 days before an expiry, opens (then comments weekly on) a GitHub issue labelled
+`security-exception-expiry`, assigned to the repository owner. When an exception expires, Trivy
+stops ignoring it and the `dependency-security`/`containers` CI jobs fail.
