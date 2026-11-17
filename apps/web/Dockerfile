@@ -7,6 +7,9 @@ RUN pnpm install --frozen-lockfile --filter web... \
     && pnpm --filter web build
 
 FROM nginxinc/nginx-unprivileged:1.30-alpine3.24
+USER root
+RUN apk upgrade --no-cache
+USER 101
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/apps/web/dist/client /usr/share/nginx/html
 EXPOSE 8080
