@@ -400,7 +400,7 @@
       "lastName": "Last Name",
       "emailAddress": "Email address",
       "phoneNumberOptional": "Phone number (optional)",
-      "password": "Password",
+      "passwordLabel": "Password",
       "confirmPassword": "Confirm Password"
     },
     "login": {
@@ -412,7 +412,7 @@
       "loginFailed": "Login Failed",
       "pleaseFillInAllFields": "Please fill in all fields",
       "emailAddress": "Email address",
-      "password": "Password"
+      "passwordLabel": "Password"
     },
     "profile": {
       "signInToViewYourProfile": "Sign in to view your profile",

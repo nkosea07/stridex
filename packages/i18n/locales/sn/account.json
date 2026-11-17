@@ -1,0 +1,44 @@
+{
+  "deletion": {
+    "title": "Dzima akaundi",
+    "description": "Akaundi yako inovharwa ipapo ipapo uye ruzivo rwako rwega runodzimwa zvachose mushure memazuva {{days}}.",
+    "consequencesTitle": "Zvinoitika",
+    "consequences": [
+      "Unobudiswa pamidziyo yose uye zviziviso zve push zvinomira ipapo ipapo.",
+      "Mushure memazuva {{days}}, purofiri yako, ruzivo rwekukubata, ruzivo rwako rwega nerwehutano rwekunyoresa kwako, nhoroondo yeGPS, vamhanyi vaunotevera nezviziviso zvinodzimwa.",
+      "Mifananidzo yako inobviswa mumagalari emijaho.",
+      "Mibairo yemijaho nemarekodhi ekubhadhara zvinochengetwa chete zvisingakuzivikanise kana kuvimbika kwemijaho kana mutemo zvichizvida."
+    ],
+    "exportHint": "Dhaunirodha kopi yeruzivo rwako kutanga kana uchirwuda.",
+    "recoveryHint": "Wachinja pfungwa? Kusvikira zuva rekudzima, shandisa \"Kanzura kudzimwa kweakaundi kwakamirira\" papeji yekupinda neemail nepasiwedhi yako.",
+    "passwordLabel": "Pasiwedhi yako",
+    "confirmLabel": "Nyora {{token}} kuti usimbise",
+    "submit": "Dzima akaundi yangu",
+    "submitting": "Kuronga…",
+    "scheduledTitle": "Kudzimwa kwarongwa",
+    "scheduledBody": "Akaundi yako yavharwa uye yakarongerwa kudzimwa musi wa{{date}}. Uchiri kugona kukanzura zvisati zvaitika.",
+    "scheduledBodyNoDate": "Akaundi yako yavharwa uye yakarongerwa kudzimwa. Uchiri kugona kukanzura zvisati zvaitika.",
+    "successTitle": "Kudzimwa kweakaundi kwarongwa",
+    "successBody": "Akaundi yako yavharwa uye ichadzimwa musi wa{{date}}. Iye zvino uchabudiswa.",
+    "cancel": "Kanzura kudzimwa",
+    "cancelling": "Kukanzura…",
+    "cancelledTitle": "Kudzimwa kwakanzurwa",
+    "cancelledBody": "Akaundi yako yavhurwa zvakare.",
+    "cancelFailed": "Hatina kukwanisa kukanzura kudzimwa. Ndapota edza zvakare.",
+    "ok": "Zvakanaka",
+    "blockedTitle": "Kudzima akaundi hakugoneki parizvino",
+    "blockers": {
+      "ACCOUNT_DELETION_LAST_SUPER_ADMIN": "Ndiwe wega mutungamiriri mukuru ari kushanda. Ita mumwe mushandisi kuti ave mutungamiriri mukuru usati wadzima akaundi iyi.",
+      "ACCOUNT_DELETION_ACTIVE_RACES": "Ndiwe wega murongi ari kushanda wemujaho wakavhurika, wakavharwa kunyoresa, kana uri kuitika. Wedzera mumwe mutungamiriri wemujaho, kana pedzisa kana kanzura mujaho kutanga."
+    },
+    "errorTitle": "Hazvigoneke kudzima akaundi",
+    "errors": {
+      "ACCOUNT_DELETION_PASSWORD_REQUIRED": "Isa pasiwedhi yako kuti udzime akaundi yako.",
+      "ACCOUNT_DELETION_PASSWORD_INVALID": "Pasiwedhi iyoyo haina kunaka.",
+      "ACCOUNT_DELETION_CONFIRMATION_REQUIRED": "Nyora {{token}} sezvazviri kuti usimbise.",
+      "ACCOUNT_ALREADY_DELETED": "Akaundi iyi yakatodzimwa.",
+      "TOO_MANY_REQUESTS": "Kuedza kwawandisa. Mira maminitsi mashoma wobva waedza zvakare.",
+      "generic": "Pane chakanganisika. Ndapota edza zvakare."
+    }
+  }
+}

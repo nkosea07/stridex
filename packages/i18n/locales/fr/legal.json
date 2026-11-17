@@ -1,0 +1,38 @@
+{
+  "common": {
+    "version": "Version {{version}}",
+    "back": "Retour",
+    "contents": "Sommaire",
+    "privacyPolicy": "Politique de confidentialité",
+    "terms": "Conditions générales",
+    "contactLine": "Questions sur ce document : {{contactEmail}}",
+    "relatedPrivacy": "Lire notre politique de confidentialité",
+    "relatedTerms": "Lire nos conditions générales",
+    "footerLegal": "Mentions légales",
+    "englishOnly": "Ce document est disponible uniquement en anglais. La version anglaise fait foi."
+  },
+  "privacy": {
+    "title": "Politique de confidentialité"
+  },
+  "terms": {
+    "title": "Conditions générales"
+  },
+  "acceptance": {
+    "title": "Consultez nos conditions avant de continuer",
+    "body": "Pour utiliser Race Tracker, veuillez lire et accepter nos conditions générales et prendre connaissance de notre politique de confidentialité.",
+    "updatedBody": "Nous avons mis à jour nos conditions générales ou notre politique de confidentialité. Veuillez consulter la version actuelle pour continuer.",
+    "checkbox": "J’ai lu et j’accepte les conditions générales et je reconnais avoir pris connaissance de la politique de confidentialité.",
+    "accept": "Accepter et continuer",
+    "accepting": "Enregistrement…",
+    "signOut": "Se déconnecter",
+    "failed": "Nous n’avons pas pu enregistrer votre acceptation. Veuillez réessayer.",
+    "outdated": "Ces documents ont été mis à jour après le chargement de l’application. Rechargez la page, relisez la version actuelle et réessayez."
+  },
+  "registration": {
+    "prefix": "J’ai lu et j’accepte les",
+    "join": " et la",
+    "suffix": ".",
+    "errorTitle": "Erreur",
+    "required": "Veuillez accepter les conditions générales et la politique de confidentialité pour continuer."
+  }
+}

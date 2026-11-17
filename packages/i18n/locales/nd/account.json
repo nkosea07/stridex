@@ -1,0 +1,44 @@
+{
+  "deletion": {
+    "title": "Susa i-akhawunti",
+    "description": "I-akhawunti yakho iyavalwa khona manje, njalo ulwazi lwakho lomuntu siqu lususwa unomphela ngemva kwezinsuku ezingu-{{days}}.",
+    "consequencesTitle": "Okuzakwenzakala",
+    "consequences": [
+      "Uyakhutshwa kuzo zonke izinto ozisebenzisayo, njalo izaziso ze-push ziyama khona manje.",
+      "Ngemva kwezinsuku ezingu-{{days}}, iphrofayili yakho, ulwazi lokukuthinta, ulwazi lomuntu siqu lolwempilo lokubhalisa kwakho, umlando we-GPS, abagijimi obalandelayo lezaziso kuyasuswa.",
+      "Izithombe zakho ziyasuswa emagalari emijaho.",
+      "Imiphumela yemijaho lamarekhodi enkokhelo kugcinwa kuphela kungakwazisi lapho ukwethembeka kwemijaho kumbe umthetho kukudinga."
+    ],
+    "exportHint": "Thatha ikhophi yolwazi lwakho kuqala nxa uyidinga.",
+    "recoveryHint": "Usuguqule umqondo? Kuze kube lusuku lokususwa, sebenzisa \"Khansela ukususwa kwe-akhawunti okulindileyo\" ekhasini lokungena nge-imeyili lephasiwedi yakho.",
+    "passwordLabel": "Iphasiwedi yakho",
+    "confirmLabel": "Bhala u-{{token}} ukuze uqinisekise",
+    "submit": "Susa i-akhawunti yami",
+    "submitting": "Kuyahlelwa…",
+    "scheduledTitle": "Ukususwa kuhleliwe",
+    "scheduledBody": "I-akhawunti yakho ivaliwe njalo ihlelelwe ukususwa ngomhla ka-{{date}}. Usengakukhansela kungakenzakali.",
+    "scheduledBodyNoDate": "I-akhawunti yakho ivaliwe njalo ihlelelwe ukususwa. Usengakukhansela kungakenzakali.",
+    "successTitle": "Ukususwa kwe-akhawunti kuhleliwe",
+    "successBody": "I-akhawunti yakho ivaliwe njalo izasuswa ngomhla ka-{{date}}. Khathesi uzakhutshwa.",
+    "cancel": "Khansela ukususwa",
+    "cancelling": "Kuyakhanselwa…",
+    "cancelledTitle": "Ukususwa kukhanseliwe",
+    "cancelledBody": "I-akhawunti yakho isivuliwe njalo.",
+    "cancelFailed": "Asikwazanga ukukhansela ukususwa. Ngicela uzame njalo.",
+    "ok": "Kulungile",
+    "blockedTitle": "I-akhawunti kayisuseki khathesi",
+    "blockers": {
+      "ACCOUNT_DELETION_LAST_SUPER_ADMIN": "Nguwe wedwa umphathi omkhulu osebenzayo. Yenza omunye umsebenzisi abe ngumphathi omkhulu ungakasusi i-akhawunti le.",
+      "ACCOUNT_DELETION_ACTIVE_RACES": "Nguwe wedwa umhleli osebenzayo womjaho ovulekileyo, ovalelwe ukubhalisa, kumbe oqhubekayo. Engeza omunye umphathi womjaho, kumbe uqede kumbe ukhansele umjaho kuqala."
+    },
+    "errorTitle": "I-akhawunti kayisuseki",
+    "errors": {
+      "ACCOUNT_DELETION_PASSWORD_REQUIRED": "Faka iphasiwedi yakho ukuze ususe i-akhawunti yakho.",
+      "ACCOUNT_DELETION_PASSWORD_INVALID": "Iphasiwedi leyo kayilunganga.",
+      "ACCOUNT_DELETION_CONFIRMATION_REQUIRED": "Bhala u-{{token}} njengoba unjalo ukuze uqinisekise.",
+      "ACCOUNT_ALREADY_DELETED": "I-akhawunti le isisusiwe.",
+      "TOO_MANY_REQUESTS": "Imizamo inengi kakhulu. Linda imizuzu embalwa ubusuzama njalo.",
+      "generic": "Kukhona okungahambanga kahle. Ngicela uzame njalo."
+    }
+  }
+}

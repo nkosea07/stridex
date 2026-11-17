@@ -107,7 +107,7 @@ export default function LoginScreen() {
             <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder={t('mobile:ui.login.password')}
+              placeholder={t('mobile:ui.login.passwordLabel')}
               placeholderTextColor="#9CA3AF"
               value={password}
               onChangeText={setPassword}

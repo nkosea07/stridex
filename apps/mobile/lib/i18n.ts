@@ -9,8 +9,33 @@ import {
   sharedResources,
 } from '@race-tracker/i18n'
 import mobileEn from './locales/en/mobile.json'
+import mobileSn from './locales/sn/mobile.json'
+import mobileNd from './locales/nd/mobile.json'
+import mobileAf from './locales/af/mobile.json'
+import mobileZu from './locales/zu/mobile.json'
+import mobileFr from './locales/fr/mobile.json'
+import mobilePt from './locales/pt/mobile.json'
+import mobileSw from './locales/sw/mobile.json'
 
 const LANGUAGE_STORAGE_KEY = 'race_tracker_language'
+
+const mobileResources: Record<string, Record<string, unknown>> = {
+  en: mobileEn,
+  sn: mobileSn,
+  nd: mobileNd,
+  af: mobileAf,
+  zu: mobileZu,
+  fr: mobileFr,
+  pt: mobilePt,
+  sw: mobileSw,
+}
+
+const resources = Object.fromEntries(
+  Object.entries(mobileResources).map(([locale, mobile]) => [
+    locale,
+    { ...sharedResources[locale], mobile },
+  ]),
+)
 
 const i18n: I18nInstance = createInstance()
 
@@ -28,7 +53,7 @@ export async function initI18n(): Promise<I18nInstance> {
 
   if (!i18n.isInitialized) {
     await i18n.use(initReactI18next).init({
-      resources: { en: { ...sharedResources.en, mobile: mobileEn } },
+      resources,
       lng: initial,
       supportedLngs: SUPPORTED_LOCALES,
       fallbackLng: FALLBACK_LOCALE,

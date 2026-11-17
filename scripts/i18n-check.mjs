@@ -83,7 +83,9 @@ for (const rootEntry of roots) {
     if (locale === defaultLocale) continue;
     const localeKeys = readCatalog(path.join(rootEntry.dir, locale));
     for (const key of localeKeys.keys()) {
-      if (!enKeys.has(key)) {
+      const pluralBase = key.match(/^(.*)_(zero|one|two|few|many|other)$/)?.[1];
+      const isPluralVariant = pluralBase !== undefined && enKeys.has(`${pluralBase}_other`);
+      if (!enKeys.has(key) && !isPluralVariant) {
         errors.push(`[${rootEntry.name}/${locale}] key "${key}" does not exist in ${defaultLocale} (orphan/typo).`);
       }
     }

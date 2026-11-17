@@ -1,0 +1,44 @@
+{
+  "deletion": {
+    "title": "Eliminar conta",
+    "description": "A sua conta é desativada de imediato e os seus dados pessoais são apagados definitivamente após {{days}} dias.",
+    "consequencesTitle": "O que acontece",
+    "consequences": [
+      "A sessão é terminada em todos os dispositivos e as notificações push param imediatamente.",
+      "Após {{days}} dias, o seu perfil, contactos, dados pessoais e médicos das inscrições, histórico de GPS, atletas seguidos e notificações são apagados.",
+      "As fotos em que aparece são removidas das galerias das corridas.",
+      "Os resultados e os registos de pagamento só são mantidos de forma anonimizada quando a integridade das corridas ou a lei o exigem."
+    ],
+    "exportHint": "Se precisar, descarregue primeiro uma cópia dos seus dados.",
+    "recoveryHint": "Mudou de ideias? Até à data de eliminação, use «Cancelar uma eliminação de conta pendente» na página de início de sessão com o seu e-mail e palavra-passe.",
+    "passwordLabel": "A sua palavra-passe",
+    "confirmLabel": "Escreva {{token}} para confirmar",
+    "submit": "Eliminar a minha conta",
+    "submitting": "A agendar…",
+    "scheduledTitle": "Eliminação agendada",
+    "scheduledBody": "A sua conta está desativada e a eliminação está agendada para {{date}}. Ainda pode cancelar até lá.",
+    "scheduledBodyNoDate": "A sua conta está desativada e a eliminação está agendada. Ainda pode cancelar até lá.",
+    "successTitle": "Eliminação da conta agendada",
+    "successBody": "A sua conta está desativada e será apagada em {{date}}. A sua sessão vai agora ser terminada.",
+    "cancel": "Cancelar eliminação",
+    "cancelling": "A cancelar…",
+    "cancelledTitle": "Eliminação cancelada",
+    "cancelledBody": "A sua conta foi reativada.",
+    "cancelFailed": "Não foi possível cancelar a eliminação. Tente novamente.",
+    "ok": "OK",
+    "blockedTitle": "Neste momento não é possível eliminar a conta",
+    "blockers": {
+      "ACCOUNT_DELETION_LAST_SUPER_ADMIN": "É o único superadministrador ativo. Torne outro utilizador superadministrador antes de eliminar esta conta.",
+      "ACCOUNT_DELETION_ACTIVE_RACES": "É o único organizador ativo de uma corrida aberta, com inscrições fechadas ou a decorrer. Adicione outro administrador da corrida, ou conclua ou cancele a corrida primeiro."
+    },
+    "errorTitle": "Não foi possível eliminar a conta",
+    "errors": {
+      "ACCOUNT_DELETION_PASSWORD_REQUIRED": "Introduza a sua palavra-passe para eliminar a conta.",
+      "ACCOUNT_DELETION_PASSWORD_INVALID": "Essa palavra-passe está incorreta.",
+      "ACCOUNT_DELETION_CONFIRMATION_REQUIRED": "Escreva exatamente {{token}} para confirmar.",
+      "ACCOUNT_ALREADY_DELETED": "Esta conta já foi eliminada.",
+      "TOO_MANY_REQUESTS": "Demasiadas tentativas. Aguarde alguns minutos e tente novamente.",
+      "generic": "Algo correu mal. Tente novamente."
+    }
+  }
+}

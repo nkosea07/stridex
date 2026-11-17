@@ -1,0 +1,44 @@
+{
+  "deletion": {
+    "title": "Supprimer le compte",
+    "description": "Votre compte est désactivé immédiatement et vos données personnelles sont définitivement effacées après {{days}} jours.",
+    "consequencesTitle": "Ce qui se passe",
+    "consequences": [
+      "Vous êtes déconnecté sur tous vos appareils et les notifications push s’arrêtent immédiatement.",
+      "Après {{days}} jours, votre profil, vos coordonnées, les informations personnelles et médicales de vos inscriptions, votre historique GPS, les athlètes suivis et vos notifications sont effacés.",
+      "Les photos de vous sont retirées des galeries des courses.",
+      "Les résultats et les paiements ne sont conservés que sous forme anonymisée lorsque l’intégrité des courses ou la loi l’exige."
+    ],
+    "exportHint": "Téléchargez d’abord une copie de vos données si vous en avez besoin.",
+    "recoveryHint": "Vous avez changé d’avis ? Jusqu’à la date d’effacement, utilisez « Annuler une suppression de compte en attente » sur la page de connexion avec votre e-mail et votre mot de passe.",
+    "passwordLabel": "Votre mot de passe",
+    "confirmLabel": "Saisissez {{token}} pour confirmer",
+    "submit": "Supprimer mon compte",
+    "submitting": "Planification…",
+    "scheduledTitle": "Suppression planifiée",
+    "scheduledBody": "Votre compte est désactivé et son effacement est prévu le {{date}}. Vous pouvez encore annuler d’ici là.",
+    "scheduledBodyNoDate": "Votre compte est désactivé et son effacement est planifié. Vous pouvez encore annuler d’ici là.",
+    "successTitle": "Suppression du compte planifiée",
+    "successBody": "Votre compte est désactivé et sera effacé le {{date}}. Vous allez maintenant être déconnecté.",
+    "cancel": "Annuler la suppression",
+    "cancelling": "Annulation…",
+    "cancelledTitle": "Suppression annulée",
+    "cancelledBody": "Votre compte a été réactivé.",
+    "cancelFailed": "Nous n’avons pas pu annuler la suppression. Veuillez réessayer.",
+    "ok": "OK",
+    "blockedTitle": "La suppression du compte est impossible pour le moment",
+    "blockers": {
+      "ACCOUNT_DELETION_LAST_SUPER_ADMIN": "Vous êtes le seul super-administrateur actif. Nommez un autre utilisateur super-administrateur avant de supprimer ce compte.",
+      "ACCOUNT_DELETION_ACTIVE_RACES": "Vous êtes le seul organisateur actif d’une course ouverte, aux inscriptions closes ou en cours. Ajoutez un autre administrateur de course, ou terminez ou annulez la course d’abord."
+    },
+    "errorTitle": "Impossible de supprimer le compte",
+    "errors": {
+      "ACCOUNT_DELETION_PASSWORD_REQUIRED": "Saisissez votre mot de passe pour supprimer votre compte.",
+      "ACCOUNT_DELETION_PASSWORD_INVALID": "Ce mot de passe est incorrect.",
+      "ACCOUNT_DELETION_CONFIRMATION_REQUIRED": "Saisissez exactement {{token}} pour confirmer.",
+      "ACCOUNT_ALREADY_DELETED": "Ce compte a déjà été supprimé.",
+      "TOO_MANY_REQUESTS": "Trop de tentatives. Patientez quelques minutes, puis réessayez.",
+      "generic": "Une erreur s’est produite. Veuillez réessayer."
+    }
+  }
+}

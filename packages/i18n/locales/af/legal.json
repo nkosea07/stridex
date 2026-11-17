@@ -1,0 +1,38 @@
+{
+  "common": {
+    "version": "Weergawe {{version}}",
+    "back": "Terug",
+    "contents": "Inhoud",
+    "privacyPolicy": "Privaatheidsbeleid",
+    "terms": "Bepalings en voorwaardes",
+    "contactLine": "Vrae oor hierdie dokument: {{contactEmail}}",
+    "relatedPrivacy": "Lees ons privaatheidsbeleid",
+    "relatedTerms": "Lees ons bepalings en voorwaardes",
+    "footerLegal": "Regsinligting",
+    "englishOnly": "Hierdie dokument is slegs in Engels beskikbaar. Die Engelse weergawe is die amptelike een."
+  },
+  "privacy": {
+    "title": "Privaatheidsbeleid"
+  },
+  "terms": {
+    "title": "Bepalings en voorwaardes"
+  },
+  "acceptance": {
+    "title": "Lees ons bepalings voordat jy voortgaan",
+    "body": "Om Race Tracker te gebruik, lees en aanvaar asseblief ons bepalings en voorwaardes en neem kennis van ons privaatheidsbeleid.",
+    "updatedBody": "Ons het ons bepalings en voorwaardes of privaatheidsbeleid bygewerk. Lees asseblief die huidige weergawe om voort te gaan.",
+    "checkbox": "Ek het die bepalings en voorwaardes gelees en stem daartoe in, en ek neem kennis van die privaatheidsbeleid.",
+    "accept": "Aanvaar en gaan voort",
+    "accepting": "Stoor tans…",
+    "signOut": "Meld af",
+    "failed": "Ons kon nie jou aanvaarding aanteken nie. Probeer asseblief weer.",
+    "outdated": "Hierdie dokumente is bygewerk nadat die toep gelaai is. Herlaai die bladsy, lees die huidige weergawe en probeer weer."
+  },
+  "registration": {
+    "prefix": "Ek het die volgende gelees en aanvaar dit:",
+    "join": " en",
+    "suffix": ".",
+    "errorTitle": "Fout",
+    "required": "Aanvaar asseblief die bepalings en voorwaardes en die privaatheidsbeleid om voort te gaan."
+  }
+}
