@@ -1,0 +1,62 @@
+name: security-exception-expiry
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      today:
+        description: Pretend today is this date (YYYY-MM-DD) to test the alert; leave empty for the real date
+        required: false
+        default: ''
+  pull_request:
+    paths:
+      - '.trivyignore'
+      - 'scripts/check-security-exceptions*.mjs'
+      - '.github/workflows/security-exception-expiry.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: security-exception-expiry
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test the expiry checker
+        run: node --test scripts/check-security-exceptions.test.mjs
+      - name: Check .trivyignore expiry dates
+        id: check
+        env:
+          TODAY: ${{ github.event.inputs.today }}
+        run: |
+          node scripts/check-security-exceptions.mjs --warn-days 45 --strict ${TODAY:+--today "$TODAY"} \
+            --github-output "$GITHUB_OUTPUT" > "$RUNNER_TEMP/report.md"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Open or update the alert issue
+        if: github.event_name != 'pull_request' && steps.check.outputs.due == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          label=security-exception-expiry
+          gh label create "$label" --color B60205 \
+            --description "Accepted security advisories about to expire" 2>/dev/null || true
+          number=$(gh issue list --state open --label "$label" --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            gh issue create \
+              --title "Security exceptions in .trivyignore expire soon" \
+              --label "$label" \
+              --assignee "$OWNER" \
+              --body-file "$RUNNER_TEMP/report.md"
+          else
+            gh issue comment "$number" --body-file "$RUNNER_TEMP/report.md"
+          fi
