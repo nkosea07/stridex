@@ -6,7 +6,7 @@ RUN pnpm install --frozen-lockfile --filter web... \
     && pnpm contracts:validate \
     && pnpm --filter web build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.30-alpine3.24
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/apps/web/dist/client /usr/share/nginx/html
 EXPOSE 8080
