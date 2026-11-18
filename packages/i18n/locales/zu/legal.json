@@ -1,0 +1,38 @@
+{
+  "common": {
+    "version": "Inguqulo {{version}}",
+    "back": "Emuva",
+    "contents": "Okuqukethwe",
+    "privacyPolicy": "Inqubomgomo Yobumfihlo",
+    "terms": "Imigomo Nemibandela",
+    "contactLine": "Imibuzo mayelana nalo mbhalo: {{contactEmail}}",
+    "relatedPrivacy": "Funda Inqubomgomo Yethu Yobumfihlo",
+    "relatedTerms": "Funda Imigomo Nemibandela Yethu",
+    "footerLegal": "Ezomthetho",
+    "englishOnly": "Lo mbhalo utholakala ngesiNgisi kuphela. Inguqulo yesiNgisi yiyona esemthethweni."
+  },
+  "privacy": {
+    "title": "Inqubomgomo Yobumfihlo"
+  },
+  "terms": {
+    "title": "Imigomo Nemibandela"
+  },
+  "acceptance": {
+    "title": "Buyekeza imigomo yethu ngaphambi kokuqhubeka",
+    "body": "Ukuze usebenzise i-Race Tracker, sicela ufunde futhi wamukele Imigomo Nemibandela yethu futhi uqaphele Inqubomgomo Yethu Yobumfihlo.",
+    "updatedBody": "Sibuyekeze Imigomo Nemibandela noma Inqubomgomo Yobumfihlo. Sicela ubuyekeze inguqulo yamanje ukuze uqhubeke.",
+    "checkbox": "Ngifundile futhi ngiyavumelana neMigomo Nemibandela, futhi ngiyayiqaphela Inqubomgomo Yobumfihlo.",
+    "accept": "Yamukela uqhubeke",
+    "accepting": "Iyagcina…",
+    "signOut": "Phuma",
+    "failed": "Asikwazanga ukurekhoda ukwamukela kwakho. Sicela uzame futhi.",
+    "outdated": "Le mibhalo ibuyekeziwe ngemva kokulayishwa kohlelo. Layisha kabusha ikhasi, ubuyekeze inguqulo yamanje bese uzama futhi."
+  },
+  "registration": {
+    "prefix": "Ngifundile futhi ngiyamukela",
+    "join": " ne-",
+    "suffix": ".",
+    "errorTitle": "Iphutha",
+    "required": "Sicela wamukele Imigomo Nemibandela kanye Nenqubomgomo Yobumfihlo ukuze uqhubeke."
+  }
+}

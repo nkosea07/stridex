@@ -1,0 +1,44 @@
+{
+  "deletion": {
+    "title": "Futa akaunti",
+    "description": "Akaunti yako inazimwa mara moja na data yako binafsi inafutwa kabisa baada ya siku {{days}}.",
+    "consequencesTitle": "Kinachotokea",
+    "consequences": [
+      "Unaondolewa kwenye vifaa vyote na arifa za papo hapo zinasimama mara moja.",
+      "Baada ya siku {{days}}, wasifu wako, maelezo ya mawasiliano, taarifa binafsi na za kiafya za usajili wako, historia ya GPS, wanariadha unaowafuatilia na arifa zako zinafutwa.",
+      "Picha zako zinaondolewa kwenye matunzio ya mbio.",
+      "Matokeo ya mbio na rekodi za malipo huhifadhiwa tu bila kukutambulisha pale ambapo uadilifu wa mbio au sheria inahitaji."
+    ],
+    "exportHint": "Pakua nakala ya data yako kwanza ikiwa unaihitaji.",
+    "recoveryHint": "Umebadilisha nia? Hadi tarehe ya kufuta, tumia \"Ghairi ufutaji wa akaunti unaosubiri\" kwenye ukurasa wa kuingia kwa barua pepe na nenosiri lako.",
+    "passwordLabel": "Nenosiri lako",
+    "confirmLabel": "Andika {{token}} ili kuthibitisha",
+    "submit": "Futa akaunti yangu",
+    "submitting": "Inapanga…",
+    "scheduledTitle": "Ufutaji umepangwa",
+    "scheduledBody": "Akaunti yako imezimwa na imepangwa kufutwa tarehe {{date}}. Bado unaweza kughairi kabla ya hapo.",
+    "scheduledBodyNoDate": "Akaunti yako imezimwa na imepangwa kufutwa. Bado unaweza kughairi kabla ya hapo.",
+    "successTitle": "Ufutaji wa akaunti umepangwa",
+    "successBody": "Akaunti yako imezimwa na itafutwa tarehe {{date}}. Sasa utaondolewa kwenye akaunti.",
+    "cancel": "Ghairi ufutaji",
+    "cancelling": "Inaghairi…",
+    "cancelledTitle": "Ufutaji umeghairiwa",
+    "cancelledBody": "Akaunti yako imewashwa tena.",
+    "cancelFailed": "Hatukuweza kughairi ufutaji. Tafadhali jaribu tena.",
+    "ok": "Sawa",
+    "blockedTitle": "Kufuta akaunti hakuwezekani kwa sasa",
+    "blockers": {
+      "ACCOUNT_DELETION_LAST_SUPER_ADMIN": "Wewe ndiye msimamizi mkuu pekee aliye hai. Mfanye mtumiaji mwingine kuwa msimamizi mkuu kabla ya kufuta akaunti hii.",
+      "ACCOUNT_DELETION_ACTIVE_RACES": "Wewe ndiye mratibu pekee aliye hai wa mbio zilizo wazi, zilizofungwa kwa usajili au zinazoendelea. Ongeza msimamizi mwingine wa mbio, au maliza au ghairi mbio kwanza."
+    },
+    "errorTitle": "Imeshindwa kufuta akaunti",
+    "errors": {
+      "ACCOUNT_DELETION_PASSWORD_REQUIRED": "Weka nenosiri lako ili kufuta akaunti yako.",
+      "ACCOUNT_DELETION_PASSWORD_INVALID": "Nenosiri hilo si sahihi.",
+      "ACCOUNT_DELETION_CONFIRMATION_REQUIRED": "Andika {{token}} kama lilivyo ili kuthibitisha.",
+      "ACCOUNT_ALREADY_DELETED": "Akaunti hii tayari imefutwa.",
+      "TOO_MANY_REQUESTS": "Majaribio mengi mno. Subiri dakika chache kisha ujaribu tena.",
+      "generic": "Hitilafu imetokea. Tafadhali jaribu tena."
+    }
+  }
+}

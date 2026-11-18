@@ -1,0 +1,10 @@
+{
+  "mediaPublicationConsent": "J’autorise la publication des photos ou vidéos approuvées liées à mon inscription dans la galerie publique de la course. Je peux retirer ce consentement plus tard.",
+  "mediaPublicationManage": "Médias publics de la course",
+  "mediaPublicationSaved": "Choix concernant les médias enregistré.",
+  "mediaPublicationFailed": "Impossible de mettre à jour le choix concernant les médias.",
+  "language": "Langue",
+  "actions": {
+    "cancel": "Annuler"
+  }
+}

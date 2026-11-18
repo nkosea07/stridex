@@ -6,7 +6,8 @@ import { LEGAL_VERSIONS, asList, legalInterpolation, type LegalDocumentKind, typ
 
 export function LegalDocumentScreen({ kind }: { kind: LegalDocumentKind }) {
   const { colors } = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const englishOnly = (i18n.resolvedLanguage ?? 'en') !== 'en';
   const values = legalInterpolation();
   const sections = asList<LegalSection>(t(`legal:${kind}.sections`, { returnObjects: true, ...values }));
   const other: LegalDocumentKind = kind === 'privacy' ? 'terms' : 'privacy';
@@ -17,6 +18,9 @@ export function LegalDocumentScreen({ kind }: { kind: LegalDocumentKind }) {
       <Text style={[styles.version, { color: colors.subText }]}>
         {t('legal:common.version', { version: LEGAL_VERSIONS[kind] })}
       </Text>
+      {englishOnly ? (
+        <Text style={[styles.notice, { color: colors.text, borderColor: colors.border }]}>{t('legal:common.englishOnly')}</Text>
+      ) : null}
       <Text style={[styles.summary, { color: colors.subText }]}>{t(`legal:${kind}.summary`, values)}</Text>
 
       {sections.map((section) => (
@@ -55,6 +59,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '800' },
   version: { fontSize: 14, marginTop: 4, marginBottom: 12 },
   summary: { fontSize: 14, lineHeight: 21, marginBottom: 20 },
+  notice: { fontSize: 14, lineHeight: 20, borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 16 },
   section: { marginBottom: 20 },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 6 },
   body: { fontSize: 14, lineHeight: 21, marginBottom: 6 },

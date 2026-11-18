@@ -1,0 +1,10 @@
+{
+  "mediaPublicationConsent": "Ninaruhusu picha au video zilizoidhinishwa zinazohusiana na usajili wangu zionekane kwenye matunzio ya umma ya mbio. Ninaweza kuondoa ruhusa hii baadaye.",
+  "mediaPublicationManage": "Picha na video za umma za mbio",
+  "mediaPublicationSaved": "Chaguo la picha na video limehifadhiwa.",
+  "mediaPublicationFailed": "Imeshindwa kusasisha chaguo la picha na video.",
+  "language": "Lugha",
+  "actions": {
+    "cancel": "Ghairi"
+  }
+}

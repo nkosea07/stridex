@@ -1,0 +1,38 @@
+{
+  "common": {
+    "version": "Shanduro {{version}}",
+    "back": "Dzokera",
+    "contents": "Zviri mukati",
+    "privacyPolicy": "Mutemo Wekuchengetedza Ruzivo",
+    "terms": "Mitemo neMamiriro",
+    "contactLine": "Mibvunzo pamusoro pegwaro iri: {{contactEmail}}",
+    "relatedPrivacy": "Verenga Mutemo wedu Wekuchengetedza Ruzivo",
+    "relatedTerms": "Verenga Mitemo neMamiriro edu",
+    "footerLegal": "Zvemutemo",
+    "englishOnly": "Gwaro iri rinowanikwa muChirungu chete. Shanduro yeChirungu ndiyo yepamutemo."
+  },
+  "privacy": {
+    "title": "Mutemo Wekuchengetedza Ruzivo"
+  },
+  "terms": {
+    "title": "Mitemo neMamiriro"
+  },
+  "acceptance": {
+    "title": "Ongorora mitemo yedu usati waenderera mberi",
+    "body": "Kuti ushandise Race Tracker, ndapota verenga uye ubvume Mitemo neMamiriro edu, uye uzive Mutemo wedu Wekuchengetedza Ruzivo.",
+    "updatedBody": "Takagadziridza Mitemo neMamiriro kana Mutemo Wekuchengetedza Ruzivo. Ndapota ongorora shanduro iripo kuti uenderere mberi.",
+    "checkbox": "Ndaverenga uye ndinobvumirana neMitemo neMamiriro, uye ndinoziva Mutemo Wekuchengetedza Ruzivo.",
+    "accept": "Bvuma uenderere mberi",
+    "accepting": "Kuchengetedza…",
+    "signOut": "Buda",
+    "failed": "Hatina kukwanisa kunyora kubvuma kwako. Ndapota edza zvakare.",
+    "outdated": "Magwaro aya akagadziridzwa mushure mekunge app yarodha. Rodha peji zvakare, ongorora shanduro iripo, wobva waedza zvakare."
+  },
+  "registration": {
+    "prefix": "Ndaverenga uye ndinobvuma",
+    "join": " ne",
+    "suffix": ".",
+    "errorTitle": "Kukanganisa",
+    "required": "Ndapota bvuma Mitemo neMamiriro neMutemo Wekuchengetedza Ruzivo kuti uenderere mberi."
+  }
+}

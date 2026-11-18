@@ -1,0 +1,38 @@
+{
+  "common": {
+    "version": "Versão {{version}}",
+    "back": "Voltar",
+    "contents": "Índice",
+    "privacyPolicy": "Política de Privacidade",
+    "terms": "Termos e Condições",
+    "contactLine": "Dúvidas sobre este documento: {{contactEmail}}",
+    "relatedPrivacy": "Ler a nossa Política de Privacidade",
+    "relatedTerms": "Ler os nossos Termos e Condições",
+    "footerLegal": "Informação legal",
+    "englishOnly": "Este documento só está disponível em inglês. A versão em inglês é a oficial."
+  },
+  "privacy": {
+    "title": "Política de Privacidade"
+  },
+  "terms": {
+    "title": "Termos e Condições"
+  },
+  "acceptance": {
+    "title": "Reveja os nossos termos antes de continuar",
+    "body": "Para usar o Race Tracker, leia e aceite os nossos Termos e Condições e tome conhecimento da nossa Política de Privacidade.",
+    "updatedBody": "Atualizámos os nossos Termos e Condições ou a Política de Privacidade. Reveja a versão atual para continuar.",
+    "checkbox": "Li e aceito os Termos e Condições e tomei conhecimento da Política de Privacidade.",
+    "accept": "Aceitar e continuar",
+    "accepting": "A guardar…",
+    "signOut": "Terminar sessão",
+    "failed": "Não foi possível registar a sua aceitação. Tente novamente.",
+    "outdated": "Estes documentos foram atualizados depois de a aplicação ser carregada. Recarregue a página, reveja a versão atual e tente novamente."
+  },
+  "registration": {
+    "prefix": "Li e aceito os",
+    "join": " e a",
+    "suffix": ".",
+    "errorTitle": "Erro",
+    "required": "Aceite os Termos e Condições e a Política de Privacidade para continuar."
+  }
+}

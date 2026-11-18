@@ -1,0 +1,38 @@
+{
+  "common": {
+    "version": "Toleo {{version}}",
+    "back": "Rudi",
+    "contents": "Yaliyomo",
+    "privacyPolicy": "Sera ya Faragha",
+    "terms": "Sheria na Masharti",
+    "contactLine": "Maswali kuhusu hati hii: {{contactEmail}}",
+    "relatedPrivacy": "Soma Sera yetu ya Faragha",
+    "relatedTerms": "Soma Sheria na Masharti yetu",
+    "footerLegal": "Kisheria",
+    "englishOnly": "Hati hii inapatikana kwa Kiingereza pekee. Toleo la Kiingereza ndilo rasmi."
+  },
+  "privacy": {
+    "title": "Sera ya Faragha"
+  },
+  "terms": {
+    "title": "Sheria na Masharti"
+  },
+  "acceptance": {
+    "title": "Pitia masharti yetu kabla ya kuendelea",
+    "body": "Ili kutumia Race Tracker, tafadhali soma na ukubali Sheria na Masharti yetu na uzingatie Sera yetu ya Faragha.",
+    "updatedBody": "Tumesasisha Sheria na Masharti au Sera ya Faragha. Tafadhali pitia toleo la sasa ili kuendelea.",
+    "checkbox": "Nimesoma na ninakubali Sheria na Masharti, na ninatambua Sera ya Faragha.",
+    "accept": "Kubali na uendelee",
+    "accepting": "Inahifadhi…",
+    "signOut": "Ondoka",
+    "failed": "Hatukuweza kurekodi ukubali wako. Tafadhali jaribu tena.",
+    "outdated": "Hati hizi zilisasishwa baada ya programu kupakiwa. Pakia ukurasa upya, pitia toleo la sasa, kisha ujaribu tena."
+  },
+  "registration": {
+    "prefix": "Nimesoma na ninakubali",
+    "join": " na",
+    "suffix": ".",
+    "errorTitle": "Hitilafu",
+    "required": "Tafadhali kubali Sheria na Masharti na Sera ya Faragha ili kuendelea."
+  }
+}

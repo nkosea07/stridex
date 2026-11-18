@@ -1,0 +1,10 @@
+{
+  "mediaPublicationConsent": "Ngiyavuma ukuthi izithombe noma amavidiyo agunyaziwe axhumene nokubhalisa kwami avele kugalari yomphakathi yomjaho. Ngingakuhoxisa lokhu kamuva.",
+  "mediaPublicationManage": "Imidiya yomphakathi yomjaho",
+  "mediaPublicationSaved": "Ukukhetha kwemidiya kugciniwe.",
+  "mediaPublicationFailed": "Akukwazanga ukubuyekeza ukukhetha kwemidiya.",
+  "language": "Ulimi",
+  "actions": {
+    "cancel": "Khansela"
+  }
+}

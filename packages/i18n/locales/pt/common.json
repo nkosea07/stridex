@@ -1,0 +1,10 @@
+{
+  "mediaPublicationConsent": "Autorizo que fotos ou vídeos aprovados ligados à minha inscrição apareçam na galeria pública da corrida. Posso retirar esta autorização mais tarde.",
+  "mediaPublicationManage": "Media públicos da corrida",
+  "mediaPublicationSaved": "Escolha sobre media guardada.",
+  "mediaPublicationFailed": "Não foi possível atualizar a escolha sobre media.",
+  "language": "Idioma",
+  "actions": {
+    "cancel": "Cancelar"
+  }
+}

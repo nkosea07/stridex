@@ -8,7 +8,8 @@
     "contactLine": "Questions about this document: {{contactEmail}}",
     "relatedPrivacy": "Read our Privacy Policy",
     "relatedTerms": "Read our Terms and Conditions",
-    "footerLegal": "Legal"
+    "footerLegal": "Legal",
+    "englishOnly": "This document is available in English only. The English version is the official one."
   },
   "privacy": {
     "title": "Privacy Policy",

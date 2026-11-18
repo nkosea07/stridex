@@ -1,0 +1,44 @@
+{
+  "deletion": {
+    "title": "Skrap rekening",
+    "description": "Jou rekening word dadelik gedeaktiveer en jou persoonlike data word na {{days}} dae permanent uitgevee.",
+    "consequencesTitle": "Wat gebeur",
+    "consequences": [
+      "Jy word op elke toestel afgemeld en stootkennisgewings hou dadelik op.",
+      "Na {{days}} dae word jou profiel, kontakbesonderhede, die persoonlike en mediese besonderhede van jou inskrywings, GPS-geskiedenis, gevolgde atlete en kennisgewings uitgevee.",
+      "Foto’s van jou word uit wedloopgalerye verwyder.",
+      "Wedloopuitslae en betalingsrekords word slegs in ontidentifiseerde vorm gehou waar wedloopintegriteit of die wet dit vereis."
+    ],
+    "exportHint": "Laai eers ’n afskrif van jou data af as jy dit nodig het.",
+    "recoveryHint": "Van plan verander? Gebruik tot die uitveedatum “Kanselleer ’n hangende rekeningskrapping” op die aanmeldbladsy met jou e-pos en wagwoord.",
+    "passwordLabel": "Jou wagwoord",
+    "confirmLabel": "Tik {{token}} om te bevestig",
+    "submit": "Skrap my rekening",
+    "submitting": "Skeduleer tans…",
+    "scheduledTitle": "Skrapping geskeduleer",
+    "scheduledBody": "Jou rekening is gedeaktiveer en uitvee is geskeduleer vir {{date}}. Jy kan nog voor dan kanselleer.",
+    "scheduledBodyNoDate": "Jou rekening is gedeaktiveer en uitvee is geskeduleer. Jy kan nog voor dan kanselleer.",
+    "successTitle": "Rekeningskrapping geskeduleer",
+    "successBody": "Jou rekening is gedeaktiveer en word op {{date}} uitgevee. Jy word nou afgemeld.",
+    "cancel": "Kanselleer skrapping",
+    "cancelling": "Kanselleer tans…",
+    "cancelledTitle": "Skrapping gekanselleer",
+    "cancelledBody": "Jou rekening is weer geaktiveer.",
+    "cancelFailed": "Ons kon nie die skrapping kanselleer nie. Probeer asseblief weer.",
+    "ok": "OK",
+    "blockedTitle": "Rekeningskrapping is tans nie beskikbaar nie",
+    "blockers": {
+      "ACCOUNT_DELETION_LAST_SUPER_ADMIN": "Jy is die enigste aktiewe superadministrateur. Maak ’n ander gebruiker ’n superadministrateur voordat jy hierdie rekening skrap.",
+      "ACCOUNT_DELETION_ACTIVE_RACES": "Jy is die enigste aktiewe organiseerder van ’n wedloop wat oop is, gesluit is vir inskrywings of aan die gang is. Voeg nog ’n wedloopadministrateur by, of voltooi of kanselleer die wedloop eers."
+    },
+    "errorTitle": "Kan nie rekening skrap nie",
+    "errors": {
+      "ACCOUNT_DELETION_PASSWORD_REQUIRED": "Voer jou wagwoord in om jou rekening te skrap.",
+      "ACCOUNT_DELETION_PASSWORD_INVALID": "Daardie wagwoord is verkeerd.",
+      "ACCOUNT_DELETION_CONFIRMATION_REQUIRED": "Tik presies {{token}} om te bevestig.",
+      "ACCOUNT_ALREADY_DELETED": "Hierdie rekening is reeds geskrap.",
+      "TOO_MANY_REQUESTS": "Te veel pogings. Wag ’n paar minute en probeer weer.",
+      "generic": "Iets het skeefgeloop. Probeer asseblief weer."
+    }
+  }
+}

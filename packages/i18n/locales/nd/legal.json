@@ -1,0 +1,38 @@
+{
+  "common": {
+    "version": "Inguqulo {{version}}",
+    "back": "Buyela emuva",
+    "contents": "Okuphakathi",
+    "privacyPolicy": "Inqubomgomo Yobumfihlo",
+    "terms": "Imigomo Lemibandela",
+    "contactLine": "Imibuzo mayelana leli bhuku: {{contactEmail}}",
+    "relatedPrivacy": "Bala Inqubomgomo Yobumfihlo yethu",
+    "relatedTerms": "Bala Imigomo Lemibandela yethu",
+    "footerLegal": "Ezomthetho",
+    "englishOnly": "Ibhuku leli litholakala ngesiNgisi kuphela. Inguqulo yesiNgisi yiyo esemthethweni."
+  },
+  "privacy": {
+    "title": "Inqubomgomo Yobumfihlo"
+  },
+  "terms": {
+    "title": "Imigomo Lemibandela"
+  },
+  "acceptance": {
+    "title": "Hlola imigomo yethu ungakaqhubeki",
+    "body": "Ukuze usebenzise i-Race Tracker, ngicela ubale njalo uvume Imigomo Lemibandela yethu, wazi lenqubomgomo Yobumfihlo yethu.",
+    "updatedBody": "Sivuselele Imigomo Lemibandela kumbe Inqubomgomo Yobumfihlo. Ngicela uhlole inguqulo yakhathesi ukuze uqhubeke.",
+    "checkbox": "Ngibalile njalo ngiyavumelana leMigomo LeMibandela, njalo ngiyayazi Inqubomgomo Yobumfihlo.",
+    "accept": "Vuma uqhubeke",
+    "accepting": "Kuyagcinwa…",
+    "signOut": "Phuma",
+    "failed": "Asikwazanga ukubhala ukuvuma kwakho. Ngicela uzame njalo.",
+    "outdated": "Amabhuku la avuselelwe ngemva kokuthi i-app ilayishe. Layisha ikhasi kabutsha, uhlole inguqulo yakhathesi, ubusuzama njalo."
+  },
+  "registration": {
+    "prefix": "Ngibalile njalo ngiyavuma",
+    "join": " lo",
+    "suffix": ".",
+    "errorTitle": "Iphutha",
+    "required": "Ngicela uvume Imigomo Lemibandela kanye leNqubomgomo Yobumfihlo ukuze uqhubeke."
+  }
+}
