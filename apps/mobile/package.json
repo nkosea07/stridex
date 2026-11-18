@@ -60,7 +60,7 @@
     "eslint": "9.38.0",
     "eslint-config-expo": "10.0.0",
     "expo-doctor": "^1.19.8",
-    "typescript": "~5.9.3"
+    "typescript": "~7.0.2"
   },
   "private": true
 }
