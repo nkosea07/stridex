@@ -82,6 +82,19 @@ CI runs `pnpm audit --prod --audit-level high`. Transitive fixes are pnpm `overr
 
 Both are fixed only in Spring Framework 7 (Spring Boot 4); 6.2.19 is the last 6.2 release. `UnreachableSpringCveGuardTest` fails the build if XSLT views or SSE are introduced. Before the expiry, migrate to Spring Boot 4 (plan: `docs/plans/2026-11-17-spring-boot-4-migration.md`) or re-review and renew the exception. `.github/workflows/security-exception-expiry.yml` opens an alert issue 45 days before any `.trivyignore` expiry.
 
+### Web image (Trivy, `.trivyignore`)
+
+| Advisory | Package | Why it is accepted | Expires |
+| --- | --- | --- | --- |
+| CVE-2026-113425 (critical) | `nginx` 1.30.6 | Use-after-free in the mail proxy. The web image never loads the mail module. | 2026-12-22 |
+| CVE-2026-121810 (critical) | `nginx` 1.30.6 | Use-after-free with HTTP/3. The server listens on plain HTTP/1.1 only. | 2026-12-22 |
+| CVE-2026-123007 (critical) | `nginx` 1.30.6 | HTTP/2 flow-control overflow. HTTP/2 is not enabled. | 2026-12-22 |
+| CVE-2026-123633 (critical) | `nginx` 1.30.6 | Use-after-free with HTTP/2. HTTP/2 is not enabled. | 2026-12-22 |
+| CVE-2026-118899 (high) | `nginx` 1.30.6 | Denial of service through a crafted TLS connection. The container does not terminate TLS. | 2026-12-22 |
+| CVE-2026-123634 (high) | `nginx` 1.30.6 | Use-after-free in the resolver. There is no `resolver` directive; `backend` is resolved once at startup. | 2026-12-22 |
+
+All six are fixed in nginx 1.30.7, but `nginxinc/nginx-unprivileged:1.30-alpine3.24` still ships 1.30.6, and `apk upgrade` cannot move it because the image pins nginx to an exact nginx.org build. `apps/web/src/test/nginx-cve-guard.test.ts` fails if `apps/web/nginx.conf` enables TLS, HTTP/2, HTTP/3, the mail or stream modules, or a resolver. The expiry is deliberately short: once a 1.30.7 image is published, rebuild and delete these lines from `.trivyignore`.
+
 Install with a release-age guard when changing dependencies: `pnpm install --config.minimum-release-age=20160` (14 days).
 
 ## Evidence commands
