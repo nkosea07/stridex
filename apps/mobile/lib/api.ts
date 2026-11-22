@@ -17,6 +17,7 @@ import type {
   RaceResultPage,
   ResultQuery,
   PublicAthleteSummary,
+  PublicRaceMedia,
   NotificationPreferences,
   ConsentState,
   PersonalBest,
@@ -390,6 +391,20 @@ function parsePublicAthletes(value: unknown): PublicAthleteSummary[] {
     }) as PublicAthleteSummary);
 }
 
+export function parsePublicRaceMedia(value: unknown): PublicRaceMedia[] {
+  return parseRecordArray<Record<string, unknown>>(value, 'Race media response was malformed.')
+    .flatMap((item) => {
+      const id = optionalString(item.id);
+      if (!id || item.publiclyVisible === false) return [];
+      return [{
+        id,
+        mediaType: item.mediaType === 'VIDEO' ? 'VIDEO' : 'IMAGE',
+        caption: optionalString(item.caption),
+        hasThumbnail: optionalString(item.thumbnailUrl) !== null,
+      } satisfies PublicRaceMedia];
+    });
+}
+
 function parseResultQuery(value: unknown): ResultQuery {
   const query = parseRequiredRecord(value, 'Result query response was malformed.');
   if (typeof query.id !== 'string' || typeof query.raceId !== 'string' || typeof query.status !== 'string') {
@@ -405,6 +420,13 @@ export function certificateUrl(result: Pick<RaceResult, 'raceId' | 'participantI
     participantId: result.participantId,
   });
   return `${API_BASE_URL}${path}?token=${encodeURIComponent(result.certificateToken)}`;
+}
+
+export function publicRaceMediaUrl(raceId: string, mediaId: string, variant: 'content' | 'thumbnail'): string {
+  const path = variant === 'thumbnail'
+    ? buildContractPath(API_CONTRACT.endpoints.publicRaceMediaThumbnail, { raceId, mediaId })
+    : buildContractPath(API_CONTRACT.endpoints.publicRaceMediaContent, { raceId, mediaId });
+  return `${API_BASE_URL}${path}`;
 }
 
 function parseRaceResult(value: unknown): RaceResult {
@@ -1064,6 +1086,12 @@ class ApiClient {
   async searchRaceAthletes(raceId: string, query: string): Promise<PublicAthleteSummary[]> {
     const path = buildContractPath(API_CONTRACT.endpoints.publicRaceSearch, { raceId });
     return parsePublicAthletes(await this.request<unknown>(`${path}?q=${encodeURIComponent(query.trim())}`));
+  }
+
+  async getPublicRaceMedia(raceId: string): Promise<PublicRaceMedia[]> {
+    return parsePublicRaceMedia(await this.request<unknown>(
+      buildContractPath(API_CONTRACT.endpoints.publicRaceMedia, { raceId }),
+    ));
   }
 
   async getPublicRaceRoute(raceId: string): Promise<Coordinate[]> {

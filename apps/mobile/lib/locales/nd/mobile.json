@@ -486,7 +486,8 @@
     "raceDetails": "Imininingwane yomjaho",
     "liveTracking": "Ukulandela bukhoma",
     "notifications": "Izaziso",
-    "athleteLive": "Umgijimi bukhoma"
+    "athleteLive": "Umgijimi bukhoma",
+    "raceGallery": "Izithombe zomjaho"
   },
   "notificationsScreen": {
     "tryAgain": "Ngicela udonsele phansi ukuze uvuselele ubusuzama njalo.",
@@ -701,5 +702,22 @@
     "unfollowName": "Yekela ukulandela u-{{name}}",
     "followFailedTitle": "Kakugcinwanga",
     "followFailed": "Ukulandela kakuvuselelekanga. Ngicela uzame njalo."
+  },
+  "gallery": {
+    "title": "Izithombe zomjaho",
+    "seeAll": "Bona zonke izithombe ({{total}})",
+    "loading": "Kulayishwa izithombe zomjaho",
+    "loadFailed": "Izithombe zomjaho kazilayishekanga",
+    "empty": "Akukabi lezithombe ezikhutshiweyo zomjaho lo.",
+    "consentNote": "Kutshengiswa izithombe ezivunyelweyo kuphela, njalo kuphela ezabagijimi abavumileyo ukuthi zikhutshwe.",
+    "photoLabel": "Isithombe {{index}} kwezingu-{{total}}",
+    "videoLabel": "Ividiyo {{index}} kwezingu-{{total}}",
+    "counter": "{{index}} kwezingu-{{total}}",
+    "openPhotoHint": "Kuvula isithombe kusikrini sonke",
+    "playVideoHint": "Kudlala ividiyo ku-bhrawuza yakho",
+    "playVideo": "Dlala ividiyo",
+    "video": "Ividiyo",
+    "imageFailed": "Isithombe lesi kasilayishekanga.",
+    "close": "Vala"
   }
 }

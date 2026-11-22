@@ -90,6 +90,15 @@ export interface PublicAthleteSummary {
   rank?: number | null;
 }
 
+export type PublicRaceMediaType = 'IMAGE' | 'VIDEO';
+
+export interface PublicRaceMedia {
+  id: string;
+  mediaType: PublicRaceMediaType;
+  caption: string | null;
+  hasThumbnail: boolean;
+}
+
 export interface PublicRaceResultPage {
   items: PublicRaceResult[];
   page: number;

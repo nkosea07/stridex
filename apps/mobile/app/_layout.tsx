@@ -209,6 +209,13 @@ function RootNavigator() {
           }}
         />
         <Stack.Screen
+          name="race-gallery/[id]"
+          options={{
+            title: t('mobile:screens.raceGallery'),
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
           name="settings"
           options={{
             title: t('mobile:settings.title'),

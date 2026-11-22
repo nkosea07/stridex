@@ -486,7 +486,8 @@
     "raceDetails": "Ruzivo rwemujaho",
     "liveTracking": "Kutevera mhenyu",
     "notifications": "Zviziviso",
-    "athleteLive": "Mumhanyi mhenyu"
+    "athleteLive": "Mumhanyi mhenyu",
+    "raceGallery": "Mifananidzo yemujaho"
   },
   "notificationsScreen": {
     "tryAgain": "Ndapota kweva pasi kuti uvandudze wobva waedza zvakare.",
@@ -701,5 +702,22 @@
     "unfollowName": "Rega kutevera {{name}}",
     "followFailedTitle": "Hazvina kuchengetwa",
     "followFailed": "Kutevera hakuna kukwanisa kugadziriswa. Ndapota edza zvakare."
+  },
+  "gallery": {
+    "title": "Mifananidzo yemujaho",
+    "seeAll": "Ona mifananidzo yose ({{total}})",
+    "loading": "Kurodha mifananidzo yemujaho",
+    "loadFailed": "Mifananidzo yemujaho haina kukwanisa kurodhwa",
+    "empty": "Hapana mifananidzo yakaburitswa yemujaho uyu parizvino.",
+    "consentNote": "Mifananidzo yakabvumidzwa chete ndiyo inoratidzwa, uye chete yevamhanyi vakabvuma kuti iburitswe.",
+    "photoLabel": "Mufananidzo {{index}} pa{{total}}",
+    "videoLabel": "Vhidhiyo {{index}} pa{{total}}",
+    "counter": "{{index}} pa{{total}}",
+    "openPhotoHint": "Inovhura mufananidzo pasikirini yose",
+    "playVideoHint": "Inotamba vhidhiyo mubhurawuza yako",
+    "playVideo": "Tamba vhidhiyo",
+    "video": "Vhidhiyo",
+    "imageFailed": "Mufananidzo uyu hauna kukwanisa kurodhwa.",
+    "close": "Vhara"
   }
 }

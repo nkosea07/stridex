@@ -486,7 +486,8 @@
     "raceDetails": "Detalhes da corrida",
     "liveTracking": "Acompanhamento em direto",
     "notifications": "Notificações",
-    "athleteLive": "Atleta em direto"
+    "athleteLive": "Atleta em direto",
+    "raceGallery": "Fotografias da corrida"
   },
   "notificationsScreen": {
     "tryAgain": "Puxe para baixo para atualizar e tente novamente.",
@@ -703,5 +704,22 @@
     "unfollowName": "Deixar de seguir {{name}}",
     "followFailedTitle": "Não guardado",
     "followFailed": "Não foi possível atualizar o seguimento. Tente novamente."
+  },
+  "gallery": {
+    "title": "Fotografias da corrida",
+    "seeAll": "Ver todas as fotografias ({{total}})",
+    "loading": "A carregar as fotografias da corrida",
+    "loadFailed": "Não foi possível carregar as fotografias da corrida",
+    "empty": "Ainda não foram publicadas fotografias desta corrida.",
+    "consentNote": "Só são mostradas fotografias aprovadas, e apenas de atletas que aceitaram a sua publicação.",
+    "photoLabel": "Fotografia {{index}} de {{total}}",
+    "videoLabel": "Vídeo {{index}} de {{total}}",
+    "counter": "{{index}} de {{total}}",
+    "openPhotoHint": "Abre a fotografia em ecrã inteiro",
+    "playVideoHint": "Reproduz o vídeo no seu navegador",
+    "playVideo": "Reproduzir vídeo",
+    "video": "Vídeo",
+    "imageFailed": "Não foi possível carregar esta fotografia.",
+    "close": "Fechar"
   }
 }

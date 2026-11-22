@@ -486,7 +486,8 @@
     "raceDetails": "Wedloopbesonderhede",
     "liveTracking": "Regstreekse volging",
     "notifications": "Kennisgewings",
-    "athleteLive": "Atleet regstreeks"
+    "athleteLive": "Atleet regstreeks",
+    "raceGallery": "Wedloopfoto's"
   },
   "notificationsScreen": {
     "tryAgain": "Trek af om te verfris en probeer weer.",
@@ -701,5 +702,22 @@
     "unfollowName": "Ontvolg {{name}}",
     "followFailedTitle": "Nie gestoor nie",
     "followFailed": "Volging kon nie bygewerk word nie. Probeer asseblief weer."
+  },
+  "gallery": {
+    "title": "Wedloopfoto's",
+    "seeAll": "Sien alle foto's ({{total}})",
+    "loading": "Laai tans wedloopfoto's",
+    "loadFailed": "Wedloopfoto's kon nie gelaai word nie",
+    "empty": "Nog geen foto's is vir hierdie wedloop gepubliseer nie.",
+    "consentNote": "Slegs goedgekeurde foto's word gewys, en slegs van atlete wat ingestem het dat hulle gepubliseer word.",
+    "photoLabel": "Foto {{index}} van {{total}}",
+    "videoLabel": "Video {{index}} van {{total}}",
+    "counter": "{{index}} van {{total}}",
+    "openPhotoHint": "Maak die foto oop op die volle skerm",
+    "playVideoHint": "Speel die video in jou blaaier",
+    "playVideo": "Speel video",
+    "video": "Video",
+    "imageFailed": "Hierdie foto kon nie gelaai word nie.",
+    "close": "Maak toe"
   }
 }

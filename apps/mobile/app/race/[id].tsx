@@ -13,6 +13,7 @@ import { getPreferredCapability, isOperationsRole } from '@/lib/capabilities';
 import { useTranslation } from 'react-i18next';
 import { CapabilityGate } from '@/components/CapabilityGate';
 import { RequestErrorState } from '@/components/RequestErrorState';
+import { RaceGalleryPreview } from '@/components/RaceGalleryPreview';
 import { formatCurrency, formatDate, formatDistanceKm, formatNumber, statusTranslationKey } from '@/lib/format';
 import type { PublicRaceResult, Registration, RegistrationField } from '@/types';
 
@@ -465,6 +466,8 @@ function RaceDetailScreenContent() {
             <Text style={styles.sectionTitle}>{t('mobile:race.about')}</Text>
             <Text style={styles.description}>{race.description || t('mobile:race.noDescription')}</Text>
           </View>
+
+          <RaceGalleryPreview raceId={String(race.id)} />
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('mobile:race.categories')}</Text>

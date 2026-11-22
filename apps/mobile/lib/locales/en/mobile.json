@@ -486,7 +486,8 @@
     "raceDetails": "Race details",
     "liveTracking": "Live tracking",
     "notifications": "Notifications",
-    "athleteLive": "Live athlete"
+    "athleteLive": "Live athlete",
+    "raceGallery": "Race photos"
   },
   "notificationsScreen": {
     "tryAgain": "Please pull to refresh and try again.",
@@ -701,5 +702,22 @@
     "unfollowName": "Unfollow {{name}}",
     "followFailedTitle": "Not saved",
     "followFailed": "Following could not be updated. Please try again."
+  },
+  "gallery": {
+    "title": "Race photos",
+    "seeAll": "See all photos ({{total}})",
+    "loading": "Loading race photos",
+    "loadFailed": "Race photos couldn't be loaded",
+    "empty": "No photos have been published for this race yet.",
+    "consentNote": "Only approved photos are shown, and only of athletes who agreed to have them published.",
+    "photoLabel": "Photo {{index}} of {{total}}",
+    "videoLabel": "Video {{index}} of {{total}}",
+    "counter": "{{index}} of {{total}}",
+    "openPhotoHint": "Opens the photo full screen",
+    "playVideoHint": "Plays the video in your browser",
+    "playVideo": "Play video",
+    "video": "Video",
+    "imageFailed": "This photo couldn't be loaded.",
+    "close": "Close"
   }
 }
