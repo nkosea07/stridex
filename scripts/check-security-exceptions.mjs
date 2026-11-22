@@ -52,8 +52,6 @@ export function renderReport(results, { today, warnDays }) {
     'What to do:',
     '- Spring MVC CVE-2026-47884 / CVE-2026-47890: complete the Spring Boot 4 migration in',
     '  `docs/plans/2026-11-17-spring-boot-4-migration.md`, then delete both lines from `.trivyignore`.',
-    '- nginx CVE-2026-113425 / -118899 / -121810 / -123007 / -123633 / -123634: rebuild the web image once',
-    '  `nginxinc/nginx-unprivileged` ships nginx 1.30.7, then delete those lines from `.trivyignore`.',
     '- JavaScript advisories (image-size, decode-uri-component): upgrade Expo / React Navigation if a',
     '  compatible fix exists; otherwise re-review and renew the date.',
     '- Rationale for every exception: `docs/RELEASE_READINESS.md` → *Dependency audit exceptions*.',
