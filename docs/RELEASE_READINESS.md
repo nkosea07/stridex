@@ -65,7 +65,7 @@ operational.
 
 ## Dependency audit exceptions
 
-CI runs `pnpm audit --prod --audit-level high`. Transitive fixes are pnpm `overrides` in `pnpm-workspace.yaml`, kept within each package's current major version. Three advisories have no compatible patched release and are listed in `auditConfig.ignoreGhsas` and, for the Trivy scans, in `.trivyignore` with a 2027-05-16 expiry; revisit them whenever Expo, Metro, or React Navigation is upgraded and remove the entry once the dependency ships a fixed version.
+CI runs `pnpm audit --prod --audit-level high`. Transitive fixes are pnpm `overrides` in `pnpm-workspace.yaml`, kept within each package's current major version. Four advisories have no compatible patched release and are listed in `auditConfig.ignoreGhsas`; three of them are also in `.trivyignore` with a 2027-05-16 expiry for the Trivy scans (`picomatch` is audit-only, so re-check it manually on the same date); revisit them whenever Expo, Metro, or React Navigation is upgraded and remove the entry once the dependency ships a fixed version.
 
 | Advisory | Package | Why it is accepted |
 | --- | --- | --- |
