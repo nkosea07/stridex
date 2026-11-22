@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PublicRaceResultsPanel } from '@/components/public/PublicRaceResultsPanel'
+import '@/i18n'
 
 function page(pageNumber: number, name: string) {
   return {

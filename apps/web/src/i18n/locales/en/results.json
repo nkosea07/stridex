@@ -115,5 +115,11 @@
     "failedToExportResults": "Failed to export results",
     "searchByNameOrBib": "Search by name or bib...",
     "gender": "Gender"
-  }
+  },
+  "speedKmh": "{{value}} km/h",
+  "exportFormat": "Export format",
+  "team": "Team",
+  "country": "Country",
+  "loadMore": "Load more results",
+  "loadingMore": "Loading…"
 }

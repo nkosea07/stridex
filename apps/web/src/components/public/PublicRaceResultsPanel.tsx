@@ -3,12 +3,14 @@ import { Trophy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { resultsApi } from '@/lib/api'
 import type { PublicRaceResult, PublicRaceResultPage } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 interface PublicRaceResultsPanelProps {
   raceId: string
 }
 
 export function PublicRaceResultsPanel({ raceId }: PublicRaceResultsPanelProps) {
+  const { t } = useTranslation()
   const [results, setResults] = useState<PublicRaceResult[]>([])
   const [page, setPage] = useState(0)
   const [revision, setRevision] = useState<number | null>(null)
@@ -74,27 +76,27 @@ export function PublicRaceResultsPanel({ raceId }: PublicRaceResultsPanelProps) 
       <div className="flex items-center gap-3">
         <div className="rounded-2xl bg-cyan-300/10 p-3 text-cyan-200"><Trophy className="h-5 w-5" /></div>
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-200">Official race results</p>
-          <h2 className="mt-1 text-xl font-black uppercase tracking-[-0.04em]">Finishers</h2>
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-200">{t('publicRace:results.eyebrow')}</p>
+          <h2 className="mt-1 text-xl font-black uppercase tracking-[-0.04em]">{t('publicRace:results.title')}</h2>
         </div>
       </div>
 
       {isLoading ? (
-        <p className="mt-5 text-sm text-slate-400" role="status">Loading published results…</p>
+        <p className="mt-5 text-sm text-slate-400" role="status">{t('publicRace:results.loading')}</p>
       ) : loadError && results.length === 0 ? (
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
-          <span>Published results could not be loaded.</span>
-          <Button variant="outline" onClick={() => void loadFirstPage()}>Retry</Button>
+          <span>{t('publicRace:results.loadFailed')}</span>
+          <Button variant="outline" onClick={() => void loadFirstPage()}>{t('publicRace:results.retry')}</Button>
         </div>
       ) : results.length === 0 ? (
-        <p className="mt-5 text-sm text-slate-400">No published finishers yet.</p>
+        <p className="mt-5 text-sm text-slate-400">{t('publicRace:results.empty')}</p>
       ) : (
         <>
           <ol className="mt-5 divide-y divide-white/10">
             {results.map((result) => (
               <li key={result.participantId} className="grid grid-cols-[3rem,1fr,auto,auto] items-center gap-3 py-3 first:pt-0 last:pb-0">
                 <span className="font-mono text-sm font-bold text-cyan-200">{result.overallPosition ?? '—'}</span>
-                <span className="min-w-0 truncate text-sm font-semibold">{result.participantName || 'Participant'}
+                <span className="min-w-0 truncate text-sm font-semibold">{result.participantName || t('publicRace:results.participant')}
                   <span className="ml-2 font-mono text-xs font-normal text-slate-400">#{result.bibNumber || '—'}</span>
                 </span>
                 <span className="font-mono text-sm text-slate-300">{result.totalTime || result.finishTime || '—'}</span>
@@ -105,7 +107,7 @@ export function PublicRaceResultsPanel({ raceId }: PublicRaceResultsPanelProps) 
                     target="_blank"
                     rel="noreferrer"
                   >
-                    Certificate
+                    {t('publicRace:results.certificate')}
                   </a>
                 ) : (
                   <span />
@@ -113,11 +115,11 @@ export function PublicRaceResultsPanel({ raceId }: PublicRaceResultsPanelProps) 
               </li>
             ))}
           </ol>
-          {loadError && <p className="mt-3 text-sm text-amber-200" role="status">Could not load the next page. Try again.</p>}
+          {loadError && <p className="mt-3 text-sm text-amber-200" role="status">{t('publicRace:results.loadMoreFailed')}</p>}
           {hasMore && (
             <div className="mt-5 flex justify-center">
               <Button variant="secondary" onClick={() => void loadMore()} disabled={isLoadingMore}>
-                {isLoadingMore ? 'Loading…' : 'Load more finishers'}
+                {isLoadingMore ? t('publicRace:results.loadingMore') : t('publicRace:results.loadMore')}
               </Button>
             </div>
           )}

@@ -2,5 +2,53 @@
   "ui": {
     "mapboxTokenIsMissingPleaseCheck": "Mapbox token is missing. Please check your configuration.",
     "failedToLoadRaceData": "Failed to load race data"
+  },
+  "title": "Live tracking",
+  "defaultTitle": "Live race tracking",
+  "live": "Live",
+  "liveTelemetry": "Live telemetry",
+  "telemetry": "Telemetry",
+  "bib": "Bib {{bib}}",
+  "avgPace": "Avg pace",
+  "lastCheckpoint": "Last checkpoint",
+  "notAvailable": "N/A",
+  "estimatedFinish": "Est. finish",
+  "coordinates": "Coordinates",
+  "latitude": "Latitude",
+  "longitude": "Longitude",
+  "closePanel": "Close athlete panel",
+  "noSelection": "No selection",
+  "selectParticipantTelemetry": "Select a participant to view detailed telemetry",
+  "selectParticipantAnalytics": "Select a participant to view detailed analytics",
+  "elapsed": "Elapsed",
+  "remaining": "Remaining",
+  "raceProgress": "Race progress",
+  "noCheckpoints": "No checkpoints",
+  "latestCheckpoint": "Latest checkpoint",
+  "noCheckpointsRecorded": "No checkpoints recorded yet",
+  "start": "Start",
+  "onCourse": "On course",
+  "updates": "Updates",
+  "noRunners": "No runners found",
+  "searchPlaceholder": "Search bib or name…",
+  "units": {
+    "minPerKm": "min/km",
+    "kmPerHour": "km/h",
+    "km": "{{value}} km",
+    "speed": "{{value}} km/h"
+  },
+  "modes": {
+    "spectator": "Spectator",
+    "organizer": "Organizer"
+  },
+  "freshness": {
+    "live": "Sync: live",
+    "stale": "Stale: {{seconds}}s ago",
+    "updated": "Updated {{seconds}}s ago"
+  },
+  "config": {
+    "title": "Security/config alert",
+    "mapboxMissing": "Mapbox token is missing",
+    "localhostApi": "Production build is using a localhost API"
   }
 }

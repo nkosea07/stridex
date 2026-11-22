@@ -27,28 +27,20 @@ export default tseslint.config(
     },
   },
   {
-    // i18n-migrated files: no hardcoded JSX text. Grow this list as areas are localized
-    // (see AGENTS.md "Internationalization").
-    files: [
-      'src/pages/LoginPage.tsx',
-      'src/pages/RegisterPage.tsx',
-      'src/pages/SettingsPage.tsx',
-      'src/pages/RegistrationFieldsPage.tsx',
-      'src/pages/CategoriesPage.tsx',
-      'src/components/layout/DashboardLayout.tsx',
-      'src/components/layout/UserLayout.tsx',
-      'src/components/auth/RequireAuthenticatedRoute.tsx',
-      'src/components/auth/RequireAdminRoute.tsx',
-      'src/components/auth/RequireOperationsRoute.tsx',
-      'src/components/auth/RequireRoleRoute.tsx',
-      'src/components/auth/RequireCapabilityRoute.tsx',
-      'app/routes/home.tsx',
-    ],
+    // No hardcoded user-facing text anywhere in the web app (see AGENTS.md "Internationalization").
+    files: ['src/**/*.tsx', 'app/**/*.tsx'],
+    ignores: ['src/test/**', '**/*.test.tsx'],
     plugins: {
       i18next,
     },
     rules: {
-      'i18next/no-literal-string': ['error', { mode: 'jsx-text-only', 'should-validate-template': false }],
+      'i18next/no-literal-string': ['error', {
+        mode: 'jsx-only',
+        'should-validate-template': false,
+        'jsx-attributes': {
+          include: ['placeholder', 'title', 'alt', 'aria-label', 'aria-description', 'label', 'description'],
+        },
+      }],
     },
   },
 )

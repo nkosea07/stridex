@@ -1,6 +1,7 @@
 import { Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { useTranslation } from 'react-i18next'
 
 interface PublicAthleteSearchProps {
   query: string
@@ -15,15 +16,16 @@ export function PublicAthleteSearch({
   resultCount,
   isSearching,
 }: PublicAthleteSearchProps) {
+  const { t } = useTranslation()
   return (
     <section className="rounded-[28px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_50px_rgba(15,23,42,0.08)] backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Find An Athlete</p>
-          <p className="mt-1 text-sm text-slate-600">Search by bib number or athlete name.</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">{t('publicRace:search.eyebrow')}</p>
+          <p className="mt-1 text-sm text-slate-600">{t('publicRace:search.description')}</p>
         </div>
         <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-mono text-xs font-bold text-slate-700">
-          {resultCount} shown
+          {t('publicRace:search.shown', { count: resultCount })}
         </div>
       </div>
 
@@ -32,7 +34,8 @@ export function PublicAthleteSearch({
         <Input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Bib 1024 or N. Kosin..."
+          placeholder={t('publicRace:search.placeholder')}
+            aria-label={t('publicRace:search.label')}
           className="border-0 bg-transparent px-0 text-base text-white placeholder:text-slate-400 focus-visible:ring-0"
         />
         {query ? (
@@ -49,8 +52,8 @@ export function PublicAthleteSearch({
       </div>
 
       <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-        <span>{query ? 'Search results update from the public index.' : 'Showing current live telemetry feed.'}</span>
-        <span className="font-mono uppercase tracking-[0.16em]">{isSearching ? 'Scanning' : 'Ready'}</span>
+        <span>{query ? t('publicRace:search.searchingHint') : t('publicRace:search.liveHint')}</span>
+        <span className="font-mono uppercase tracking-[0.16em]">{isSearching ? t('publicRace:search.scanning') : t('publicRace:search.ready')}</span>
       </div>
     </section>
   )

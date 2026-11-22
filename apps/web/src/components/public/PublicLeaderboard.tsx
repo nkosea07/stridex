@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, Medal, Timer } from 'lucide-react'
 import type { PublicAthleteSummary } from '@/types'
 import { Badge } from '@/components/ui/badge'
+import { useTranslation } from 'react-i18next'
+import { formatTime } from '@/lib/format'
 
 interface PublicLeaderboardProps {
   raceId: string
@@ -14,19 +16,20 @@ function formatPredictedFinish(value?: string) {
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return value
 
-  return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return formatTime(parsed)
 }
 
 export function PublicLeaderboard({ raceId, athletes }: PublicLeaderboardProps) {
+  const { t } = useTranslation()
   return (
     <section className="rounded-[28px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_50px_rgba(15,23,42,0.08)] backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Leaderboard</p>
-          <h2 className="mt-1 text-xl font-black uppercase tracking-[-0.04em] text-slate-950">Front Of Race</h2>
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">{t('publicRace:leaderboard.eyebrow')}</p>
+          <h2 className="mt-1 text-xl font-black uppercase tracking-[-0.04em] text-slate-950">{t('publicRace:leaderboard.title')}</h2>
         </div>
         <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-700">
-          Top {athletes.length}
+          {t('publicRace:leaderboard.top', { count: athletes.length })}
         </Badge>
       </div>
 
@@ -63,17 +66,17 @@ export function PublicLeaderboard({ raceId, athletes }: PublicLeaderboardProps) 
 
                 <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
                   <div className="rounded-2xl border border-white/10 bg-white/5 px-2.5 py-2">
-                    <p className="uppercase tracking-[0.18em] text-slate-400">Last CP</p>
-                    <p className="mt-1 truncate font-bold text-white">{athlete.lastCheckpoint || 'Awaiting'}</p>
+                    <p className="uppercase tracking-[0.18em] text-slate-400">{t('publicRace:athlete.lastCheckpoint')}</p>
+                    <p className="mt-1 truncate font-bold text-white">{athlete.lastCheckpoint || t('publicRace:athlete.awaitingStart')}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/5 px-2.5 py-2">
-                    <p className="uppercase tracking-[0.18em] text-slate-400">Elapsed</p>
+                    <p className="uppercase tracking-[0.18em] text-slate-400">{t('publicRace:athlete.elapsed')}</p>
                     <p className="mt-1 font-mono font-bold text-white">{athlete.elapsedTime || '--:--:--'}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/5 px-2.5 py-2">
                     <p className="flex items-center gap-1 uppercase tracking-[0.18em] text-slate-400">
                       <Timer className="h-3 w-3" />
-                      Est
+                      {t('publicRace:athlete.estimatedFinish')}
                     </p>
                     <p className="mt-1 font-mono font-bold text-white">{formatPredictedFinish(athlete.predictedFinishTime)}</p>
                   </div>
@@ -83,7 +86,7 @@ export function PublicLeaderboard({ raceId, athletes }: PublicLeaderboardProps) 
           ))
         ) : (
           <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-            Leaderboard data is not live yet for this race.
+            {t('publicRace:leaderboard.notLive')}
           </div>
         )}
       </div>

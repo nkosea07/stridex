@@ -17,6 +17,7 @@ import { toast } from 'sonner'
 import { PUBLIC_BROWSER_DEMO_RACE_ID } from '@/router/publicLoaders'
 import type { PublicRaceHubLoaderData } from '@/router/publicLoaders'
 import { LegalFooter } from '@/components/legal/LegalFooter'
+import { useTranslation } from 'react-i18next'
 
 const HUB_POLL_INTERVAL_MS = 15000
 
@@ -26,6 +27,7 @@ interface PublicRaceHubPageProps {
 }
 
 export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRaceHubPageProps = {}) {
+  const { t } = useTranslation()
   const params = useParams<{ raceId: string }>()
   const raceId = routeRaceId ?? params.raceId
   const location = useLocation()
@@ -84,7 +86,7 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
       setVisibilityDenied(true)
       setAthletes([])
       void mutate(undefined, { revalidate: false })
-      toast.error('Failed to refresh public race data')
+      toast.error(t('publicRace:hubPage.refreshFailed'))
     }
   }, [error, mutate])
 
@@ -109,7 +111,7 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
         } catch {
           if (!cancelled) {
             setAthletes([])
-            toast.error('Failed to refresh athlete results')
+            toast.error(t('publicRace:hubPage.searchFailed'))
           }
         } finally {
           if (!cancelled) {
@@ -169,7 +171,7 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
   if (!hub) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-center text-slate-200">
-        Public race data is not available.
+        {t('publicRace:hubPage.unavailable')}
       </div>
     )
   }
@@ -184,7 +186,7 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-200 backdrop-blur-sm"
           >
             <Search className="h-3.5 w-3.5" />
-            Find Athlete
+            {t('publicRace:hubPage.findAthlete')}
           </button>
 
           {!isBrowserDemo && (
@@ -196,7 +198,7 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
               disabled={isValidating}
             >
               <RefreshCcw className={`mr-2 h-3.5 w-3.5 ${isValidating ? 'animate-spin' : ''}`} />
-              Refresh
+              {t('publicRace:refresh')}
             </Button>
           )}
         </div>
@@ -224,20 +226,19 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
               <PublicLeaderboard raceId={raceId} athletes={leaderboard} />
 
               <section className="rounded-[28px] border border-slate-200/70 bg-white/80 p-5 shadow-[0_16px_50px_rgba(15,23,42,0.08)] backdrop-blur-sm">
-                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Free on Web</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">{t('publicRace:account.eyebrow')}</p>
                 <h2 className="mt-2 text-2xl font-black uppercase tracking-[-0.04em] text-slate-950">
-                  Keep following here, save favorites in your account
+                  {t('publicRace:account.hubTitle')}
                 </h2>
                 <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
-                  Public race tracking stays open on web. Create a free account when you want favorite athletes,
-                  alerts, and the fuller spectator experience in the mobile app.
+                  {t('publicRace:account.hubBody')}
                 </p>
                 <Button
                   asChild
                   className="mt-4 rounded-full bg-slate-950 px-5 text-xs font-bold uppercase tracking-[0.18em] text-cyan-100 hover:bg-slate-800"
                 >
                   <Link to="/register" state={{ from: returnTo }}>
-                    Create Free Account
+                    {t('publicRace:account.create')}
                     <ChevronRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
@@ -250,9 +251,9 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">Live Athletes</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">{t('publicRace:hubPage.liveAthletes')}</p>
                   <h2 className="mt-1 text-xl font-black uppercase tracking-[-0.04em] text-slate-950">
-                    Search Results
+                    {t('publicRace:hubPage.searchResults')}
                   </h2>
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-3 py-1 font-mono text-xs font-bold text-cyan-100">
@@ -268,7 +269,7 @@ export function PublicRaceHubPage({ raceId: routeRaceId, initialData }: PublicRa
                   ))
                 ) : (
                   <div className="sm:col-span-2 rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-                    No athletes matched that search.
+                    {t('publicRace:hubPage.noMatches')}
                   </div>
                 )}
               </div>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface DashboardLayoutProps {
   dataStrip: React.ReactNode;
@@ -14,6 +15,7 @@ export function DashboardLayout({
   analyticsTray,
   className,
 }: DashboardLayoutProps) {
+  const { t } = useTranslation();
   return (
     <div className={cn('grid h-screen w-full grid-cols-1 overflow-hidden bg-background md:grid-cols-[20rem_1fr_18rem]', className)}>
       {/* Left Sidebar: Data Strip */}
@@ -30,7 +32,7 @@ export function DashboardLayout({
       <aside className="hidden flex-col border-l border-border bg-card lg:flex">
         {analyticsTray || (
           <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
-            <p>Select a participant to view detailed analytics</p>
+            <p>{t('liveTracking:selectParticipantAnalytics')}</p>
           </div>
         )}
       </aside>

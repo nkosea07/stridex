@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { publicTrackingApi } from '@/lib/api'
 import { getMapAccessToken, resolveMapStyleUrl } from '@/lib/map-provider'
 import type { HeatCell } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 const MAPBOX_TOKEN = getMapAccessToken()
 
@@ -13,6 +14,7 @@ interface RaceHeatmapProps {
 }
 
 export function RaceHeatmap({ raceId }: RaceHeatmapProps) {
+  const { t } = useTranslation()
   const [cells, setCells] = useState<HeatCell[]>([])
   const [visible, setVisible] = useState(true)
 
@@ -50,8 +52,8 @@ export function RaceHeatmap({ raceId }: RaceHeatmapProps) {
     <section className="rounded-[28px] border border-white/10 bg-white/6 p-4 text-white shadow-[0_20px_60px_rgba(2,6,23,0.35)] backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Course Heat</p>
-          <h2 className="mt-1 text-xl font-black uppercase tracking-[-0.04em] text-white">Where the field runs</h2>
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{t('publicRace:heatmap.eyebrow')}</p>
+          <h2 className="mt-1 text-xl font-black uppercase tracking-[-0.04em] text-white">{t('publicRace:heatmap.title')}</h2>
         </div>
         <Button
           type="button"
@@ -60,7 +62,7 @@ export function RaceHeatmap({ raceId }: RaceHeatmapProps) {
           onClick={() => setVisible((value) => !value)}
         >
           <Flame className="mr-2 h-3.5 w-3.5" />
-          {visible ? 'Hide' : 'Show'}
+          {visible ? t('publicRace:heatmap.hide') : t('publicRace:heatmap.show')}
         </Button>
       </div>
 

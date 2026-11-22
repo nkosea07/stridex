@@ -154,5 +154,6 @@
   "importRowErrorsTruncated": "Only the first {{count}} skipped rows are listed.",
   "importCompleted": "Import finished: {{success}} added, {{skipped}} skipped.",
   "importFailed": "The import failed. Open the import history for details.",
-  "importSubmitting": "Starting import…"
+  "importSubmitting": "Starting import…",
+  "race": "Race"
 }

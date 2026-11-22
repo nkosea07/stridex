@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { mediaApi } from '@/lib/api'
 import type { MediaItem } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 interface RaceMediaGalleryProps {
   raceId: string
 }
 
 export function RaceMediaGallery({ raceId }: RaceMediaGalleryProps) {
+  const { t } = useTranslation()
   const [items, setItems] = useState<MediaItem[]>([])
 
   useEffect(() => {
@@ -30,8 +32,8 @@ export function RaceMediaGallery({ raceId }: RaceMediaGalleryProps) {
 
   return (
     <section className="rounded-[28px] border border-white/10 bg-white/6 p-4 text-white shadow-[0_20px_60px_rgba(2,6,23,0.35)] backdrop-blur-sm">
-      <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Media</p>
-      <h2 className="mt-1 text-xl font-black uppercase tracking-[-0.04em]">Race Gallery</h2>
+      <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{t('publicRace:gallery.eyebrow')}</p>
+      <h2 className="mt-1 text-xl font-black uppercase tracking-[-0.04em]">{t('publicRace:gallery.title')}</h2>
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
         {items.map((item) => (
           <figure key={item.id} className="overflow-hidden rounded-2xl border border-white/10">
@@ -40,7 +42,7 @@ export function RaceMediaGallery({ raceId }: RaceMediaGalleryProps) {
             ) : (
               <img
                 src={item.thumbnailUrl || item.url}
-                alt={item.caption || 'Race media'}
+                alt={item.caption || t('publicRace:gallery.mediaAlt')}
                 className="aspect-square h-full w-full object-cover"
                 loading="lazy"
               />

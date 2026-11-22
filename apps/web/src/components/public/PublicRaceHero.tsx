@@ -1,6 +1,8 @@
 import { Activity, CalendarDays, MapPin, Timer } from 'lucide-react'
 import type { PublicRaceHub } from '@/types'
 import { Badge } from '@/components/ui/badge'
+import { useTranslation } from 'react-i18next'
+import { formatDate, formatNumber } from '@/lib/format'
 
 interface PublicRaceHeroProps {
   hub: PublicRaceHub
@@ -8,12 +10,12 @@ interface PublicRaceHeroProps {
 }
 
 function formatRaceDate(value?: string) {
-  if (!value) return 'Date pending'
+  if (!value) return null
 
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return value
 
-  return parsed.toLocaleDateString([], {
+  return formatDate(parsed, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -22,11 +24,12 @@ function formatRaceDate(value?: string) {
 }
 
 function formatDistance(distanceKm?: number) {
-  if (distanceKm === undefined || distanceKm === null) return 'Distance TBC'
-  return `${distanceKm} km`
+  if (distanceKm === undefined || distanceKm === null) return null
+  return formatNumber(distanceKm, { maximumFractionDigits: 1 })
 }
 
 export function PublicRaceHero({ hub, liveCount }: PublicRaceHeroProps) {
+  const { t } = useTranslation()
   const location = [hub.city, hub.country].filter(Boolean).join(', ')
 
   return (
@@ -46,7 +49,7 @@ export function PublicRaceHero({ hub, liveCount }: PublicRaceHeroProps) {
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Badge className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.24em] text-cyan-100">
-                Public Race Hub
+                {t('publicRace:hero.badge')}
               </Badge>
               <Badge variant="outline" className="rounded-full border-white/15 bg-white/5 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-200">
                 {hub.status}
@@ -66,16 +69,16 @@ export function PublicRaceHero({ hub, liveCount }: PublicRaceHeroProps) {
                   {hub.raceName}
                 </h1>
                 <p className="mt-1 text-sm text-slate-300">
-                  Spectator view with live standings and athlete search.
+                  {t('publicRace:hero.description')}
                 </p>
               </div>
             </div>
           </div>
 
           <div className="hidden rounded-3xl border border-white/10 bg-white/5 px-4 py-3 text-right backdrop-blur-sm sm:block">
-            <p className="text-[10px] uppercase tracking-[0.22em] text-slate-400">Live Field</p>
+            <p className="text-[10px] uppercase tracking-[0.22em] text-slate-400">{t('publicRace:hero.liveField')}</p>
             <p className="mt-1 font-mono text-3xl font-black text-white">{liveCount}</p>
-            <p className="text-xs text-slate-400">tracked athletes</p>
+            <p className="text-xs text-slate-400">{t('publicRace:hero.trackedAthletes')}</p>
           </div>
         </div>
 
@@ -83,25 +86,25 @@ export function PublicRaceHero({ hub, liveCount }: PublicRaceHeroProps) {
           <div className="rounded-3xl border border-white/10 bg-white/6 p-4 backdrop-blur-sm">
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-400">
               <CalendarDays className="h-3.5 w-3.5 text-cyan-300" />
-              Race Day
+              {t('publicRace:hero.raceDay')}
             </div>
-            <p className="mt-2 text-lg font-bold text-white">{formatRaceDate(hub.raceDate)}</p>
+            <p className="mt-2 text-lg font-bold text-white">{formatRaceDate(hub.raceDate) ?? t('publicRace:hero.datePending')}</p>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/6 p-4 backdrop-blur-sm">
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-400">
               <MapPin className="h-3.5 w-3.5 text-amber-300" />
-              Host City
+              {t('publicRace:hero.hostCity')}
             </div>
-            <p className="mt-2 text-lg font-bold text-white">{location || 'Location pending'}</p>
+            <p className="mt-2 text-lg font-bold text-white">{location || t('publicRace:hero.locationPending')}</p>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/6 p-4 backdrop-blur-sm">
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-400">
               <Timer className="h-3.5 w-3.5 text-emerald-300" />
-              Course
+              {t('publicRace:hero.course')}
             </div>
-            <p className="mt-2 text-lg font-bold text-white">{formatDistance(hub.distanceKm)}</p>
+            <p className="mt-2 text-lg font-bold text-white">{formatDistance(hub.distanceKm) ? t('publicRace:hero.distanceKm', { value: formatDistance(hub.distanceKm) }) : t('publicRace:hero.distancePending')}</p>
           </div>
         </div>
 
@@ -109,11 +112,11 @@ export function PublicRaceHero({ hub, liveCount }: PublicRaceHeroProps) {
           <div className="rounded-3xl border border-cyan-400/15 bg-cyan-400/10 p-4">
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-cyan-100/80">
               <Activity className="h-3.5 w-3.5" />
-              Live Field
+              {t('publicRace:hero.liveField')}
             </div>
             <div className="mt-2 flex items-end justify-between">
               <p className="font-mono text-3xl font-black text-white">{liveCount}</p>
-              <p className="text-xs text-cyan-100/75">tracked athletes</p>
+              <p className="text-xs text-cyan-100/75">{t('publicRace:hero.trackedAthletes')}</p>
             </div>
           </div>
         </div>

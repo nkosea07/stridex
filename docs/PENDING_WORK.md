@@ -17,20 +17,15 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 
 - **Phase 0 — foundation: Done** (`e6d9d87`). `contract.i18n`, `packages/i18n`, web/mobile
   providers + switchers, `src/lib/format.ts`, `i18n:check`/`i18n:report`, CI wiring, AGENTS rule.
-- **Phase 1 — web extraction: Partial** (`a3cb968`, `3292f01`). Most admin, registration and
-  auth screens use `t()`, and the email-link pages (`/verify-email`, `/reset-password`,
-  `/forgot-password`, PR #51) were built translated. Still hardcoded English as of 2026-11-22
-  (extract to a namespace, then add the file to the `no-literal-string` override list in
-  `apps/web/eslint.config.js`):
-  - pages: `AnalyticsPage`, `RaceInsightsPage`, `PromoCodesPage`, `TeamsPage`,
-    `NotificationsPage`, `LandingPage`, `PublicRaceHubPage`, `PublicAthleteTrackingPage`
-    (`PrivacyPolicyPage`/`TermsPage` render the shared `legal` namespace).
-  - components: `DashboardLayout`, `Sidebar`, `ThemeSelect`, `AnalyticsTray`, `AeroPanel`,
-    `SecurityAuditor`, `PublicLeaderboard`, `PublicAthleteSearch`, `PublicAthleteCard`,
-    `PublicRaceHero`, `PublicRaceResultsPanel`, `RaceHeatmap`, `RaceMediaGallery`,
-    `AthleteTrackPlayback`.
-  - End state: `no-literal-string` = error repo-wide; then load the non-English web catalogs
-    (web currently uses only `sharedResources.en`).
+- **Phase 1 — web extraction: Done** (2026-11-22). Every web page and component uses `t()`,
+  including toasts, prompts, placeholders and accessible labels, and dates/numbers go through
+  `src/lib/format.ts`. New namespaces: `admin`, `publicRace`, `landing`; `liveTracking` filled
+  in. `i18next/no-literal-string` now runs on every `src/**/*.tsx` and `app/**/*.tsx` file in
+  `jsx-only` mode with user-facing attributes checked, so new hardcoded text fails lint. The
+  static `<title>`/`<meta>` in `app/root.tsx` stay English (rendered before i18n loads).
+  **Remaining:** translate the web catalogs (`apps/web/src/i18n/locales/en/*.json`, about 1,300
+  keys) into `sn/nd/af/zu/fr/pt/sw` and load them in `src/i18n/index.ts` (web currently loads
+  only `en`).
 - **Phase 2 — mobile extraction: Done** (`3292f01`). Every mobile screen uses `t('mobile:…')`.
 - **Phase 3 — backend: Done** (`3292f01`, `V58__user_preferred_locale.sql`). Per-user
   `preferred_locale`, `Accept-Language` fallback (`UserLocales`), `MessageSource`-backed email and
@@ -129,7 +124,7 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 1. **§2 Section 5 dead-code removal** (low risk, in progress).
 2. **Mobile release readiness** (§9): device testing, deployment values, translation review,
    store listings.
-3. **Finish i18n Phase 1** (web) for the files listed in §1, then load web translations.
+3. **Translate the web catalogs** into the seven other locales and load them (§1 Phase 1).
 4. Verify the deployed Redis-backed rate limits and metrics.
 5. Resolve the remaining **§4** decisions (Apple OAuth, partitioning) and capture S3/MinIO,
    WhatsApp and Pesepay refund provider evidence.

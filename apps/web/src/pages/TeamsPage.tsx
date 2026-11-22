@@ -18,8 +18,10 @@ import { registrationApi } from '@/lib/api'
 import type { Team } from '@/types'
 import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 
 export function TeamsPage() {
+  const { t } = useTranslation()
   const { raceId } = useParams()
   const { user } = useAuth()
   const canManageTeams = isAdminRole(user?.role)
@@ -35,7 +37,7 @@ export function TeamsPage() {
     try {
       setTeams(await registrationApi.listTeams(raceId))
     } catch {
-      toast.error('Failed to load teams')
+      toast.error(t('admin:teams.loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -48,7 +50,7 @@ export function TeamsPage() {
   const handleCreate = async () => {
     if (!raceId) return
     if (!form.name.trim()) {
-      toast.error('Team name is required')
+      toast.error(t('admin:teams.nameRequired'))
       return
     }
     setSaving(true)
@@ -57,12 +59,12 @@ export function TeamsPage() {
         name: form.name.trim(),
         clubName: form.clubName.trim() || undefined,
       })
-      toast.success('Team created')
+      toast.success(t('admin:teams.created'))
       setDialogOpen(false)
       setForm({ name: '', clubName: '' })
       await load()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create team')
+      toast.error(error instanceof Error ? error.message : t('admin:teams.createFailed'))
     } finally {
       setSaving(false)
     }
@@ -72,30 +74,30 @@ export function TeamsPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Teams</h1>
-          <p className="text-muted-foreground">Teams athletes can join during registration</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t('admin:teams.title')}</h1>
+          <p className="text-muted-foreground">{t('admin:teams.description')}</p>
         </div>
         {canManageTeams && (
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            New team
+            {t('admin:teams.new')}
           </Button>
         )}
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Registered teams</CardTitle>
-          <CardDescription>Team membership is managed at registration.</CardDescription>
+          <CardTitle className="text-base">{t('admin:teams.registered')}</CardTitle>
+          <CardDescription>{t('admin:teams.membershipNote')}</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Club</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Members</TableHead>
+                <TableHead>{t('admin:teams.name')}</TableHead>
+                <TableHead>{t('admin:teams.club')}</TableHead>
+                <TableHead>{t('admin:teams.status')}</TableHead>
+                <TableHead>{t('admin:teams.members')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -117,7 +119,7 @@ export function TeamsPage() {
               {!loading && teams.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={4} className="text-sm text-muted-foreground">
-                    No teams registered.
+                    {t('admin:teams.empty')}
                   </TableCell>
                 </TableRow>
               )}
@@ -128,14 +130,14 @@ export function TeamsPage() {
 
       {canManageTeams && <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>New team</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('admin:teams.new')}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
-            <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
-            <div><Label>Club</Label><Input value={form.clubName} onChange={(e) => setForm((f) => ({ ...f, clubName: e.target.value }))} /></div>
+            <div><Label htmlFor="team-name">{t('admin:teams.name')}</Label><Input id="team-name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
+            <div><Label htmlFor="team-club">{t('admin:teams.club')}</Label><Input id="team-club" value={form.clubName} onChange={(e) => setForm((f) => ({ ...f, clubName: e.target.value }))} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
-            <Button onClick={() => void handleCreate()} disabled={saving}>{saving ? 'Creating…' : 'Create'}</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>{t('admin:teams.cancel')}</Button>
+            <Button onClick={() => void handleCreate()} disabled={saving}>{saving ? t('admin:teams.creating') : t('admin:teams.create')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>}

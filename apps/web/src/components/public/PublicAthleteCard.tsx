@@ -3,6 +3,8 @@ import { ArrowUpRight, Gauge, MapPinned, Timer } from 'lucide-react'
 import type { PublicAthleteSummary } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
+import { formatTime } from '@/lib/format'
 
 interface PublicAthleteCardProps {
   athlete: PublicAthleteSummary
@@ -15,7 +17,7 @@ function formatPredictedFinish(value?: string) {
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return value
 
-  return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return formatTime(parsed)
 }
 
 function statusTone(status: string) {
@@ -33,6 +35,7 @@ function statusTone(status: string) {
 }
 
 export function PublicAthleteCard({ athlete, raceId }: PublicAthleteCardProps) {
+  const { t } = useTranslation()
   return (
     <Link
       to={`/race/${raceId}/athlete/${athlete.participantId}`}
@@ -60,15 +63,15 @@ export function PublicAthleteCard({ athlete, raceId }: PublicAthleteCardProps) {
         <div className="rounded-2xl bg-slate-100 p-3">
           <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
             <MapPinned className="h-3 w-3 text-cyan-600" />
-            Last Checkpoint
+            {t('publicRace:athlete.lastCheckpoint')}
           </p>
-          <p className="mt-1 truncate font-bold text-slate-900">{athlete.lastCheckpoint || 'Awaiting start'}</p>
+          <p className="mt-1 truncate font-bold text-slate-900">{athlete.lastCheckpoint || t('publicRace:athlete.awaitingStart')}</p>
         </div>
 
         <div className="rounded-2xl bg-slate-100 p-3">
           <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
             <Timer className="h-3 w-3 text-amber-600" />
-            Elapsed
+            {t('publicRace:athlete.elapsed')}
           </p>
           <p className="mt-1 font-mono font-bold text-slate-900">{athlete.elapsedTime || '--:--:--'}</p>
         </div>
@@ -76,13 +79,13 @@ export function PublicAthleteCard({ athlete, raceId }: PublicAthleteCardProps) {
         <div className="rounded-2xl bg-slate-100 p-3">
           <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
             <Gauge className="h-3 w-3 text-emerald-600" />
-            Avg Pace
+            {t('publicRace:athlete.avgPace')}
           </p>
           <p className="mt-1 font-mono font-bold text-slate-900">{athlete.averagePace || '--'}</p>
         </div>
 
         <div className="rounded-2xl bg-slate-100 p-3">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Est Finish</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">{t('publicRace:athlete.estimatedFinish')}</p>
           <p className="mt-1 font-mono font-bold text-slate-900">{formatPredictedFinish(athlete.predictedFinishTime)}</p>
         </div>
       </div>

@@ -52,6 +52,7 @@ import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { getRaceNavigationForRole } from '@/config/adminNavigation'
+import { formatNumber, formatDate } from '@/lib/format'
 
 const statusColors: Record<RaceStatus, string> = {
   DRAFT: 'bg-muted text-muted-foreground',
@@ -62,17 +63,7 @@ const statusColors: Record<RaceStatus, string> = {
   CANCELLED: 'bg-destructive/20 text-destructive',
 }
 
-const raceTypeLabels: Record<RaceType, string> = {
-  MARATHON: 'Marathon',
-  HALF_MARATHON: 'Half Marathon',
-  ULTRA_MARATHON: 'Ultra Marathon',
-  '10K': '10K',
-  '5K': '5K',
-  TRAIL: 'Trail Run',
-  CYCLING: 'Cycling',
-  TRIATHLON: 'Triathlon',
-  OTHER: 'Other',
-}
+const RACE_TYPES: RaceType[] = ['MARATHON', 'HALF_MARATHON', 'ULTRA_MARATHON', '10K', '5K', 'TRAIL', 'CYCLING', 'TRIATHLON', 'OTHER']
 
 export function RacesPage() {
   const navigate = useNavigate()
@@ -120,7 +111,7 @@ export function RacesPage() {
       setRaces(data)
     } catch {
       setHasLoadError(true)
-      toast.error('Failed to load races')
+      toast.error(t('admin:races.toasts.loadFailed'))
     } finally {
       setIsLoading(false)
     }
@@ -169,7 +160,7 @@ export function RacesPage() {
         bibTemplate: newRace.bibTemplate || undefined,
         bibAccentColor: newRace.bibAccentColor || undefined,
       })
-      toast.success('Race created')
+      toast.success(t('admin:races.toasts.created'))
       setIsCreateDialogOpen(false)
       setNewRace({
         name: '',
@@ -194,37 +185,37 @@ export function RacesPage() {
       })
       await loadRaces()
     } catch {
-      toast.error('Failed to create race')
+      toast.error(t('admin:races.toasts.createFailed'))
     }
   }
 
   const handleDelete = async (id: string) => {
     try {
       await racesApi.delete(id)
-      toast.success('Race deleted')
+      toast.success(t('admin:races.toasts.deleted'))
       await loadRaces()
     } catch {
-      toast.error('Failed to delete race')
+      toast.error(t('admin:races.toasts.deleteFailed'))
     }
   }
 
   const handleArchive = async (id: string) => {
     try {
       await racesApi.archive(id)
-      toast.success('Race archived')
+      toast.success(t('admin:races.toasts.archived'))
       await loadRaces()
     } catch {
-      toast.error('Failed to archive race')
+      toast.error(t('admin:races.toasts.archiveFailed'))
     }
   }
 
   const handleRestore = async (id: string) => {
     try {
       await racesApi.restore(id)
-      toast.success('Race restored')
+      toast.success(t('admin:races.toasts.restored'))
       await loadRaces()
     } catch {
-      toast.error('Failed to restore race')
+      toast.error(t('admin:races.toasts.restoreFailed'))
     }
   }
 
@@ -242,12 +233,12 @@ export function RacesPage() {
         name: cloneName,
         raceDate: cloneDate || undefined,
       })
-      toast.success('Race cloned')
+      toast.success(t('admin:races.toasts.cloned'))
       setIsCloneDialogOpen(false)
       setCloneSource(null)
       await loadRaces()
     } catch {
-      toast.error('Failed to clone race')
+      toast.error(t('admin:races.toasts.cloneFailed'))
     }
   }
 
@@ -263,7 +254,7 @@ export function RacesPage() {
         {canManageRaces && (
           <Button onClick={() => setIsCreateDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            Create Race
+            {t('admin:races.create')}
           </Button>
         )}
       </div>
@@ -286,7 +277,8 @@ export function RacesPage() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search races..."
+            placeholder={t('admin:races.searchPlaceholder')}
+              aria-label={t('admin:races.searchPlaceholder')}
             className="pl-10"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -295,16 +287,16 @@ export function RacesPage() {
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[180px]">
             <Filter className="mr-2 h-4 w-4" />
-            <SelectValue placeholder="Filter by status" />
+            <SelectValue placeholder={t('admin:races.filterStatus')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="DRAFT">Draft</SelectItem>
-            <SelectItem value="REGISTRATION_OPEN">Registration Open</SelectItem>
-            <SelectItem value="REGISTRATION_CLOSED">Registration Closed</SelectItem>
-            <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-            <SelectItem value="COMPLETED">Completed</SelectItem>
-            <SelectItem value="CANCELLED">Cancelled</SelectItem>
+            <SelectItem value="all">{t('admin:races.allStatuses')}</SelectItem>
+            <SelectItem value="DRAFT">{t('admin:races.status.DRAFT')}</SelectItem>
+            <SelectItem value="REGISTRATION_OPEN">{t('admin:races.status.REGISTRATION_OPEN')}</SelectItem>
+            <SelectItem value="REGISTRATION_CLOSED">{t('admin:races.status.REGISTRATION_CLOSED')}</SelectItem>
+            <SelectItem value="IN_PROGRESS">{t('admin:races.status.IN_PROGRESS')}</SelectItem>
+            <SelectItem value="COMPLETED">{t('admin:races.status.COMPLETED')}</SelectItem>
+            <SelectItem value="CANCELLED">{t('admin:races.status.CANCELLED')}</SelectItem>
           </SelectContent>
         </Select>
         <Button
@@ -312,7 +304,7 @@ export function RacesPage() {
           onClick={() => setShowArchived((value) => !value)}
         >
           <Archive className="mr-2 h-4 w-4" />
-          {showArchived ? 'Hide Archived' : 'Show Archived'}
+          {showArchived ? t('admin:races.hideArchived') : t('admin:races.showArchived')}
         </Button>
       </div>
 
@@ -339,7 +331,7 @@ export function RacesPage() {
                   <div>
                     <CardTitle className="text-base line-clamp-1">{race.name}</CardTitle>
                     <CardDescription className="text-xs">
-                      {raceTypeLabels[race.raceType]} - {race.distanceKm ?? '-'}km
+                      {t('admin:races.typeAndDistance', { type: t(`admin:races.types.${race.raceType}`), distance: race.distanceKm != null ? formatNumber(race.distanceKm, { maximumFractionDigits: 1 }) : '-' })}
                     </CardDescription>
                   </div>
                 </div>
@@ -353,27 +345,27 @@ export function RacesPage() {
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/admin/races/${race.id}`) }}>
                         <Eye className="mr-2 h-4 w-4" />
-                        View Details
+                        {t('admin:races.viewDetails')}
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openCloneDialog(race) }}>
                         <Copy className="mr-2 h-4 w-4" />
-                        Clone
+                        {t('admin:races.clone')}
                       </DropdownMenuItem>
                       {race.archivedAt ? (
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void handleRestore(race.id) }}>
                           <ArchiveRestore className="mr-2 h-4 w-4" />
-                          Restore
+                          {t('admin:races.restore')}
                         </DropdownMenuItem>
                       ) : (
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void handleArchive(race.id) }}>
                           <Archive className="mr-2 h-4 w-4" />
-                          Archive
+                          {t('admin:races.archive')}
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void handleDelete(race.id) }} className="text-destructive">
                         <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
+                        {t('admin:races.delete')}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -390,15 +382,15 @@ export function RacesPage() {
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
-                  <span>{new Date(race.raceDate).toLocaleDateString()}</span>
+                  <span>{formatDate(race.raceDate)}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Users className="h-3 w-3" />
-                  <span>{race.participantCount?.toLocaleString() || 0}</span>
+                  <span>{formatNumber(race.participantCount ?? 0)}</span>
                 </div>
               </div>
               <div className="flex items-center justify-between pt-2">
-                <Badge className={statusColors[race.status]}>{race.status.replace('_', ' ')}</Badge>
+                <Badge className={statusColors[race.status]}>{t(`admin:races.status.${race.status}`)}</Badge>
               </div>
             </CardContent>
           </Card>
@@ -451,84 +443,84 @@ export function RacesPage() {
       {canManageRaces && <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create Race</DialogTitle>
-            <DialogDescription>Add a new race event.</DialogDescription>
+            <DialogTitle>{t('admin:races.createTitle')}</DialogTitle>
+            <DialogDescription>{t('admin:races.createDescription')}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div>
-              <Label>Name</Label>
+              <Label>{t('admin:races.fields.name')}</Label>
               <Input value={newRace.name} onChange={(e) => setNewRace((v) => ({ ...v, name: e.target.value }))} />
             </div>
             <div>
-              <Label>Description</Label>
+              <Label>{t('admin:races.fields.description')}</Label>
               <Textarea value={newRace.description} onChange={(e) => setNewRace((v) => ({ ...v, description: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Type</Label>
+                <Label>{t('admin:races.fields.type')}</Label>
                 <Select value={newRace.raceType} onValueChange={(value) => setNewRace((v) => ({ ...v, raceType: value as RaceType }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.keys(raceTypeLabels).map((type) => (
-                      <SelectItem key={type} value={type}>{raceTypeLabels[type as RaceType]}</SelectItem>
+                    {RACE_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>{t(`admin:races.types.${type}`)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Race Date</Label>
+                <Label>{t('admin:races.fields.raceDate')}</Label>
                 <Input type="date" value={newRace.raceDate} onChange={(e) => setNewRace((v) => ({ ...v, raceDate: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>City</Label>
+                <Label>{t('admin:races.fields.city')}</Label>
                 <Input value={newRace.city} onChange={(e) => setNewRace((v) => ({ ...v, city: e.target.value }))} />
               </div>
               <div>
-                <Label>Country</Label>
+                <Label>{t('admin:races.fields.country')}</Label>
                 <Input value={newRace.country} onChange={(e) => setNewRace((v) => ({ ...v, country: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Distance (km)</Label>
+                <Label>{t('admin:races.fields.distance')}</Label>
                 <Input type="number" value={newRace.distanceKm} onChange={(e) => setNewRace((v) => ({ ...v, distanceKm: e.target.value }))} />
               </div>
               <div>
-                <Label>Max Participants</Label>
+                <Label>{t('admin:races.fields.maxParticipants')}</Label>
                 <Input type="number" value={newRace.maxParticipants} onChange={(e) => setNewRace((v) => ({ ...v, maxParticipants: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Timezone</Label>
-                <Input value={newRace.timezone} onChange={(e) => setNewRace((v) => ({ ...v, timezone: e.target.value }))} placeholder="Africa/Johannesburg" />
+                <Label>{t('admin:races.fields.timezone')}</Label>
+                <Input value={newRace.timezone} onChange={(e) => setNewRace((v) => ({ ...v, timezone: e.target.value }))} placeholder={t('admin:races.fields.timezonePlaceholder')} />
               </div>
               <div>
-                <Label>Poster URL</Label>
+                <Label>{t('admin:races.fields.posterUrl')}</Label>
                 <Input value={newRace.posterUrl} onChange={(e) => setNewRace((v) => ({ ...v, posterUrl: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>Registration Fee</Label><Input type="number" value={newRace.registrationFee} onChange={(e) => setNewRace((v) => ({ ...v, registrationFee: e.target.value }))} /></div>
-              <div><Label>Early Bird Fee</Label><Input type="number" value={newRace.earlyBirdFee} onChange={(e) => setNewRace((v) => ({ ...v, earlyBirdFee: e.target.value }))} /></div>
-              <div><Label>Team Fee</Label><Input type="number" value={newRace.teamFee} onChange={(e) => setNewRace((v) => ({ ...v, teamFee: e.target.value }))} /></div>
+              <div><Label>{t('admin:races.fields.registrationFee')}</Label><Input type="number" value={newRace.registrationFee} onChange={(e) => setNewRace((v) => ({ ...v, registrationFee: e.target.value }))} /></div>
+              <div><Label>{t('admin:races.fields.earlyBirdFee')}</Label><Input type="number" value={newRace.earlyBirdFee} onChange={(e) => setNewRace((v) => ({ ...v, earlyBirdFee: e.target.value }))} /></div>
+              <div><Label>{t('admin:races.fields.teamFee')}</Label><Input type="number" value={newRace.teamFee} onChange={(e) => setNewRace((v) => ({ ...v, teamFee: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Early Bird Ends</Label><Input type="datetime-local" value={newRace.earlyBirdEndsAt} onChange={(e) => setNewRace((v) => ({ ...v, earlyBirdEndsAt: e.target.value }))} /></div>
-              <div><Label>Bib Prefix</Label><Input value={newRace.bibPrefix} onChange={(e) => setNewRace((v) => ({ ...v, bibPrefix: e.target.value }))} /></div>
+              <div><Label>{t('admin:races.fields.earlyBirdEnds')}</Label><Input type="datetime-local" value={newRace.earlyBirdEndsAt} onChange={(e) => setNewRace((v) => ({ ...v, earlyBirdEndsAt: e.target.value }))} /></div>
+              <div><Label>{t('admin:races.fields.bibPrefix')}</Label><Input value={newRace.bibPrefix} onChange={(e) => setNewRace((v) => ({ ...v, bibPrefix: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-4 gap-3">
-              <div><Label>Bib Width</Label><Input type="number" value={newRace.bibWidth} onChange={(e) => setNewRace((v) => ({ ...v, bibWidth: e.target.value }))} /></div>
-              <div><Label>Medal Places</Label><Input type="number" value={newRace.medalPlaces} onChange={(e) => setNewRace((v) => ({ ...v, medalPlaces: e.target.value }))} /></div>
-              <div><Label>Bib Template</Label><Input value={newRace.bibTemplate} onChange={(e) => setNewRace((v) => ({ ...v, bibTemplate: e.target.value }))} /></div>
-              <div><Label>Bib Color</Label><Input type="color" value={newRace.bibAccentColor} onChange={(e) => setNewRace((v) => ({ ...v, bibAccentColor: e.target.value }))} /></div>
+              <div><Label>{t('admin:races.fields.bibWidth')}</Label><Input type="number" value={newRace.bibWidth} onChange={(e) => setNewRace((v) => ({ ...v, bibWidth: e.target.value }))} /></div>
+              <div><Label>{t('admin:races.fields.medalPlaces')}</Label><Input type="number" value={newRace.medalPlaces} onChange={(e) => setNewRace((v) => ({ ...v, medalPlaces: e.target.value }))} /></div>
+              <div><Label>{t('admin:races.fields.bibTemplate')}</Label><Input value={newRace.bibTemplate} onChange={(e) => setNewRace((v) => ({ ...v, bibTemplate: e.target.value }))} /></div>
+              <div><Label>{t('admin:races.fields.bibColor')}</Label><Input type="color" value={newRace.bibAccentColor} onChange={(e) => setNewRace((v) => ({ ...v, bibAccentColor: e.target.value }))} /></div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => void handleCreateRace()}>Create</Button>
+            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>{t('admin:races.cancel')}</Button>
+            <Button onClick={() => void handleCreateRace()}>{t('admin:races.submitCreate')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>}
@@ -536,24 +528,24 @@ export function RacesPage() {
       {canManageRaces && <Dialog open={isCloneDialogOpen} onOpenChange={setIsCloneDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Clone Race</DialogTitle>
+            <DialogTitle>{t('admin:races.cloneTitle')}</DialogTitle>
             <DialogDescription>
-              Copy categories, checkpoints, and registration fields from {cloneSource?.name ?? 'the selected race'}.
+              {t('admin:races.cloneDescription', { name: cloneSource?.name ?? t('admin:races.selectedRace') })}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div>
-              <Label>New Name</Label>
+              <Label>{t('admin:races.fields.newName')}</Label>
               <Input value={cloneName} onChange={(e) => setCloneName(e.target.value)} />
             </div>
             <div>
-              <Label>Race Date</Label>
+              <Label>{t('admin:races.fields.raceDate')}</Label>
               <Input type="date" value={cloneDate} onChange={(e) => setCloneDate(e.target.value)} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCloneDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => void handleCloneRace()} disabled={!cloneName.trim()}>Clone</Button>
+            <Button variant="outline" onClick={() => setIsCloneDialogOpen(false)}>{t('admin:races.cancel')}</Button>
+            <Button onClick={() => void handleCloneRace()} disabled={!cloneName.trim()}>{t('admin:races.clone')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>}

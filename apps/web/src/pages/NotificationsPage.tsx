@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTranslation } from 'react-i18next'
+import { formatDateTime } from '@/lib/format'
 
 type SessionSnapshot = {
   userId: string | null
@@ -15,6 +17,7 @@ type SessionSnapshot = {
 }
 
 export function NotificationsPage() {
+  const { t } = useTranslation()
   const { user, getSessionGeneration } = useAuth()
   const userId = user?.id ?? null
   const sessionGeneration = getSessionGeneration()
@@ -42,7 +45,7 @@ export function NotificationsPage() {
       const nextNotifications = await notificationsApi.list()
       if (isCurrentSession()) setNotifications(nextNotifications)
     } catch {
-      if (isCurrentSession()) toast.error('Failed to load notifications')
+      if (isCurrentSession()) toast.error(t('admin:notifications.loadFailed'))
     } finally {
       if (isCurrentSession()) {
         setLoading(false)
@@ -69,7 +72,7 @@ export function NotificationsPage() {
         setNotifications((current) => current.map((item) => (item.id === updated.id ? updated : item)))
       }
     } catch {
-      if (isCurrentSession()) toast.error('Failed to mark notification as read')
+      if (isCurrentSession()) toast.error(t('admin:notifications.markFailed'))
     }
   }
 
@@ -80,12 +83,12 @@ export function NotificationsPage() {
           <Button asChild variant="ghost" className="-ml-2 text-muted-foreground">
             <Link to="/">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
+              {t('admin:notifications.back')}
             </Link>
           </Button>
           <Button variant="outline" size="sm" onClick={() => void load('refresh')} disabled={refreshing}>
             <RefreshCcw className={cn('mr-2 h-4 w-4', refreshing && 'animate-spin')} />
-            Refresh
+            {t('admin:notifications.refresh')}
           </Button>
         </div>
 
@@ -94,8 +97,8 @@ export function NotificationsPage() {
             <Bell className="h-6 w-6" />
           </span>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
-            <p className="text-sm text-muted-foreground">Your race alerts and account updates</p>
+            <h1 className="text-2xl font-bold text-foreground">{t('admin:notifications.title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('admin:notifications.description')}</p>
           </div>
         </div>
 
@@ -107,7 +110,7 @@ export function NotificationsPage() {
           </div>
         ) : notifications.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-16 text-center text-sm text-muted-foreground">
-            No notifications yet.
+            {t('admin:notifications.empty')}
           </div>
         ) : (
           <ul className="space-y-3">
@@ -136,7 +139,7 @@ export function NotificationsPage() {
                     <span className="mt-1 block text-sm text-muted-foreground">{notification.message}</span>
                     {notification.timestamp && (
                       <span className="mt-1 block text-xs text-muted-foreground">
-                        {new Date(notification.timestamp).toLocaleString()}
+                        {formatDateTime(notification.timestamp)}
                       </span>
                     )}
                   </span>

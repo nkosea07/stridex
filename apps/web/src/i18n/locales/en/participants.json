@@ -91,5 +91,30 @@
     "searchByNameEmailOrBib": "Search by name, email, or bib...",
     "filterByStatus": "Filter by status",
     "select": "Select"
+  },
+  "penalties": {
+    "save": "Save",
+    "saving": "Saving…",
+    "title": "Time penalties — {{name}}",
+    "seconds_one": "{{count}} s",
+    "seconds_other": "{{count}} s",
+    "add": "Add penalty",
+    "adding": "Adding…"
+  },
+  "review": {
+    "rejectReasonPrompt": "Reason for rejection (optional)",
+    "done": {
+      "APPROVE": "Registration approved",
+      "REJECT": "Registration rejected",
+      "WAITLIST": "Registration waitlisted"
+    },
+    "failed": "Failed to update registration"
+  },
+  "payment": {
+    "promoPrompt": "Promo code (optional)",
+    "failed": "Failed to start payment"
+  },
+  "edit": {
+    "failed": "Failed to update participant"
   }
 }
