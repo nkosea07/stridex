@@ -18,6 +18,7 @@ import type {
   ResultQuery,
   PublicAthleteSummary,
   PublicRaceMedia,
+  HeatCell,
   NotificationPreferences,
   ConsentState,
   PersonalBest,
@@ -34,7 +35,8 @@ import type {
   UserRole,
 } from '@/types';
 import { normalizeUser } from './capabilities';
-import { toCoordinates, type Coordinate, type TrackPoint } from './routeGeometry';
+import { isValidCoordinate, toCoordinates, type Coordinate, type TrackPoint } from './routeGeometry';
+import { getInstallId } from './installId';
 import { API_CONTRACT, getVersionedApiBase } from '@race-tracker/contracts';
 
 const API_ROOT = process.env.EXPO_PUBLIC_API_URL || API_CONTRACT.mobile.defaultApiRoot;
@@ -391,6 +393,14 @@ function parsePublicAthletes(value: unknown): PublicAthleteSummary[] {
     }) as PublicAthleteSummary);
 }
 
+export function parseHeatCells(value: unknown, limit: number): HeatCell[] {
+  return parseRecordArray<Record<string, unknown>>(value, 'Race heatmap response was malformed.')
+    .map((cell) => ({ latitude: Number(cell.latitude), longitude: Number(cell.longitude), weight: Number(cell.weight) }))
+    .filter((cell) => isValidCoordinate(cell) && Number.isFinite(cell.weight) && cell.weight > 0)
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, limit);
+}
+
 export function parsePublicRaceMedia(value: unknown): PublicRaceMedia[] {
   return parseRecordArray<Record<string, unknown>>(value, 'Race media response was malformed.')
     .flatMap((item) => {
@@ -548,8 +558,10 @@ class ApiClient {
         await AsyncStorage.removeItem('auth_token');
       }
     }
+    const installId = await getInstallId();
     return {
       'Content-Type': 'application/json',
+      [API_CONTRACT.headers.publicClientId]: installId,
       ...(appIdentity.version ? { 'X-App-Version': appIdentity.version } : {}),
       ...(appIdentity.platform ? { 'X-App-Platform': appIdentity.platform } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -1055,6 +1067,17 @@ class ApiClient {
     }, false);
   }
 
+  async verifyEmail(token: string): Promise<void> {
+    await this.request(`${API_CONTRACT.endpoints.authVerifyEmail}?token=${encodeURIComponent(token)}`, {}, false);
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    await this.request(API_CONTRACT.endpoints.authResetPassword, {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
+    }, false);
+  }
+
   async resendVerification(email: string): Promise<void> {
     await this.request(API_CONTRACT.endpoints.authResendVerification, {
       method: 'POST',
@@ -1092,6 +1115,11 @@ class ApiClient {
     return parsePublicRaceMedia(await this.request<unknown>(
       buildContractPath(API_CONTRACT.endpoints.publicRaceMedia, { raceId }),
     ));
+  }
+
+  async getRaceHeatmap(raceId: string, since: Date, limit: number): Promise<HeatCell[]> {
+    const path = buildContractPath(API_CONTRACT.endpoints.publicRaceHeatmap, { raceId });
+    return parseHeatCells(await this.request<unknown>(`${path}?from=${encodeURIComponent(since.toISOString())}`), limit);
   }
 
   async getPublicRaceRoute(raceId: string): Promise<Coordinate[]> {

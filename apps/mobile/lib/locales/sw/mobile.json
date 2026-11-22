@@ -685,7 +685,8 @@
     "openHint": "Ona nani anaongoza na umtafute mwanariadha yeyote kwa jina au namba.",
     "tabs": {
       "leaderboard": "Msimamo",
-      "search": "Tafuta mwanariadha"
+      "search": "Tafuta mwanariadha",
+      "map": "Ramani"
     },
     "loading": "Inapakia msimamo",
     "leaderboardHelp": "Wanariadha ambao bado wako kwenye njia, wamepangwa kwa umbali waliokwisha kukimbia. Waliomaliza wanaonekana kwenye matokeo.",
@@ -701,7 +702,16 @@
     "followName": "Mfuatilie {{name}}",
     "unfollowName": "Acha kumfuatilia {{name}}",
     "followFailedTitle": "Haijahifadhiwa",
-    "followFailed": "Ufuatiliaji haukuweza kusasishwa. Tafadhali jaribu tena."
+    "followFailed": "Ufuatiliaji haukuweza kusasishwa. Tafadhali jaribu tena.",
+    "mapLabel": "Ramani ya njia ya mbio inayoonyesha wanariadha walipo na wanariadha unaowafuatilia",
+    "mapDensity": "Maeneo yenye kivuli yanaonyesha wanariadha walipopita katika dakika {{minutes}} zilizopita. Maeneo ya mtu mmoja mmoja yanaonyeshwa tu kwa wanariadha unaowafuatilia.",
+    "mapEmpty": "Ramani itaonekana njia au maeneo ya wanariadha yakipatikana.",
+    "mapFollowedTitle": "Wanariadha unaowafuatilia",
+    "mapFollowHint": "Fuatilia wanariadha kutoka kwenye orodha ya wanaoongoza au utafutaji ili uwaone kwenye ramani.",
+    "mapNoPosition": "Hakuna eneo la hivi karibuni",
+    "mapOnMap": "Kwenye ramani",
+    "mapFollowedLimit": "Inaonyesha {{shown}} kati ya wanariadha {{total}} unaowafuatilia katika mbio hizi.",
+    "mapLoadFailed": "Ramani haikuweza kusasishwa. Gusa ili ujaribu tena."
   },
   "gallery": {
     "title": "Picha za mbio",
@@ -719,5 +729,23 @@
     "video": "Video",
     "imageFailed": "Picha hii haikuweza kupakiwa.",
     "close": "Funga"
+  },
+  "authLinks": {
+    "verifyTitle": "Thibitisha barua pepe yako",
+    "verifying": "Inathibitisha barua pepe yako…",
+    "verified": "Barua pepe yako imethibitishwa. Sasa unaweza kuingia.",
+    "verifyInvalid": "Kiungo hiki cha uthibitisho si sahihi, kimeisha muda au kimeshatumika. Ingia ili ujitumie kipya ikiwa bado unakihitaji.",
+    "resetTitle": "Chagua nenosiri jipya",
+    "resetIntro": "Tumia angalau herufi {{min}}. Utaondolewa kwenye vifaa vingine.",
+    "newPassword": "Nenosiri jipya",
+    "confirmPassword": "Thibitisha nenosiri jipya",
+    "save": "Hifadhi nenosiri jipya",
+    "resetDone": "Nenosiri lako limebadilishwa. Ingia kwa nenosiri lako jipya.",
+    "resetInvalid": "Kiungo hiki cha kubadilisha nenosiri si sahihi, kimeisha muda au kimeshatumika. Omba kipya.",
+    "requestNewLink": "Omba kiungo kipya",
+    "tooShort": "Tumia angalau herufi {{min}}.",
+    "tooLong": "Usitumie zaidi ya herufi {{max}}.",
+    "mismatch": "Manenosiri hayalingani.",
+    "signIn": "Nenda kuingia"
   }
 }

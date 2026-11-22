@@ -96,7 +96,16 @@ Create a `.env` file:
 ```env
 EXPO_PUBLIC_API_URL=http://your-backend-url/api
 EXPO_PUBLIC_MAPBOX_TOKEN=your-mapbox-token
+EXPO_PUBLIC_WEB_URL=https://race.example.com
 ```
+
+### Email links in the app
+
+`app.config.js` reads `EXPO_PUBLIC_WEB_URL` at build time. When it is an HTTPS URL, the build declares an iOS associated domain and Android verified app links for `/verify-email` and `/reset-password`, so links in verification and password-reset emails open the in-app screens (`app/verify-email.tsx`, `app/reset-password.tsx`). The web server must publish the matching `/.well-known` files (see `APP_LINKS_*` in `.env.pilot.example`); otherwise the links keep opening the web pages. The `racetracker://verify-email?token=…` scheme also works for testing.
+
+### Public request identity
+
+The app sends a random install id (`X-Race-Tracker-Client`, from `API_CONTRACT.headers.publicClientId`) with every request. It is not tied to the account and is used only to rate-limit public spectator endpoints per install instead of per carrier IP address.
 
 ### App version gate
 

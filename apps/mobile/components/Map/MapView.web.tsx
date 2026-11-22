@@ -6,6 +6,7 @@ export const PROVIDER_DEFAULT = 'default';
 
 export const Marker: React.FC<any> = ({ children }) => <>{children}</>;
 export const Polyline: React.FC<any> = () => null;
+export const Circle: React.FC<any> = () => null;
 
 const MapView: React.FC<any> = ({ children, style }) => {
   const { t } = useTranslation();

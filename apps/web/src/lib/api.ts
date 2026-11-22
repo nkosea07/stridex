@@ -448,6 +448,21 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),
+
+  resetPassword: (token: string, newPassword: string) =>
+    fetchApi<{ message: string }>(API_CONTRACT.endpoints.authResetPassword, {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
+    }),
+
+  verifyEmail: (token: string) =>
+    fetchApi<{ message: string }>(buildContractPath(API_CONTRACT.endpoints.authVerifyEmail, {}, { token })),
+
+  resendVerification: (email: string) =>
+    fetchApi<{ message: string }>(API_CONTRACT.endpoints.authResendVerification, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
   
   logout: async () => {
     invalidateBrowserSession()

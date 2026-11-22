@@ -685,7 +685,8 @@
     "openHint": "Bona ukuthi ubani ohola futhi uthole noma yimuphi umgijimi ngegama noma ngenombolo.",
     "tabs": {
       "leaderboard": "Abaholayo",
-      "search": "Thola umgijimi"
+      "search": "Thola umgijimi",
+      "map": "Imephu"
     },
     "loading": "Ilayisha uhlu lwabaholayo",
     "leaderboardHelp": "Abagijimi abasesemzileni, behlelwe ngebanga abaseligijimile. Abaseqedile bavela emiphumeleni.",
@@ -701,7 +702,16 @@
     "followName": "Landela u-{{name}}",
     "unfollowName": "Yeka ukulandela u-{{name}}",
     "followFailedTitle": "Akulondolozwanga",
-    "followFailed": "Ukulandela akukwazanga ukubuyekezwa. Sicela uzame futhi."
+    "followFailed": "Ukulandela akukwazanga ukubuyekezwa. Sicela uzame futhi.",
+    "mapLabel": "Imephu yomzila womjaho ekhombisa lapho abagijimi bekhona nabagijimi obalandelayo",
+    "mapDensity": "Izindawo ezifiphele zikhombisa lapho abagijimi bebekhona emizuzwini engu-{{minutes}} edlule. Izindawo zomuntu ngamunye zikhonjiswa kuphela kubagijimi obalandelayo.",
+    "mapEmpty": "Imephu izovela uma umzila noma izindawo zabagijimi sezitholakala.",
+    "mapFollowedTitle": "Abagijimi obalandelayo",
+    "mapFollowHint": "Landela abagijimi ohlwini lwabahamba phambili noma ekusesheni ukuze ubabone emephini.",
+    "mapNoPosition": "Ayikho indawo yakamuva",
+    "mapOnMap": "Emephini",
+    "mapFollowedLimit": "Kukhonjiswa abangu-{{shown}} kwabangu-{{total}} obalandelayo kulo mjaho.",
+    "mapLoadFailed": "Imephu ayikwazanga ukubuyekezwa. Thepha ukuze uzame futhi."
   },
   "gallery": {
     "title": "Izithombe zomjaho",
@@ -719,5 +729,23 @@
     "video": "Ividiyo",
     "imageFailed": "Lesi sithombe asikwazanga ukulayishwa.",
     "close": "Vala"
+  },
+  "authLinks": {
+    "verifyTitle": "Qinisekisa i-imeyili yakho",
+    "verifying": "Iqinisekisa i-imeyili yakho…",
+    "verified": "I-imeyili yakho iqinisekisiwe. Manje ungangena.",
+    "verifyInvalid": "Lesi sixhumanisi sokuqinisekisa asivumelekile, siphelelwe yisikhathi noma sesisetshenzisiwe. Ngena ukuze uzithumelele esisha uma usasidinga.",
+    "resetTitle": "Khetha iphasiwedi entsha",
+    "resetIntro": "Sebenzisa okungenani izinhlamvu ezingu-{{min}}. Uzokhishwa kwamanye amadivayisi.",
+    "newPassword": "Iphasiwedi entsha",
+    "confirmPassword": "Qinisekisa iphasiwedi entsha",
+    "save": "Gcina iphasiwedi entsha",
+    "resetDone": "Iphasiwedi yakho ishintshiwe. Ngena ngephasiwedi yakho entsha.",
+    "resetInvalid": "Lesi sixhumanisi sokusetha kabusha asivumelekile, siphelelwe yisikhathi noma sesisetshenzisiwe. Cela esisha.",
+    "requestNewLink": "Cela isixhumanisi esisha",
+    "tooShort": "Sebenzisa okungenani izinhlamvu ezingu-{{min}}.",
+    "tooLong": "Ungasebenzisi izinhlamvu ezingaphezu kwezingu-{{max}}.",
+    "mismatch": "Amaphasiwedi awafani.",
+    "signIn": "Iya ekungeneni"
   }
 }

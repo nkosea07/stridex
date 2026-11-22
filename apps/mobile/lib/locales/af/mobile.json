@@ -685,7 +685,8 @@
     "openHint": "Sien wie voor is en vind enige atleet volgens naam of borsnommer.",
     "tabs": {
       "leaderboard": "Puntelys",
-      "search": "Vind atleet"
+      "search": "Vind atleet",
+      "map": "Kaart"
     },
     "loading": "Laai die puntelys",
     "leaderboardHelp": "Atlete wat nog op die roete is, gerangskik volgens afgelegde afstand. Atlete wat klaar is, verskyn in die uitslae.",
@@ -701,7 +702,16 @@
     "followName": "Volg {{name}}",
     "unfollowName": "Ontvolg {{name}}",
     "followFailedTitle": "Nie gestoor nie",
-    "followFailed": "Volging kon nie bygewerk word nie. Probeer asseblief weer."
+    "followFailed": "Volging kon nie bygewerk word nie. Probeer asseblief weer.",
+    "mapLabel": "Kaart van die roete wat wys waar hardlopers is en watter atlete jy volg",
+    "mapDensity": "Gekleurde areas wys waar hardlopers die afgelope {{minutes}} minute was. Individuele posisies word net gewys vir atlete wat jy volg.",
+    "mapEmpty": "Die kaart verskyn sodra die roete of hardlopers se posisies beskikbaar is.",
+    "mapFollowedTitle": "Atlete wat jy volg",
+    "mapFollowHint": "Volg atlete vanaf die puntelys of soektog om hulle op die kaart te sien.",
+    "mapNoPosition": "Geen onlangse posisie nie",
+    "mapOnMap": "Op die kaart",
+    "mapFollowedLimit": "Wys {{shown}} van die {{total}} atlete wat jy in hierdie wedloop volg.",
+    "mapLoadFailed": "Die kaart kon nie bygewerk word nie. Tik om weer te probeer."
   },
   "gallery": {
     "title": "Wedloopfoto's",
@@ -719,5 +729,23 @@
     "video": "Video",
     "imageFailed": "Hierdie foto kon nie gelaai word nie.",
     "close": "Maak toe"
+  },
+  "authLinks": {
+    "verifyTitle": "Verifieer jou e-pos",
+    "verifying": "Verifieer tans jou e-pos…",
+    "verified": "Jou e-pos is geverifieer. Jy kan nou aanmeld.",
+    "verifyInvalid": "Hierdie verifikasieskakel is ongeldig, verval of reeds gebruik. Meld aan om vir jouself 'n nuwe een te stuur as jy dit nog nodig het.",
+    "resetTitle": "Kies 'n nuwe wagwoord",
+    "resetIntro": "Gebruik ten minste {{min}} karakters. Jy sal op ander toestelle afgemeld word.",
+    "newPassword": "Nuwe wagwoord",
+    "confirmPassword": "Bevestig nuwe wagwoord",
+    "save": "Stoor nuwe wagwoord",
+    "resetDone": "Jou wagwoord is verander. Meld aan met jou nuwe wagwoord.",
+    "resetInvalid": "Hierdie herstelskakel is ongeldig, verval of reeds gebruik. Vra vir 'n nuwe een.",
+    "requestNewLink": "Vra vir 'n nuwe skakel",
+    "tooShort": "Gebruik ten minste {{min}} karakters.",
+    "tooLong": "Gebruik hoogstens {{max}} karakters.",
+    "mismatch": "Die wagwoorde stem nie ooreen nie.",
+    "signIn": "Gaan na aanmelding"
   }
 }

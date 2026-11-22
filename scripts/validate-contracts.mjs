@@ -13,6 +13,7 @@ const webApiPath = path.join(root, 'apps/web/src/lib/api.ts');
 const mobileApiPath = path.join(root, 'apps/mobile/lib/api.ts');
 const contractPackagePath = path.join(root, 'packages/contracts/index.js');
 const contractTypesPath = path.join(root, 'packages/contracts/index.d.ts');
+const backendPublicRequestLimiterPath = path.join(root, 'apps/backend/src/main/java/com/racetracker/security/PublicRequestLimiter.java');
 
 const requiredPublicEndpointKeys = [
   'publicRaceHub',
@@ -595,6 +596,24 @@ assert(
   contractPackage.includes(`apiVersion: ${contract.apiVersion}`),
   'packages/contracts/index.js apiVersion is out of sync with contract.json.',
 );
+const publicClientHeader = contract.headers?.publicClientId;
+assert(
+  typeof publicClientHeader === 'string' && /^X-[A-Za-z0-9-]+$/.test(publicClientHeader),
+  'contract.headers.publicClientId must be an X- prefixed header name.',
+);
+assert(
+  contractPackage.includes(`publicClientId: '${publicClientHeader}'`),
+  'packages/contracts/index.js headers.publicClientId is out of sync with contract.json.',
+);
+assert(
+  read(backendPublicRequestLimiterPath).includes(`CLIENT_HEADER = "${publicClientHeader}"`),
+  'PublicRequestLimiter.CLIENT_HEADER is out of sync with contract.headers.publicClientId.',
+);
+assert(
+  mobileApi.includes('API_CONTRACT.headers.publicClientId'),
+  'apps/mobile/lib/api.ts must send the public client header from API_CONTRACT.headers.publicClientId.',
+);
+
 assert(
   contractPackage.includes(`apiBasePath: '${contract.web.apiBasePath}'`),
   'packages/contracts/index.js web.apiBasePath is out of sync with contract.json.',

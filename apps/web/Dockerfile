@@ -17,5 +17,6 @@ RUN apk upgrade --no-cache \
     && chmod -R g+w /var/cache/nginx /etc/nginx
 USER 101
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --chmod=0755 apps/web/docker/40-app-links.sh /docker-entrypoint.d/40-app-links.sh
 COPY --from=build /workspace/apps/web/dist/client /usr/share/nginx/html
 EXPOSE 8080

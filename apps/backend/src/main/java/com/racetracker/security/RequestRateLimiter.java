@@ -107,9 +107,17 @@ public class RequestRateLimiter {
         check("rfid", buckets);
     }
 
-    public void checkPublicTracking(String raceId, String ipAddress) {
+    public void checkPublicTracking(String raceId, String ipAddress, String clientKey,
+                                    int perClientPerMinute, int perAddressPerMinute) {
+        if (clientKey == null || clientKey.isBlank()) {
+            check("public_tracking", List.of(
+                bucket("public-tracking", hash(raceId + ":" + ipAddress), perClientPerMinute, 60)
+            ));
+            return;
+        }
         check("public_tracking", List.of(
-            bucket("public-tracking", hash(raceId + ":" + ipAddress), 120, 60)
+            bucket("public-tracking:client", hash(raceId + ":" + clientKey), perClientPerMinute, 60),
+            bucket("public-tracking:address", hash(raceId + ":" + ipAddress), perAddressPerMinute, 60)
         ));
     }
 

@@ -3,9 +3,8 @@ package com.racetracker.controller;
 import com.racetracker.exception.GlobalExceptionHandler;
 import com.racetracker.exception.ResourceNotFoundException;
 import com.racetracker.security.CertificateTokenService;
-import com.racetracker.security.ClientAddressResolver;
 import com.racetracker.security.RaceAccessGuard;
-import com.racetracker.security.RequestRateLimiter;
+import com.racetracker.security.PublicRequestLimiter;
 import com.racetracker.service.AuditEventService;
 import com.racetracker.service.CertificateService;
 import com.racetracker.service.MediaService;
@@ -52,14 +51,13 @@ class PublicRaceVisibilityControllerTest {
     void setUp() {
         RaceAccessGuard accessGuard = mock(RaceAccessGuard.class);
         AuditEventService auditEvents = mock(AuditEventService.class);
-        RequestRateLimiter rateLimiter = mock(RequestRateLimiter.class);
-        ClientAddressResolver addressResolver = mock(ClientAddressResolver.class);
+        PublicRequestLimiter publicLimiter = mock(PublicRequestLimiter.class);
         mvc = MockMvcBuilders.standaloneSetup(
                 new RaceRouteController(routeService, accessGuard, visibility),
                 new MediaController(mediaService, auditEvents, accessGuard, visibility),
                 new PublicTrackingController(mock(PublicTrackingService.class), participantService,
-                    visibility, rateLimiter, addressResolver),
-                new ResultController(resultService, auditEvents, rateLimiter, addressResolver,
+                    visibility, publicLimiter),
+                new ResultController(resultService, auditEvents, publicLimiter,
                     mock(ResultExportService.class), certificateService, mock(CertificateTokenService.class),
                     mock(RankingService.class), accessGuard, visibility,
                     mock(com.racetracker.service.impl.TimingAnomalyService.class),
