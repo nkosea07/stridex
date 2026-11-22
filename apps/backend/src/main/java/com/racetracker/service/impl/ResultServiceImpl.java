@@ -469,12 +469,11 @@ public class ResultServiceImpl implements ResultService {
         for (RaceResultRowProjection projection : projections) {
             Participant participant = participantById.get(projection.getParticipantId());
             if (participant == null || participant.getRace() == null) continue;
-            ResultComputation computed = computeResult(
+            RaceResultDto dto = computeResult(
                 participant.getRace(), participant,
                 recordsByParticipant.getOrDefault(participant.getId(), List.of()),
                 penaltySecondsByParticipant.getOrDefault(participant.getId(), 0)
             );
-            RaceResultDto dto = computed.dto();
             dto.setOverallPosition(toPosition(projection.getOverallPosition()));
             dto.setGenderPosition(toPosition(projection.getGenderPosition()));
             dto.setCategoryPosition(toPosition(projection.getCategoryPosition()));
@@ -504,12 +503,11 @@ public class ResultServiceImpl implements ResultService {
             Participant participant = row.getParticipant();
             if (participant == null || participant.getRace() == null) continue;
             int penaltySeconds = row.getPenaltySeconds() == null ? 0 : row.getPenaltySeconds();
-            ResultComputation computed = computeResult(
+            RaceResultDto dto = computeResult(
                 participant.getRace(), participant,
                 recordsByParticipant.getOrDefault(participant.getId(), List.of()),
                 penaltySeconds
             );
-            RaceResultDto dto = computed.dto();
             applyPersistedSnapshot(dto, row);
             results.add(dto);
         }
@@ -575,7 +573,7 @@ public class ResultServiceImpl implements ResultService {
         return overallPosition <= places ? "QUALIFIED" : "NOT_QUALIFIED";
     }
 
-    private ResultComputation computeResult(Race race, Participant participant, List<CheckpointRecord> records, int penaltySeconds) {
+    private RaceResultDto computeResult(Race race, Participant participant, List<CheckpointRecord> records, int penaltySeconds) {
 
         RaceResultDto dto = new RaceResultDto();
         dto.setId(participant.getId());
@@ -635,8 +633,7 @@ public class ResultServiceImpl implements ResultService {
             }
         }
 
-        Long finishSeconds = duration != null ? duration.toSeconds() : null;
-        return new ResultComputation(dto, finishSeconds);
+        return dto;
     }
 
     private OffsetDateTime effectiveTime(CheckpointRecord record) {
@@ -751,5 +748,4 @@ public class ResultServiceImpl implements ResultService {
             .orElseThrow(() -> new UnauthorizedException("Unauthorized"));
     }
 
-    private record ResultComputation(RaceResultDto dto, Long finishSeconds) {}
 }

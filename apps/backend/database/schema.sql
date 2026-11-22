@@ -32,13 +32,6 @@ CREATE TABLE users (
                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE refresh_tokens (
-                                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-                                token VARCHAR(500) UNIQUE NOT NULL,
-                                expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
 
 CREATE TYPE auth_token_type AS ENUM ('EMAIL_VERIFICATION', 'PASSWORD_RESET', 'REFRESH');
 
@@ -489,29 +482,7 @@ CREATE TABLE notifications (
                                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE email_templates (
-                                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                 race_id UUID REFERENCES races(id) ON DELETE CASCADE,
-                                 notification_type notification_type NOT NULL,
-                                 subject VARCHAR(255) NOT NULL,
-                                 body_html TEXT NOT NULL,
-                                 body_text TEXT,
-                                 is_active BOOLEAN DEFAULT true,
-                                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
 
-CREATE TABLE email_logs (
-                            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                            participant_id UUID REFERENCES participants(id) ON DELETE SET NULL,
-                            template_id UUID REFERENCES email_templates(id) ON DELETE SET NULL,
-                            recipient_email VARCHAR(255) NOT NULL,
-                            subject VARCHAR(255) NOT NULL,
-                            status VARCHAR(20) DEFAULT 'PENDING', -- PENDING, SENT, FAILED
-                            sent_at TIMESTAMP WITH TIME ZONE,
-                            error_message TEXT,
-                            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
 
 -- =============================================
 -- INDEXES
@@ -589,7 +560,6 @@ CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECU
 CREATE TRIGGER update_races_updated_at BEFORE UPDATE ON races FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_participants_updated_at BEFORE UPDATE ON participants FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_race_results_updated_at BEFORE UPDATE ON race_results FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_email_templates_updated_at BEFORE UPDATE ON email_templates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_rfid_readers_updated_at BEFORE UPDATE ON rfid_readers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_participant_credentials_updated_at BEFORE UPDATE ON participant_credentials FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

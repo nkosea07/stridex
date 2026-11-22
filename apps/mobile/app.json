@@ -58,12 +58,6 @@
           "cameraPermission": "Allow Race Tracker to access your camera for QR code scanning."
         }
       ],
-      [
-        "@rnmapbox/maps",
-        {
-          "mapboxAccessToken": "$MAPBOX_ACCESS_TOKEN"
-        }
-      ],
       "expo-font",
       "expo-sqlite",
       "expo-background-task",

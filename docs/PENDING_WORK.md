@@ -57,16 +57,16 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
   - `scripts/validate-contracts.mjs` fails on controller ↔ contract drift in either direction.
   - `docs/api-contract.md`, the backend README WebSocket/timing sections, and the RFID runbook
     were corrected in the 2026-11-08 audit.
-- **Section 5 — dead code: Pending.**
-  - backend: unused `GeoTelemetryService` injection (`TrackingServiceImpl`),
-    `ResultComputation.finishSeconds`, duplicate `toFieldDto` (`RaceServiceImpl`/
-    `ParticipantServiceImpl`), unused tables `refresh_tokens`/`email_templates`/`email_logs`,
-    `checkpoint_volunteers` model with no API.
-  - web: leftover `App.tsx`/`main.tsx`/`index.html`, duplicate `components/ui/buttons.tsx`,
-    unused deps (`papaparse`, `react-hook-form`, `zod`, `cmdk`, `input-otp`), STOMP `console.log`.
-  - mobile: unused deps (`swr`, `@rnmapbox/maps`, `expo-linking`, `expo-web-browser`,
-    `expo-system-ui`), dead `checkpointRecords`/`estimatedFinishTime`/`getMobileRuntimeInfo`,
-    register debug logging.
+- **Section 5 — dead code: Done** (2026-11-22). Removed: `ResultComputation.finishSeconds`, the
+  duplicate `toFieldDto` (now `mapper/RegistrationFieldMappings`), tables `refresh_tokens`/
+  `email_templates`/`email_logs` (`V59__drop_unused_legacy_tables.sql`); web `App.tsx`/`main.tsx`/
+  `index.html`, `components/ui/buttons.tsx`, compiled `vite.config.js`/`.d.ts` (`tsc -b` now emits
+  to `node_modules/.tmp`), deps `papaparse`/`@types/papaparse`/`react-hook-form`/`cmdk`/
+  `input-otp`; mobile `swr`, `@rnmapbox/maps` (and its config plugin), `lib/mobile-runtime.ts`,
+  `LiveStats.estimatedFinishTime`, web SQLite stub logging. Kept because they are in use:
+  `GeoTelemetryService` (distance in `TrackingServiceImpl`), `checkpoint_volunteers`
+  (`RaceStaffAssignmentRepository`), the `checkpointRecords` endpoint (staff recent entries),
+  `expo-linking` (expo-router peer), `expo-system-ui` (`userInterfaceStyle`), `expo-web-browser`.
 - **Section 6 — genuinely missing features: Partial.**
   - Results: personal bests, qualification status, and cross-race history endpoints/UI added.
   - CSV **timing/checkpoint** imports added; import preview and participant Excel export added.
