@@ -107,5 +107,25 @@
     "duplicateRate": "Duplicate Rate",
     "unknownTags": "Unknown Tags",
     "ingressLag": "Ingress Lag"
+  },
+  "overviewDescription": "{{race}} reader health, ingest backlog and timing-event quality signals.",
+  "raceFallback": "Race",
+  "readerLabel": "Reader",
+  "creating": "Creating…",
+  "createReader": "Create reader",
+  "toasts": {
+    "createFailed": "Failed to create reader",
+    "revokeFailed": "Failed to revoke reader"
+  },
+  "overview": {
+    "readerHealth": "{{online}} online / {{degraded}} degraded / {{offline}} offline",
+    "silenceTimeout": "Silence timeout {{seconds}} s",
+    "percent": "{{value}}%",
+    "duplicates_one": "{{count}} duplicate event",
+    "duplicates_other": "{{count}} duplicate events",
+    "unmatched_one": "{{count}} unmatched read",
+    "unmatched_other": "{{count}} unmatched reads",
+    "milliseconds": "{{value}} ms",
+    "oldestQueued": "Oldest queued read {{seconds}} s"
   }
 }

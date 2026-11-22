@@ -51,5 +51,12 @@
     "closeRegistration": "Close Registration",
     "startRace": "Start Race",
     "completeRace": "Complete Race"
-  }
+  },
+  "distanceKm": "{{value}} km",
+  "saving": "Saving…",
+  "saveChanges": "Save changes",
+  "toasts": {
+    "updateFailed": "Failed to update race"
+  },
+  "cancelReasonPrompt": "Cancellation reason"
 }

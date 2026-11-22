@@ -1,0 +1,122 @@
+{
+  "playback": {
+    "eyebrow": "Route playback",
+    "title": "Movement replay",
+    "pause": "Pause",
+    "play": "Play",
+    "restart": "Restart",
+    "position": "Playback position",
+    "speed": "{{value}}×"
+  },
+  "athlete": {
+    "lastCheckpoint": "Last checkpoint",
+    "awaitingStart": "Awaiting start",
+    "elapsed": "Elapsed",
+    "avgPace": "Avg pace",
+    "estimatedFinish": "Est. finish"
+  },
+  "search": {
+    "eyebrow": "Find an athlete",
+    "description": "Search by bib number or athlete name.",
+    "shown_one": "{{count}} shown",
+    "shown_other": "{{count}} shown",
+    "placeholder": "Bib 1024 or athlete name",
+    "label": "Search athletes by bib or name",
+    "searchingHint": "Search results update from the public index.",
+    "liveHint": "Showing the current live feed.",
+    "scanning": "Searching",
+    "ready": "Ready"
+  },
+  "leaderboard": {
+    "eyebrow": "Leaderboard",
+    "title": "Front of race",
+    "top_one": "Top {{count}}",
+    "top_other": "Top {{count}}",
+    "notLive": "Leaderboard data is not live yet for this race."
+  },
+  "hero": {
+    "badge": "Public race hub",
+    "description": "Spectator view with live standings and athlete search.",
+    "liveField": "Live field",
+    "trackedAthletes": "tracked athletes",
+    "raceDay": "Race day",
+    "datePending": "Date pending",
+    "hostCity": "Host city",
+    "locationPending": "Location pending",
+    "course": "Course",
+    "distanceKm": "{{value}} km",
+    "distancePending": "Distance to be confirmed"
+  },
+  "results": {
+    "eyebrow": "Official race results",
+    "title": "Finishers",
+    "loading": "Loading published results…",
+    "loadFailed": "Published results could not be loaded.",
+    "retry": "Retry",
+    "empty": "No published finishers yet.",
+    "participant": "Participant",
+    "certificate": "Certificate",
+    "loadMoreFailed": "Could not load the next page. Try again.",
+    "loadingMore": "Loading…",
+    "loadMore": "Load more finishers"
+  },
+  "heatmap": {
+    "eyebrow": "Course heat",
+    "title": "Where the field runs",
+    "hide": "Hide",
+    "show": "Show"
+  },
+  "gallery": {
+    "eyebrow": "Media",
+    "title": "Race gallery",
+    "mediaAlt": "Race media"
+  },
+  "refresh": "Refresh",
+  "bib": "Bib {{bib}}",
+  "units": {
+    "minPerKm": "min/km"
+  },
+  "athletePage": {
+    "unavailable": "Athlete tracking is not available.",
+    "backToHub": "Race hub",
+    "copyLink": "Copy link",
+    "description": "Public athlete tracking with checkpoint progress and projected finish timing.",
+    "predictedFinish": "Predicted finish",
+    "remaining": "Remaining",
+    "snapshot": "Athlete snapshot",
+    "status": "Status",
+    "latestSplit": "Latest split",
+    "noSplit": "No split recorded",
+    "finishWindow": "Projected finish window",
+    "paceEyebrow": "Pace profile",
+    "paceTitle": "Pace by split",
+    "paceEmpty": "Pace data appears once checkpoint distances are recorded.",
+    "splitsEyebrow": "Split timeline",
+    "splitsTitle": "Latest six splits",
+    "splitTotal_one": "{{count}} total",
+    "splitTotal_other": "{{count}} total",
+    "checkpoint": "Checkpoint",
+    "timingSplit": "Public timing split",
+    "splitsEmpty": "No public splits recorded yet.",
+    "refreshFailed": "Failed to refresh athlete tracking",
+    "linkCopied": "Athlete link copied",
+    "copyFailed": "Failed to copy athlete link"
+  },
+  "account": {
+    "eyebrow": "Free on web",
+    "athleteTitle": "Follow this athlete here, and unlock favorites and alerts with an account.",
+    "athleteBody": "Public tracking stays available on the web. A free account adds saved athletes, alerts and the richer mobile app experience.",
+    "hubTitle": "Keep following here, save favorites in your account",
+    "hubBody": "Public race tracking stays open on the web. Create a free account when you want favorite athletes, alerts and the fuller spectator experience in the mobile app.",
+    "create": "Create free account"
+  },
+  "hubPage": {
+    "unavailable": "Public race data is not available.",
+    "findAthlete": "Find athlete",
+    "liveAthletes": "Live athletes",
+    "searchResults": "Search results",
+    "noMatches": "No athletes matched that search.",
+    "refreshFailed": "Failed to refresh public race data",
+    "searchFailed": "Failed to refresh athlete results"
+  }
+}

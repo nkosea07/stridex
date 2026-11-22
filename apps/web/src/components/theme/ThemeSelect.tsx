@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useTranslation } from 'react-i18next'
 
 type ThemeSelectProps = {
   className?: string
@@ -24,6 +25,7 @@ function isThemePreference(value: string): value is ThemePreference {
 }
 
 export function ThemeSelect({ className }: ThemeSelectProps) {
+  const { t } = useTranslation()
   const { theme, setTheme } = useTheme()
 
   return (
@@ -35,8 +37,8 @@ export function ThemeSelect({ className }: ThemeSelectProps) {
         }
       }}
     >
-      <SelectTrigger className={cn('w-[150px]', className)} aria-label="Theme">
-        <SelectValue placeholder="Theme" />
+      <SelectTrigger className={cn('w-[150px]', className)} aria-label={t('nav:theme')}>
+        <SelectValue placeholder={t('nav:theme')} />
       </SelectTrigger>
       <SelectContent>
         {themeOptions.map((option) => (

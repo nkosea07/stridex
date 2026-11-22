@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { organizerApplicationsApi } from '@/lib/api'
 import type { OrganizerApplicationReview, OrganizerApplicationStatus } from '@/types'
 import { toast } from 'sonner'
+import { formatDateTime } from '@/lib/format'
 
 const statusFilters: Array<'PENDING' | 'APPROVED' | 'REJECTED'> = ['PENDING', 'APPROVED', 'REJECTED']
 
@@ -28,7 +29,7 @@ export function OrganizerApplicationsPage() {
       setItems(page.items)
     } catch {
       setLoadError(true)
-      toast.error('Could not load organizer applications')
+      toast.error(t('admin:organizers.loadFailed'))
     } finally {
       setIsLoading(false)
     }
@@ -42,10 +43,10 @@ export function OrganizerApplicationsPage() {
     setPendingId(application.id)
     try {
       await organizerApplicationsApi.decide(application.id, decision, reviewNotes[application.id]?.trim())
-      toast.success(decision === 'APPROVE' ? 'Organizer approved; password sign-in is required before admin access.' : 'Organizer application rejected')
+      toast.success(decision === 'APPROVE' ? t('admin:organizers.approved') : t('admin:organizers.rejected'))
       await loadApplications()
     } catch {
-      toast.error('Decision was not saved. Refresh the list and try again.')
+      toast.error(t('admin:organizers.decisionFailed'))
     } finally {
       setPendingId(null)
     }
@@ -54,25 +55,25 @@ export function OrganizerApplicationsPage() {
   return (
     <div className="space-y-6 p-4 md:p-8">
       <div>
-        <div className="flex items-center gap-2 text-primary"><ClipboardList className="h-5 w-5" /><span className="text-sm font-medium">Super-admin review</span></div>
+        <div className="flex items-center gap-2 text-primary"><ClipboardList className="h-5 w-5" /><span className="text-sm font-medium">{t('admin:organizers.eyebrow')}</span></div>
         <h1 className="mt-2 text-3xl font-semibold">{t('nav:organizerApplications')}</h1>
-        <p className="mt-2 text-muted-foreground">Approve verified organizers or reject applications with a review note. Approved organizers sign in with their password.</p>
+        <p className="mt-2 text-muted-foreground">{t('admin:organizers.description')}</p>
       </div>
 
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Application status">
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label={t('admin:organizers.statusFilter')}>
         {statusFilters.map((filter) => (
           <Button key={filter} variant={status === filter ? 'default' : 'outline'} onClick={() => setStatus(filter)} role="tab" aria-selected={status === filter}>
-            {filter.toLowerCase()}
+            {t(`admin:organizers.status.${filter}`)}
           </Button>
         ))}
       </div>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 py-12 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading applications…</div>
+        <div className="flex items-center gap-2 py-12 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{t('admin:organizers.loading')}</div>
       ) : loadError ? (
-        <Card><CardContent className="flex items-center justify-between gap-4 p-6"><span>Applications could not be loaded.</span><Button variant="outline" onClick={() => void loadApplications()}>Retry</Button></CardContent></Card>
+        <Card><CardContent className="flex items-center justify-between gap-4 p-6"><span>{t('admin:organizers.loadError')}</span><Button variant="outline" onClick={() => void loadApplications()}>{t('admin:organizers.retry')}</Button></CardContent></Card>
       ) : items.length === 0 ? (
-        <Card><CardContent className="p-10 text-center text-muted-foreground">No {status.toLowerCase()} organizer applications.</CardContent></Card>
+        <Card><CardContent className="p-10 text-center text-muted-foreground">{t(`admin:organizers.empty.${status}`)}</CardContent></Card>
       ) : (
         <div className="grid gap-4">
           {items.map((application) => (
@@ -86,30 +87,30 @@ export function OrganizerApplicationsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">{application.emailVerified ? <MailCheck className="h-4 w-4 text-emerald-600" /> : <ShieldAlert className="h-4 w-4 text-amber-600" />}{application.emailVerified ? 'Email verified' : 'Email verification required'}</span>
-                  <span>Submitted {new Date(application.createdAt).toLocaleString()}</span>
-                  {application.reviewedByEmail && <span>Reviewed by {application.reviewedByEmail}</span>}
+                  <span className="inline-flex items-center gap-1">{application.emailVerified ? <MailCheck className="h-4 w-4 text-emerald-600" /> : <ShieldAlert className="h-4 w-4 text-amber-600" />}{application.emailVerified ? t('admin:organizers.emailVerified') : t('admin:organizers.emailUnverified')}</span>
+                  <span>{t('admin:organizers.submitted', { date: formatDateTime(application.createdAt) })}</span>
+                  {application.reviewedByEmail && <span>{t('admin:organizers.reviewedBy', { email: application.reviewedByEmail })}</span>}
                 </div>
-                {application.reviewNotes && <p className="rounded-md bg-muted p-3 text-sm">Review note: {application.reviewNotes}</p>}
+                {application.reviewNotes && <p className="rounded-md bg-muted p-3 text-sm">{t('admin:organizers.reviewNote', { note: application.reviewNotes })}</p>}
                 {application.status === 'PENDING' && (
                   <>
                     <Textarea
                       value={reviewNotes[application.id] ?? ''}
                       onChange={(event) => setReviewNotes((current) => ({ ...current, [application.id]: event.target.value }))}
                       maxLength={2000}
-                      placeholder="Optional review note"
-                      aria-label={`Review note for ${application.organizationName}`}
+                      placeholder={t('admin:organizers.notePlaceholder')}
+                      aria-label={t('admin:organizers.noteFor', { organization: application.organizationName })}
                     />
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button variant="outline" disabled={pendingId === application.id} onClick={() => void decide(application, 'REJECT')}>
-                        Reject
+                        {t('admin:organizers.reject')}
                       </Button>
                       <Button disabled={!application.emailVerified || pendingId === application.id} onClick={() => void decide(application, 'APPROVE')}>
                         {pendingId === application.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BadgeCheck className="mr-2 h-4 w-4" />}
-                        Approve organizer
+                        {t('admin:organizers.approve')}
                       </Button>
                     </div>
-                    {!application.emailVerified && <p className="text-right text-xs text-muted-foreground">Approval is disabled until the applicant verifies their email.</p>}
+                    {!application.emailVerified && <p className="text-right text-xs text-muted-foreground">{t('admin:organizers.approvalDisabled')}</p>}
                   </>
                 )}
               </CardContent>

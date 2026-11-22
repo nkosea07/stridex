@@ -12,6 +12,7 @@ import type { AthleteHistoryEntry, FavoriteAthlete, PersonalBest, RaceResult } f
 import { getPreferredCapability, useAuth } from '@/contexts/AuthContext'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Switch } from '@/components/ui/switch'
+import { formatNumber } from '@/lib/format'
 
 type MyRegistration = {
   id: string
@@ -166,7 +167,7 @@ export function UserStatsPage() {
           <CardContent className="space-y-2">
             {personalBests.length === 0 ? <p className="text-sm text-muted-foreground">{t('common:noPersonalBests')}</p> : personalBests.map((best) => (
               <div key={`${best.raceId}-${best.distanceKm}`} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
-                <span>{best.distanceKm ? `${best.distanceKm} km` : t('common:race')}</span>
+                <span>{best.distanceKm ? t('raceDetails:distanceKm', { value: formatNumber(best.distanceKm, { maximumFractionDigits: 1 }) }) : t('common:race')}</span>
                 <span className="font-mono">{best.chipTime ?? '—'}</span>
                 <span className="text-xs text-muted-foreground">{best.raceName}</span>
               </div>

@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ApiError, checkpointsApi, routeApi } from '@/lib/api'
-import { formatDateTime } from '@/lib/format'
+import { formatDateTime, formatNumber } from '@/lib/format'
 import { toast } from 'sonner'
 import type { Checkpoint, CheckpointType, CheckpointRecord } from '@/types'
 import { isAdminRole, useAuth } from '@/contexts/AuthContext'
@@ -85,9 +85,9 @@ export function CheckpointsPage() {
     if (!file || !raceId) return
     try {
       const points = await routeApi.importGpx(raceId, file)
-      toast.success(`Imported ${points.length} route points`)
+      toast.success(t('checkpoints:toasts.routeImported', { count: points.length }))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to import GPX')
+      toast.error(error instanceof Error ? error.message : t('checkpoints:toasts.gpxImportFailed'))
     }
   }
   const [newCheckpoint, setNewCheckpoint] = useState({
@@ -120,9 +120,9 @@ export function CheckpointsPage() {
       anchor.click()
       anchor.remove()
       URL.revokeObjectURL(url)
-      toast.success(`Exported ${format.toUpperCase()}`)
+      toast.success(t('checkpoints:toasts.exported', { format: format.toUpperCase() }))
     } catch {
-      toast.error(`Failed to export ${format.toUpperCase()}`)
+      toast.error(t('checkpoints:toasts.exportFailed', { format: format.toUpperCase() }))
     } finally {
       setExporting(false)
     }
@@ -246,7 +246,7 @@ export function CheckpointsPage() {
         method: recordMethod,
         participantBibNumber: recordBib,
       } as never)
-      toast.success(`Time recorded for ${recordBib}`)
+      toast.success(t('checkpoints:toasts.timeRecorded', { bib: recordBib }))
       setIsRecordDialogOpen(false)
       setRecordBib('')
       setRecordMethod('MANUAL')
@@ -330,7 +330,7 @@ export function CheckpointsPage() {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('checkpoints:ui.totalCheckpoints')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{checkpoints.length}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('checkpoints:ui.rfidEnabled')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{checkpoints.filter((cp) => cp.hasRfidReader).length}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('checkpoints:ui.qrEnabled')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{checkpoints.filter((cp) => cp.hasQrScanner).length}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('checkpoints:ui.totalRecords')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{totalRecords.toLocaleString()}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('checkpoints:ui.totalRecords')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{formatNumber(totalRecords)}</div></CardContent></Card>
       </div>
 
       {canReviewSelfScans && raceId && <SelfScanClaimsPanel raceId={raceId} />}
@@ -361,7 +361,7 @@ export function CheckpointsPage() {
                   <TableCell>{index + 1}</TableCell>
                   <TableCell className="font-medium">{checkpoint.name}</TableCell>
                   <TableCell><Badge className={checkpointTypeColors[checkpoint.checkpointType]}>{checkpoint.checkpointType.replace('_', ' ')}</Badge></TableCell>
-                  <TableCell>{checkpoint.distanceFromStartKm ?? '-'}km</TableCell>
+                  <TableCell>{checkpoint.distanceFromStartKm != null ? t('checkpoints:distanceKm', { value: formatNumber(checkpoint.distanceFromStartKm, { maximumFractionDigits: 2 }) }) : '-'}</TableCell>
                   <TableCell>{checkpoint.cutoffTime || '-'}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -369,7 +369,7 @@ export function CheckpointsPage() {
                       {checkpoint.hasQrScanner && <Badge variant="outline" className="gap-1"><QrCode className="h-3 w-3" />{t('checkpoints:ui.qr')}</Badge>}
                     </div>
                   </TableCell>
-                  <TableCell>{(checkpoint.recordCount || 0).toLocaleString()}</TableCell>
+                  <TableCell>{formatNumber(checkpoint.recordCount || 0)}</TableCell>
                   <TableCell>
                     <Button variant="ghost" size="icon" onClick={() => openRecordDialog(checkpoint)}>
                       <PlayCircle className="h-4 w-4" />

@@ -21,6 +21,7 @@ import { racesApi, participantsApi, checkpointsApi, resultsApi, trackingApi } fr
 import type { Race, RaceStatus, Participant, Checkpoint, RaceResult, LiveTrackingData } from '@/types'
 import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
+import { formatNumber, formatDate } from '@/lib/format'
 
 const statusColors: Record<RaceStatus, string> = {
   DRAFT: 'bg-muted text-muted-foreground',
@@ -178,7 +179,7 @@ export function RaceDetailPage() {
       setEditOpen(false)
       await load()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update race')
+      toast.error(error instanceof Error ? error.message : t('raceDetails:toasts.updateFailed'))
     } finally {
       setSaving(false)
     }
@@ -203,7 +204,7 @@ export function RaceDetailPage() {
                 <span>{race.city}, {race.country}</span>
                 <span>-</span>
                 <Calendar className="h-3 w-3" />
-                <span>{new Date(race.raceDate).toLocaleDateString()}</span>
+                <span>{formatDate(race.raceDate)}</span>
               </div>
             </div>
           </div>
@@ -218,7 +219,7 @@ export function RaceDetailPage() {
             ))}
           {canManageRace && race.status !== 'CANCELLED' && race.status !== 'COMPLETED' && (
             <Button variant="outline" className="text-destructive" onClick={() => {
-              const reason = window.prompt('Cancellation reason')
+              const reason = window.prompt(t('raceDetails:cancelReasonPrompt'))
               if (reason !== null) void handleStatusChange('CANCELLED', reason)
             }}>
               <Ban className="mr-2 h-4 w-4" />
@@ -237,12 +238,12 @@ export function RaceDetailPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="cursor-pointer" onClick={() => navigate(`/admin/races/${raceId}/participants`)}>
           <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('raceDetails:ui.participants')}</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{participants.length.toLocaleString()}</div><Progress value={registrationProgress} className="mt-2 h-1" /></CardContent>
+          <CardContent><div className="text-2xl font-bold">{formatNumber(participants.length)}</div><Progress value={registrationProgress} className="mt-2 h-1" /></CardContent>
         </Card>
 
         <Card className="cursor-pointer" onClick={() => navigate(`/admin/races/${raceId}/live`)}>
           <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('raceDetails:ui.liveTracking')}</CardTitle><MapPin className="h-4 w-4 text-live" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{live.length.toLocaleString()}</div><p className="text-xs text-muted-foreground">{t('raceDetails:ui.athletesOnCourse')}</p></CardContent>
+          <CardContent><div className="text-2xl font-bold">{formatNumber(live.length)}</div><p className="text-xs text-muted-foreground">{t('raceDetails:ui.athletesOnCourse')}</p></CardContent>
         </Card>
 
         <Card className="cursor-pointer" onClick={() => navigate(`/admin/races/${raceId}/checkpoints`)}>
@@ -261,7 +262,7 @@ export function RaceDetailPage() {
 
         <Card className="cursor-pointer" onClick={() => navigate(`/admin/races/${raceId}/results`)}>
           <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('raceDetails:ui.finished')}</CardTitle><Trophy className="h-4 w-4 text-primary" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{byStatus.finished.toLocaleString()}</div><Progress value={finishProgress} className="mt-2 h-1" /></CardContent>
+          <CardContent><div className="text-2xl font-bold">{formatNumber(byStatus.finished)}</div><Progress value={finishProgress} className="mt-2 h-1" /></CardContent>
         </Card>
       </div>
 
@@ -275,7 +276,7 @@ export function RaceDetailPage() {
           <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.checkedIn')}</span><span>{byStatus.checkedIn}</span></div>
           <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.started')}</span><span>{byStatus.started}</span></div>
           <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.officialResults')}</span><span>{results.filter((r) => r.isOfficial).length}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.distance')}</span><span>{race.distanceKm ?? '-'} km</span></div>
+          <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.distance')}</span><span>{race.distanceKm != null ? t('raceDetails:distanceKm', { value: formatNumber(race.distanceKm, { maximumFractionDigits: 1 }) }) : '-'}</span></div>
           <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.maxParticipants')}</span><span>{race.maxParticipants ?? '-'}</span></div>
           <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.timezone')}</span><span>{race.timezone ?? 'UTC'}</span></div>
           <div className="flex justify-between text-sm"><span className="text-muted-foreground">{t('raceDetails:ui.earlyBird')}</span><span>{race.earlyBirdFee ?? '-'} {race.currency}</span></div>
@@ -371,7 +372,7 @@ export function RaceDetailPage() {
               {t('raceDetails:ui.cancel')}
             </Button>
             <Button onClick={() => void handleSaveRace()} disabled={saving}>
-              {saving ? 'Saving…' : 'Save changes'}
+              {saving ? t('raceDetails:saving') : t('raceDetails:saveChanges')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -21,6 +21,8 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { PublicAthleteTrackingLoaderData } from '@/router/publicLoaders'
 import { LegalFooter } from '@/components/legal/LegalFooter'
+import { useTranslation } from 'react-i18next'
+import { formatTime, formatNumber } from '@/lib/format'
 
 const TRACKING_POLL_INTERVAL_MS = 15000
 
@@ -30,7 +32,7 @@ function formatPredictedFinish(value?: string) {
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return value
 
-  return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return formatTime(parsed)
 }
 
 function formatPaceTick(totalSeconds: number) {
@@ -74,6 +76,7 @@ export function PublicAthleteTrackingPage({
   participantId: routeParticipantId,
   initialData,
 }: PublicAthleteTrackingPageProps = {}) {
+  const { t } = useTranslation()
   const params = useParams<{ raceId: string; participantId: string }>()
   const raceId = routeRaceId ?? params.raceId
   const participantId = routeParticipantId ?? params.participantId
@@ -106,7 +109,7 @@ export function PublicAthleteTrackingPage({
     if (error) {
       setVisibilityDenied(true)
       void mutate(undefined, { revalidate: false })
-      toast.error('Failed to refresh athlete tracking')
+      toast.error(t('publicRace:athletePage.refreshFailed'))
     }
   }, [error, mutate])
 
@@ -125,9 +128,9 @@ export function PublicAthleteTrackingPage({
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href)
-      toast.success('Athlete link copied')
+      toast.success(t('publicRace:athletePage.linkCopied'))
     } catch {
-      toast.error('Failed to copy athlete link')
+      toast.error(t('publicRace:athletePage.copyFailed'))
     }
   }
 
@@ -153,7 +156,7 @@ export function PublicAthleteTrackingPage({
   if (!tracking) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-center text-slate-200">
-        Athlete tracking is not available.
+        {t('publicRace:athletePage.unavailable')}
       </div>
     )
   }
@@ -167,7 +170,7 @@ export function PublicAthleteTrackingPage({
             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-200 backdrop-blur-sm"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Race Hub
+            {t('publicRace:athletePage.backToHub')}
           </Link>
 
           <div className="flex items-center gap-2">
@@ -179,7 +182,7 @@ export function PublicAthleteTrackingPage({
               onClick={() => void handleCopyLink()}
             >
               <Copy className="mr-2 h-3.5 w-3.5" />
-              Copy Link
+              {t('publicRace:athletePage.copyLink')}
             </Button>
             <Button
               type="button"
@@ -189,7 +192,7 @@ export function PublicAthleteTrackingPage({
               disabled={isValidating}
             >
               <RefreshCcw className={`mr-2 h-3.5 w-3.5 ${isValidating ? 'animate-spin' : ''}`} />
-              Refresh
+              {t('publicRace:refresh')}
             </Button>
           </div>
         </div>
@@ -204,19 +207,19 @@ export function PublicAthleteTrackingPage({
                     {tracking.status}
                   </Badge>
                   <Badge variant="outline" className="rounded-full border-white/15 bg-white/5 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-200">
-                    Bib {tracking.bibNumber || '---'}
+                    {t('publicRace:bib', { bib: tracking.bibNumber || '---' })}
                   </Badge>
                 </div>
                 <h1 className="mt-4 text-3xl font-black uppercase tracking-[-0.05em] text-white sm:text-4xl">
                   {tracking.participantName}
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm text-slate-300">
-                  Public athlete tracking with checkpoint progress and projected finish timing.
+                  {t('publicRace:athletePage.description')}
                 </p>
               </div>
 
               <div className="rounded-3xl border border-cyan-300/15 bg-cyan-400/10 px-4 py-3 text-right">
-                <p className="text-[10px] uppercase tracking-[0.22em] text-cyan-100/80">Predicted Finish</p>
+                <p className="text-[10px] uppercase tracking-[0.22em] text-cyan-100/80">{t('publicRace:athletePage.predictedFinish')}</p>
                 <p className="mt-1 font-mono text-3xl font-black text-white">{formatPredictedFinish(tracking.predictedFinishTime)}</p>
               </div>
             </div>
@@ -225,32 +228,32 @@ export function PublicAthleteTrackingPage({
               <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
                 <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-400">
                   <Flag className="h-3.5 w-3.5 text-cyan-300" />
-                  Latest Checkpoint
+                  {t('publicRace:athlete.lastCheckpoint')}
                 </p>
-                <p className="mt-2 text-lg font-bold text-white">{tracking.lastCheckpoint || 'Awaiting start'}</p>
+                <p className="mt-2 text-lg font-bold text-white">{tracking.lastCheckpoint || t('publicRace:athlete.awaitingStart')}</p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
                 <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-400">
                   <Timer className="h-3.5 w-3.5 text-amber-300" />
-                  Elapsed
+                  {t('publicRace:athlete.elapsed')}
                 </p>
                 <p className="mt-2 font-mono text-lg font-bold text-white">{tracking.elapsedTime || '--:--:--'}</p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
                 <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-400">
                   <Activity className="h-3.5 w-3.5 text-emerald-300" />
-                  Average Pace
+                  {t('publicRace:athlete.avgPace')}
                 </p>
                 <p className="mt-2 font-mono text-lg font-bold text-white">{tracking.averagePace || '--'}</p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
                 <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-400">
                   <MapPin className="h-3.5 w-3.5 text-rose-300" />
-                  Remaining
+                  {t('publicRace:athletePage.remaining')}
                 </p>
                 <p className="mt-2 font-mono text-lg font-bold text-white">
                   {tracking.distanceRemaining !== undefined && tracking.distanceRemaining !== null
-                    ? `${tracking.distanceRemaining.toFixed(1)} km`
+                    ? t('publicRace:hero.distanceKm', { value: formatNumber(tracking.distanceRemaining, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })
                     : '---'}
                 </p>
               </div>
@@ -260,36 +263,36 @@ export function PublicAthleteTrackingPage({
 
         <div className="mt-5 grid gap-5 lg:grid-cols-[0.88fr,1.12fr]">
           <section className="rounded-[28px] border border-white/10 bg-white/6 p-4 text-white shadow-[0_20px_60px_rgba(2,6,23,0.35)] backdrop-blur-sm">
-            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Athlete Snapshot</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{t('publicRace:athletePage.snapshot')}</p>
             <div className="mt-4 space-y-3">
               <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Status</p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">{t('publicRace:athletePage.status')}</p>
                 <p className="mt-1 text-lg font-black uppercase tracking-[-0.03em] text-white">{tracking.status}</p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Latest Split</p>
-                <p className="mt-1 text-lg font-bold text-white">{tracking.lastCheckpoint || 'No split recorded'}</p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">{t('publicRace:athletePage.latestSplit')}</p>
+                <p className="mt-1 text-lg font-bold text-white">{tracking.lastCheckpoint || t('publicRace:athletePage.noSplit')}</p>
                 <p className="mt-2 font-mono text-sm text-slate-300">{tracking.elapsedTime || '--:--:--'}</p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Projected Finish Window</p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">{t('publicRace:athletePage.finishWindow')}</p>
                 <p className="mt-1 font-mono text-2xl font-black text-cyan-100">
                   {formatPredictedFinish(tracking.predictedFinishTime)}
                 </p>
               </div>
 
               <div className="rounded-3xl border border-cyan-300/15 bg-cyan-400/10 p-4">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-100/80">Free on Web</p>
-                <p className="mt-2 text-base font-bold text-white">Follow this athlete here, unlock favorites and alerts with an account.</p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-100/80">{t('publicRace:account.eyebrow')}</p>
+                <p className="mt-2 text-base font-bold text-white">{t('publicRace:account.athleteTitle')}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-200">
-                  Public tracking stays available on web. A free account adds saved athletes, alerting, and the richer mobile app experience.
+                  {t('publicRace:account.athleteBody')}
                 </p>
                 <Button
                   asChild
                   className="mt-4 rounded-full bg-white px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-950 hover:bg-cyan-50"
                 >
                   <Link to="/register" state={{ from: returnTo }}>
-                    Create Free Account
+                    {t('publicRace:account.create')}
                     <ChevronRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
@@ -300,11 +303,11 @@ export function PublicAthleteTrackingPage({
           <section className="rounded-[28px] border border-white/10 bg-white/6 p-4 text-white shadow-[0_20px_60px_rgba(2,6,23,0.35)] backdrop-blur-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Pace Profile</p>
-                <h2 className="mt-1 text-2xl font-black uppercase tracking-[-0.04em] text-white">Pace by Split</h2>
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{t('publicRace:athletePage.paceEyebrow')}</p>
+                <h2 className="mt-1 text-2xl font-black uppercase tracking-[-0.04em] text-white">{t('publicRace:athletePage.paceTitle')}</h2>
               </div>
               <Badge variant="outline" className="rounded-full border-white/15 bg-white/5 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-200">
-                min/km
+                {t('publicRace:units.minPerKm')}
               </Badge>
             </div>
 
@@ -351,7 +354,7 @@ export function PublicAthleteTrackingPage({
               </div>
             ) : (
               <div className="mt-4 rounded-3xl border border-dashed border-white/10 bg-slate-950/40 px-4 py-10 text-center text-sm text-slate-400">
-                Pace data appears once checkpoint distances are recorded.
+                {t('publicRace:athletePage.paceEmpty')}
               </div>
             )}
           </section>
@@ -359,11 +362,11 @@ export function PublicAthleteTrackingPage({
           <section className="rounded-[28px] border border-white/10 bg-white/6 p-4 text-white shadow-[0_20px_60px_rgba(2,6,23,0.35)] backdrop-blur-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Split Timeline</p>
-                <h2 className="mt-1 text-2xl font-black uppercase tracking-[-0.04em] text-white">Latest Six Splits</h2>
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{t('publicRace:athletePage.splitsEyebrow')}</p>
+                <h2 className="mt-1 text-2xl font-black uppercase tracking-[-0.04em] text-white">{t('publicRace:athletePage.splitsTitle')}</h2>
               </div>
               <Badge variant="outline" className="rounded-full border-white/15 bg-white/5 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-200">
-                {tracking.splits.length} total
+                {t('publicRace:athletePage.splitTotal', { count: tracking.splits.length })}
               </Badge>
             </div>
 
@@ -379,8 +382,8 @@ export function PublicAthleteTrackingPage({
                         {recentSplits.length - index}
                       </div>
                       <div>
-                        <p className="font-bold uppercase tracking-[0.01em] text-white">{split.name || 'Checkpoint'}</p>
-                        <p className="text-xs text-slate-400">Public timing split</p>
+                        <p className="font-bold uppercase tracking-[0.01em] text-white">{split.name || t('publicRace:athletePage.checkpoint')}</p>
+                        <p className="text-xs text-slate-400">{t('publicRace:athletePage.timingSplit')}</p>
                       </div>
                     </div>
                     <p className="font-mono text-sm font-bold text-white">{split.time || '--:--:--'}</p>
@@ -388,7 +391,7 @@ export function PublicAthleteTrackingPage({
                 ))
               ) : (
                 <div className="rounded-3xl border border-dashed border-white/10 bg-slate-950/40 px-4 py-12 text-center text-sm text-slate-400">
-                  No public splits recorded yet.
+                  {t('publicRace:athletePage.splitsEmpty')}
                 </div>
               )}
             </div>

@@ -4,6 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { LiveTrackingData, Checkpoint } from '@/types';
 import type { TrackingMode } from './CommandBar';
+import { useTranslation } from 'react-i18next';
+import { formatTime, formatNumber } from '@/lib/format';
 
 interface AnalyticsTrayProps {
   selectedParticipant: LiveTrackingData | null;
@@ -12,6 +14,7 @@ interface AnalyticsTrayProps {
 }
 
 export function AnalyticsTray({ selectedParticipant, checkpoints }: AnalyticsTrayProps) {
+  const { t } = useTranslation();
   if (!selectedParticipant) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-4 relative overflow-hidden bg-background/40 backdrop-blur-md">
@@ -25,8 +28,8 @@ export function AnalyticsTray({ selectedParticipant, checkpoints }: AnalyticsTra
           <Activity className="h-6 w-6 text-muted-foreground" />
         </div>
         <div className="space-y-1 relative z-10">
-          <p className="font-bold uppercase text-xs tracking-widest text-muted-foreground">No Selection</p>
-          <p className="text-sm text-muted-foreground/60">Select a participant to view detailed telemetry</p>
+          <p className="font-bold uppercase text-xs tracking-widest text-muted-foreground">{t('liveTracking:noSelection')}</p>
+          <p className="text-sm text-muted-foreground/60">{t('liveTracking:selectParticipantTelemetry')}</p>
         </div>
       </div>
     );
@@ -52,7 +55,7 @@ export function AnalyticsTray({ selectedParticipant, checkpoints }: AnalyticsTra
       <div className="flex flex-col h-full p-4 space-y-6 relative z-10">
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Telemetry</h3>
+            <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">{t('liveTracking:telemetry')}</h3>
             <Badge variant="outline" className="font-mono text-[10px] h-5 rounded-sm bg-primary/5 text-primary border-primary/20 uppercase">
               {selectedParticipant.status}
             </Badge>
@@ -62,7 +65,7 @@ export function AnalyticsTray({ selectedParticipant, checkpoints }: AnalyticsTra
           </p>
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="font-mono rounded-sm px-1.5 py-0 text-[10px] h-5">
-              BIB {selectedParticipant.bibNumber}
+              {t('liveTracking:bib', { bib: selectedParticipant.bibNumber })}
             </Badge>
           </div>
         </div>
@@ -72,12 +75,12 @@ export function AnalyticsTray({ selectedParticipant, checkpoints }: AnalyticsTra
             <CardContent className="p-3">
               <div className="flex items-center gap-2 mb-1.5">
                 <TrendingUp className="h-3.5 w-3.5 text-primary" />
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Avg Pace</span>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('liveTracking:avgPace')}</span>
               </div>
               <p className="text-xl font-black">
                 {selectedParticipant.averagePace || Number(selectedParticipant.speed || 0).toFixed(1)} 
                 <span className="text-xs font-bold text-muted-foreground ml-1">
-                  {selectedParticipant.averagePace ? 'min/km' : 'km/h'}
+                  {selectedParticipant.averagePace ? t('liveTracking:units.minPerKm') : t('liveTracking:units.kmPerHour')}
                 </span>
               </p>
             </CardContent>
@@ -86,7 +89,7 @@ export function AnalyticsTray({ selectedParticipant, checkpoints }: AnalyticsTra
             <CardContent className="p-3">
               <div className="flex items-center gap-2 mb-1.5">
                 <Clock className="h-3.5 w-3.5 text-primary" />
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Elapsed</span>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('liveTracking:elapsed')}</span>
               </div>
               <p className="text-xl font-black tracking-tight">{selectedParticipant.elapsedTime || '00:00:00'}</p>
             </CardContent>
@@ -100,18 +103,18 @@ export function AnalyticsTray({ selectedParticipant, checkpoints }: AnalyticsTra
               <div className="flex items-center gap-2">
                 <Timer className="h-4 w-4 text-primary" />
                 <div>
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Est. Finish</p>
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">{t('liveTracking:estimatedFinish')}</p>
                   <p className="text-sm font-black font-mono">
                     {selectedParticipant.predictedFinishTime 
-                      ? new Date(selectedParticipant.predictedFinishTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      ? formatTime(selectedParticipant.predictedFinishTime)
                       : '---'}
                   </p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Remaining</p>
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">{t('liveTracking:remaining')}</p>
                 <p className="text-sm font-black text-primary">
-                  {selectedParticipant.distanceRemaining ? `${selectedParticipant.distanceRemaining.toFixed(1)} km` : '---'}
+                  {selectedParticipant.distanceRemaining ? t('liveTracking:units.km', { value: formatNumber(selectedParticipant.distanceRemaining, { maximumFractionDigits: 1 }) }) : '---'}
                 </p>
               </div>
             </CardContent>
@@ -120,7 +123,7 @@ export function AnalyticsTray({ selectedParticipant, checkpoints }: AnalyticsTra
 
         {/* Race Progress Funnel */}
         <div className="space-y-4">
-          <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] px-1">Race Progress Funnel</h4>
+          <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] px-1">{t('liveTracking:raceProgress')}</h4>
           <div className="relative px-2 py-4">
             {/* Connecting Line */}
             <div className="absolute top-[26px] left-4 right-4 h-0.5 bg-muted/30" />
@@ -148,7 +151,7 @@ export function AnalyticsTray({ selectedParticipant, checkpoints }: AnalyticsTra
               ))}
               {processedCheckpoints.length === 0 && (
                 <div className="flex-1 text-center py-2">
-                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">No Checkpoints</span>
+                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">{t('liveTracking:noCheckpoints')}</span>
                 </div>
               )}
             </div>
@@ -156,7 +159,7 @@ export function AnalyticsTray({ selectedParticipant, checkpoints }: AnalyticsTra
         </div>
 
         <div className="space-y-2 mt-4">
-          <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] px-1">Latest Checkpoint</h4>
+          <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] px-1">{t('liveTracking:latestCheckpoint')}</h4>
           <div className="space-y-1.5">
             {selectedParticipant.lastCheckpoint ? (
               <div className="flex items-center justify-between p-2.5 rounded-md bg-muted/20 border border-white/5 text-xs backdrop-blur-sm">
@@ -167,7 +170,7 @@ export function AnalyticsTray({ selectedParticipant, checkpoints }: AnalyticsTra
                 <span className="font-mono font-bold text-muted-foreground">{selectedParticipant.elapsedTime || '--'}</span>
               </div>
             ) : (
-              <p className="text-[10px] text-muted-foreground italic px-1">No checkpoints recorded yet</p>
+              <p className="text-[10px] text-muted-foreground italic px-1">{t('liveTracking:noCheckpointsRecorded')}</p>
             )}
           </div>
         </div>

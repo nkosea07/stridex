@@ -15,7 +15,7 @@ import { toast } from 'sonner'
 import type { ExternalRefundAttempt, ImportJob, Participant, ParticipantStatus, Payment, Penalty, RaceCategory } from '@/types'
 import { isAdminRole, useAuth } from '@/contexts/AuthContext'
 import { useTranslation } from 'react-i18next'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, formatNumber, formatDateTime } from '@/lib/format'
 
 const statusColors: Record<ParticipantStatus, string> = {
   REGISTERED: 'bg-muted text-muted-foreground',
@@ -302,14 +302,14 @@ export function ParticipantsPage() {
     if (!raceId) return
     let reason: string | undefined
     if (decision === 'REJECT') {
-      reason = window.prompt('Reason for rejection (optional)') ?? undefined
+      reason = window.prompt(t('participants:review.rejectReasonPrompt')) ?? undefined
     }
     try {
       await participantsApi.review(raceId, participantId, decision, reason)
-      toast.success(`Registration ${decision.toLowerCase()}d`)
+      toast.success(t(`participants:review.done.${decision}`))
       await loadParticipants()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update registration')
+      toast.error(error instanceof Error ? error.message : t('participants:review.failed'))
     }
   }
 
@@ -326,7 +326,7 @@ export function ParticipantsPage() {
 
   const handleStartPayment = async (participantId: string) => {
     if (!raceId) return
-    const promoCode = window.prompt('Promo code (optional)') ?? undefined
+    const promoCode = window.prompt(t('participants:payment.promoPrompt')) ?? undefined
     try {
       const payment = await participantsApi.startCheckout(raceId, participantId, promoCode || undefined)
       if (payment.checkoutUrl) {
@@ -336,7 +336,7 @@ export function ParticipantsPage() {
         toast.error(t('participants:ui.noCheckoutUrlReturned'))
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to start payment')
+      toast.error(error instanceof Error ? error.message : t('participants:payment.failed'))
     }
   }
 
@@ -418,7 +418,7 @@ export function ParticipantsPage() {
       setEditOpen(false)
       await loadParticipants()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update participant')
+      toast.error(error instanceof Error ? error.message : t('participants:edit.failed'))
     } finally {
       setEditSaving(false)
     }
@@ -540,10 +540,10 @@ export function ParticipantsPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('participants:ui.totalRegistered')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{total.toLocaleString()}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('participants:ui.checkedIn')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{checkedIn.toLocaleString()}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('participants:ui.onCourse')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{onCourse.toLocaleString()}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('participants:ui.finished')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finished.toLocaleString()}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('participants:ui.totalRegistered')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{formatNumber(total)}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('participants:ui.checkedIn')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{formatNumber(checkedIn)}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('participants:ui.onCourse')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{formatNumber(onCourse)}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{t('participants:ui.finished')}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{formatNumber(finished)}</div></CardContent></Card>
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row">
@@ -595,7 +595,7 @@ export function ParticipantsPage() {
                       <Badge className={paymentColors[p.paymentStatus] ?? 'bg-muted text-muted-foreground'}>{p.paymentStatus}</Badge>
                     ) : '-'}
                   </TableCell>
-                  <TableCell>{p.checkedInAt ? new Date(p.checkedInAt).toLocaleString() : '-'}</TableCell>
+                  <TableCell>{p.checkedInAt ? formatDateTime(p.checkedInAt) : '-'}</TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -725,7 +725,7 @@ export function ParticipantsPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-xs">
-                      {new Date(job.createdAt).toLocaleString()}
+                      {formatDateTime(job.createdAt)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -813,7 +813,7 @@ export function ParticipantsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>{t('participants:ui.cancel')}</Button>
-            <Button onClick={() => void handleSaveEdit()} disabled={editSaving}>{editSaving ? 'Saving…' : 'Save'}</Button>
+            <Button onClick={() => void handleSaveEdit()} disabled={editSaving}>{editSaving ? t('participants:penalties.saving') : t('participants:penalties.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -821,7 +821,7 @@ export function ParticipantsPage() {
       <Dialog open={penaltyOpen} onOpenChange={setPenaltyOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Time Penalties — {penaltyParticipant?.firstName} {penaltyParticipant?.lastName}</DialogTitle>
+            <DialogTitle>{t('participants:penalties.title', { name: [penaltyParticipant?.firstName, penaltyParticipant?.lastName].filter(Boolean).join(' ') })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -831,7 +831,7 @@ export function ParticipantsPage() {
                 penalties.map((penalty) => (
                   <div key={penalty.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
                     <span>
-                      <span className="font-medium">{penalty.seconds}s</span>
+                      <span className="font-medium">{t('participants:penalties.seconds', { count: penalty.seconds })}</span>
                       {penalty.reason ? <span className="text-muted-foreground"> — {penalty.reason}</span> : null}
                     </span>
                     {canManageAdminActions && (
@@ -853,7 +853,7 @@ export function ParticipantsPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPenaltyOpen(false)}>{t('participants:ui.close')}</Button>
             {canManageAdminActions && (
-              <Button onClick={() => void handleAddPenalty()} disabled={penaltyBusy}>{penaltyBusy ? 'Adding…' : 'Add penalty'}</Button>
+              <Button onClick={() => void handleAddPenalty()} disabled={penaltyBusy}>{penaltyBusy ? t('participants:penalties.adding') : t('participants:penalties.add')}</Button>
             )}
           </DialogFooter>
         </DialogContent>

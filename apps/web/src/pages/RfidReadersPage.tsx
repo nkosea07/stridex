@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next'
 import { RfidTimingPanel, clockOffsetWarning } from '@/components/rfid/RfidTimingPanel'
 import { WavesPanel } from '@/components/rfid/WavesPanel'
 import { isAdminRole, useAuth } from '@/contexts/AuthContext'
+import { formatDateTime as formatLocaleDateTime, formatNumber } from '@/lib/format'
 
 const gatewayStatusColors = {
   ONLINE: 'bg-success/20 text-success',
@@ -42,7 +43,7 @@ const readerStatusColors = {
 } as const
 
 function formatDateTime(value?: string) {
-  return value ? new Date(value).toLocaleString() : '-'
+  return value ? formatLocaleDateTime(value) : '-'
 }
 
 export function RfidReadersPage() {
@@ -123,7 +124,7 @@ export function RfidReadersPage() {
       setCreatedReader(created)
       await load()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create reader')
+      toast.error(error instanceof Error ? error.message : t('rfid:toasts.createFailed'))
     } finally {
       setCreating(false)
     }
@@ -149,7 +150,7 @@ export function RfidReadersPage() {
       toast.success(t('rfid:ui.readerRevoked'))
       await load()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to revoke reader')
+      toast.error(error instanceof Error ? error.message : t('rfid:toasts.revokeFailed'))
     }
   }
 
@@ -157,31 +158,31 @@ export function RfidReadersPage() {
     {
       title: t('rfid:ui.readers'),
       value: overview?.totalReaders ?? 0,
-      detail: `${overview?.onlineReaders ?? 0} online / ${overview?.degradedReaders ?? 0} degraded / ${overview?.offlineReaders ?? 0} offline`,
+      detail: t('rfid:overview.readerHealth', { online: overview?.onlineReaders ?? 0, degraded: overview?.degradedReaders ?? 0, offline: overview?.offlineReaders ?? 0 }),
       icon: <Radio className="h-4 w-4 text-primary" />,
     },
     {
       title: t('rfid:ui.queueDepth'),
       value: overview?.queueDepth ?? 0,
-      detail: `silence timeout ${overview?.readerSilenceTimeoutSeconds ?? 0}s`,
+      detail: t('rfid:overview.silenceTimeout', { seconds: overview?.readerSilenceTimeoutSeconds ?? 0 }),
       icon: <Clock3 className="h-4 w-4 text-warning-foreground" />,
     },
     {
       title: t('rfid:ui.duplicateRate'),
-      value: `${(overview?.duplicateRate ?? 0).toFixed(1)}%`,
-      detail: `${overview?.duplicateCount ?? 0} duplicate events`,
+      value: t('rfid:overview.percent', { value: formatNumber(overview?.duplicateRate ?? 0, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }),
+      detail: t('rfid:overview.duplicates', { count: overview?.duplicateCount ?? 0 }),
       icon: <Activity className="h-4 w-4 text-live" />,
     },
     {
       title: t('rfid:ui.unknownTags'),
-      value: `${(overview?.unknownCredentialRate ?? 0).toFixed(1)}%`,
-      detail: `${overview?.unknownCredentialCount ?? 0} unmatched reads`,
+      value: t('rfid:overview.percent', { value: formatNumber(overview?.unknownCredentialRate ?? 0, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }),
+      detail: t('rfid:overview.unmatched', { count: overview?.unknownCredentialCount ?? 0 }),
       icon: <AlertTriangle className="h-4 w-4 text-destructive" />,
     },
     {
       title: t('rfid:ui.ingressLag'),
-      value: overview?.averageIngressLagMillis != null ? `${overview.averageIngressLagMillis} ms` : '-',
-      detail: `oldest queued read ${overview?.oldestQueuedReadAgeSeconds ?? 0}s`,
+      value: overview?.averageIngressLagMillis != null ? t('rfid:overview.milliseconds', { value: formatNumber(overview.averageIngressLagMillis) }) : '-',
+      detail: t('rfid:overview.oldestQueued', { seconds: overview?.oldestQueuedReadAgeSeconds ?? 0 }),
       icon: <Cpu className="h-4 w-4 text-muted-foreground" />,
     },
   ]
@@ -196,7 +197,7 @@ export function RfidReadersPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('rfid:ui.rfidMonitoring')}</h1>
           <p className="text-sm text-muted-foreground">
-            {race?.name ?? 'Race'} reader health, ingest backlog, and timing-event quality signals.
+            {t('rfid:overviewDescription', { race: race?.name ?? t('rfid:raceFallback') })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -331,7 +332,7 @@ export function RfidReadersPage() {
           {createdReader ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Reader <span className="font-medium text-foreground">{createdReader.name}</span> {t('rfid:ui.wasCreatedCopyTheApiKey')}
+                {t('rfid:readerLabel')} <span className="font-medium text-foreground">{createdReader.name}</span> {t('rfid:ui.wasCreatedCopyTheApiKey')}
               </p>
               <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-3">
                 <KeyRound className="h-4 w-4 text-primary" />
@@ -398,7 +399,7 @@ export function RfidReadersPage() {
                   {t('rfid:ui.cancel')}
                 </Button>
                 <Button onClick={() => void handleCreate()} disabled={creating}>
-                  {creating ? 'Creating…' : 'Create reader'}
+                  {creating ? t('rfid:creating') : t('rfid:createReader')}
                 </Button>
               </>
             )}

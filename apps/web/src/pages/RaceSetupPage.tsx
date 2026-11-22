@@ -9,6 +9,7 @@ import { sponsorsApi, stagesApi } from '@/lib/api'
 import type { RaceSponsor, RaceStage } from '@/types'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
+import { formatNumber } from '@/lib/format'
 
 export function RaceSetupPage() {
   const { raceId } = useParams()
@@ -81,7 +82,7 @@ export function RaceSetupPage() {
         <CardContent className="space-y-3">
           {stages.map((stage) => (
             <div key={stage.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-              <div><p className="font-medium">{stage.sequence}. {stage.name}</p><p className="text-xs text-muted-foreground">{stage.stageDate ?? '—'} · {stage.distanceKm ?? '—'} km</p></div>
+              <div><p className="font-medium">{stage.sequence}. {stage.name}</p><p className="text-xs text-muted-foreground">{stage.stageDate ?? '—'} · {stage.distanceKm != null ? t('admin:distanceKm', { value: formatNumber(stage.distanceKm, { maximumFractionDigits: 1 }) }) : '—'}</p></div>
               <Button size="icon" variant="ghost" onClick={() => void remove('stage', stage.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
             </div>
           ))}

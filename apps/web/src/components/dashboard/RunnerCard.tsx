@@ -3,6 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { LiveTrackingData } from '@/types';
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatNumber } from '@/lib/format';
 
 interface RunnerCardProps {
   participant: LiveTrackingData;
@@ -11,6 +13,7 @@ interface RunnerCardProps {
 }
 
 export function RunnerCard({ participant, isSelected, onClick }: RunnerCardProps) {
+  const { t } = useTranslation();
   const statusColor = useMemo(() => {
     if (participant.speed > 12) return 'bg-green-500';
     if (participant.speed >= 5) return 'bg-yellow-500';
@@ -39,7 +42,7 @@ export function RunnerCard({ participant, isSelected, onClick }: RunnerCardProps
               <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium">
                 <span className="font-mono">{participant.bibNumber}</span>
                 <span>•</span>
-                <span className="text-foreground font-bold">{Number(participant.speed || 0).toFixed(1)} km/h</span>
+                <span className="text-foreground font-bold">{t('liveTracking:units.speed', { value: formatNumber(Number(participant.speed || 0), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}</span>
               </div>
             </div>
           </div>
@@ -49,7 +52,7 @@ export function RunnerCard({ participant, isSelected, onClick }: RunnerCardProps
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-2 text-[10px]">
             <Badge variant="outline" className="h-5 px-1.5 rounded-sm font-mono bg-background">
-              {participant.lastCheckpoint || 'START'}
+              {participant.lastCheckpoint || t('liveTracking:start')}
             </Badge>
             <span className="text-muted-foreground flex items-center gap-1 font-medium">
               <Clock className="h-3 w-3" />

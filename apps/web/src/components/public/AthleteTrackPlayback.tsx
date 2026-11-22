@@ -6,6 +6,8 @@ import { publicTrackingApi } from '@/lib/api'
 import { getMapAccessToken, resolveMapStyleUrl } from '@/lib/map-provider'
 import { formatClock, resolvePlaybackPosition, trackDurationMs } from '@/lib/playback'
 import type { TrackPoint } from '@/types'
+import { useTranslation } from 'react-i18next'
+import { formatNumber } from '@/lib/format'
 
 const MAPBOX_TOKEN = getMapAccessToken()
 
@@ -17,6 +19,7 @@ interface AthleteTrackPlaybackProps {
 const SPEEDS = [1, 2, 4]
 
 export function AthleteTrackPlayback({ raceId, participantId }: AthleteTrackPlaybackProps) {
+  const { t } = useTranslation()
   const [points, setPoints] = useState<TrackPoint[]>([])
   const [progress, setProgress] = useState(1)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -80,8 +83,8 @@ export function AthleteTrackPlayback({ raceId, participantId }: AthleteTrackPlay
     <section className="rounded-[28px] border border-white/10 bg-white/6 p-4 text-white shadow-[0_20px_60px_rgba(2,6,23,0.35)] backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Route Playback</p>
-          <h2 className="mt-1 text-2xl font-black uppercase tracking-[-0.04em] text-white">Movement Replay</h2>
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{t('publicRace:playback.eyebrow')}</p>
+          <h2 className="mt-1 text-2xl font-black uppercase tracking-[-0.04em] text-white">{t('publicRace:playback.title')}</h2>
         </div>
         <span className="font-mono text-xs text-cyan-100">{formatClock(elapsed)} / {formatClock(duration)}</span>
       </div>
@@ -120,7 +123,7 @@ export function AthleteTrackPlayback({ raceId, participantId }: AthleteTrackPlay
           }}
         >
           {isPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-          {isPlaying ? 'Pause' : 'Play'}
+          {isPlaying ? t('publicRace:playback.pause') : t('publicRace:playback.play')}
         </Button>
         <Button
           type="button"
@@ -132,7 +135,7 @@ export function AthleteTrackPlayback({ raceId, participantId }: AthleteTrackPlay
           }}
         >
           <RotateCcw className="mr-2 h-4 w-4" />
-          Restart
+          {t('publicRace:playback.restart')}
         </Button>
 
         <input
@@ -145,7 +148,7 @@ export function AthleteTrackPlayback({ raceId, participantId }: AthleteTrackPlay
             setProgress(Number(event.target.value) / 1000)
           }}
           className="h-1 flex-1 min-w-[160px] cursor-pointer appearance-none rounded-full bg-white/20 accent-cyan-400"
-          aria-label="Playback position"
+          aria-label={t('publicRace:playback.position')}
         />
 
         <div className="flex items-center gap-1">
@@ -158,7 +161,7 @@ export function AthleteTrackPlayback({ raceId, participantId }: AthleteTrackPlay
               className="rounded-full text-xs"
               onClick={() => setSpeed(value)}
             >
-              {value}x
+              {t('publicRace:playback.speed', { value: formatNumber(value) })}
             </Button>
           ))}
         </div>

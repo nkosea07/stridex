@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { insightsApi } from '@/lib/api'
 import type { ParticipantAnomaly, RaceInsightsSummary } from '@/types'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
+import { formatTime, formatNumber } from '@/lib/format'
 
 function formatPace(secondsPerKm: number) {
   if (!secondsPerKm || secondsPerKm <= 0) return '—'
@@ -15,6 +17,7 @@ function formatPace(secondsPerKm: number) {
 }
 
 export function RaceInsightsPage() {
+  const { t } = useTranslation()
   const { raceId } = useParams()
   const [summary, setSummary] = useState<RaceInsightsSummary | null>(null)
   const [anomalies, setAnomalies] = useState<ParticipantAnomaly[]>([])
@@ -28,7 +31,7 @@ export function RaceInsightsPage() {
       setSummary(s)
       setAnomalies(a)
     } catch {
-      toast.error('Failed to load insights')
+      toast.error(t('admin:insights.loadFailed'))
     } finally {
       setIsLoading(false)
     }
@@ -41,8 +44,8 @@ export function RaceInsightsPage() {
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Race insights</h1>
-        <p className="text-muted-foreground">Projected finish and data-integrity signals (heuristic)</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t('admin:insights.title')}</h1>
+        <p className="text-muted-foreground">{t('admin:insights.description')}</p>
       </div>
 
       {isLoading && !summary ? (
@@ -56,17 +59,17 @@ export function RaceInsightsPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Participants</CardTitle>
+                <CardTitle className="text-sm font-medium">{t('admin:insights.participants')}</CardTitle>
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{summary?.totalParticipants ?? 0}</div>
-                <p className="text-xs text-muted-foreground">{summary?.liveParticipants ?? 0} live</p>
+                <p className="text-xs text-muted-foreground">{t('admin:insights.live', { count: summary?.liveParticipants ?? 0 })}</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Average pace</CardTitle>
+                <CardTitle className="text-sm font-medium">{t('admin:insights.averagePace')}</CardTitle>
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -75,47 +78,47 @@ export function RaceInsightsPage() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Projected leader finish</CardTitle>
+                <CardTitle className="text-sm font-medium">{t('admin:insights.leaderFinish')}</CardTitle>
                 <Clock className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
                   {summary?.predictedLeaderFinishTime
-                    ? new Date(summary.predictedLeaderFinishTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    ? formatTime(summary.predictedLeaderFinishTime)
                     : '—'}
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Anomalies</CardTitle>
+                <CardTitle className="text-sm font-medium">{t('admin:insights.anomalies')}</CardTitle>
                 <AlertTriangle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{summary?.anomalyCount ?? 0}</div>
-                <p className="text-xs text-muted-foreground">{summary?.dropoutRiskPercent ?? 0}% at risk</p>
+                <p className="text-xs text-muted-foreground">{t('admin:insights.atRisk', { value: formatNumber(summary?.dropoutRiskPercent ?? 0, { maximumFractionDigits: 1 }) })}</p>
               </CardContent>
             </Card>
           </div>
 
           <Card>
             <CardHeader>
-              <CardTitle>Anomaly signals</CardTitle>
+              <CardTitle>{t('admin:insights.signals')}</CardTitle>
             </CardHeader>
             <CardContent>
               {anomalies.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">No anomalies detected.</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">{t('admin:insights.none')}</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left text-muted-foreground">
-                        <th className="py-2 pr-4 font-medium">Athlete</th>
-                        <th className="py-2 pr-4 font-medium">Bib</th>
-                        <th className="py-2 pr-4 font-medium">Status</th>
-                        <th className="py-2 pr-4 font-medium">Filtered GPS</th>
-                        <th className="py-2 pr-4 font-medium">Missed cutoffs</th>
-                        <th className="py-2 font-medium">Score</th>
+                        <th className="py-2 pr-4 font-medium">{t('admin:insights.athlete')}</th>
+                        <th className="py-2 pr-4 font-medium">{t('admin:insights.bib')}</th>
+                        <th className="py-2 pr-4 font-medium">{t('admin:insights.status')}</th>
+                        <th className="py-2 pr-4 font-medium">{t('admin:insights.filteredGps')}</th>
+                        <th className="py-2 pr-4 font-medium">{t('admin:insights.missedCutoffs')}</th>
+                        <th className="py-2 font-medium">{t('admin:insights.score')}</th>
                       </tr>
                     </thead>
                     <tbody>

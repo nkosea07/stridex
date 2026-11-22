@@ -17,6 +17,7 @@ import { ResultReleasePanel } from '@/components/results/ResultReleasePanel'
 import { TimingAnomaliesPanel } from '@/components/results/TimingAnomaliesPanel'
 import { ResultQueriesPanel } from '@/components/results/ResultQueriesPanel'
 import { isAdminRole, useAuth } from '@/contexts/AuthContext'
+import { formatNumber } from '@/lib/format'
 
 export function ResultsPage() {
   const { t } = useTranslation()
@@ -167,7 +168,7 @@ export function ResultsPage() {
             <TableCell><div className="flex items-center gap-1"><Clock className="h-3 w-3 text-muted-foreground" />{result.chipTime || '--:--:--'}</div></TableCell>
             <TableCell>{result.ageGroup || '-'}{result.ageGroupPosition ? ` (#${result.ageGroupPosition})` : ''}</TableCell>
             <TableCell>{result.averagePace || '-'}</TableCell>
-            <TableCell><div className="flex items-center gap-1"><TrendingUp className="h-3 w-3 text-muted-foreground" />{result.averageSpeed ?? '-'} km/h</div></TableCell>
+            <TableCell><div className="flex items-center gap-1"><TrendingUp className="h-3 w-3 text-muted-foreground" />{result.averageSpeed != null ? t('results:speedKmh', { value: formatNumber(result.averageSpeed, { maximumFractionDigits: 1 }) }) : '-'}</div></TableCell>
             {showGenderPosition && <TableCell>{result.genderPosition}</TableCell>}
             <TableCell>{result.isOfficial ? <Badge className="bg-success/20 text-success">{t('results:ui.official')}</Badge> : <Badge variant="outline">{t('results:ui.provisional')}</Badge>}</TableCell>
           </TableRow>
@@ -214,7 +215,7 @@ export function ResultsPage() {
           <Button variant="outline" onClick={() => void handleExportResults('csv')}><Download className="mr-2 h-4 w-4" />{t('results:ui.export')}</Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" aria-label="Export format">
+              <Button variant="outline" size="icon" aria-label={t('results:exportFormat')}>
                 <Download className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -271,7 +272,7 @@ export function ResultsPage() {
           ) : teamRankings.length === 0 ? (
             <p className="py-6 text-sm text-muted-foreground">{t('results:ui.noTeamResultsAvailable')}</p>
           ) : (
-            <RankingTable list={teamRankings} label="Team" />
+            <RankingTable list={teamRankings} label={t('results:team')} />
           )}
         </TabsContent>
         <TabsContent value="countries">
@@ -280,14 +281,14 @@ export function ResultsPage() {
           ) : countryRankings.length === 0 ? (
             <p className="py-6 text-sm text-muted-foreground">{t('results:ui.noCountryResultsAvailable')}</p>
           ) : (
-            <RankingTable list={countryRankings} label="Country" />
+            <RankingTable list={countryRankings} label={t('results:country')} />
           )}
         </TabsContent>
       </Tabs>
       {hasMoreResults && (
         <div className="flex justify-center">
           <Button variant="outline" disabled={isLoadingMore} onClick={() => void loadResults(resultPage + 1, true)}>
-            {isLoadingMore ? 'Loading…' : 'Load more results'}
+            {isLoadingMore ? t('results:loadingMore') : t('results:loadMore')}
           </Button>
         </div>
       )}

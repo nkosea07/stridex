@@ -1,0 +1,29 @@
+{
+  "viewPublicTracking": "View public tracking",
+  "signIn": "Sign in",
+  "eyebrow": "Built for the moment the starter fires",
+  "tagline": "Race-day control, without race-day guesswork.",
+  "description": "A reliable command centre for race organizers, officials, athletes and spectators. Set up the event, move participants through the course, and give every follower a clear view of race day.",
+  "createOrganizer": "Create organizer account",
+  "exploreTracking": "Explore race tracking",
+  "reviewNote": "Organizer permissions are reviewed before race controls are enabled.",
+  "signal": "Race day signal",
+  "live": "Live",
+  "officialTiming": "Official timing signal",
+  "courseUpdates": "Active course updates",
+  "operatingPicture": "One operating picture for organizers, officials, athletes and spectators.",
+  "capabilities": {
+    "plan": {
+      "title": "Plan with certainty",
+      "description": "Registrations, race setup, participant operations and bibs in one operational workspace."
+    },
+    "follow": {
+      "title": "See the race unfold",
+      "description": "Live GPS, checkpoints, public tracking and official results stay connected from start to finish."
+    },
+    "operate": {
+      "title": "Operate with confidence",
+      "description": "Role-aware access, verified accounts, reader health and a pilot-first reliability model."
+    }
+  }
+}

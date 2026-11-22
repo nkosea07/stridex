@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Users, Shield } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export type TrackingMode = 'spectator' | 'organizer';
 
@@ -14,11 +15,12 @@ interface CommandBarProps {
 }
 
 export function CommandBar({
-  raceTitle = 'Live Race Tracking',
+  raceTitle,
   mode,
   onModeChange,
   className,
 }: CommandBarProps) {
+  const { t } = useTranslation();
   return (
     <div className={cn(
       "absolute top-6 left-1/2 -translate-x-1/2 z-50",
@@ -33,9 +35,9 @@ export function CommandBar({
           <div className="h-2 w-2 rounded-full bg-live animate-live-pulse" />
         </div>
         <div>
-          <h1 className="text-sm font-bold tracking-tight uppercase">{raceTitle}</h1>
+          <h1 className="text-sm font-bold tracking-tight uppercase">{raceTitle ?? t('liveTracking:defaultTitle')}</h1>
           <Badge variant="outline" className="text-[10px] h-4 py-0 border-live/50 text-live bg-live/5">
-            LIVE
+            {t('liveTracking:live')}
           </Badge>
         </div>
       </div>
@@ -52,7 +54,7 @@ export function CommandBar({
           onClick={() => onModeChange('spectator')}
         >
           <Users className="h-3.5 w-3.5" />
-          Spectator
+          {t('liveTracking:modes.spectator')}
         </Button>
         <Button
           variant={mode === 'organizer' ? 'secondary' : 'ghost'}
@@ -64,7 +66,7 @@ export function CommandBar({
           onClick={() => onModeChange('organizer')}
         >
           <Shield className="h-3.5 w-3.5" />
-          Organizer
+          {t('liveTracking:modes.organizer')}
         </Button>
       </div>
     </div>

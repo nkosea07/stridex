@@ -155,5 +155,14 @@
       "RESULTS_CERTIFIED": "Results are certified. Reopen them before changing times.",
       "CORRECTION_REASON_REQUIRED": "Enter a reason of at least 5 characters."
     }
+  },
+  "distanceKm": "{{value}} km",
+  "toasts": {
+    "routeImported_one": "Imported {{count}} route point",
+    "routeImported_other": "Imported {{count}} route points",
+    "gpxImportFailed": "Failed to import GPX",
+    "exported": "Exported {{format}}",
+    "exportFailed": "Failed to export {{format}}",
+    "timeRecorded": "Time recorded for {{bib}}"
   }
 }

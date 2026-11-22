@@ -38,7 +38,7 @@ export function MediaPage() {
     try {
       setItems(await mediaApi.list(raceId))
     } catch {
-      toast.error('Failed to load media')
+      toast.error(t('admin:media.loadFailed'))
     } finally {
       setIsLoading(false)
     }
@@ -53,11 +53,11 @@ export function MediaPage() {
     setIsUploading(true)
     try {
       await mediaApi.upload(raceId, file, caption || undefined)
-      toast.success('Media uploaded for review')
+      toast.success(t('admin:media.uploaded'))
       setCaption('')
       await loadMedia()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Upload failed')
+      toast.error(error instanceof Error ? error.message : t('admin:media.uploadFailed'))
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -72,10 +72,10 @@ export function MediaPage() {
       } else {
         await mediaApi.reject(raceId, id)
       }
-      toast.success(approve ? 'Media approved' : 'Media rejected')
+      toast.success(approve ? t('admin:media.approved') : t('admin:media.rejected'))
       await loadMedia()
     } catch {
-      toast.error('Failed to update media')
+      toast.error(t('admin:media.updateFailed'))
     }
   }
 
@@ -110,25 +110,26 @@ export function MediaPage() {
     if (!raceId) return
     try {
       await mediaApi.remove(raceId, id)
-      toast.success('Media deleted')
+      toast.success(t('admin:media.deleted'))
       await loadMedia()
     } catch {
-      toast.error('Failed to delete media')
+      toast.error(t('admin:media.deleteFailed'))
     }
   }
 
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Media Gallery</h1>
-        <p className="text-muted-foreground">Upload race photos/videos and moderate what spectators see</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t('admin:media.title')}</h1>
+        <p className="text-muted-foreground">{t('admin:media.description')}</p>
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Upload Media</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t('admin:media.upload')}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <Input
-            placeholder="Caption (optional)"
+            placeholder={t('admin:media.captionPlaceholder')}
+              aria-label={t('admin:media.captionPlaceholder')}
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
           />
@@ -143,15 +144,15 @@ export function MediaPage() {
             }}
           />
           <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <Upload className="h-3 w-3" /> {isUploading ? 'Uploading…' : 'Images or MP4/WebM, up to 15MB'}
+            <Upload className="h-3 w-3" /> {isUploading ? t('admin:media.uploading') : t('admin:media.uploadHint')}
           </p>
         </CardContent>
       </Card>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading media…</p>
+        <p className="text-sm text-muted-foreground">{t('admin:media.loading')}</p>
       ) : items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No media uploaded yet.</p>
+        <p className="text-sm text-muted-foreground">{t('admin:media.empty')}</p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item) => (
@@ -160,7 +161,7 @@ export function MediaPage() {
                 {item.mediaType === 'VIDEO' ? (
                   <video src={item.url} className="h-full w-full object-cover" controls />
                 ) : (
-                  <img src={item.url} alt={item.caption || 'Race media'} className="h-full w-full object-cover" />
+                  <img src={item.url} alt={item.caption || t('admin:media.mediaAlt')} className="h-full w-full object-cover" />
                 )}
               </div>
               <CardContent className="space-y-2 p-3">
@@ -183,12 +184,12 @@ export function MediaPage() {
                 <div className="flex gap-2">
                   {canModerateMedia && item.status !== 'APPROVED' && (
                     <Button size="sm" variant="outline" onClick={() => void handleModerate(item.id, true)}>
-                      <Check className="mr-1 h-3 w-3" /> Approve
+                      <Check className="mr-1 h-3 w-3" /> {t('admin:media.approve')}
                     </Button>
                   )}
                   {canModerateMedia && item.status !== 'REJECTED' && (
                     <Button size="sm" variant="outline" onClick={() => void handleModerate(item.id, false)}>
-                      <X className="mr-1 h-3 w-3" /> Reject
+                      <X className="mr-1 h-3 w-3" /> {t('admin:media.reject')}
                     </Button>
                   )}
                   {canModerateMedia && !item.participantId && item.status === 'APPROVED' && !item.nonPersonAttested && (

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { dashboardApi, racesApi } from '@/lib/api'
 import type { DashboardStats, Race } from '@/types'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { formatNumber } from '@/lib/format'
 
 const statusColors: Record<string, string> = {
   DRAFT: 'bg-muted text-muted-foreground',
@@ -63,11 +64,11 @@ export function DashboardPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('nav:dashboard')}</h1>
-          <p className="text-muted-foreground">Race operations overview</p>
+          <p className="text-muted-foreground">{t('admin:dashboard.description')}</p>
         </div>
         <Button onClick={() => navigate('/admin/races')}>
           <Plus className="mr-2 h-4 w-4" />
-          Manage Races
+          {t('admin:dashboard.manageRaces')}
         </Button>
       </div>
 
@@ -88,7 +89,7 @@ export function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Races</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('admin:dashboard.totalRaces')}</CardTitle>
             <Flag className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -101,41 +102,41 @@ export function DashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Participants</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('admin:dashboard.participants')}</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statsError ? '—' : isLoading ? '--' : (stats?.totalParticipants ?? 0).toLocaleString()}
+              {statsError ? '—' : isLoading ? '--' : formatNumber(stats?.totalParticipants ?? 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {statsError ? t('nav:dashboardStatsUnavailable') : 'across all races'}
+              {statsError ? t('nav:dashboardStatsUnavailable') : t('admin:dashboard.acrossAllRaces')}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Live Tracking</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('admin:dashboard.liveTracking')}</CardTitle>
             <MapPin className="h-4 w-4 text-live" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metricValue(stats?.liveTracking)}</div>
             <p className="text-xs text-muted-foreground">
-              {statsError ? t('nav:dashboardStatsUnavailable') : 'athletes active in last 10 min'}
+              {statsError ? t('nav:dashboardStatsUnavailable') : t('admin:dashboard.activeRecently')}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming (30d)</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('admin:dashboard.upcoming')}</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metricValue(stats?.upcomingRaces)}</div>
             <p className="text-xs text-muted-foreground">
-              {statsError ? t('nav:dashboardStatsUnavailable') : `completed today: ${stats?.completedToday ?? 0}`}
+              {statsError ? t('nav:dashboardStatsUnavailable') : t('admin:dashboard.completedToday', { count: stats?.completedToday ?? 0 })}
             </p>
           </CardContent>
         </Card>
@@ -144,11 +145,11 @@ export function DashboardPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-base">Recent Races</CardTitle>
-            <CardDescription>Latest race events</CardDescription>
+            <CardTitle className="text-base">{t('admin:dashboard.recentRaces')}</CardTitle>
+            <CardDescription>{t('admin:dashboard.latestRaces')}</CardDescription>
           </div>
           <Button variant="ghost" size="sm" onClick={() => navigate('/admin/races')}>
-            View all
+            {t('admin:dashboard.viewAll')}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </CardHeader>
@@ -163,7 +164,7 @@ export function DashboardPage() {
                 <div>
                   <p className="font-medium">{race.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {race.city}, {race.country} - {race.distanceKm ?? '-'}km
+                    {t('admin:dashboard.raceLine', { city: race.city, country: race.country, distance: race.distanceKm != null ? formatNumber(race.distanceKm, { maximumFractionDigits: 1 }) : '-' })}
                   </p>
                 </div>
                 <Badge className={statusColors[race.status] ?? statusColors.DRAFT}>

@@ -114,7 +114,7 @@ export function PrivacyOperationsPage() {
             <div className="space-y-2">
               <Label htmlFor="privacy-scope">{t('common:privacyOps.verifiedScope')}</Label>
               <Input id="privacy-scope" value={scope} onChange={(event) => setScope(event.target.value)}
-                placeholder="local|/verified/legacy/path" />
+                placeholder={t('admin:privacyOps.storageKeyPlaceholder')} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="privacy-reason">{t('common:privacyOps.reason')}</Label>
