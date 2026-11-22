@@ -1,4 +1,4 @@
-# Pending Work Register (2026-10-12)
+# Pending Work Register (updated 2026-11-22)
 
 Single inventory of remaining gaps and phased work, consolidating
 `docs/IMPLEMENTATION_GAP_ANALYSIS_2026_10_11.md`, `docs/GAP_ANALYSIS_2026_10_09.md`,
@@ -12,34 +12,34 @@ Legend: **Done** · **Partial** · **Pending** · **Blocked** (needs a decision)
 ## 1. Internationalization (i18n)
 
 Languages: `en` (default/fallback), `sn`, `nd`, `af`, `zu`, `fr`, `pt`, `sw`. No RTL yet.
-Guaradirails: `pnpm i18n:check` (CI), `eslint-plugin-i18next/no-literal-string` (scoped),
+Guardrails: `pnpm i18n:check` (CI), `eslint-plugin-i18next/no-literal-string` (scoped),
 format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 
 - **Phase 0 — foundation: Done** (`e6d9d87`). `contract.i18n`, `packages/i18n`, web/mobile
   providers + switchers, `src/lib/format.ts`, `i18n:check`/`i18n:report`, CI wiring, AGENTS rule.
-- **Phase 1 — web extraction: Partial** (`a3cb968`). Done: `auth`, `register`, `nav` + the four
-  migrated files. Remaining areas (extract to a namespace, then add the file(s) to the
-  `no-literal-string` override list in `apps/web/eslint.config.js`):
-  - admin: `ParticipantsPage`, `CheckpointsPage`, `ResultsPage`, `AnalyticsPage`,
-    `RaceInsightsPage`, `MediaPage`, `PromoCodesPage`, `CategoriesPage`, `TeamsPage`,
-    `RfidReadersPage`, `RaceDetailsPage`, `RacesPage`, `OrganizerApplicationsPage`,
-    `SettingsPage`, `NotificationsPage`, dashboard shell components.
-  - registration: `RegistrationFieldsPage`, `PublicRaceRegistrationPanel`.
-  - tracking: `LiveTrackingPage`, `CommandBar`, `Sidebar`, `AnalyticsTray`, `AeroPanel`,
-    `RunnerCard`, `FreshnessIndicator`, `SecurityAuditor`.
-  - public: `PublicRaceHubPage`, `PublicAthleteTrackingPage`, `PublicLeaderboard`,
-    `PublicAthleteSearch`, `PublicAthleteCard`, `PublicRaceHero`, `PublicRaceResultsPanel`,
-    `RaceHeatmap`, `RaceMediaGallery`, `AthleteTrackPlayback`, `FollowButton`.
-  - shared: toaster strings, dialog/empty states, client-side validation/error copy.
-  - End state: `no-literal-string` = error repo-wide.
-- **Phase 2 — mobile extraction: Pending.** Mirror the web namespaces; device locale + switcher
-  already wired; add a mobile eslint override as areas migrate.
-- **Phase 3 — backend: Pending.** `Accept-Language` → `LocaleContextHolder` (interceptor/
-  resolver); `users.locale` migration; localize `AuthEmailService`/`RegistrationEmailService`/
-  `NotificationService` via `MessageSource` + `messages_<lang>.properties`; add stable
-  `ErrorResponse.code` (+ `GlobalExceptionHandler`) and map codes → localized client strings.
-- **Phase 4 — languages: Pending.** Seed `sn/nd/af/zu/fr/pt/sw` catalogs (English placeholders),
-  translate guided by `pnpm i18n:report`. Adding a language = one catalog + the contract list.
+- **Phase 1 — web extraction: Partial** (`a3cb968`, `3292f01`). Most admin, registration and
+  auth screens use `t()`, and the email-link pages (`/verify-email`, `/reset-password`,
+  `/forgot-password`, PR #51) were built translated. Still hardcoded English as of 2026-11-22
+  (extract to a namespace, then add the file to the `no-literal-string` override list in
+  `apps/web/eslint.config.js`):
+  - pages: `AnalyticsPage`, `RaceInsightsPage`, `PromoCodesPage`, `TeamsPage`,
+    `NotificationsPage`, `LandingPage`, `PublicRaceHubPage`, `PublicAthleteTrackingPage`
+    (`PrivacyPolicyPage`/`TermsPage` render the shared `legal` namespace).
+  - components: `DashboardLayout`, `Sidebar`, `ThemeSelect`, `AnalyticsTray`, `AeroPanel`,
+    `SecurityAuditor`, `PublicLeaderboard`, `PublicAthleteSearch`, `PublicAthleteCard`,
+    `PublicRaceHero`, `PublicRaceResultsPanel`, `RaceHeatmap`, `RaceMediaGallery`,
+    `AthleteTrackPlayback`.
+  - End state: `no-literal-string` = error repo-wide; then load the non-English web catalogs
+    (web currently uses only `sharedResources.en`).
+- **Phase 2 — mobile extraction: Done** (`3292f01`). Every mobile screen uses `t('mobile:…')`.
+- **Phase 3 — backend: Done** (`3292f01`, `V58__user_preferred_locale.sql`). Per-user
+  `preferred_locale`, `Accept-Language` fallback (`UserLocales`), `MessageSource`-backed email and
+  notification text (`LocalizedMessages`), stable API error codes mapped to client strings.
+  Only `messages.properties` (English) exists; add `messages_<lang>.properties` as translations land.
+- **Phase 4 — languages: Done for mobile** (PR #46). `sn/nd/af/zu/fr/pt/sw` catalogs for
+  `mobile`, `account`, `legal` and the `common` keys mobile uses. Machine translated: needs
+  native-speaker review (especially `sn`, `nd`, `zu`). Legal document bodies stay English with a
+  translated notice. Web and backend catalogs are still English-only.
 
 ## 2. Audit remediation (2026-10-11 audit)
 
@@ -73,7 +73,9 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
   - AI depth: deterministic dropout-risk foundation added; forecasting/fraud/LLM remain pending.
   - Printable bibs: 1D barcode, sponsor branding, accent color, and template metadata added.
   - Media: facial matching and social sharing remain pending.
-  - Mobile parity: operations timing mode added; offline QR queue and certificate detail remain pending.
+  - Mobile parity: **Done.** Operations timing, offline staff capture queue, certificates (including
+    private races, PR #51), race-wide leaderboard/search (#45), photo gallery (#48), race map
+    (#51) and in-app email-link screens (#51).
   - Race depth: timezone, stages, sponsors, cancellation reason, and bib branding added; advanced stage classifications remain pending.
   - PWA: manifest and offline shell added; install/offline device evidence pending.
 
@@ -82,9 +84,10 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 - **`gps_locations` partitioning** — see §4 decision; retention + index already in place.
 - **Event-driven scale** — external WebSocket relay, event bus; durable import queue is partly
   done (`import_jobs` + `ParticipantImportProcessor` recovery).
-- **GDPR** — self-service export/consent/erase done; remaining: re-acknowledgement when the
-  privacy policy version changes (B2 item 5), retention-exception documentation and
-  query-based PII-absence tests.
+- **GDPR** — self-service export/consent/erase and re-acceptance when the privacy policy or terms
+  version changes are done (legal acceptance gate, web and mobile). Remaining: retention-exception
+  documentation (`docs/backlog.md` item 5) and query-based PII-absence tests for every public
+  endpoint (today only some public controller tests assert PII absence).
 - **Observability/docs** — `docs/architecture.md` + `docs/er-diagram.md` done; annotated OpenAPI
   and user/admin manuals pending.
 - **Ops** — k8s manifests, deploy workflow and Prometheus alerts done; backup automation, full
@@ -98,45 +101,68 @@ format helpers, `AGENTS.md` rule. Use `t('<namespace>:<key>')`.
 | 2 | Object storage (S3 / MinIO) | Done in code — `AwsS3MediaStorage` / `MinioMediaStorage`; provider smoke evidence pending |
 | 3 | Apple OAuth (Services ID/team/key) | Deferred — production disables OAuth; Google OAuth is dev/test only |
 | 4 | `gps_locations` partitioning (window + cadence) | Blocked — ops migration |
-| 5 | Public-endpoint rate limiting (OAuth + RFID) | Done — OAuth 10/15m per IP; RFID 120/min per IP + 600/min per reader key; heartbeat excluded |
+| 5 | Public-endpoint rate limiting | Done — OAuth 10/15m per IP; RFID 120/min per IP + 600/min per reader key (heartbeat excluded); public spectator endpoints 120/min per user or app install under a 1200/min per-IP ceiling (PR #51) |
 | 6 | Client i18n | Decided — see §1 |
 
 ## 5. Security residual risks (`docs/security-review.md`)
 
 - Pesepay refund endpoint contract unverified against provider docs.
 - Google verification depends on the remote tokeninfo call (no local JWKS cache).
-- OAuth and RFID ingest throttling is implemented; production Redis enforcement and alerting
-  still require deployment/runtime verification.
+- OAuth, RFID and public spectator throttling are implemented; production Redis enforcement and
+  alerting still require deployment/runtime verification.
+- Public heatmap cells need at least `TRACKING_HEATMAP_MIN_PARTICIPANTS` (default 3, minimum 2)
+  distinct athletes (PR #52). Comparing overlapping time windows can still reveal that an
+  unnamed runner crossed a cell; fixed public time buckets would close this.
 - Erase irreversibility is mitigated by the grace period + cancel path (done).
 
 ## 6. Environment / CI caveats
 
-- As of 2026-11-17 every CI job runs on GitHub Actions (PRs #8, #30, #42): `backend` (including the
-  PostGIS Flyway smoke test for V1–V58), `javascript`, `load-smoke`, `containers` (Docker builds +
-  Trivy image scans), `dependency-security`, and `deployment-preflight`. `e2e` (Cypress) is still
+- As of 2026-11-22 every CI job runs on GitHub Actions (PRs #8, #30, #42, #50): `backend` (including the
+  PostGIS Flyway smoke test for V1–V58), `javascript`, `load-smoke`, `containers` (Docker builds, a
+  web image smoke test including app-link files, and Trivy image scans), `dependency-security`, and `deployment-preflight`. `e2e` (Cypress) is still
   skipped in CI.
 - Accepted dependency advisories and their expiry dates are listed in
   `docs/RELEASE_READINESS.md` → *Dependency audit exceptions* and in `.trivyignore`.
 
 ## 7. Suggested sequencing
 
-1. **Finish i18n Phase 1** area-by-area (admin → registration → tracking → public → shared),
-   then **Phase 2** (mobile), **Phase 3** (backend), **Phase 4** (locales).
-2. **Push the branch and let CI run** (validates the new CI jobs, Docker builds, migration smoke).
-3. Verify the deployed Redis-backed rate limits and metrics, then complete **§2 Section 5
-   dead-code removal** (low risk).
-4. Resolve the remaining **§4** decisions (Apple OAuth, partitioning) and capture S3/MinIO and
-   WhatsApp provider evidence.
-5. **§2 Section 6** product features (results depth, timing imports, AI depth, bibs, media).
+1. **§2 Section 5 dead-code removal** (low risk, in progress).
+2. **Mobile release readiness** (§9): device testing, deployment values, translation review,
+   store listings.
+3. **Finish i18n Phase 1** (web) for the files listed in §1, then load web translations.
+4. Verify the deployed Redis-backed rate limits and metrics.
+5. Resolve the remaining **§4** decisions (Apple OAuth, partitioning) and capture S3/MinIO,
+   WhatsApp and Pesepay refund provider evidence.
+6. **Spring Boot 4 migration** before 2027-02-17 (§8).
+7. **§2 Section 6** product features still pending (AI forecasting/fraud, facial matching,
+   social sharing, advanced stage classifications) — each needs a product and privacy decision.
 
 ## 8. Dated security to-dos
 
 | Due | Item | Status |
 | --- | --- | --- |
 | **2027-02-17** | **Migrate the backend to Spring Boot 4** (Spring Framework ≥ 7.0.9) and remove the CVE-2026-47884 / CVE-2026-47890 lines from `.trivyignore`. Plan: `docs/plans/2026-11-17-spring-boot-4-migration.md`. | **Pending** |
-| **2027-05-16** | Re-review the three accepted JavaScript advisories (`image-size` via Metro, `decode-uri-component` via React Navigation): upgrade Expo/React Navigation if fixed versions are compatible, otherwise renew with a new review date. | **Pending** |
+| **2027-05-16** | Re-review the accepted JavaScript advisories (`image-size` via Metro, `decode-uri-component` via React Navigation, `picomatch` via Expo CLI/Metro): upgrade Expo/React Navigation if fixed versions are compatible, otherwise renew with a new review date. `picomatch` (GHSA-fc5q-39xc-vjpf, PR #47) is only in `pnpm-workspace.yaml` `auditConfig.ignoreGhsas`, not `.trivyignore`, so the expiry workflow does not track it — check it manually. | **Pending** |
 
 Reminders are automatic: `.github/workflows/security-exception-expiry.yml` runs every Monday and,
 from 45 days before an expiry, opens (then comments weekly on) a GitHub issue labelled
 `security-exception-expiry`, assigned to the repository owner. When an exception expires, Trivy
 stops ignoring it and the `dependency-security`/`containers` CI jobs fail.
+
+## 9. Mobile release readiness
+
+The mobile app is feature-complete for the planned scope (see §2 Section 6). Before a store
+release:
+
+- **Device testing — Pending.** Nothing has run on a phone or simulator: maps, camera scanning,
+  payment browser, push routing, background GPS, email links. There is no device test suite
+  (Detox/Maestro).
+- **Deployment values — Pending.** `APP_LINKS_IOS_APP_IDS`, `APP_LINKS_ANDROID_PACKAGE`,
+  `APP_LINKS_ANDROID_SHA256_FINGERPRINTS` (`.env.pilot`) and `EXPO_PUBLIC_WEB_URL` (app build)
+  for in-app email links; FCM credentials for push; `MOBILE_IOS_STORE_URL` /
+  `MOBILE_ANDROID_STORE_URL` for the update screen.
+- **Translation review — Pending.** Native-speaker review of all non-English mobile strings.
+- **Store work — Pending.** Listings, screenshots, Apple privacy labels and Google data safety
+  (location, install id, photos).
+- **Known limitations (accepted):** videos open in the browser (no in-app player); the public
+  media list is not paginated and media is served `no-store`.
