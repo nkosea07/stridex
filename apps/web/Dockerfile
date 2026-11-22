@@ -6,7 +6,7 @@ RUN pnpm install --frozen-lockfile --filter web... \
     && pnpm contracts:validate \
     && pnpm --filter web build
 
-FROM nginxinc/nginx-unprivileged:1.30-alpine3.24-slim
+FROM nginxinc/nginx-unprivileged:1.31-alpine3.24-slim
 USER root
 RUN apk upgrade --no-cache \
     && apk add --no-cache --repositories-file /dev/null \
