@@ -705,6 +705,7 @@
     "followFailed": "Volging kon nie bygewerk word nie. Probeer asseblief weer.",
     "mapLabel": "Kaart van die roete wat wys waar hardlopers is en watter atlete jy volg",
     "mapDensity": "Gekleurde areas wys waar hardlopers die afgelope {{minutes}} minute was. Individuele posisies word net gewys vir atlete wat jy volg.",
+    "mapPrivacy": "Areas met baie min hardlopers bly leeg om hul privaatheid te beskerm.",
     "mapEmpty": "Die kaart verskyn sodra die roete of hardlopers se posisies beskikbaar is.",
     "mapFollowedTitle": "Atlete wat jy volg",
     "mapFollowHint": "Volg atlete vanaf die puntelys of soektog om hulle op die kaart te sien.",

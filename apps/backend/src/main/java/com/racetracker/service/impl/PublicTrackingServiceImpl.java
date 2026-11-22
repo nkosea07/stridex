@@ -65,6 +65,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
     private static final int DEFAULT_FEED_LIMIT = 25;
     private static final int MAX_FEED_LIMIT = 100;
     private static final int MAX_PUBLIC_HEATMAP_SCALE = 4;
+    static final int MIN_PUBLIC_HEATMAP_PARTICIPANTS = 2;
 
     private final PublicRaceVisibility publicRaceVisibility;
     private final ParticipantRepository participantRepository;
@@ -90,6 +91,10 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
         this.feedRevisionRepository = feedRevisionRepository;
         this.lastCheckpointNameCache = lastCheckpointNameCache;
         this.raceTrackerProperties = raceTrackerProperties;
+        if (raceTrackerProperties.getTracking().getHeatmapMinParticipants() < MIN_PUBLIC_HEATMAP_PARTICIPANTS) {
+            throw new IllegalStateException("racetracker.tracking.heatmap-min-participants must be at least "
+                + MIN_PUBLIC_HEATMAP_PARTICIPANTS + " so a public heatmap cell never represents a single athlete");
+        }
     }
 
     @Override
@@ -315,7 +320,8 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
         publicRaceVisibility.requireVisible(raceId);
         int boundedScale = scale == null ? raceTrackerProperties.getTracking().getHeatmapScale()
             : Math.max(1, Math.min(scale, MAX_PUBLIC_HEATMAP_SCALE));
-        return gpsLocationRepository.heatCells(raceId, from, to, boundedScale).stream()
+        int minParticipants = raceTrackerProperties.getTracking().getHeatmapMinParticipants();
+        return gpsLocationRepository.heatCells(raceId, from, to, boundedScale, minParticipants).stream()
             .map(cell -> new HeatCellDto(cell.getLatitude(), cell.getLongitude(), cell.getWeight()))
             .toList();
     }

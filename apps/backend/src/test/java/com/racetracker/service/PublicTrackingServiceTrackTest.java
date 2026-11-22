@@ -206,12 +206,44 @@ class PublicTrackingServiceTrackTest {
         when(cell.getWeight()).thenReturn(12L);
 
         when(races.findByIdForPublicVisibility(raceId)).thenReturn(Optional.of(race));
-        when(gps.heatCells(eq(raceId), any(), any(), eq(3))).thenReturn(List.of(cell));
+        when(gps.heatCells(eq(raceId), any(), any(), eq(3), eq(3))).thenReturn(List.of(cell));
 
         var cells = newService(races, participants, gps, checkpoints, revisions).getRaceHeatmap(raceId, null, null, null);
 
         assertThat(cells).hasSize(1);
         assertThat(cells.get(0).getLatitude()).isEqualTo(-33.9);
         assertThat(cells.get(0).getWeight()).isEqualTo(12L);
+    }
+
+    @Test
+    void heatmapAppliesTheConfiguredMinimumDistinctAthletesPerCell() {
+        RaceRepository races = mock(RaceRepository.class);
+        GpsLocationRepository gps = mock(GpsLocationRepository.class);
+        UUID raceId = UUID.randomUUID();
+        Race race = new Race();
+        race.setId(raceId);
+        race.setStatus(Race.RaceStatus.IN_PROGRESS);
+        when(races.findByIdForPublicVisibility(raceId)).thenReturn(Optional.of(race));
+        RaceTrackerProperties properties = new RaceTrackerProperties();
+        properties.getTracking().setHeatmapMinParticipants(5);
+
+        new PublicTrackingServiceImpl(new PublicRaceVisibility(races), mock(ParticipantRepository.class), gps,
+            mock(CheckpointRecordRepository.class), mock(RaceFeedRevisionRepository.class),
+            mock(LastCheckpointNameCache.class), properties).getRaceHeatmap(raceId, null, null, 9);
+
+        org.mockito.Mockito.verify(gps).heatCells(eq(raceId), any(), any(), eq(4), eq(5));
+    }
+
+    @Test
+    void refusesToStartWithAHeatmapMinimumThatWouldExposeASingleAthlete() {
+        RaceTrackerProperties properties = new RaceTrackerProperties();
+        properties.getTracking().setHeatmapMinParticipants(1);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new PublicTrackingServiceImpl(
+                new PublicRaceVisibility(mock(RaceRepository.class)), mock(ParticipantRepository.class),
+                mock(GpsLocationRepository.class), mock(CheckpointRecordRepository.class),
+                mock(RaceFeedRevisionRepository.class), mock(LastCheckpointNameCache.class), properties))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("heatmap-min-participants");
     }
 }

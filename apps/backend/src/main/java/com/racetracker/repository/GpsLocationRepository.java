@@ -91,13 +91,15 @@ public interface GpsLocationRepository extends JpaRepository<GpsLocation, UUID> 
           and (:from is null or g.recorded_at >= :from)
           and (:to is null or g.recorded_at <= :to)
         group by 1, 2
+        having count(distinct g.participant_id) >= :minParticipants
         order by weight desc
         """, nativeQuery = true)
     List<HeatCellProjection> heatCells(
         @Param("raceId") UUID raceId,
         @Param("from") OffsetDateTime from,
         @Param("to") OffsetDateTime to,
-        @Param("scale") int scale
+        @Param("scale") int scale,
+        @Param("minParticipants") int minParticipants
     );
 
     void deleteByParticipantIdIn(java.util.Collection<UUID> participantIds);

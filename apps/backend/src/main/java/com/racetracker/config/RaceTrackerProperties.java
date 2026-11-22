@@ -82,6 +82,7 @@ public class RaceTrackerProperties {
         private double minDistanceForAccumulationMeters = 5;
         private int maxTrackPoints = 1000;
         private int heatmapScale = 3;
+        private int heatmapMinParticipants = 3;
         private int retentionDays = 0;
         private int maxClockSkewSeconds = 120;
         private int selfScanMaxFixAgeSeconds = 120;

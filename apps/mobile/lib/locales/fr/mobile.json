@@ -707,6 +707,7 @@
     "followFailed": "Le suivi n’a pas pu être mis à jour. Veuillez réessayer.",
     "mapLabel": "Carte du parcours montrant où sont les coureurs et les athlètes que vous suivez",
     "mapDensity": "Les zones colorées montrent où les coureurs sont passés au cours des {{minutes}} dernières minutes. Les positions individuelles ne sont affichées que pour les athlètes que vous suivez.",
+    "mapPrivacy": "Les zones avec très peu de coureurs restent vides pour protéger leur vie privée.",
     "mapEmpty": "La carte s'affiche dès que le parcours ou la position des coureurs est disponible.",
     "mapFollowedTitle": "Athlètes que vous suivez",
     "mapFollowHint": "Suivez des athlètes depuis le classement ou la recherche pour les voir sur la carte.",
