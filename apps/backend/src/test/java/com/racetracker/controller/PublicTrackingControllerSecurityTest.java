@@ -7,6 +7,7 @@ import com.racetracker.dto.publictracking.PublicRaceHubResponse;
 import com.racetracker.security.CustomUserDetailsService;
 import com.racetracker.security.JwtService;
 import com.racetracker.security.ClientAddressResolver;
+import com.racetracker.security.PublicRequestLimiter;
 import com.racetracker.security.ApiSecurityExceptionHandler;
 import com.racetracker.security.RequestRateLimiter;
 import com.racetracker.service.impl.MfaAuthenticationServiceImpl;
@@ -61,6 +62,9 @@ class PublicTrackingControllerSecurityTest {
 
     @MockBean
     private ClientAddressResolver clientAddressResolver;
+
+    @MockBean
+    private PublicRequestLimiter publicRequestLimiter;
 
     @MockBean
     private MfaAuthenticationServiceImpl mfaAuthenticationService;

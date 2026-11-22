@@ -26,6 +26,9 @@ export const API_CONTRACT = {
     supportedLocales: ['en', 'sn', 'nd', 'af', 'zu', 'fr', 'pt', 'sw'],
     rtlLocales: [],
   },
+  headers: {
+    publicClientId: 'X-Race-Tracker-Client',
+  },
   endpoints: {
     myPersonalBests: '/results/my/personal-bests',
     myResultsHistory: '/results/my/history',

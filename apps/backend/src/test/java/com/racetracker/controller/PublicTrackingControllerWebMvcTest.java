@@ -7,6 +7,7 @@ import com.racetracker.dto.publictracking.PublicRaceLiveFeedResponse;
 import com.racetracker.dto.tracking.CheckpointSplitDto;
 import com.racetracker.security.JwtAuthenticationFilter;
 import com.racetracker.security.ClientAddressResolver;
+import com.racetracker.security.PublicRequestLimiter;
 import com.racetracker.security.RequestRateLimiter;
 import com.racetracker.service.ParticipantService;
 import com.racetracker.service.PublicTrackingService;
@@ -53,6 +54,9 @@ class PublicTrackingControllerWebMvcTest {
 
     @MockBean
     private ClientAddressResolver clientAddressResolver;
+
+    @MockBean
+    private PublicRequestLimiter publicRequestLimiter;
 
     @Test
     void getHub_returnsPayloadInControllerSlice() throws Exception {

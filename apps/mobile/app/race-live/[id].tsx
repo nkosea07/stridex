@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/auth';
 import { getPreferredCapability, isOperationsRole } from '@/lib/capabilities';
 import { api, getApiErrorKind, getNonEmptyRouteId, type ApiErrorKind } from '@/lib/api';
 import { RequestErrorState } from '@/components/RequestErrorState';
+import { RaceLiveMap } from '@/components/RaceLiveMap';
 import { formatDistanceKm, formatTime, statusTranslationKey } from '@/lib/format';
 import type { PublicAthleteSummary } from '@/types';
 
@@ -15,7 +16,7 @@ const REFRESH_INTERVAL_MS = 30000;
 const SEARCH_DEBOUNCE_MS = 400;
 const LEADERBOARD_SIZE = 50;
 
-type Tab = 'leaderboard' | 'search';
+type Tab = 'leaderboard' | 'search' | 'map';
 
 export default function RaceLiveScreen() {
   const { t } = useTranslation();
@@ -195,7 +196,7 @@ export default function RaceLiveScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.tabs} accessibilityRole="tablist">
-        {(['leaderboard', 'search'] as Tab[]).map((key) => (
+        {(['leaderboard', 'search', 'map'] as Tab[]).map((key) => (
           <TouchableOpacity key={key} onPress={() => setTab(key)} accessibilityRole="tab"
             accessibilityState={{ selected: tab === key }}
             style={[styles.tab, { borderColor: colors.border }, tab === key && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
@@ -204,7 +205,9 @@ export default function RaceLiveScreen() {
         ))}
       </View>
 
-      {tab === 'leaderboard' ? (
+      {tab === 'map' ? (
+        <RaceLiveMap raceId={raceId} canFollow={canFollow} followedIds={followed} />
+      ) : tab === 'leaderboard' ? (
         loading ? (
           <ActivityIndicator style={styles.loading} color={colors.primary} accessibilityLabel={t('mobile:raceLive.loading')} />
         ) : (

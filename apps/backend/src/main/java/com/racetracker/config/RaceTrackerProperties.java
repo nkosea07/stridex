@@ -89,6 +89,8 @@ public class RaceTrackerProperties {
         private double maxPlausibleSplitSpeedKmh = 30;
         private int retentionBatchSize = 5000;
         private int retentionMaxBatchesPerRun = 200;
+        private int publicClientRequestsPerMinute = 120;
+        private int publicAddressRequestsPerMinute = 1200;
     }
 
     @Getter

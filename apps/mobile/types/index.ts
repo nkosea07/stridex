@@ -90,6 +90,12 @@ export interface PublicAthleteSummary {
   rank?: number | null;
 }
 
+export interface HeatCell {
+  latitude: number;
+  longitude: number;
+  weight: number;
+}
+
 export type PublicRaceMediaType = 'IMAGE' | 'VIDEO';
 
 export interface PublicRaceMedia {

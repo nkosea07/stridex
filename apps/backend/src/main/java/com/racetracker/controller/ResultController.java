@@ -15,8 +15,7 @@ import com.racetracker.service.ResultExportService;
 import com.racetracker.service.ResultService;
 import com.racetracker.service.PublicRaceVisibility;
 import com.racetracker.service.AuditEventService;
-import com.racetracker.security.ClientAddressResolver;
-import com.racetracker.security.RequestRateLimiter;
+import com.racetracker.security.PublicRequestLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -33,8 +32,7 @@ public class ResultController {
 
     private final ResultService resultService;
     private final AuditEventService auditEventService;
-    private final RequestRateLimiter requestRateLimiter;
-    private final ClientAddressResolver clientAddressResolver;
+    private final PublicRequestLimiter publicRequestLimiter;
     private final ResultExportService resultExportService;
     private final CertificateService certificateService;
     private final CertificateTokenService certificateTokenService;
@@ -49,8 +47,7 @@ public class ResultController {
     public ResultController(
         ResultService resultService,
         AuditEventService auditEventService,
-        RequestRateLimiter requestRateLimiter,
-        ClientAddressResolver clientAddressResolver,
+        PublicRequestLimiter publicRequestLimiter,
         ResultExportService resultExportService,
         CertificateService certificateService,
         CertificateTokenService certificateTokenService,
@@ -64,8 +61,7 @@ public class ResultController {
         this.timingAnomalyService = timingAnomalyService;
         this.resultNotifier = resultNotifier;
         this.auditEventService = auditEventService;
-        this.requestRateLimiter = requestRateLimiter;
-        this.clientAddressResolver = clientAddressResolver;
+        this.publicRequestLimiter = publicRequestLimiter;
         this.resultExportService = resultExportService;
         this.certificateService = certificateService;
         this.certificateTokenService = certificateTokenService;
@@ -135,7 +131,7 @@ public class ResultController {
         @RequestParam(required = false) Long revision,
         HttpServletRequest request
     ) {
-        requestRateLimiter.checkPublicTracking(raceId.toString(), clientAddressResolver.resolve(request));
+        publicRequestLimiter.check(raceId, request);
         publicRaceVisibility.requireVisible(raceId);
         RaceResultPageDto results = resultService.listPublishedByRacePage(raceId, page, size, revision);
         List<PublicRaceResultDto> publicItems = results.items().stream().map(this::toPublicResult).toList();
@@ -150,12 +146,13 @@ public class ResultController {
         @RequestParam(required = false) String token,
         HttpServletRequest request
     ) {
-        requestRateLimiter.checkPublicTracking(raceId.toString(), clientAddressResolver.resolve(request));
-        publicRaceVisibility.requireVisible(raceId);
+        publicRequestLimiter.check(raceId, request);
         var claims = certificateTokenService.verify(token);
-        if (claims.isEmpty()
-            || !claims.get().raceId().equals(raceId)
-            || !claims.get().participantId().equals(participantId)) {
+        boolean ownerToken = claims.isPresent()
+            && claims.get().raceId().equals(raceId)
+            && claims.get().participantId().equals(participantId);
+        if (!ownerToken) {
+            publicRaceVisibility.requireVisible(raceId);
             return ResponseEntity.status(403).build();
         }
         return pdfResponse(certificateService.generate(raceId, participantId), "certificate.pdf");

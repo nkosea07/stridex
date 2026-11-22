@@ -57,6 +57,39 @@ class RequestRateLimiterTest {
     }
 
     @Test
+    void anonymousPublicTrackingWithoutClientIdKeepsOneHashedPerAddressBucket() {
+        doReturn(0L).when(redisTemplate).execute(any(RedisScript.class), anyList(), any(Object[].class));
+
+        limiter.checkPublicTracking("race-1", "198.51.100.7", null, 120, 1200);
+
+        org.mockito.ArgumentCaptor<List<String>> keys = org.mockito.ArgumentCaptor.forClass(List.class);
+        org.mockito.ArgumentCaptor<Object[]> arguments = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        org.mockito.Mockito.verify(redisTemplate).execute(any(RedisScript.class), keys.capture(), arguments.capture());
+        assertEquals(1, keys.getValue().size());
+        assertTrue(keys.getValue().get(0).startsWith("rt:limit:public-tracking:"));
+        assertEquals(false, keys.getValue().get(0).contains("198.51.100.7"));
+        assertEquals("120", String.valueOf(arguments.getValue()[0]));
+    }
+
+    @Test
+    void identifiedPublicTrackingClientsShareOnlyAHigherPerAddressCeiling() {
+        doReturn(0L).when(redisTemplate).execute(any(RedisScript.class), anyList(), any(Object[].class));
+
+        limiter.checkPublicTracking("race-1", "198.51.100.7", "install:6f1c2b9e-7a4d-4c1e-9a52-3b8f0d6e2a11", 120, 1200);
+
+        org.mockito.ArgumentCaptor<List<String>> keys = org.mockito.ArgumentCaptor.forClass(List.class);
+        org.mockito.ArgumentCaptor<Object[]> arguments = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        org.mockito.Mockito.verify(redisTemplate).execute(any(RedisScript.class), keys.capture(), arguments.capture());
+        assertEquals(2, keys.getValue().size());
+        assertTrue(keys.getValue().get(0).startsWith("rt:limit:public-tracking:client:"));
+        assertTrue(keys.getValue().get(1).startsWith("rt:limit:public-tracking:address:"));
+        assertEquals(false, keys.getValue().stream().anyMatch(key -> key.contains("198.51.100.7") || key.contains("6f1c2b9e")));
+        List<String> values = List.of(arguments.getValue()).stream().map(String::valueOf).toList();
+        assertEquals("120", values.get(0));
+        assertEquals("1200", values.get(2));
+    }
+
+    @Test
     void verificationResendIsLimitedPerAccountAndIpWithoutStoringTheEmail() {
         doReturn(0L).when(redisTemplate).execute(any(RedisScript.class), anyList(), any(Object[].class));
 

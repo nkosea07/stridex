@@ -17,7 +17,7 @@ class MyResultCertificateTokenTest {
 
     private final ResultService resultService = mock(ResultService.class);
     private final CertificateTokenService tokens = new CertificateTokenService("test-secret-that-is-long-enough-for-hmac-signing");
-    private final ResultController controller = new ResultController(resultService, null, null, null, null, null, tokens,
+    private final ResultController controller = new ResultController(resultService, null, null, null, null, tokens,
         null, null, null, null, null);
 
     private RaceResultDto result(boolean official) {

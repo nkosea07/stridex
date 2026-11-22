@@ -139,7 +139,12 @@ export function LoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">{t('auth:passwordLabel')}</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">{t('auth:passwordLabel')}</Label>
+                  <Link to="/forgot-password" className="text-sm text-primary underline-offset-4 hover:underline">
+                    {t('auth:forgotPassword.link')}
+                  </Link>
+                </div>
                 <Input
                   id="password"
                   type="password"

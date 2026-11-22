@@ -687,7 +687,8 @@
     "openHint": "Veja quem lidera e encontre qualquer atleta pelo nome ou dorsal.",
     "tabs": {
       "leaderboard": "Classificação",
-      "search": "Encontrar atleta"
+      "search": "Encontrar atleta",
+      "map": "Mapa"
     },
     "loading": "A carregar a classificação",
     "leaderboardHelp": "Atletas ainda em prova, ordenados pela distância percorrida. Quem já terminou aparece nos resultados.",
@@ -703,7 +704,16 @@
     "followName": "Seguir {{name}}",
     "unfollowName": "Deixar de seguir {{name}}",
     "followFailedTitle": "Não guardado",
-    "followFailed": "Não foi possível atualizar o seguimento. Tente novamente."
+    "followFailed": "Não foi possível atualizar o seguimento. Tente novamente.",
+    "mapLabel": "Mapa do percurso que mostra onde estão os corredores e os atletas que segue",
+    "mapDensity": "As zonas sombreadas mostram por onde os corredores passaram nos últimos {{minutes}} minutos. As posições individuais só são mostradas para os atletas que segue.",
+    "mapEmpty": "O mapa aparece quando o percurso ou as posições dos corredores estiverem disponíveis.",
+    "mapFollowedTitle": "Atletas que segue",
+    "mapFollowHint": "Siga atletas na classificação ou na pesquisa para os ver no mapa.",
+    "mapNoPosition": "Sem posição recente",
+    "mapOnMap": "No mapa",
+    "mapFollowedLimit": "A mostrar {{shown}} dos {{total}} atletas que segue nesta corrida.",
+    "mapLoadFailed": "Não foi possível atualizar o mapa. Toque para tentar novamente."
   },
   "gallery": {
     "title": "Fotografias da corrida",
@@ -721,5 +731,23 @@
     "video": "Vídeo",
     "imageFailed": "Não foi possível carregar esta fotografia.",
     "close": "Fechar"
+  },
+  "authLinks": {
+    "verifyTitle": "Verifique o seu e-mail",
+    "verifying": "A verificar o seu e-mail…",
+    "verified": "O seu e-mail está verificado. Já pode iniciar sessão.",
+    "verifyInvalid": "Esta ligação de verificação é inválida, expirou ou já foi usada. Inicie sessão para receber uma nova, se ainda precisar.",
+    "resetTitle": "Escolha uma nova palavra-passe",
+    "resetIntro": "Use pelo menos {{min}} caracteres. A sessão será terminada nos outros dispositivos.",
+    "newPassword": "Nova palavra-passe",
+    "confirmPassword": "Confirme a nova palavra-passe",
+    "save": "Guardar nova palavra-passe",
+    "resetDone": "A sua palavra-passe foi alterada. Inicie sessão com a nova palavra-passe.",
+    "resetInvalid": "Esta ligação de reposição é inválida, expirou ou já foi usada. Peça uma nova.",
+    "requestNewLink": "Pedir nova ligação",
+    "tooShort": "Use pelo menos {{min}} caracteres.",
+    "tooLong": "Use no máximo {{max}} caracteres.",
+    "mismatch": "As palavras-passe não coincidem.",
+    "signIn": "Ir para o início de sessão"
   }
 }

@@ -687,7 +687,8 @@
     "openHint": "Voyez qui mène et trouvez n’importe quel athlète par nom ou dossard.",
     "tabs": {
       "leaderboard": "Classement",
-      "search": "Trouver un athlète"
+      "search": "Trouver un athlète",
+      "map": "Carte"
     },
     "loading": "Chargement du classement",
     "leaderboardHelp": "Athlètes encore en course, classés selon la distance parcourue. Les arrivants figurent dans les résultats.",
@@ -703,7 +704,16 @@
     "followName": "Suivre {{name}}",
     "unfollowName": "Ne plus suivre {{name}}",
     "followFailedTitle": "Non enregistré",
-    "followFailed": "Le suivi n’a pas pu être mis à jour. Veuillez réessayer."
+    "followFailed": "Le suivi n’a pas pu être mis à jour. Veuillez réessayer.",
+    "mapLabel": "Carte du parcours montrant où sont les coureurs et les athlètes que vous suivez",
+    "mapDensity": "Les zones colorées montrent où les coureurs sont passés au cours des {{minutes}} dernières minutes. Les positions individuelles ne sont affichées que pour les athlètes que vous suivez.",
+    "mapEmpty": "La carte s'affiche dès que le parcours ou la position des coureurs est disponible.",
+    "mapFollowedTitle": "Athlètes que vous suivez",
+    "mapFollowHint": "Suivez des athlètes depuis le classement ou la recherche pour les voir sur la carte.",
+    "mapNoPosition": "Aucune position récente",
+    "mapOnMap": "Sur la carte",
+    "mapFollowedLimit": "{{shown}} des {{total}} athlètes que vous suivez dans cette course sont affichés.",
+    "mapLoadFailed": "La carte n'a pas pu être mise à jour. Touchez pour réessayer."
   },
   "gallery": {
     "title": "Photos de la course",
@@ -721,5 +731,23 @@
     "video": "Vidéo",
     "imageFailed": "Impossible de charger cette photo.",
     "close": "Fermer"
+  },
+  "authLinks": {
+    "verifyTitle": "Vérifiez votre e-mail",
+    "verifying": "Vérification de votre e-mail…",
+    "verified": "Votre e-mail est vérifié. Vous pouvez maintenant vous connecter.",
+    "verifyInvalid": "Ce lien de vérification est invalide, expiré ou déjà utilisé. Connectez-vous pour en recevoir un nouveau si nécessaire.",
+    "resetTitle": "Choisissez un nouveau mot de passe",
+    "resetIntro": "Utilisez au moins {{min}} caractères. Vous serez déconnecté de vos autres appareils.",
+    "newPassword": "Nouveau mot de passe",
+    "confirmPassword": "Confirmez le nouveau mot de passe",
+    "save": "Enregistrer le nouveau mot de passe",
+    "resetDone": "Votre mot de passe a été modifié. Connectez-vous avec votre nouveau mot de passe.",
+    "resetInvalid": "Ce lien de réinitialisation est invalide, expiré ou déjà utilisé. Demandez-en un nouveau.",
+    "requestNewLink": "Demander un nouveau lien",
+    "tooShort": "Utilisez au moins {{min}} caractères.",
+    "tooLong": "Utilisez au maximum {{max}} caractères.",
+    "mismatch": "Les mots de passe ne correspondent pas.",
+    "signIn": "Aller à la connexion"
   }
 }

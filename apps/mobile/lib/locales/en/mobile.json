@@ -685,7 +685,8 @@
     "openHint": "See who is leading and find any athlete by name or bib.",
     "tabs": {
       "leaderboard": "Leaderboard",
-      "search": "Find athlete"
+      "search": "Find athlete",
+      "map": "Map"
     },
     "loading": "Loading the leaderboard",
     "leaderboardHelp": "Athletes still on course, ranked by distance covered. Finishers appear in the results.",
@@ -701,7 +702,16 @@
     "followName": "Follow {{name}}",
     "unfollowName": "Unfollow {{name}}",
     "followFailedTitle": "Not saved",
-    "followFailed": "Following could not be updated. Please try again."
+    "followFailed": "Following could not be updated. Please try again.",
+    "mapLabel": "Race course map showing where runners are and the athletes you follow",
+    "mapDensity": "Shaded areas show where runners have been in the last {{minutes}} minutes. Individual positions are shown only for athletes you follow.",
+    "mapEmpty": "The map appears once the course or runners' positions are available.",
+    "mapFollowedTitle": "Athletes you follow",
+    "mapFollowHint": "Follow athletes from the leaderboard or search to see them on the map.",
+    "mapNoPosition": "No recent position",
+    "mapOnMap": "On the map",
+    "mapFollowedLimit": "Showing {{shown}} of the {{total}} athletes you follow in this race.",
+    "mapLoadFailed": "The map couldn't be updated. Tap to try again."
   },
   "gallery": {
     "title": "Race photos",
@@ -719,5 +729,23 @@
     "video": "Video",
     "imageFailed": "This photo couldn't be loaded.",
     "close": "Close"
+  },
+  "authLinks": {
+    "verifyTitle": "Verify your email",
+    "verifying": "Verifying your email…",
+    "verified": "Your email is verified. You can now sign in.",
+    "verifyInvalid": "This verification link is invalid, expired or already used. Sign in to send yourself a new one if you still need it.",
+    "resetTitle": "Choose a new password",
+    "resetIntro": "Use at least {{min}} characters. You'll be signed out of other devices.",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "save": "Save new password",
+    "resetDone": "Your password has been changed. Sign in with your new password.",
+    "resetInvalid": "This reset link is invalid, expired or already used. Request a new one.",
+    "requestNewLink": "Request a new link",
+    "tooShort": "Use at least {{min}} characters.",
+    "tooLong": "Use no more than {{max}} characters.",
+    "mismatch": "The passwords don't match.",
+    "signIn": "Go to sign in"
   }
 }

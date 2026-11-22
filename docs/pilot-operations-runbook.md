@@ -144,8 +144,14 @@ the source database during rehearsal.
 
 - Athletes pay the entry fee from the race page (**Pay now**). The app opens the provider checkout in an in-app browser; after payment the provider redirects to `PAYMENTS_RETURN_URL`, which should be a page that tells the athlete to close it and return to the app. The entry shows as paid only after the provider callback reaches `PAYMENTS_RESULT_URL`.
 - Checkout is refused for waitlisted, rejected, or disqualified entries (`PAYMENT_NOT_AVAILABLE_FOR_STATUS`). Registrations expose `amountDue` (current fee, including early-bird and team fees) while unpaid.
-- **Forgot password** and **Resend verification email** are available on the mobile sign-in screen. Both are rate-limited per account and per IP address; reset links open the web app's reset page.
-- Finisher certificates appear in the app once results are certified (official).
+- **Forgot password** and **Resend verification email** are available on the mobile sign-in screen and on the web sign-in page (`/forgot-password`). Both are rate-limited per account and per IP address.
+- Email links go to `FRONTEND_URL/verify-email` and `FRONTEND_URL/reset-password`. These web pages always work. To open them in the app instead, set `APP_LINKS_IOS_APP_IDS` (`TEAMID.com.racetracker.app`), `APP_LINKS_ANDROID_PACKAGE` and `APP_LINKS_ANDROID_SHA256_FINGERPRINTS` (the Play App Signing key and the upload key) in `.env.pilot`, and build the app with `EXPO_PUBLIC_WEB_URL=FRONTEND_URL`. Check `https://<host>/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json` return JSON before release. A malformed value stops the web container from starting.
+- Finisher certificates appear in the app once results are certified (official), including for private races.
+
+## Public spectator rate limits
+
+- Public race endpoints are limited per race to `PUBLIC_TRACKING_CLIENT_LIMIT_PER_MINUTE` (default 120) for each signed-in user or app install, under a shared `PUBLIC_TRACKING_ADDRESS_LIMIT_PER_MINUTE` ceiling (default 1200) for one IP address. Mobile carriers put many phones behind one address, so the ceiling, not the per-client limit, is what a busy venue hits. Browsers without an install id share the per-client limit per address.
+- Watch `security.rate_limit.blocked{policy="public_tracking"}`. Raise the address ceiling if spectators report "Too many requests" at a venue; the per-address ceiling must stay at least the per-client limit or the backend refuses to start.
 
 ## Mobile app minimum version
 

@@ -685,7 +685,8 @@
     "openHint": "Ona kuti ndiani ari kutungamira uye tsvaga mumhanyi upi zvake nezita kana nhamba.",
     "tabs": {
       "leaderboard": "Vari kutungamira",
-      "search": "Tsvaga mumhanyi"
+      "search": "Tsvaga mumhanyi",
+      "map": "Mepu"
     },
     "loading": "Kurodha vari kutungamira",
     "leaderboardHelp": "Vamhanyi vachiri munzira, vakarongwa nechinhambwe chavamhanya. Vapedza vanoonekwa pamibairo.",
@@ -701,7 +702,16 @@
     "followName": "Tevera {{name}}",
     "unfollowName": "Rega kutevera {{name}}",
     "followFailedTitle": "Hazvina kuchengetwa",
-    "followFailed": "Kutevera hakuna kukwanisa kugadziriswa. Ndapota edza zvakare."
+    "followFailed": "Kutevera hakuna kukwanisa kugadziriswa. Ndapota edza zvakare.",
+    "mapLabel": "Mepu yenzira yemujaho inoratidza panowanikwa vamhanyi nevamhanyi vaunotevera",
+    "mapDensity": "Nzvimbo dzine mumvuri dzinoratidza pakapfuura vamhanyi mumaminitsi {{minutes}} apfuura. Nzvimbo dzemunhu mumwe nemumwe dzinoratidzwa chete kuvamhanyi vaunotevera.",
+    "mapEmpty": "Mepu ichaoneka kana nzira kana nzvimbo dzevamhanyi dzawanikwa.",
+    "mapFollowedTitle": "Vamhanyi vaunotevera",
+    "mapFollowHint": "Tevera vamhanyi kubva kune vari kutungamira kana kutsvaga kuti uvaone pamepu.",
+    "mapNoPosition": "Hapana nzvimbo ichangobva kuwanikwa",
+    "mapOnMap": "Pamepu",
+    "mapFollowedLimit": "Kuratidza {{shown}} pa{{total}} vevamhanyi vaunotevera mumujaho uyu.",
+    "mapLoadFailed": "Mepu haina kukwanisa kugadziriswa. Baya kuti uedze zvakare."
   },
   "gallery": {
     "title": "Mifananidzo yemujaho",
@@ -719,5 +729,23 @@
     "video": "Vhidhiyo",
     "imageFailed": "Mufananidzo uyu hauna kukwanisa kurodhwa.",
     "close": "Vhara"
+  },
+  "authLinks": {
+    "verifyTitle": "Simbisa email yako",
+    "verifying": "Kusimbisa email yako…",
+    "verified": "Email yako yasimbiswa. Iye zvino unogona kupinda.",
+    "verifyInvalid": "Chinongedzo ichi chekusimbisa hachina kunaka, chapera nguva kana chakatoshandiswa. Pinda kuti uzvitumire chitsva kana uchichida.",
+    "resetTitle": "Sarudza pasiwedhi itsva",
+    "resetIntro": "Shandisa mavara anokwana {{min}}. Uchabudiswa pane mimwe midziyo.",
+    "newPassword": "Pasiwedhi itsva",
+    "confirmPassword": "Simbisa pasiwedhi itsva",
+    "save": "Chengetedza pasiwedhi itsva",
+    "resetDone": "Pasiwedhi yako yachinjwa. Pinda nepasiwedhi yako itsva.",
+    "resetInvalid": "Chinongedzo ichi chekugadzira pasiwedhi itsva hachina kunaka, chapera nguva kana chakatoshandiswa. Kumbira chitsva.",
+    "requestNewLink": "Kumbira chinongedzo chitsva",
+    "tooShort": "Shandisa mavara anokwana {{min}}.",
+    "tooLong": "Usashandise mavara anopfuura {{max}}.",
+    "mismatch": "Mapasiwedhi haaenderane.",
+    "signIn": "Enda kunopinda"
   }
 }

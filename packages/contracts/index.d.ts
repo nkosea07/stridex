@@ -216,6 +216,9 @@ export interface ApiContract {
     supportedLocales: string[];
     rtlLocales: string[];
   };
+  headers: {
+    publicClientId: string;
+  };
   endpoints: Record<EndpointKey, string>;
 }
 

@@ -11,8 +11,7 @@ import com.racetracker.exception.ApiException;
 import com.racetracker.service.ParticipantService;
 import com.racetracker.service.PublicTrackingService;
 import com.racetracker.service.PublicRaceVisibility;
-import com.racetracker.security.ClientAddressResolver;
-import com.racetracker.security.RequestRateLimiter;
+import com.racetracker.security.PublicRequestLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,21 +31,18 @@ public class PublicTrackingController {
     private final PublicTrackingService publicTrackingService;
     private final ParticipantService participantService;
     private final PublicRaceVisibility publicRaceVisibility;
-    private final RequestRateLimiter requestRateLimiter;
-    private final ClientAddressResolver clientAddressResolver;
+    private final PublicRequestLimiter publicRequestLimiter;
 
     public PublicTrackingController(
         PublicTrackingService publicTrackingService,
         ParticipantService participantService,
         PublicRaceVisibility publicRaceVisibility,
-        RequestRateLimiter requestRateLimiter,
-        ClientAddressResolver clientAddressResolver
+        PublicRequestLimiter publicRequestLimiter
     ) {
         this.publicTrackingService = publicTrackingService;
         this.participantService = participantService;
         this.publicRaceVisibility = publicRaceVisibility;
-        this.requestRateLimiter = requestRateLimiter;
-        this.clientAddressResolver = clientAddressResolver;
+        this.publicRequestLimiter = publicRequestLimiter;
     }
 
     @GetMapping("/hub")
@@ -145,6 +141,6 @@ public class PublicTrackingController {
     }
 
     private void rateLimit(UUID raceId, HttpServletRequest request) {
-        requestRateLimiter.checkPublicTracking(raceId.toString(), clientAddressResolver.resolve(request));
+        publicRequestLimiter.check(raceId, request);
     }
 }

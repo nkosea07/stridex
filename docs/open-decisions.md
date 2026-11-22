@@ -58,11 +58,14 @@ The table is **not** range-partitioned.
 
 **State. Done in code.** Google OAuth is limited to 10 requests per client IP per 15 minutes.
 RFID read ingest is limited to 120 requests per client IP per minute and 600 requests per
-supplied reader key per minute. Heartbeat remains unthrottled. Production Redis enforcement
+supplied reader key per minute. Heartbeat remains unthrottled. Public spectator endpoints are
+limited per race to 120 requests per minute for each signed-in user or app install
+(`X-Race-Tracker-Client`), under a 1200 per minute ceiling per IP address so phones behind
+carrier NAT are not blocked together; both are configurable. Production Redis enforcement
 and metrics still require deployment/runtime verification.
 
 **Evidence.** `RequestRateLimiterTest`, `OAuthControllerWebMvcTest`, and
-`RfidControllerWebMvcTest` cover the policies and service short-circuit behavior. The current
+`RfidControllerWebMvcTest` and `PublicRequestLimiterTest` cover the policies and service short-circuit behavior. The current
 implementation uses the trusted-proxy-aware client address resolver and hashes identities
 before creating Redis keys.
 

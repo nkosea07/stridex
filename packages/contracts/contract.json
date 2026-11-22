@@ -26,6 +26,9 @@
     "supportedLocales": ["en", "sn", "nd", "af", "zu", "fr", "pt", "sw"],
     "rtlLocales": []
   },
+  "headers": {
+    "publicClientId": "X-Race-Tracker-Client"
+  },
   "endpoints": {
     "adminMfaReset": "/admin/users/:userId/mfa/reset",
     "adminAuditEvents": "/admin/audit-events",
