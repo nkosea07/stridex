@@ -486,7 +486,8 @@
     "raceDetails": "Détails de la course",
     "liveTracking": "Suivi en direct",
     "notifications": "Notifications",
-    "athleteLive": "Athlète en direct"
+    "athleteLive": "Athlète en direct",
+    "raceGallery": "Photos de la course"
   },
   "notificationsScreen": {
     "tryAgain": "Tirez vers le bas pour actualiser et réessayez.",
@@ -703,5 +704,22 @@
     "unfollowName": "Ne plus suivre {{name}}",
     "followFailedTitle": "Non enregistré",
     "followFailed": "Le suivi n’a pas pu être mis à jour. Veuillez réessayer."
+  },
+  "gallery": {
+    "title": "Photos de la course",
+    "seeAll": "Voir toutes les photos ({{total}})",
+    "loading": "Chargement des photos de la course",
+    "loadFailed": "Impossible de charger les photos de la course",
+    "empty": "Aucune photo n'a encore été publiée pour cette course.",
+    "consentNote": "Seules les photos approuvées sont affichées, et uniquement celles des athlètes qui ont accepté leur publication.",
+    "photoLabel": "Photo {{index}} sur {{total}}",
+    "videoLabel": "Vidéo {{index}} sur {{total}}",
+    "counter": "{{index}} sur {{total}}",
+    "openPhotoHint": "Ouvre la photo en plein écran",
+    "playVideoHint": "Lit la vidéo dans votre navigateur",
+    "playVideo": "Lire la vidéo",
+    "video": "Vidéo",
+    "imageFailed": "Impossible de charger cette photo.",
+    "close": "Fermer"
   }
 }

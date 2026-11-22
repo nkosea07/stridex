@@ -486,7 +486,8 @@
     "raceDetails": "Maelezo ya mbio",
     "liveTracking": "Ufuatiliaji wa moja kwa moja",
     "notifications": "Arifa",
-    "athleteLive": "Mwanariadha moja kwa moja"
+    "athleteLive": "Mwanariadha moja kwa moja",
+    "raceGallery": "Picha za mbio"
   },
   "notificationsScreen": {
     "tryAgain": "Tafadhali vuta chini ili kuonyesha upya kisha ujaribu tena.",
@@ -701,5 +702,22 @@
     "unfollowName": "Acha kumfuatilia {{name}}",
     "followFailedTitle": "Haijahifadhiwa",
     "followFailed": "Ufuatiliaji haukuweza kusasishwa. Tafadhali jaribu tena."
+  },
+  "gallery": {
+    "title": "Picha za mbio",
+    "seeAll": "Tazama picha zote ({{total}})",
+    "loading": "Inapakia picha za mbio",
+    "loadFailed": "Picha za mbio hazikuweza kupakiwa",
+    "empty": "Bado hakuna picha zilizochapishwa kwa mbio hizi.",
+    "consentNote": "Picha zilizoidhinishwa pekee ndizo zinaonyeshwa, na tu za wanariadha waliokubali zichapishwe.",
+    "photoLabel": "Picha {{index}} kati ya {{total}}",
+    "videoLabel": "Video {{index}} kati ya {{total}}",
+    "counter": "{{index}} kati ya {{total}}",
+    "openPhotoHint": "Inafungua picha kwenye skrini nzima",
+    "playVideoHint": "Inacheza video kwenye kivinjari chako",
+    "playVideo": "Cheza video",
+    "video": "Video",
+    "imageFailed": "Picha hii haikuweza kupakiwa.",
+    "close": "Funga"
   }
 }
