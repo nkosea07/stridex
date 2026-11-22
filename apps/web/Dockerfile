@@ -6,9 +6,15 @@ RUN pnpm install --frozen-lockfile --filter web... \
     && pnpm contracts:validate \
     && pnpm --filter web build
 
-FROM nginxinc/nginx-unprivileged:1.30-alpine3.24
+FROM nginxinc/nginx-unprivileged:1.30-alpine3.24-slim
 USER root
-RUN apk upgrade --no-cache
+RUN apk upgrade --no-cache \
+    && apk add --no-cache --repositories-file /dev/null \
+        -X "https://nginx.org/packages/alpine/v$(grep -oE '^[0-9]+\.[0-9]+' /etc/alpine-release)/main" \
+        'nginx>=1.30.7-r1' \
+    && rm -f /etc/nginx/*.apk-new /etc/nginx/conf.d/*.apk-new \
+    && chown -R 101:0 /var/cache/nginx /etc/nginx \
+    && chmod -R g+w /var/cache/nginx /etc/nginx
 USER 101
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/apps/web/dist/client /usr/share/nginx/html

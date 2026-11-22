@@ -87,6 +87,19 @@ jobs:
       - run: docker build -t race-tracker/backend:ci -f apps/backend/Dockerfile apps/backend
       - run: docker build -t race-tracker/web:ci -f apps/web/Dockerfile .
       - run: docker build -t race-tracker/rfid-gateway:ci -f apps/rfid-gateway/Dockerfile apps/rfid-gateway
+      - name: Smoke-test web image
+        run: |
+          docker run -d --name web-smoke --add-host backend:127.0.0.1 -p 8080:8080 race-tracker/web:ci
+          for attempt in $(seq 1 20); do
+            curl -fsS -o /dev/null http://127.0.0.1:8080/ && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/ | grep -qi '<!doctype html'
+          curl -fsS http://127.0.0.1:8080/races/smoke-route | grep -qi '<!doctype html'
+          test "$(docker exec web-smoke id -u)" = "101"
+          docker exec web-smoke nginx -v
+          docker exec web-smoke nginx -t
+          docker rm -f web-smoke
       - name: Scan backend image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
