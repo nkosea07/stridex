@@ -174,6 +174,7 @@ export function RaceLiveMap({ raceId, canFollow, followedIds }: RaceLiveMapProps
           <View style={[styles.swatch, { backgroundColor: heatFill(1, 1) }]} />
           <Text style={[styles.hint, styles.flex, { color: colors.subText }]}>{t('mobile:raceLive.mapDensity', { minutes })}</Text>
         </View>
+        <Text style={[styles.hint, { color: colors.subText }]}>{t('mobile:raceLive.mapPrivacy')}</Text>
         {updatedAt ? (
           <Text style={[styles.hint, { color: colors.subText }]}>
             {t('mobile:raceLive.updatedAt', { time: formatTime(updatedAt, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) })}

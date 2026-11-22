@@ -206,6 +206,7 @@ racetracker:
     min-distance-for-accumulation-meters: ${TRACKING_MIN_DISTANCE_METERS:5}
     max-track-points: ${TRACKING_MAX_TRACK_POINTS:1000}
     heatmap-scale: ${TRACKING_HEATMAP_SCALE:3}
+    heatmap-min-participants: ${TRACKING_HEATMAP_MIN_PARTICIPANTS:3}
     retention-days: ${TRACKING_RETENTION_DAYS:90}
     public-client-requests-per-minute: ${PUBLIC_TRACKING_CLIENT_LIMIT_PER_MINUTE:120}
     public-address-requests-per-minute: ${PUBLIC_TRACKING_ADDRESS_LIMIT_PER_MINUTE:1200}

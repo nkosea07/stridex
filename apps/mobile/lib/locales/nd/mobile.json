@@ -705,6 +705,7 @@
     "followFailed": "Ukulandela kakuvuselelekanga. Ngicela uzame njalo.",
     "mapLabel": "Imephu yendlela yomjaho etshengisa lapho abagijimi abakhona labagijimi obalandelayo",
     "mapDensity": "Izindawo ezifiphele zitshengisa lapho abagijimi ababekhona emizuzwini engu-{{minutes}} edlulileyo. Izindawo zomuntu ngamunye zitshengiswa kuphela kubagijimi obalandelayo.",
+    "mapPrivacy": "Izindawo ezilabagijimi abalutshwana kakhulu zihlala zingelalutho ukuze kuvikelwe ubumfihlo babo.",
     "mapEmpty": "Imephu izabonakala nxa indlela kumbe izindawo zabagijimi sezitholakala.",
     "mapFollowedTitle": "Abagijimi obalandelayo",
     "mapFollowHint": "Landela abagijimi ohlwini lwabaphambili kumbe ekudingeni ukuze ubabone emephini.",

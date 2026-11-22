@@ -705,6 +705,7 @@
     "followFailed": "Ufuatiliaji haukuweza kusasishwa. Tafadhali jaribu tena.",
     "mapLabel": "Ramani ya njia ya mbio inayoonyesha wanariadha walipo na wanariadha unaowafuatilia",
     "mapDensity": "Maeneo yenye kivuli yanaonyesha wanariadha walipopita katika dakika {{minutes}} zilizopita. Maeneo ya mtu mmoja mmoja yanaonyeshwa tu kwa wanariadha unaowafuatilia.",
+    "mapPrivacy": "Maeneo yenye wanariadha wachache sana hubaki tupu ili kulinda faragha yao.",
     "mapEmpty": "Ramani itaonekana njia au maeneo ya wanariadha yakipatikana.",
     "mapFollowedTitle": "Wanariadha unaowafuatilia",
     "mapFollowHint": "Fuatilia wanariadha kutoka kwenye orodha ya wanaoongoza au utafutaji ili uwaone kwenye ramani.",

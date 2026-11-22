@@ -151,6 +151,7 @@ the source database during rehearsal.
 ## Public spectator rate limits
 
 - Public race endpoints are limited per race to `PUBLIC_TRACKING_CLIENT_LIMIT_PER_MINUTE` (default 120) for each signed-in user or app install, under a shared `PUBLIC_TRACKING_ADDRESS_LIMIT_PER_MINUTE` ceiling (default 1200) for one IP address. Mobile carriers put many phones behind one address, so the ceiling, not the per-client limit, is what a busy venue hits. Browsers without an install id share the per-client limit per address.
+- The public heatmap (web **Course heat** and the mobile race map) only returns cells that at least `TRACKING_HEATMAP_MIN_PARTICIPANTS` different athletes (default 3) passed through in the requested window, so it cannot locate a lone runner. The backend refuses to start with a value below 2. Athletes who turn off tracking are never included.
 - Watch `security.rate_limit.blocked{policy="public_tracking"}`. Raise the address ceiling if spectators report "Too many requests" at a venue; the per-address ceiling must stay at least the per-client limit or the backend refuses to start.
 
 ## Mobile app minimum version

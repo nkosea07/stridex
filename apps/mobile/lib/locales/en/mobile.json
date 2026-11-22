@@ -705,6 +705,7 @@
     "followFailed": "Following could not be updated. Please try again.",
     "mapLabel": "Race course map showing where runners are and the athletes you follow",
     "mapDensity": "Shaded areas show where runners have been in the last {{minutes}} minutes. Individual positions are shown only for athletes you follow.",
+    "mapPrivacy": "Areas with very few runners stay blank to protect their privacy.",
     "mapEmpty": "The map appears once the course or runners' positions are available.",
     "mapFollowedTitle": "Athletes you follow",
     "mapFollowHint": "Follow athletes from the leaderboard or search to see them on the map.",

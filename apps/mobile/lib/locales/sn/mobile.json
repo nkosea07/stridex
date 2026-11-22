@@ -705,6 +705,7 @@
     "followFailed": "Kutevera hakuna kukwanisa kugadziriswa. Ndapota edza zvakare.",
     "mapLabel": "Mepu yenzira yemujaho inoratidza panowanikwa vamhanyi nevamhanyi vaunotevera",
     "mapDensity": "Nzvimbo dzine mumvuri dzinoratidza pakapfuura vamhanyi mumaminitsi {{minutes}} apfuura. Nzvimbo dzemunhu mumwe nemumwe dzinoratidzwa chete kuvamhanyi vaunotevera.",
+    "mapPrivacy": "Nzvimbo dzine vamhanyi vashoma zvikuru dzinosiyiwa dzisina chinhu kuchengetedza zvakavanzika zvavo.",
     "mapEmpty": "Mepu ichaoneka kana nzira kana nzvimbo dzevamhanyi dzawanikwa.",
     "mapFollowedTitle": "Vamhanyi vaunotevera",
     "mapFollowHint": "Tevera vamhanyi kubva kune vari kutungamira kana kutsvaga kuti uvaone pamepu.",

@@ -707,6 +707,7 @@
     "followFailed": "Não foi possível atualizar o seguimento. Tente novamente.",
     "mapLabel": "Mapa do percurso que mostra onde estão os corredores e os atletas que segue",
     "mapDensity": "As zonas sombreadas mostram por onde os corredores passaram nos últimos {{minutes}} minutos. As posições individuais só são mostradas para os atletas que segue.",
+    "mapPrivacy": "As zonas com muito poucos corredores ficam em branco para proteger a sua privacidade.",
     "mapEmpty": "O mapa aparece quando o percurso ou as posições dos corredores estiverem disponíveis.",
     "mapFollowedTitle": "Atletas que segue",
     "mapFollowHint": "Siga atletas na classificação ou na pesquisa para os ver no mapa.",
