@@ -95,7 +95,6 @@ Create a `.env` file:
 
 ```env
 EXPO_PUBLIC_API_URL=http://your-backend-url/api
-EXPO_PUBLIC_MAPBOX_TOKEN=your-mapbox-token
 EXPO_PUBLIC_WEB_URL=https://race.example.com
 ```
 

@@ -293,7 +293,6 @@ export interface LiveStats {
   averagePace: number;
   distanceCovered: number;
   elapsedTime: number; // in seconds
-  estimatedFinishTime?: string;
   currentPosition?: number;
   heartRate?: number;
 }

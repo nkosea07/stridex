@@ -69,17 +69,11 @@ const calculateStats = (
   
   const currentPace = recentDistance > 0 ? recentTime / recentDistance : averagePace;
 
-  const raceDistance = race.distanceKm ?? race.distance ?? 0;
-  const remainingDistance = raceDistance - totalDistance;
-  const estimatedRemainingSeconds = remainingDistance > 0 ? (remainingDistance * averagePace * 60) : 0;
-  const estimatedFinish = new Date(now.getTime() + estimatedRemainingSeconds * 1000);
-
   return {
     currentPace,
     averagePace,
     distanceCovered: totalDistance,
     elapsedTime: elapsedSeconds,
-    estimatedFinishTime: estimatedFinish.toISOString(),
   };
 };
 

@@ -1,5 +1,6 @@
 package com.racetracker.service.impl;
 
+import com.racetracker.mapper.RegistrationFieldMappings;
 import com.opencsv.CSVReader;
 import com.racetracker.dto.participant.*;
 import com.racetracker.exception.ApiException;
@@ -682,7 +683,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         List<RaceRegistrationField> fields = activeOnly
             ? registrationFieldRepository.findByRaceIdAndActiveTrueOrderByDisplayOrderAsc(raceId)
             : registrationFieldRepository.findByRaceIdOrderByDisplayOrderAsc(raceId);
-        return fields.stream().map(this::toFieldDto).toList();
+        return fields.stream().map(RegistrationFieldMappings::toDto).toList();
     }
 
     @Override
@@ -712,7 +713,7 @@ public class ParticipantServiceImpl implements ParticipantService {
             .active(request.getActive() == null || Boolean.TRUE.equals(request.getActive()))
             .build();
 
-        return toFieldDto(registrationFieldRepository.save(field));
+        return RegistrationFieldMappings.toDto(registrationFieldRepository.save(field));
     }
 
     @Override
@@ -742,7 +743,7 @@ public class ParticipantServiceImpl implements ParticipantService {
             field.setActive(request.getActive());
         }
 
-        return toFieldDto(registrationFieldRepository.save(field));
+        return RegistrationFieldMappings.toDto(registrationFieldRepository.save(field));
     }
 
     @Override
@@ -1141,21 +1142,6 @@ public class ParticipantServiceImpl implements ParticipantService {
                 return dto;
             })
             .toList();
-    }
-
-    private RaceRegistrationFieldDto toFieldDto(RaceRegistrationField field) {
-        RaceRegistrationFieldDto dto = new RaceRegistrationFieldDto();
-        dto.setId(field.getId());
-        dto.setRaceId(field.getRace() != null ? field.getRace().getId() : null);
-        dto.setFieldKey(field.getFieldKey());
-        dto.setLabel(field.getLabel());
-        dto.setFieldType(field.getFieldType() != null ? field.getFieldType().name() : null);
-        dto.setRequired(Boolean.TRUE.equals(field.getRequired()));
-        dto.setOptions(field.getOptions() != null ? field.getOptions() : List.of());
-        dto.setDisplayOrder(field.getDisplayOrder());
-        dto.setActive(Boolean.TRUE.equals(field.getActive()));
-        dto.setCreatedAt(field.getCreatedAt());
-        return dto;
     }
 
     private TeamDto toTeamDto(Team team) {

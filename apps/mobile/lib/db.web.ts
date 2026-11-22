@@ -3,24 +3,9 @@
  * Performs no-op operations to allow bundling on web without WASM dependencies.
  */
 
-export const openDatabaseAsync = async (name: string) => {
-  console.log(`[SQLite Mock] Database "${name}" opened (no-op on web)`);
-  
-  return {
-    execAsync: async (sql: string) => {
-      console.log(`[SQLite Mock] Executing SQL: ${sql.substring(0, 50)}...`);
-      return;
-    },
-    runAsync: async (sql: string, params: any[] = []) => {
-      console.log(`[SQLite Mock] Running SQL: ${sql.substring(0, 50)}... with ${params.length} params`);
-      return { lastInsertRowId: 0, changes: 0 };
-    },
-    getAllAsync: async <T>(sql: string, params: any[] = []) => {
-      console.log(`[SQLite Mock] Getting all: ${sql.substring(0, 50)}...`);
-      return [] as T[];
-    },
-    getFirstAsync: async <T>(sql: string, params: any[] = []) => {
-      return null as T | null;
-    }
-  };
-};
+export const openDatabaseAsync = async (_name: string) => ({
+  execAsync: async (_sql: string) => undefined,
+  runAsync: async (_sql: string, _params: any[] = []) => ({ lastInsertRowId: 0, changes: 0 }),
+  getAllAsync: async <T>(_sql: string, _params: any[] = []) => [] as T[],
+  getFirstAsync: async <T>(_sql: string, _params: any[] = []) => null as T | null,
+});
