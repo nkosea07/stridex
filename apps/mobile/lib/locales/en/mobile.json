@@ -508,7 +508,8 @@
     "paceValue": "{{pace}} /km",
     "progress": "RACE PROGRESS",
     "batterySaver": "BATTERY SAVER",
-    "batterySaverHint": "Reduces GPS frequency"
+    "batterySaverHint": "Reduces GPS frequency",
+    "mapLabel": "Map of the course with your live position and route so far"
   },
   "mapWeb": {
     "title": "Map preview is not available on the web",
@@ -748,5 +749,11 @@
     "tooLong": "Use no more than {{max}} characters.",
     "mismatch": "The passwords don't match.",
     "signIn": "Go to sign in"
+  },
+  "map": {
+    "unavailable": "The map couldn't be loaded. Check your connection.",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "retry": "Try again"
   }
 }

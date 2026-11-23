@@ -98,6 +98,20 @@ EXPO_PUBLIC_API_URL=http://your-backend-url/api
 EXPO_PUBLIC_WEB_URL=https://race.example.com
 ```
 
+### Maps
+
+All maps (live tracking, followed athletes and the race map) use one component, `components/RaceMap`, with a provider chosen at build time:
+
+| `EXPO_PUBLIC_MAP_PROVIDER` | iOS | Android | Keys |
+| --- | --- | --- | --- |
+| `leaflet` (default) | Leaflet in a WebView | Leaflet in a WebView | none |
+| `native` | Apple Maps | Google Maps | `GOOGLE_MAPS_ANDROID_API_KEY` |
+| `google` | Google Maps | Google Maps | `GOOGLE_MAPS_ANDROID_API_KEY`, `GOOGLE_MAPS_IOS_API_KEY` |
+
+Leaflet 1.9.4 is bundled in the app (`lib/map/leafletAssets.generated.ts`, written by `pnpm --dir apps/mobile generate:leaflet` from the pinned `leaflet` package, which refuses files that differ from the published integrity hashes), so maps never depend on a CDN; only the map tiles need a connection. It draws raster tiles from `EXPO_PUBLIC_MAP_TILE_URL`, any `https` template with `{z}`, `{x}` and `{y}` (and optionally `{s}`), which must be paired with that provider's `EXPO_PUBLIC_MAP_TILE_ATTRIBUTION`; `EXPO_PUBLIC_MAP_MAX_ZOOM` (1–22) defaults to 19. The default is OpenStreetMap's public tiles, which suit development and a pilot but are not for heavy production traffic under the [OSM tile usage policy](https://operations.osmfoundation.org/policies/tiles/); switch to a dedicated free or paid tile provider (for example CARTO, MapTiler or a self-hosted server) by changing the URL and attribution.
+
+`app.config.js` validates these settings, fails the build on a malformed value, and passes the result to the app as `extra.map`. The Google keys are read only by `app.config.js`: store them as EAS secrets. A missing key fails builds on EAS (`EAS_BUILD=true`) and only warns when the config is evaluated locally. Changing `EXPO_PUBLIC_MAP_PROVIDER` or the Google keys needs a new native build, not an over-the-air update.
+
 ### Email links in the app
 
 `app.config.js` reads `EXPO_PUBLIC_WEB_URL` at build time. When it is an HTTPS URL, the build declares an iOS associated domain and Android verified app links for `/verify-email` and `/reset-password`, so links in verification and password-reset emails open the in-app screens (`app/verify-email.tsx`, `app/reset-password.tsx`). The web server must publish the matching `/.well-known` files (see `APP_LINKS_*` in `.env.pilot.example`); otherwise the links keep opening the web pages. The `racetracker://verify-email?token=…` scheme also works for testing.
@@ -148,11 +162,12 @@ The active race session is also stored locally. When the app starts, it attempts
 
 ### Maps Integration
 
-Uses `react-native-maps` for:
+`components/RaceMap` (Leaflet or `react-native-maps`, see [Maps](#maps)) draws:
 - The uploaded course route (falls back to straight lines between checkpoints when no route is uploaded)
 - Checkpoint markers
-- The athlete's own position and path while tracking
+- The athlete's own position and path while tracking, with a re-centre button
 - A followed athlete's track and latest position in the spectator live view
+- The race map's recent-density layer and followed athletes
 
 ## Building for Production
 

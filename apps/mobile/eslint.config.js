@@ -4,6 +4,6 @@ const { defineConfig } = require('eslint/config');
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ['dist/**', '.expo/**', 'node_modules/**'],
+    ignores: ['dist/**', '.expo/**', 'node_modules/**', 'lib/map/leafletAssets.generated.ts'],
   },
 ]);

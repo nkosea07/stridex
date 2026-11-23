@@ -88,6 +88,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        VITE_MAPBOX_TOKEN: ${VITE_MAPBOX_TOKEN:-}
     restart: unless-stopped
     depends_on:
       backend:

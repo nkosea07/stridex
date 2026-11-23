@@ -508,7 +508,8 @@
     "paceValue": "{{pace}} /km",
     "progress": "WEDLOOPVORDERING",
     "batterySaver": "BATTERYBESPARING",
-    "batterySaverHint": "Verminder GPS-frekwensie"
+    "batterySaverHint": "Verminder GPS-frekwensie",
+    "mapLabel": "Kaart van die roete met jou lewendige posisie en roete tot dusver"
   },
   "mapWeb": {
     "title": "Kaartvoorskou is nie op die web beskikbaar nie",
@@ -748,5 +749,11 @@
     "tooLong": "Gebruik hoogstens {{max}} karakters.",
     "mismatch": "Die wagwoorde stem nie ooreen nie.",
     "signIn": "Gaan na aanmelding"
+  },
+  "map": {
+    "unavailable": "Die kaart kon nie gelaai word nie. Kontroleer jou verbinding.",
+    "zoomIn": "Zoem in",
+    "zoomOut": "Zoem uit",
+    "retry": "Probeer weer"
   }
 }

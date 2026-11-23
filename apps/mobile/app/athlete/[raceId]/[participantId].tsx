@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from '@/components/Map';
+import { RaceMap, useMapTheme, type MapLine, type MapPin } from '@/components/RaceMap';
 import { RequestErrorState } from '@/components/RequestErrorState';
 import { useTheme } from '@/contexts/theme';
 import { api, getApiErrorKind, getNonEmptyRouteId, type ApiErrorKind } from '@/lib/api';
@@ -121,6 +121,22 @@ export default function AthleteLiveScreen() {
   }, [refreshLive]);
 
   const latest = track.length ? track[track.length - 1] : null;
+  const mapTheme = useMapTheme();
+  const mapLines = useMemo<MapLine[]>(() => [
+    { id: 'route', coordinates: route, color: '#94A3B8', width: 4 },
+    { id: 'track', coordinates: track.map(({ latitude, longitude }) => ({ latitude, longitude })), color: colors.primary, width: 4 },
+  ], [route, track, colors.primary]);
+  const mapPins = useMemo<MapPin[]>(() => [
+    ...checkpoints.map((checkpoint) => ({ id: `checkpoint-${checkpoint.id}`, kind: 'checkpoint' as const, coordinate: checkpoint, title: checkpoint.name })),
+    ...(latest ? [{
+      id: 'athlete',
+      kind: 'athlete' as const,
+      coordinate: { latitude: latest.latitude, longitude: latest.longitude },
+      label: summary?.bibNumber || undefined,
+      title: summary?.participantName ?? undefined,
+      description: summary?.lastCheckpoint ?? undefined,
+    }] : []),
+  ], [checkpoints, latest, summary?.bibNumber, summary?.participantName, summary?.lastCheckpoint]);
   const lastSeenMinutes = minutesSince(latest?.time, now);
 
   if (!raceId || !participantId) {
@@ -166,29 +182,10 @@ export default function AthleteLiveScreen() {
       {errorKind && <RequestErrorState resource="race" kind={errorKind} onRetry={() => void refreshLive()} compact />}
 
       {initialRegion ? (
-        <MapView style={styles.map} provider={PROVIDER_DEFAULT} initialRegion={initialRegion}
-          accessibilityLabel={t('mobile:athleteLive.mapLabel')}>
-          {route.length > 1 && <Polyline coordinates={route} strokeColor="#94A3B8" strokeWidth={4} />}
-          {track.length > 1 && (
-            <Polyline coordinates={track.map(({ latitude, longitude }) => ({ latitude, longitude }))}
-              strokeColor={colors.primary} strokeWidth={4} />
-          )}
-          {checkpoints.map((checkpoint) => (
-            <Marker key={checkpoint.id} coordinate={checkpoint} title={checkpoint.name}>
-              <View style={[styles.checkpointPin, { backgroundColor: colors.cardBackground, borderColor: colors.primary }]}>
-                <Ionicons name="flag" size={12} color={colors.primary} />
-              </View>
-            </Marker>
-          ))}
-          {latest && (
-            <Marker coordinate={latest} title={summary?.participantName ?? undefined}
-              description={summary?.lastCheckpoint ?? undefined}>
-              <View style={[styles.athletePin, { backgroundColor: colors.primary }]}>
-                <Text style={styles.athletePinText}>{summary?.bibNumber || '•'}</Text>
-              </View>
-            </Marker>
-          )}
-        </MapView>
+        <View style={styles.map}>
+          <RaceMap initialRegion={initialRegion} lines={mapLines} pins={mapPins} theme={mapTheme}
+            accessibilityLabel={t('mobile:athleteLive.mapLabel')} fill />
+        </View>
       ) : (
         <View style={[styles.noMap, { backgroundColor: colors.cardBackground }]}>
           <Ionicons name="map-outline" size={28} color={colors.subText} />
@@ -247,9 +244,6 @@ const styles = StyleSheet.create({
   map: { height: 320, marginHorizontal: 16, borderRadius: 16, overflow: 'hidden' },
   noMap: { height: 120, marginHorizontal: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center', gap: 6, padding: 16 },
   noMapText: { fontSize: 14, textAlign: 'center' },
-  checkpointPin: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  athletePin: { minWidth: 34, height: 34, borderRadius: 17, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
-  athletePinText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 16 },
   statCard: { width: '47%', borderRadius: 12, padding: 12 },
   statValue: { fontSize: 18, fontWeight: '700' },

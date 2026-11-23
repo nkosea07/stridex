@@ -508,7 +508,8 @@
     "paceValue": "{{pace}} /km",
     "progress": "INQUBEKELA PHAMBILI",
     "batterySaver": "UKONGA IBHETRI",
-    "batterySaverHint": "Kunciphisa ukusebenza kwe-GPS"
+    "batterySaverHint": "Kunciphisa ukusebenza kwe-GPS",
+    "mapLabel": "Imephu yendlela elendawo yakho yakhathesi lendlela osuhambe kuyo"
   },
   "mapWeb": {
     "title": "Ukubona imephu kakutholakali ewebhu",
@@ -748,5 +749,11 @@
     "tooLong": "Ungasebenzisi izinhlamvu ezedlula ezingu-{{max}}.",
     "mismatch": "Amaphasiwedi kawafanani.",
     "signIn": "Iya ekungeneni"
+  },
+  "map": {
+    "unavailable": "Imephu kayilayishekanga. Hlola ukuxhumana kwakho.",
+    "zoomIn": "Sondeza",
+    "zoomOut": "Qhelisa",
+    "retry": "Zama njalo"
   }
 }

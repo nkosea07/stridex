@@ -508,7 +508,8 @@
     "paceValue": "{{pace}} /km",
     "progress": "KUFAMBIRA MBERI",
     "batterySaver": "KUCHENGETEDZA BHATIRI",
-    "batterySaverHint": "Inoderedza kushanda kweGPS"
+    "batterySaverHint": "Inoderedza kushanda kweGPS",
+    "mapLabel": "Mepu yenzira ine nzvimbo yauri izvozvi nenzira yawafamba"
   },
   "mapWeb": {
     "title": "Kuona mepu hakuwanikwe pawebhu",
@@ -748,5 +749,11 @@
     "tooLong": "Usashandise mavara anopfuura {{max}}.",
     "mismatch": "Mapasiwedhi haaenderane.",
     "signIn": "Enda kunopinda"
+  },
+  "map": {
+    "unavailable": "Mepu haina kukwanisa kurodhwa. Tarisa kubatana kwako.",
+    "zoomIn": "Swededza",
+    "zoomOut": "Dzosera kure",
+    "retry": "Edza zvakare"
   }
 }

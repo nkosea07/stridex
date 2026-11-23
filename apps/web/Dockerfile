@@ -1,4 +1,6 @@
 FROM node:22-alpine AS build
+ARG VITE_MAPBOX_TOKEN=
+ENV VITE_MAPBOX_TOKEN=$VITE_MAPBOX_TOKEN
 WORKDIR /workspace
 RUN corepack enable && corepack prepare pnpm@10.29.2 --activate
 COPY . .

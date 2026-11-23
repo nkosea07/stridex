@@ -152,7 +152,9 @@ release:
 - **Device testing — Pending.** Nothing has run on a phone or simulator: maps, camera scanning,
   payment browser, push routing, background GPS, email links. There is no device test suite
   (Detox/Maestro).
-- **Deployment values — Pending.** `APP_LINKS_IOS_APP_IDS`, `APP_LINKS_ANDROID_PACKAGE`,
+- **Deployment values — Pending.** `VITE_MAPBOX_TOKEN` (web maps, `.env.pilot`); a production tile
+  provider for `EXPO_PUBLIC_MAP_TILE_URL` (mobile defaults to Leaflet on OpenStreetMap's public
+  tiles) or Google Maps keys if `EXPO_PUBLIC_MAP_PROVIDER` is `native`/`google`; `APP_LINKS_IOS_APP_IDS`, `APP_LINKS_ANDROID_PACKAGE`,
   `APP_LINKS_ANDROID_SHA256_FINGERPRINTS` (`.env.pilot`) and `EXPO_PUBLIC_WEB_URL` (app build)
   for in-app email links; FCM credentials for push; `MOBILE_IOS_STORE_URL` /
   `MOBILE_ANDROID_STORE_URL` for the update screen.
