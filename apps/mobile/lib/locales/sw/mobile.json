@@ -508,7 +508,8 @@
     "paceValue": "{{pace}} /km",
     "progress": "MAENDELEO YA MBIO",
     "batterySaver": "KUOKOA BETRI",
-    "batterySaverHint": "Inapunguza mara za GPS"
+    "batterySaverHint": "Inapunguza mara za GPS",
+    "mapLabel": "Ramani ya njia ikionyesha mahali ulipo sasa na njia uliyopita"
   },
   "mapWeb": {
     "title": "Muonekano wa ramani haupatikani kwenye wavuti",
@@ -748,5 +749,11 @@
     "tooLong": "Usitumie zaidi ya herufi {{max}}.",
     "mismatch": "Manenosiri hayalingani.",
     "signIn": "Nenda kuingia"
+  },
+  "map": {
+    "unavailable": "Ramani haikuweza kupakiwa. Angalia muunganisho wako.",
+    "zoomIn": "Kuza",
+    "zoomOut": "Punguza",
+    "retry": "Jaribu tena"
   }
 }

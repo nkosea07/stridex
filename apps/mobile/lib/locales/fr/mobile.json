@@ -508,7 +508,8 @@
     "paceValue": "{{pace}} /km",
     "progress": "PROGRESSION",
     "batterySaver": "ÉCONOMIE D’ÉNERGIE",
-    "batterySaverHint": "Réduit la fréquence du GPS"
+    "batterySaverHint": "Réduit la fréquence du GPS",
+    "mapLabel": "Carte du parcours avec votre position en direct et votre trajet"
   },
   "mapWeb": {
     "title": "L’aperçu de la carte n’est pas disponible sur le web",
@@ -750,5 +751,11 @@
     "tooLong": "Utilisez au maximum {{max}} caractères.",
     "mismatch": "Les mots de passe ne correspondent pas.",
     "signIn": "Aller à la connexion"
+  },
+  "map": {
+    "unavailable": "La carte n'a pas pu être chargée. Vérifiez votre connexion.",
+    "zoomIn": "Zoom avant",
+    "zoomOut": "Zoom arrière",
+    "retry": "Réessayer"
   }
 }

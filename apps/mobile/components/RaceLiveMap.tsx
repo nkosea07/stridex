@@ -3,7 +3,7 @@ import { ActivityIndicator, AppState, ScrollView, StyleSheet, Text, TouchableOpa
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from '@/components/Map';
+import { RaceMap, useMapTheme, type MapCircle, type MapLine, type MapPin } from '@/components/RaceMap';
 import { useTheme } from '@/contexts/theme';
 import { api } from '@/lib/api';
 import { formatNumber, formatTime } from '@/lib/format';
@@ -122,6 +122,25 @@ export function RaceLiveMap({ raceId, canFollow, followedIds }: RaceLiveMapProps
   }, [route, heat, checkpoints, initialRegion]);
 
   const maxWeight = maxHeatWeight(heat);
+  const mapTheme = useMapTheme();
+  const mapLines = useMemo<MapLine[]>(() => [{ id: 'route', coordinates: route, color: '#94A3B8', width: 4 }], [route]);
+  const mapCircles = useMemo<MapCircle[]>(() => heat.map((cell) => ({
+    id: `${cell.latitude}:${cell.longitude}`,
+    center: { latitude: cell.latitude, longitude: cell.longitude },
+    radius: HEAT_CELL_RADIUS_METERS,
+    fillColor: heatFill(cell.weight, maxWeight),
+  })), [heat, maxWeight]);
+  const mapPins = useMemo<MapPin[]>(() => [
+    ...checkpoints.map((checkpoint) => ({ id: `checkpoint:${checkpoint.id}`, kind: 'checkpoint' as const, coordinate: checkpoint, title: checkpoint.name })),
+    ...followed.flatMap(({ athlete, position }) => position ? [{
+      id: `athlete:${athlete.participantId}`,
+      kind: 'athlete' as const,
+      coordinate: position,
+      label: athlete.bibNumber || undefined,
+      title: athlete.participantName,
+      description: athlete.lastCheckpoint,
+    }] : []),
+  ], [checkpoints, followed]);
   const openAthlete = (athlete: FavoriteAthlete) =>
     router.push({ pathname: '/athlete/[raceId]/[participantId]', params: { raceId, participantId: athlete.participantId } });
   const minutes = formatNumber(HEAT_WINDOW_MINUTES);
@@ -133,35 +152,21 @@ export function RaceLiveMap({ raceId, canFollow, followedIds }: RaceLiveMapProps
   return (
     <ScrollView contentContainerStyle={styles.content}>
       {initialRegion ? (
-        <MapView style={styles.map} provider={PROVIDER_DEFAULT} initialRegion={initialRegion}
-          accessibilityLabel={t('mobile:raceLive.mapLabel')}>
-          {route.length > 1 && <Polyline coordinates={route} strokeColor="#94A3B8" strokeWidth={4} />}
-          {heat.map((cell) => (
-            <Circle
-              key={`${cell.latitude}:${cell.longitude}`}
-              center={cell}
-              radius={HEAT_CELL_RADIUS_METERS}
-              fillColor={heatFill(cell.weight, maxWeight)}
-              strokeColor="transparent"
-              strokeWidth={0}
-            />
-          ))}
-          {checkpoints.map((checkpoint) => (
-            <Marker key={checkpoint.id} coordinate={checkpoint} title={checkpoint.name}>
-              <View style={[styles.checkpointPin, { backgroundColor: colors.cardBackground, borderColor: colors.primary }]}>
-                <Ionicons name="flag" size={12} color={colors.primary} />
-              </View>
-            </Marker>
-          ))}
-          {followed.map(({ athlete, position }) => position && (
-            <Marker key={athlete.participantId} coordinate={position} title={athlete.participantName}
-              description={athlete.lastCheckpoint} onCalloutPress={() => openAthlete(athlete)}>
-              <View style={[styles.athletePin, { backgroundColor: colors.primary }]}>
-                <Text style={styles.athletePinText}>{athlete.bibNumber || '•'}</Text>
-              </View>
-            </Marker>
-          ))}
-        </MapView>
+        <View style={styles.map}>
+          <RaceMap
+            initialRegion={initialRegion}
+            lines={mapLines}
+            circles={mapCircles}
+            pins={mapPins}
+            theme={mapTheme}
+            accessibilityLabel={t('mobile:raceLive.mapLabel')}
+            onPinPress={(id) => {
+              const athlete = followed.find(({ athlete: row }) => `athlete:${row.participantId}` === id)?.athlete;
+              if (athlete) openAthlete(athlete);
+            }}
+            fill
+          />
+        </View>
       ) : (
         <View style={[styles.noMap, { backgroundColor: colors.cardBackground }]}>
           <Ionicons name="map-outline" size={28} color={colors.subText} />
@@ -231,9 +236,6 @@ const styles = StyleSheet.create({
   loading: { marginTop: 32 },
   map: { height: 360, borderRadius: 16, overflow: 'hidden' },
   noMap: { height: 140, borderRadius: 16, alignItems: 'center', justifyContent: 'center', gap: 6, padding: 16 },
-  checkpointPin: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  athletePin: { minWidth: 34, height: 34, borderRadius: 17, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
-  athletePinText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
   legend: { gap: 6 },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   swatch: { width: 16, height: 16, borderRadius: 8 },

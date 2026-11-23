@@ -1,9 +1,10 @@
 import { View, Text, StyleSheet, Alert, ActivityIndicator, AppState, TouchableOpacity } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import * as Location from 'expo-location';
 import { useTrackingStore } from '@/store/tracking';
 import { api, getNonEmptyRouteId } from '@/lib/api';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from '@/components/Map';
+import { RaceMap, useMapTheme, type MapLine, type MapPin } from '@/components/RaceMap';
 import type { Checkpoint, Race } from '@/types';
 import { freshSosFix } from '@/lib/sos';
 import { HUD } from '@/components/HUD';
@@ -12,7 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/theme';
 import { CapabilityGate } from '@/components/CapabilityGate';
 import { useTranslation } from 'react-i18next';
-import { isValidCoordinate, regionFor } from '@/lib/routeGeometry';
+import { isValidCoordinate, regionFor, type Coordinate, type MapRegion } from '@/lib/routeGeometry';
+import { formatDistanceKm } from '@/lib/format';
 
 function normalizeRaceStatus(raw?: string): Race['status'] {
   const value = String(raw || '').toLowerCase();
@@ -200,8 +202,42 @@ function TrackingScreenContent() {
     if (latest && isValidCoordinate(latest)) {
       return { latitude: latest.latitude, longitude: latest.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 };
     }
-    return regionFor(routePoints.length ? routePoints : checkpointList.map((checkpoint) => checkpoint.location)) ?? undefined;
+    return regionFor(routePoints.length ? routePoints : checkpointList.map((checkpoint) => checkpoint.location)) ?? WORLD_REGION;
   }, [locations, routePoints, checkpointList]);
+  const [recenterKey, setRecenterKey] = useState(0);
+  const [devicePosition, setDevicePosition] = useState<Coordinate | null>(null);
+  const refreshDevicePosition = useCallback(async () => {
+    try {
+      const permission = await Location.getForegroundPermissionsAsync();
+      if (!permission.granted) return;
+      const position = await Location.getLastKnownPositionAsync()
+        ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      if (position) setDevicePosition({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+    } catch {
+      setDevicePosition(null);
+    }
+  }, []);
+  useEffect(() => {
+    void refreshDevicePosition();
+  }, [refreshDevicePosition]);
+  const userLocation = useMemo(() => {
+    const latest = locations.length > 0 ? locations[locations.length - 1] : null;
+    return latest && isValidCoordinate(latest) ? { latitude: latest.latitude, longitude: latest.longitude } : devicePosition;
+  }, [locations, devicePosition]);
+  const mapTheme = useMapTheme();
+  const mapLines = useMemo<MapLine[]>(() => [
+    { id: 'route', coordinates: routePoints, color: colors.primary, width: 4 },
+    { id: 'track', coordinates: locations.map((loc) => ({ latitude: loc.latitude, longitude: loc.longitude })), color: colors.secondary, width: 3 },
+  ], [routePoints, locations, colors.primary, colors.secondary]);
+  const mapPins = useMemo<MapPin[]>(() => checkpointList
+    .filter((checkpoint) => isValidCoordinate(checkpoint.location))
+    .map((checkpoint) => ({
+      id: `checkpoint:${checkpoint.id}`,
+      kind: 'checkpoint' as const,
+      coordinate: checkpoint.location,
+      title: checkpoint.name,
+      description: formatDistanceKm(Number(checkpoint.distanceFromStart || 0)),
+    })), [checkpointList]);
 
   const sendSos = async (targetRaceId: string) => {
     setIsSendingSos(true);
@@ -254,47 +290,23 @@ function TrackingScreenContent() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <MapView
-        style={styles.map}
-        provider={PROVIDER_DEFAULT}
+      <RaceMap
         initialRegion={initialRegion}
+        lines={mapLines}
+        pins={mapPins}
+        userLocation={userLocation}
         showsUserLocation
-        followsUserLocation={isTracking}
-      >
-        {routePoints.length > 1 && (
-          <Polyline
-            coordinates={routePoints}
-            strokeColor={colors.primary}
-            strokeWidth={4}
-          />
-        )}
-
-        {checkpointList.map((checkpoint) => (
-          <Marker
-            key={checkpoint.id}
-            coordinate={checkpoint.location}
-            title={checkpoint.name}
-            description={`${checkpoint.distanceFromStart}km`}
-          >
-            <View style={[styles.checkpointMarker, { backgroundColor: colors.primary }]}>
-              <Ionicons name="flag" size={16} color="#FFFFFF" />
-            </View>
-          </Marker>
-        ))}
-
-        {locations.length > 1 && (
-          <Polyline
-            coordinates={locations.map((loc) => ({ latitude: loc.latitude, longitude: loc.longitude }))}
-            strokeColor={colors.secondary}
-            strokeWidth={3}
-          />
-        )}
-      </MapView>
+        followUser={isTracking}
+        recenterKey={recenterKey}
+        theme={mapTheme}
+        accessibilityLabel={t('mobile:trackingScreen.mapLabel')}
+        fill
+      />
 
       <HUD
         onClose={() => router.back()}
         onMyLocation={() => {
-          // Map centering logic would go here if we had mapRef
+          void (isTracking ? Promise.resolve() : refreshDevicePosition()).then(() => setRecenterKey((value) => value + 1));
         }}
         onScan={() => router.push('/scanner')}
         onStop={handleStopTracking}
@@ -306,7 +318,7 @@ function TrackingScreenContent() {
         onPress={handleSos}
         disabled={isSendingSos}
         accessibilityRole="button"
-        accessibilityLabel="Send emergency SOS"
+        accessibilityLabel={t('mobile:sos.send')}
       >
         {isSendingSos ? (
           <ActivityIndicator color="#FFFFFF" />
@@ -333,6 +345,8 @@ function TrackingScreenContent() {
   );
 }
 
+const WORLD_REGION: MapRegion = { latitude: 0, longitude: 20, latitudeDelta: 100, longitudeDelta: 100 };
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -341,18 +355,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  map: {
-    flex: 1,
-  },
-  checkpointMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
   },
   sosButton: {
     position: 'absolute',
