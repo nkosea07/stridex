@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 ARG VITE_MAPBOX_TOKEN=
 ENV VITE_MAPBOX_TOKEN=$VITE_MAPBOX_TOKEN
 WORKDIR /workspace
