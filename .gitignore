@@ -31,3 +31,6 @@ uploads/
 .idea/
 .vscode/
 *.tsbuildinfo
+
+# Apple Push Notification service auth keys
+*.p8

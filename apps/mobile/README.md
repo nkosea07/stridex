@@ -183,6 +183,15 @@ OTA update readiness is configured with `runtimeVersion.policy = appVersion`. Do
 
 `production` builds on EAS fail unless `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_WEB_URL` are https URLs, so a store binary cannot ship pointing at `localhost`. `production` and `preview` builds use the production APNs environment.
 
+Build numbers are managed by EAS (`cli.appVersionSource: "remote"`), and every `production` build gets the next iOS `buildNumber` and Android `versionCode` automatically (`autoIncrement`). Bump `version` in `app.json` only for a new user-visible release.
+
+### Push notifications
+
+The app registers the device's native push token with the backend, which routes it by platform:
+
+- **Android** tokens go through Firebase Cloud Messaging. Builds need the Firebase project's `google-services.json`: store it as the EAS file environment variable `GOOGLE_SERVICES_JSON` (or place it at `apps/mobile/google-services.json` for local builds; it is gitignored). `production` builds on EAS fail without it. The backend needs `FCM_SERVICE_ACCOUNT_JSON`.
+- **iOS** tokens go straight to the Apple Push Notification service; no Firebase SDK is needed in the app. The backend needs an APNs auth key from the Apple Developer account (`APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY`, `APNS_BUNDLE_ID`). Production uses the production APNs host; set `APNS_SANDBOX=true` only on a backend that serves development builds.
+
 ### Store review settings
 
 These live in `app.json` and are checked by `tests/store-readiness.test.mjs`:

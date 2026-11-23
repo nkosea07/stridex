@@ -1,3 +1,6 @@
+const fs = require('node:fs');
+const path = require('node:path');
+
 const APP_LINK_PATHS = ['/verify-email', '/reset-password'];
 
 function appLinkHost(webUrl) {
@@ -121,11 +124,27 @@ function withReleaseSettings(config, env) {
   };
 }
 
-module.exports = ({ config }) => withReleaseSettings(
-  withMaps(withAppLinks(config, process.env.EXPO_PUBLIC_WEB_URL), process.env),
+const LOCAL_GOOGLE_SERVICES_FILE = './google-services.json';
+
+function withAndroidPushCredentials(config, env, fileExists) {
+  const configured = (env.GOOGLE_SERVICES_JSON || '').trim();
+  const file = configured || (fileExists(LOCAL_GOOGLE_SERVICES_FILE) ? LOCAL_GOOGLE_SERVICES_FILE : '');
+  if (!file) {
+    if (env.EAS_BUILD === 'true' && STORE_PROFILES.has(env.EAS_BUILD_PROFILE)) {
+      throw new Error(`GOOGLE_SERVICES_JSON must point to the Firebase google-services.json for "${env.EAS_BUILD_PROFILE}" builds so Android devices can receive push notifications`);
+    }
+    return config;
+  }
+  return { ...config, android: { ...config.android, googleServicesFile: file } };
+}
+
+module.exports = ({ config, projectRoot }) => withAndroidPushCredentials(
+  withReleaseSettings(withMaps(withAppLinks(config, process.env.EXPO_PUBLIC_WEB_URL), process.env), process.env),
   process.env,
+  (file) => fs.existsSync(path.resolve(projectRoot ?? process.cwd(), file)),
 );
 module.exports.withReleaseSettings = withReleaseSettings;
+module.exports.withAndroidPushCredentials = withAndroidPushCredentials;
 module.exports.withAppLinks = withAppLinks;
 module.exports.APP_LINK_PATHS = APP_LINK_PATHS;
 module.exports.withMaps = withMaps;

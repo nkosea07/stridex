@@ -341,6 +341,48 @@ class ProductionConfigurationValidatorTest {
         assertThatCode(() -> validator.run(new DefaultApplicationArguments())).doesNotThrowAnyException();
     }
 
+    @Test
+    void validateBeforeMigration_requiresApnsForProductionPush() {
+        RaceTrackerProperties properties = productionStorage();
+
+        assertThatThrownBy(() -> pushValidator(properties).validateBeforeMigration())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("APNS_KEY_ID");
+    }
+
+    @Test
+    void validateBeforeMigration_rejectsTheApnsSandboxInProduction() {
+        RaceTrackerProperties properties = productionStorage();
+        configureApns(properties);
+        properties.getPush().getApns().setSandbox(true);
+
+        assertThatThrownBy(() -> pushValidator(properties).validateBeforeMigration())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("APNS_SANDBOX=false");
+    }
+
+    @Test
+    void validateBeforeMigration_acceptsProductionPushWithFcmAndApns() {
+        RaceTrackerProperties properties = productionStorage();
+        configureApns(properties);
+
+        assertThatCode(() -> pushValidator(properties).validateBeforeMigration()).doesNotThrowAnyException();
+    }
+
+    private ProductionConfigurationValidator pushValidator(RaceTrackerProperties properties) {
+        return new ProductionConfigurationValidator(
+            "a-strong-production-jwt-secret-with-more-than-thirty-two-characters", true, validCorsProperties(),
+            "jdbc:postgresql://db.internal:5432/race_tracker", "unique-production-database-password",
+            false, true, "{\"type\":\"service_account\"}", false, false, properties, "smtp.example.com");
+    }
+
+    private void configureApns(RaceTrackerProperties properties) {
+        RaceTrackerProperties.Apns apns = properties.getPush().getApns();
+        apns.setKeyId("ABC123DEFG");
+        apns.setTeamId("TEAM123456");
+        apns.setPrivateKey("test-apns-signing-key");
+    }
+
     private RaceTrackerProperties productionStorage() {
         RaceTrackerProperties properties = new RaceTrackerProperties();
         properties.getStorage().setProvider("aws-s3");

@@ -124,6 +124,29 @@ describe('release build settings', () => {
   })
 })
 
+describe('push and build numbering', () => {
+  const config = { android: { package: 'com.racetracker.app' } }
+  const store = { EAS_BUILD: 'true', EAS_BUILD_PROFILE: 'production' }
+
+  it('builds Android with the Firebase config from the EAS file variable or a local file', () => {
+    expect(appConfig.withAndroidPushCredentials(config, { ...store, GOOGLE_SERVICES_JSON: '/eas/secrets/google-services.json' }, () => false)
+      .android).toEqual({ package: 'com.racetracker.app', googleServicesFile: '/eas/secrets/google-services.json' })
+    expect(appConfig.withAndroidPushCredentials(config, {}, () => true).android.googleServicesFile).toBe('./google-services.json')
+  })
+
+  it('fails store builds that could not receive Android push notifications', () => {
+    expect(() => appConfig.withAndroidPushCredentials(config, store, () => false)).toThrow(/GOOGLE_SERVICES_JSON/)
+    expect(appConfig.withAndroidPushCredentials(config, { EAS_BUILD_PROFILE: 'production' }, () => false)).toBe(config)
+    expect(appConfig.withAndroidPushCredentials(config, { EAS_BUILD: 'true', EAS_BUILD_PROFILE: 'preview' }, () => false)).toBe(config)
+  })
+
+  it('lets EAS assign increasing build numbers to every store build', () => {
+    const eas = require('../eas.json')
+    expect(eas.cli.appVersionSource).toBe('remote')
+    expect(eas.build.production.autoIncrement).toBe(true)
+  })
+})
+
 describe('tracking permission flow', () => {
   beforeEach(() => {
     vi.resetModules()
