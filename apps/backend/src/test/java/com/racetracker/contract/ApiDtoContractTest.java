@@ -12,6 +12,8 @@ import com.racetracker.dto.media.MediaDto;
 import com.racetracker.dto.participant.ExternalRefundAttemptDto;
 import com.racetracker.dto.participant.ExternalRefundAttemptRequest;
 import com.racetracker.dto.participant.ExternalRefundReconciliationRequest;
+import com.racetracker.dto.participant.LocationSharingDto;
+import com.racetracker.dto.participant.LocationSharingRequest;
 import com.racetracker.dto.participant.ReversalCaseDto;
 import com.racetracker.dto.privacy.PrivacyDeletionJobDto;
 import com.racetracker.dto.privacy.PrivacyScopeVerificationRequest;
@@ -68,6 +70,8 @@ class ApiDtoContractTest {
             "latitude", "longitude", "message", "status", "deliveryStatus", "createdAt"));
         assertFields(objectMapper.valueToTree(new MediaConsentDto(id, true, "MEDIA_PUBLICATION_V1", now)),
             Set.of("participantId", "consented", "version", "acceptedAt"));
+        assertFields(objectMapper.valueToTree(new LocationSharingDto(id, false)),
+            Set.of("participantId", "enabled"));
     }
 
     @Test
@@ -82,6 +86,7 @@ class ApiDtoContractTest {
         assertThat(objectMapper.readValue("{\"status\":\"RESOLVED\"}", EmergencyAlertStatusRequest.class)
             .status()).isEqualTo("RESOLVED");
         assertThat(objectMapper.readValue("{\"consented\":true}", MediaConsentRequest.class).consented()).isTrue();
+        assertThat(objectMapper.readValue("{\"enabled\":false}", LocationSharingRequest.class).enabled()).isFalse();
         EmergencyAlertRequest alert = objectMapper.readValue("{\"message\":\"No GPS\"}", EmergencyAlertRequest.class);
         assertThat(alert.getLatitude()).isNull();
         assertThat(alert.getLongitude()).isNull();

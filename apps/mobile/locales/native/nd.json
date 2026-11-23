@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSLocationWhenInUseUsageDescription": "I-Race Tracker isebenzisa indawo okuyo ngesikhathi ukulandela umjaho kuvuliwe, lanxa isikrini sikhiyiwe, ukuze ibhale indlela yakho njalo yabelane ngendawo yakho yakhathesi labahleli bomjaho, njalo ngaphandle kokuthi ukucime, lababukeli emephini yomjaho.",
+    "NSLocationAlwaysAndWhenInUseUsageDescription": "I-Race Tracker isebenzisa indawo okuyo ngesikhathi somjaho, lanxa i-app ivaliwe kumbe ingasetshenziswa, ukuze iqhubeke ibhala indlela yakho njalo yabelane ngendawo yakho yakhathesi labahleli bomjaho, njalo ngaphandle kokuthi ukucime, lababukeli emephini yomjaho.",
+    "NSLocationAlwaysUsageDescription": "I-Race Tracker isebenzisa indawo okuyo ngesikhathi somjaho, lanxa i-app ivaliwe kumbe ingasetshenziswa, ukuze iqhubeke ibhala indlela yakho njalo yabelane ngendawo yakho yakhathesi labahleli bomjaho, njalo ngaphandle kokuthi ukucime, lababukeli emephini yomjaho.",
+    "NSCameraUsageDescription": "I-Race Tracker isebenzisa ikhamera ukuskena amakhodi e-QR ezindaweni zokuhlola lalapho ubhalisa khona."
+  }
+}

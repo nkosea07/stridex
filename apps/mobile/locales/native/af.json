@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSLocationWhenInUseUsageDescription": "Race Tracker gebruik jou ligging terwyl wedloopvolging aan is, ook wanneer die skerm gesluit is, om jou roete op te teken en jou lewendige posisie met die wedloop-organiseerders te deel en, tensy jy dit afskakel, met toeskouers op die wedloopkaart.",
+    "NSLocationAlwaysAndWhenInUseUsageDescription": "Race Tracker gebruik jou ligging tydens ’n wedloop, selfs wanneer die toep gesluit is of nie gebruik word nie, om jou roete verder op te teken en jou lewendige posisie met die wedloop-organiseerders te deel en, tensy jy dit afskakel, met toeskouers op die wedloopkaart.",
+    "NSLocationAlwaysUsageDescription": "Race Tracker gebruik jou ligging tydens ’n wedloop, selfs wanneer die toep gesluit is of nie gebruik word nie, om jou roete verder op te teken en jou lewendige posisie met die wedloop-organiseerders te deel en, tensy jy dit afskakel, met toeskouers op die wedloopkaart.",
+    "NSCameraUsageDescription": "Race Tracker gebruik die kamera om QR-kodes by kontrolepunte en by aanmelding te skandeer."
+  }
+}

@@ -755,5 +755,20 @@
     "zoomIn": "Sondeza",
     "zoomOut": "Qhelisa",
     "retry": "Zama njalo"
+  },
+  "trackingNotification": {
+    "title": "Ukulandela umjaho kuvuliwe",
+    "body": "Indawo okuyo yabelwana labahleli bomjaho ngesikhathi ukulandela kuvuliwe."
+  },
+  "locationDisclosure": {
+    "title": "Yabelana ngendawo okuyo ngesikhathi somjaho",
+    "body": "I-Race Tracker ibutha indawo okuyo eqondileyo ngesikhathi ukulandela umjaho kuvuliwe, lanxa i-app isemuva kumbe isikrini sikhiyiwe. Isetshenziselwa ukubhala indlela yakho lokuthi usuhambe kangakanani, njalo indawo yakho yakhathesi yabelwana labahleli bomjaho, njalo ngaphandle kokuthi ukucime ekhasini lomjaho, lababukeli emephini yomphakathi yomjaho. Ukulandela kuyama nxa ukumisa kumbe nxa umjaho wakho uphela.",
+    "accept": "Qhubeka",
+    "decline": "Hatshi khathesi"
+  },
+  "locationPermission": {
+    "deniedTitle": "Ukungena endaweni kuvaliwe",
+    "deniedBody": "Ukulandela umjaho kudinga indawo okuyo. Vumela i-Race Tracker ukusebenzisa indawo kuzilungiselelo zefoni yakho, ubusuzama njalo.",
+    "openSettings": "Vula izilungiselelo"
   }
 }

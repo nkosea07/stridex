@@ -20,6 +20,7 @@ public class RegistrationDto {
     private String status;
     private OffsetDateTime registrationDate;
     private boolean mediaPublicationConsent;
+    private boolean publicLocationSharing;
     private EmergencyContact emergencyContact;
     private String shirtSize;
     private String paymentStatus;

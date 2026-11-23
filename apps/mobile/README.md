@@ -137,7 +137,9 @@ const API_ROOT = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8081/api';
 ### Live Tracking
 
 The app tracks GPS location during races:
-- Background location tracking
+- Tracking with while-in-use location only: Android keeps it running with a location foreground service, and iOS with the `location` background mode and the blue status-bar indicator, so the screen can be locked without needing "Always" or Android background-location permission
+- An in-app disclosure, shown before the first location prompt, explaining what is collected and who sees it
+- Athletes can hide their live position from spectators per race entry (organizers still see it)
 - Real-time pace calculation
 - Distance covered tracking
 - Checkpoint detection
@@ -179,6 +181,17 @@ This app is configured for EAS build channels in `eas.json`:
 
 OTA update readiness is configured with `runtimeVersion.policy = appVersion`. Do not publish OTA updates that require native changes without shipping a new binary with a new app version.
 
+`production` builds on EAS fail unless `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_WEB_URL` are https URLs, so a store binary cannot ship pointing at `localhost`. `production` and `preview` builds use the production APNs environment.
+
+### Store review settings
+
+These live in `app.json` and are checked by `tests/store-readiness.test.mjs`:
+
+- iOS: `usesNonExemptEncryption: false`, HTTPS-only App Transport Security, an app privacy manifest (required-reason APIs, no tracking, collected data types), iPhone only (`supportsTablet: false`).
+- Permission prompts are translated per language in `locales/native/<lang>.json` (no double quotes or backslashes: Expo writes them into `InfoPlist.strings` unescaped).
+- Android: `RECORD_AUDIO`, external storage, `SYSTEM_ALERT_WINDOW` and `ACCESS_BACKGROUND_LOCATION` are blocked; `FOREGROUND_SERVICE_LOCATION` is declared for tracking.
+- The public account deletion page for Google Play is `<EXPO_PUBLIC_WEB_URL>/account-deletion`.
+
 ### iOS (App Store)
 
 ```bash
@@ -205,9 +218,8 @@ Every endpoint path comes from `@race-tracker/contracts` (`packages/contracts/co
 
 ## Permissions Required
 
-- **Location**: For GPS tracking during races
-- **Background Location**: For continuing race tracking while the app is backgrounded
-- **Camera**: For QR code scanning at checkpoints
+- **Location (while using the app)**: For GPS tracking during races; tracking continues with the screen locked through the location foreground service (Android) and background mode (iOS)
+- **Camera**: For QR code scanning at checkpoints (no microphone)
 - **Notifications**: For race updates (optional)
 
 ## Validation

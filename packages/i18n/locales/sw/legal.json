@@ -9,7 +9,8 @@
     "relatedPrivacy": "Soma Sera yetu ya Faragha",
     "relatedTerms": "Soma Sheria na Masharti yetu",
     "footerLegal": "Kisheria",
-    "englishOnly": "Hati hii inapatikana kwa Kiingereza pekee. Toleo la Kiingereza ndilo rasmi."
+    "englishOnly": "Hati hii inapatikana kwa Kiingereza pekee. Toleo la Kiingereza ndilo rasmi.",
+    "accountDeletion": "Futa akaunti yako"
   },
   "privacy": {
     "title": "Sera ya Faragha"
@@ -34,5 +35,8 @@
     "suffix": ".",
     "errorTitle": "Hitilafu",
     "required": "Tafadhali kubali Sheria na Masharti na Sera ya Faragha ili kuendelea."
+  },
+  "accountDeletion": {
+    "title": "Futa akaunti yako"
   }
 }

@@ -172,6 +172,10 @@ public class Participant {
     @Column(name = "is_tracking_enabled")
     private Boolean isTrackingEnabled = true;
 
+    @Builder.Default
+    @Column(name = "public_location_sharing", nullable = false)
+    private boolean publicLocationSharing = true;
+
     @Column(name = "device_token")
     private String deviceToken;
 

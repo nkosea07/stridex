@@ -9,7 +9,8 @@
     "relatedPrivacy": "Verenga Mutemo wedu Wekuchengetedza Ruzivo",
     "relatedTerms": "Verenga Mitemo neMamiriro edu",
     "footerLegal": "Zvemutemo",
-    "englishOnly": "Gwaro iri rinowanikwa muChirungu chete. Shanduro yeChirungu ndiyo yepamutemo."
+    "englishOnly": "Gwaro iri rinowanikwa muChirungu chete. Shanduro yeChirungu ndiyo yepamutemo.",
+    "accountDeletion": "Dzima akaundi yako"
   },
   "privacy": {
     "title": "Mutemo Wekuchengetedza Ruzivo"
@@ -34,5 +35,8 @@
     "suffix": ".",
     "errorTitle": "Kukanganisa",
     "required": "Ndapota bvuma Mitemo neMamiriro neMutemo Wekuchengetedza Ruzivo kuti uenderere mberi."
+  },
+  "accountDeletion": {
+    "title": "Dzima akaundi yako"
   }
 }

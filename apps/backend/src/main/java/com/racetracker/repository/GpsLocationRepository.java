@@ -88,6 +88,7 @@ public interface GpsLocationRepository extends JpaRepository<GpsLocation, UUID> 
         where g.race_id = :raceId
           and g.filtered = false
           and coalesce(p.is_tracking_enabled, true) = true
+          and p.public_location_sharing = true
           and (:from is null or g.recorded_at >= :from)
           and (:to is null or g.recorded_at <= :to)
         group by 1, 2

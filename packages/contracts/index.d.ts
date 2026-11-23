@@ -83,6 +83,7 @@ export type EndpointKey =
   | 'raceMediaApprove'
   | 'raceMediaAttestNonPerson'
   | 'myRegistrationMediaConsent'
+  | 'myRegistrationLocationSharing'
   | 'raceMediaReject'
   | 'raceMediaDelete'
   | 'publicRaceMedia'
@@ -203,6 +204,7 @@ export interface ApiContract {
     privacyPolicyPath: string;
     termsVersion: string;
     termsPath: string;
+    accountDeletionPath: string;
     mediaPublicationConsentVersion: string;
     operatorName: string;
     operatorAddress: string;

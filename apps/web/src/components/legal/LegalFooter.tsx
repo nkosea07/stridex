@@ -11,9 +11,10 @@ export function LegalFooter({ className }: { className?: string }) {
       <nav aria-label={t('legal:common.footerLegal')}
         className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-4 gap-y-1 sm:justify-between">
         <span>{PRODUCT.name}</span>
-        <span className="flex gap-4">
+        <span className="flex flex-wrap justify-center gap-x-4 gap-y-1">
           <Link to={LEGAL_PATHS.terms} className="hover:text-foreground hover:underline">{t('legal:common.terms')}</Link>
           <Link to={LEGAL_PATHS.privacy} className="hover:text-foreground hover:underline">{t('legal:common.privacyPolicy')}</Link>
+          <Link to={LEGAL_PATHS.accountDeletion} className="hover:text-foreground hover:underline">{t('legal:common.accountDeletion')}</Link>
         </span>
       </nav>
     </footer>

@@ -87,6 +87,7 @@ function RaceDetailScreenContent() {
   const [mediaPublicationConsent, setMediaPublicationConsent] = useState(false);
   const [myRegistration, setMyRegistration] = useState<Registration | null>(null);
   const [savingMediaConsent, setSavingMediaConsent] = useState(false);
+  const [savingLocationSharing, setSavingLocationSharing] = useState(false);
 
   const [paying, setPaying] = useState(false);
   const [promoCode, setPromoCode] = useState('');
@@ -153,6 +154,20 @@ function RaceDetailScreenContent() {
       Alert.alert(t('common:mediaPublicationManage'), t('common:mediaPublicationFailed'));
     } finally {
       setSavingMediaConsent(false);
+    }
+  };
+
+  const updateLocationSharing = async (enabled: boolean) => {
+    if (!myRegistration || savingLocationSharing) return;
+    setSavingLocationSharing(true);
+    try {
+      await api.updateLocationSharing(myRegistration.id, enabled);
+      setMyRegistration({ ...myRegistration, publicLocationSharing: enabled });
+      Alert.alert(t('common:locationSharingManage'), t('common:locationSharingSaved'));
+    } catch {
+      Alert.alert(t('common:locationSharingManage'), t('common:locationSharingFailed'));
+    } finally {
+      setSavingLocationSharing(false);
     }
   };
 
@@ -652,6 +667,21 @@ function RaceDetailScreenContent() {
               accessibilityLabel={t('common:mediaPublicationManage')}
             />
             <Text style={styles.registrationNotice}>{t('common:mediaPublicationManage')}</Text>
+          </View>
+        )}
+        {canRegister && myRegistration && (
+          <View style={styles.switchRow}>
+            <Switch
+              value={myRegistration.publicLocationSharing !== false}
+              onValueChange={(value) => void updateLocationSharing(value)}
+              disabled={savingLocationSharing}
+              accessibilityLabel={t('common:locationSharingManage')}
+              accessibilityHint={t('common:locationSharingHint')}
+            />
+            <View style={styles.switchText}>
+              <Text style={[styles.registrationNotice, styles.switchLabel]}>{t('common:locationSharingManage')}</Text>
+              <Text style={styles.switchHint}>{t('common:locationSharingHint')}</Text>
+            </View>
           </View>
         )}
         {canRegister && myRegistration ? null : canRegister ? (
@@ -1190,6 +1220,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginTop: 4,
+  },
+  switchText: {
+    flex: 1,
+  },
+  switchLabel: {
+    textAlign: 'left',
+  },
+  switchHint: {
+    color: '#6B7280',
+    fontSize: 12,
+    lineHeight: 16,
   },
   waiverBox: {
     marginTop: 16,

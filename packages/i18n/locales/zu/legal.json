@@ -9,7 +9,8 @@
     "relatedPrivacy": "Funda Inqubomgomo Yethu Yobumfihlo",
     "relatedTerms": "Funda Imigomo Nemibandela Yethu",
     "footerLegal": "Ezomthetho",
-    "englishOnly": "Lo mbhalo utholakala ngesiNgisi kuphela. Inguqulo yesiNgisi yiyona esemthethweni."
+    "englishOnly": "Lo mbhalo utholakala ngesiNgisi kuphela. Inguqulo yesiNgisi yiyona esemthethweni.",
+    "accountDeletion": "Susa i-akhawunti yakho"
   },
   "privacy": {
     "title": "Inqubomgomo Yobumfihlo"
@@ -34,5 +35,8 @@
     "suffix": ".",
     "errorTitle": "Iphutha",
     "required": "Sicela wamukele Imigomo Nemibandela kanye Nenqubomgomo Yobumfihlo ukuze uqhubeke."
+  },
+  "accountDeletion": {
+    "title": "Susa i-akhawunti yakho"
   }
 }

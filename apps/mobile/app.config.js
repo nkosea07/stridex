@@ -91,7 +91,41 @@ function withMaps(config, env) {
   };
 }
 
-module.exports = ({ config }) => withMaps(withAppLinks(config, process.env.EXPO_PUBLIC_WEB_URL), process.env);
+const STORE_PROFILES = new Set(['production']);
+const RELEASE_PROFILES = new Set(['production', 'preview']);
+const STORE_URL_VARIABLES = ['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_WEB_URL'];
+
+function isHttpsUrl(value) {
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function withReleaseSettings(config, env) {
+  const profile = env.EAS_BUILD_PROFILE;
+  if (env.EAS_BUILD === 'true' && STORE_PROFILES.has(profile)) {
+    const invalid = STORE_URL_VARIABLES.filter((name) => !isHttpsUrl((env[name] || '').trim()));
+    if (invalid.length > 0) {
+      throw new Error(`${invalid.join(' and ')} must be set to https URLs for "${profile}" builds`);
+    }
+  }
+  if (!RELEASE_PROFILES.has(profile)) return config;
+  return {
+    ...config,
+    plugins: (config.plugins ?? []).map((plugin) => {
+      const [name, options] = Array.isArray(plugin) ? plugin : [plugin, undefined];
+      return name === 'expo-notifications' ? [name, { ...options, mode: 'production' }] : plugin;
+    }),
+  };
+}
+
+module.exports = ({ config }) => withReleaseSettings(
+  withMaps(withAppLinks(config, process.env.EXPO_PUBLIC_WEB_URL), process.env),
+  process.env,
+);
+module.exports.withReleaseSettings = withReleaseSettings;
 module.exports.withAppLinks = withAppLinks;
 module.exports.APP_LINK_PATHS = APP_LINK_PATHS;
 module.exports.withMaps = withMaps;

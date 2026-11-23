@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSLocationWhenInUseUsageDescription": "Race Tracker hutumia eneo lako wakati ufuatiliaji wa mbio umewashwa, hata skrini ikiwa imefungwa, ili kurekodi njia yako na kushiriki mahali ulipo sasa na waandaaji wa mbio na, usipozima, na watazamaji kwenye ramani ya mbio.",
+    "NSLocationAlwaysAndWhenInUseUsageDescription": "Race Tracker hutumia eneo lako wakati wa mbio, hata programu ikiwa imefungwa au haitumiki, ili kuendelea kurekodi njia yako na kushiriki mahali ulipo sasa na waandaaji wa mbio na, usipozima, na watazamaji kwenye ramani ya mbio.",
+    "NSLocationAlwaysUsageDescription": "Race Tracker hutumia eneo lako wakati wa mbio, hata programu ikiwa imefungwa au haitumiki, ili kuendelea kurekodi njia yako na kushiriki mahali ulipo sasa na waandaaji wa mbio na, usipozima, na watazamaji kwenye ramani ya mbio.",
+    "NSCameraUsageDescription": "Race Tracker hutumia kamera kuchanganua misimbo ya QR kwenye vituo vya ukaguzi na wakati wa kuingia."
+  }
+}

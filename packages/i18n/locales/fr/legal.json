@@ -9,7 +9,8 @@
     "relatedPrivacy": "Lire notre politique de confidentialité",
     "relatedTerms": "Lire nos conditions générales",
     "footerLegal": "Mentions légales",
-    "englishOnly": "Ce document est disponible uniquement en anglais. La version anglaise fait foi."
+    "englishOnly": "Ce document est disponible uniquement en anglais. La version anglaise fait foi.",
+    "accountDeletion": "Supprimer votre compte"
   },
   "privacy": {
     "title": "Politique de confidentialité"
@@ -34,5 +35,8 @@
     "suffix": ".",
     "errorTitle": "Erreur",
     "required": "Veuillez accepter les conditions générales et la politique de confidentialité pour continuer."
+  },
+  "accountDeletion": {
+    "title": "Supprimer votre compte"
   }
 }

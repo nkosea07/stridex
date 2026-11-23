@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSLocationWhenInUseUsageDescription": "O Race Tracker usa a sua localização enquanto o acompanhamento da corrida está ativo, incluindo com o ecrã bloqueado, para registar o seu percurso e partilhar a sua posição em direto com os organizadores e, a menos que desative esta opção, com os espectadores no mapa da corrida.",
+    "NSLocationAlwaysAndWhenInUseUsageDescription": "O Race Tracker usa a sua localização durante uma corrida, mesmo quando a app está fechada ou não está a ser usada, para continuar a registar o seu percurso e partilhar a sua posição em direto com os organizadores e, a menos que desative esta opção, com os espectadores no mapa da corrida.",
+    "NSLocationAlwaysUsageDescription": "O Race Tracker usa a sua localização durante uma corrida, mesmo quando a app está fechada ou não está a ser usada, para continuar a registar o seu percurso e partilhar a sua posição em direto com os organizadores e, a menos que desative esta opção, com os espectadores no mapa da corrida.",
+    "NSCameraUsageDescription": "O Race Tracker usa a câmara para ler códigos QR nos pontos de controlo e no check-in."
+  }
+}

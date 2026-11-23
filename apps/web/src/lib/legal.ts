@@ -1,7 +1,7 @@
 import { API_CONTRACT } from '@race-tracker/contracts'
 import type { User } from '@/types'
 
-export type LegalDocumentKind = 'privacy' | 'terms'
+export type LegalDocumentKind = 'privacy' | 'terms' | 'accountDeletion'
 
 export interface LegalSection {
   id: string
@@ -14,11 +14,13 @@ export interface LegalSection {
 export const LEGAL_PATHS: Record<LegalDocumentKind, string> = {
   privacy: API_CONTRACT.legal.privacyPolicyPath,
   terms: API_CONTRACT.legal.termsPath,
+  accountDeletion: API_CONTRACT.legal.accountDeletionPath,
 }
 
 export const LEGAL_VERSIONS: Record<LegalDocumentKind, string> = {
   privacy: API_CONTRACT.legal.privacyPolicyVersion,
   terms: API_CONTRACT.legal.termsVersion,
+  accountDeletion: API_CONTRACT.legal.privacyPolicyVersion,
 }
 
 export function legalInterpolation() {
@@ -46,5 +48,5 @@ export function asList<T>(value: unknown): T[] {
 }
 
 export function isLegalPath(pathname: string) {
-  return pathname === LEGAL_PATHS.privacy || pathname === LEGAL_PATHS.terms
+  return Object.values(LEGAL_PATHS).includes(pathname)
 }

@@ -757,5 +757,20 @@
     "zoomIn": "Zoom avant",
     "zoomOut": "Zoom arrière",
     "retry": "Réessayer"
+  },
+  "trackingNotification": {
+    "title": "Suivi de course activé",
+    "body": "Votre position est partagée avec les organisateurs pendant le suivi."
+  },
+  "locationDisclosure": {
+    "title": "Partager votre position pendant la course",
+    "body": "Race Tracker collecte votre position précise pendant le suivi de course, y compris lorsque l’app est en arrière-plan ou que l’écran est verrouillé. Elle sert à enregistrer votre parcours et votre progression, et votre position en direct est partagée avec les organisateurs et, sauf si vous le désactivez sur la page de la course, avec les spectateurs sur la carte publique de la course. Le suivi s’arrête lorsque vous l’arrêtez ou à la fin de votre course.",
+    "accept": "Continuer",
+    "decline": "Plus tard"
+  },
+  "locationPermission": {
+    "deniedTitle": "Accès à la position désactivé",
+    "deniedBody": "Le suivi de course a besoin de votre position. Autorisez l’accès à la position pour Race Tracker dans les réglages de l’appareil, puis réessayez.",
+    "openSettings": "Ouvrir les réglages"
   }
 }

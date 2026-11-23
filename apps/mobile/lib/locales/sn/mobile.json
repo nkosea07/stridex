@@ -755,5 +755,20 @@
     "zoomIn": "Swededza",
     "zoomOut": "Dzosera kure",
     "retry": "Edza zvakare"
+  },
+  "trackingNotification": {
+    "title": "Kutevera mujaho kwakabatidzwa",
+    "body": "Nzvimbo yauri iri kugovaniswa nevarongi vemujaho kana kutevera kwakabatidzwa."
+  },
+  "locationDisclosure": {
+    "title": "Govana nzvimbo yauri panguva yemujaho",
+    "body": "Race Tracker inounganidza nzvimbo chaiyo yauri kana kutevera mujaho kwakabatidzwa, kunyange app iri kumashure kana skrini yakakiyiwa. Inoshandiswa kunyora nzira yako nekufambira mberi kwako, uye nzvimbo yauri izvozvi inogovaniswa nevarongi vemujaho uye, kunze kwekunge wazvidzima papeji yemujaho, nevaoni pamepu yeruzhinji yemujaho. Kutevera kunomira kana wakumisa kana kuti mujaho wako wapera.",
+    "accept": "Enderera",
+    "decline": "Kwete izvozvi"
+  },
+  "locationPermission": {
+    "deniedTitle": "Kushandisa nzvimbo kwakadzimwa",
+    "deniedBody": "Kutevera mujaho kunoda nzvimbo yauri. Bvumira Race Tracker kushandisa nzvimbo muzvirongwa zvenhare yako, wozoedza zvakare.",
+    "openSettings": "Vhura zvirongwa"
   }
 }

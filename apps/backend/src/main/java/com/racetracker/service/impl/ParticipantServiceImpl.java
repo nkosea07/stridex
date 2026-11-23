@@ -1107,6 +1107,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         dto.setStatus(mapRegistrationStatus(participant.getStatus()));
         dto.setRegistrationDate(participant.getRegisteredAt());
         dto.setMediaPublicationConsent(participant.getMediaPublicationConsentAt() != null);
+        dto.setPublicLocationSharing(participant.isPublicLocationSharing());
         dto.setShirtSize(participant.getShirtSize());
         dto.setPaymentStatus(participant.getPaymentStatus() != null ? participant.getPaymentStatus().name() : null);
         dto.setPaymentAmount(participant.getPaymentAmount());

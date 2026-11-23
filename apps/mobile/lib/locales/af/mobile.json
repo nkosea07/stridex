@@ -755,5 +755,20 @@
     "zoomIn": "Zoem in",
     "zoomOut": "Zoem uit",
     "retry": "Probeer weer"
+  },
+  "trackingNotification": {
+    "title": "Wedloopvolging is aan",
+    "body": "Jou ligging word met die wedloop-organiseerders gedeel terwyl volging aan is."
+  },
+  "locationDisclosure": {
+    "title": "Deel jou ligging tydens die wedloop",
+    "body": "Race Tracker versamel jou presiese ligging terwyl wedloopvolging aan is, ook wanneer die toep in die agtergrond loop of die skerm gesluit is. Dit word gebruik om jou roete en vordering op te teken, en jou lewendige posisie word met die wedloop-organiseerders gedeel en, tensy jy dit op die wedloopblad afskakel, met toeskouers op die openbare wedloopkaart. Volging stop wanneer jy dit stop of wanneer jou wedloop eindig.",
+    "accept": "Gaan voort",
+    "decline": "Nie nou nie"
+  },
+  "locationPermission": {
+    "deniedTitle": "Liggingtoegang is af",
+    "deniedBody": "Wedloopvolging het jou ligging nodig. Gee Race Tracker liggingtoegang in jou toestelinstellings en probeer dan weer.",
+    "openSettings": "Maak instellings oop"
   }
 }

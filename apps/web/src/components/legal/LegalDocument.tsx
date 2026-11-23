@@ -1,15 +1,17 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, FileText, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, FileText, ShieldCheck, UserX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LegalFooter } from '@/components/legal/LegalFooter'
 import { LEGAL_PATHS, LEGAL_VERSIONS, asList, legalInterpolation, type LegalDocumentKind, type LegalSection } from '@/lib/legal'
+
+const DOCUMENT_ICONS = { privacy: ShieldCheck, terms: FileText, accountDeletion: UserX } satisfies Record<LegalDocumentKind, unknown>
 
 export function LegalDocument({ kind }: { kind: LegalDocumentKind }) {
   const { t } = useTranslation()
   const values = legalInterpolation()
   const sections = asList<LegalSection>(t(`legal:${kind}.sections`, { returnObjects: true, ...values }))
-  const Icon = kind === 'privacy' ? ShieldCheck : FileText
+  const Icon = DOCUMENT_ICONS[kind]
   const other: LegalDocumentKind = kind === 'privacy' ? 'terms' : 'privacy'
   const headingId = `legal-${kind}-title`
 

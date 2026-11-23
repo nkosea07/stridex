@@ -9,6 +9,7 @@ export default [
   route('verify-email', 'routes/verify-email.tsx'),
   route('privacy', 'routes/privacy.tsx'),
   route('terms', 'routes/terms.tsx'),
+  route('account-deletion', 'routes/account-deletion.tsx'),
   route('notifications', 'routes/notifications.tsx'),
   route('unauthorized', 'routes/unauthorized.tsx'),
   route('race/:raceId', 'routes/public-race.tsx'),
