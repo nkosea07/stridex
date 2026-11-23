@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuthOptional } from '@/contexts/AuthContext'
-import { ApiError, publicRegistrationApi } from '@/lib/api'
+import { ApiError, publicRegistrationApi, type PublicRegistrationPayload } from '@/lib/api'
 import { toast } from 'sonner'
 import type { PublicRaceHub, RegistrationField } from '@/types'
 
@@ -18,10 +18,19 @@ interface PublicRaceRegistrationPanelProps {
 
 const inputClass = 'bg-white/70'
 
+function todayIso() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 function registrationErrorKey(error: unknown) {
   if (!(error instanceof ApiError)) return 'register:errorRegistrationFailed'
 
   switch (error.code) {
+    case 'REGISTRATION_NOT_OPEN': return 'register:errorRegistrationNotOpen'
+    case 'CATEGORY_FULL': return 'register:errorCategoryFull'
+    case 'CATEGORY_AGE_INELIGIBLE': return 'register:errorCategoryAge'
+    case 'CATEGORY_GENDER_INELIGIBLE': return 'register:errorCategoryGender'
     case 'VALIDATION_ERROR': return 'register:errorRegistrationValidation'
     case 'UNAUTHORIZED': return 'register:errorRegistrationUnauthorized'
     case 'FORBIDDEN': return 'register:errorRegistrationForbidden'
@@ -49,6 +58,8 @@ export function PublicRaceRegistrationPanel({ raceId, hub, returnTo }: PublicRac
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [form, setForm] = useState({
     categoryId: '',
+    gender: '' as PublicRegistrationPayload['gender'] | '',
+    dateOfBirth: '',
     contactName: '',
     contactPhone: '',
     contactRelationship: '',
@@ -70,7 +81,7 @@ export function PublicRaceRegistrationPanel({ raceId, hub, returnTo }: PublicRac
     if (!hub.isPublicRegistration) return 'closed'
     if (hub.registrationOpens && now < new Date(hub.registrationOpens).getTime()) return 'not-open'
     if (hub.registrationCloses && now > new Date(hub.registrationCloses).getTime()) return 'closed'
-    if (hub.status === 'CANCELLED' || hub.status === 'COMPLETED' || hub.status === 'IN_PROGRESS') return 'closed'
+    if (hub.status !== 'REGISTRATION_OPEN') return 'closed'
     return 'open'
   }, [hub.isPublicRegistration, hub.registrationOpens, hub.registrationCloses, hub.status, now])
 
@@ -100,6 +111,14 @@ export function PublicRaceRegistrationPanel({ raceId, hub, returnTo }: PublicRac
       toast.error(t('register:registrationCategoryRequired'))
       return
     }
+    if (!form.gender) {
+      toast.error(t('register:registrationGenderRequired'))
+      return
+    }
+    if (!form.dateOfBirth) {
+      toast.error(t('register:registrationDateOfBirthRequired'))
+      return
+    }
     if (hub.requireWaiver && !form.waiverAccepted) {
       toast.error(t('register:registrationWaiverRequired'))
       return
@@ -108,6 +127,8 @@ export function PublicRaceRegistrationPanel({ raceId, hub, returnTo }: PublicRac
     try {
       const registration = await publicRegistrationApi.register(raceId, {
         categoryId: form.categoryId,
+        gender: form.gender,
+        dateOfBirth: form.dateOfBirth,
         emergencyContact: {
           name: form.contactName,
           phone: form.contactPhone,
@@ -201,6 +222,30 @@ export function PublicRaceRegistrationPanel({ raceId, hub, returnTo }: PublicRac
             <div className="space-y-1">
               <Label htmlFor="reg-shirt">{t('register:registrationShirtSize')}</Label>
               <Input id="reg-shirt" className={inputClass} value={form.shirtSize} onChange={(e) => setForm((v) => ({ ...v, shirtSize: e.target.value }))} />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="reg-gender">{t('register:registrationGender')}</Label>
+              <select
+                id="reg-gender"
+                className="h-10 w-full rounded-md border border-input bg-white/70 px-3 text-sm"
+                value={form.gender}
+                onChange={(e) => setForm((v) => ({ ...v, gender: e.target.value as PublicRegistrationPayload['gender'] | '' }))}
+                required
+              >
+                <option value="">{t('register:registrationGenderSelect')}</option>
+                <option value="FEMALE">{t('register:registrationGenderFemale')}</option>
+                <option value="MALE">{t('register:registrationGenderMale')}</option>
+                <option value="OTHER">{t('register:registrationGenderOther')}</option>
+                <option value="PREFER_NOT_TO_SAY">{t('register:registrationGenderPreferNotToSay')}</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="reg-dob">{t('register:registrationDateOfBirth')}</Label>
+              <Input id="reg-dob" type="date" className={inputClass} value={form.dateOfBirth} max={todayIso()}
+                onChange={(e) => setForm((v) => ({ ...v, dateOfBirth: e.target.value }))} required />
             </div>
           </div>
 

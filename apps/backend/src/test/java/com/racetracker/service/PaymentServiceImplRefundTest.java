@@ -512,6 +512,33 @@ class PaymentServiceImplRefundTest {
     }
 
     @Test
+    void promoCoveringTheWholeFeeWaivesTheEntryWithoutCallingTheProvider() {
+        Participant participant = participant();
+        User athlete = new User();
+        athlete.setEmail("athlete@example.com");
+        participant.setUser(athlete);
+        participant.setStatus(Participant.ParticipantStatus.REGISTERED);
+        participant.setPaymentStatus(Participant.PaymentStatus.UNPAID);
+        participant.getRace().setRegistrationFee(BigDecimal.valueOf(40));
+        participant.getRace().setCurrency("USD");
+        UUID promoId = UUID.randomUUID();
+        when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
+        when(promoCodeService.apply("FREEENTRY", raceId, BigDecimal.valueOf(40)))
+            .thenReturn(new PromoCodeService.AppliedPromo(promoId, "FREEENTRY", BigDecimal.valueOf(40)));
+
+        var result = service.startCheckout(raceId, participantId, "FREEENTRY", "athlete@example.com", true);
+
+        assertThat(result.getStatus()).isEqualTo("WAIVED");
+        assertThat(result.getCheckoutUrl()).isNull();
+        assertThat(result.getPayableAmount()).isEqualByComparingTo("0");
+        assertThat(participant.getPaymentStatus()).isEqualTo(Participant.PaymentStatus.WAIVED);
+        assertThat(participant.getPaymentReference()).isEqualTo("PROMO:FREEENTRY");
+        verify(promoCodeService).recordUse(promoId);
+        verify(paymentRepository, never()).save(any());
+        verifyNoInteractions(pesepayClient);
+    }
+
+    @Test
     void athleteCannotStartCheckoutForAnotherUsersParticipant() {
         Participant participant = participant();
         User owner = new User();

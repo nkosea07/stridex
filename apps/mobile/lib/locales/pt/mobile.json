@@ -264,7 +264,8 @@
       "cancelled": "A sua inscrição foi cancelada",
       "dns": "Marcado como não partiu",
       "dnf": "Marcado como desistência",
-      "finished": "Terminou"
+      "finished": "Terminou",
+      "disqualified": "Foi desqualificado desta corrida"
     },
     "register": {
       "title": "Inscrever-se em {{name}}",
@@ -303,7 +304,32 @@
       "waitlisted": "Foi adicionado à lista de espera.",
       "pendingReview": "A sua inscrição aguarda análise.",
       "completed": "Inscrição concluída.",
-      "completedPay": "Inscrição concluída. Pague a taxa de inscrição abaixo para garantir o seu lugar."
+      "completedPay": "Inscrição concluída. Pague a taxa de inscrição abaixo para garantir o seu lugar.",
+      "gender": "Género",
+      "genderFemale": "Feminino",
+      "genderMale": "Masculino",
+      "genderOther": "Outro",
+      "genderPreferNotToSay": "Prefiro não dizer",
+      "dateOfBirth": "Data de nascimento",
+      "dateOfBirthHint": "AAAA-MM-DD",
+      "genderRequired": "Selecione o seu género. É usado nas categorias por género e nos resultados.",
+      "dateOfBirthInvalid": "Introduza a data de nascimento no formato AAAA-MM-DD, por exemplo 1990-05-17.",
+      "notOpen": "As inscrições para esta corrida não estão abertas.",
+      "errors": {
+        "REGISTRATION_NOT_OPEN": "As inscrições para esta corrida não estão abertas.",
+        "CATEGORY_FULL": "Esta categoria está completa. Escolha outra categoria.",
+        "CATEGORY_AGE_INELIGIBLE": "A sua idade no dia da corrida está fora do intervalo desta categoria. Escolha outra categoria.",
+        "CATEGORY_GENDER_INELIGIBLE": "Esta categoria não está aberta ao género que selecionou. Escolha outra categoria."
+      }
+    },
+    "withdraw": {
+      "action": "Desistir desta corrida",
+      "title": "Desistir desta corrida?",
+      "body": "O seu lugar é libertado e oferecido ao próximo atleta na lista de espera. Pode inscrever-se novamente enquanto as inscrições estiverem abertas. Se pagou, o organizador analisa um reembolso.",
+      "confirm": "Desistir",
+      "cancel": "Manter a inscrição",
+      "done": "Desistiu da corrida.",
+      "failed": "Não foi possível cancelar a sua inscrição. Tente novamente."
     }
   },
   "operations": {
@@ -475,7 +501,8 @@
       "PAYMENT_WAIVED": "O organizador isentou-o da taxa de inscrição.",
       "PAYMENT_NOT_AVAILABLE_FOR_STATUS": "O pagamento fica disponível quando o seu lugar estiver confirmado.",
       "REFUND_STATE_CONFLICT": "Esta inscrição foi reembolsada. Contacte o organizador."
-    }
+    },
+    "coveredByPromo": "O seu código promocional cobre a totalidade da taxa de inscrição. A sua inscrição está agora marcada como isenta."
   },
   "tabs": {
     "home": "Início",
@@ -649,7 +676,8 @@
       "RECORD_UNDO_WINDOW_EXPIRED": "Passaram mais de 5 minutos desde este registo. Peça a um administrador da corrida que o corrija.",
       "GUN_TIME_OFFICIAL_NOW_ONLY": "Os oficiais só podem dar a partida de uma vaga na hora atual.",
       "OFFLINE_CAPTURE_BEFORE_GUN": "Este registo é anterior à partida do atleta.",
-      "OFFLINE_CAPTURE_OUT_OF_RANGE": "Este registo é demasiado antigo ou está no futuro."
+      "OFFLINE_CAPTURE_OUT_OF_RANGE": "Este registo é demasiado antigo ou está no futuro.",
+      "CHECK_IN_PAYMENT_REQUIRED": "Este atleta não pagou a taxa de inscrição. Peça ao organizador para confirmar ou isentar o pagamento antes do check-in."
     }
   },
   "settings": {

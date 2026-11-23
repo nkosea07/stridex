@@ -264,7 +264,8 @@
       "cancelled": "Kunyoresa kwako kwakanzurwa",
       "dns": "Wanyorwa sewasina kutanga",
       "dnf": "Wanyorwa sewasina kupedza",
-      "finished": "Wapedza"
+      "finished": "Wapedza",
+      "disqualified": "Wakabviswa mumujaho uyu"
     },
     "register": {
       "title": "Nyoresera {{name}}",
@@ -303,7 +304,32 @@
       "waitlisted": "Wawedzerwa pamutsara wekumirira.",
       "pendingReview": "Kunyoresa kwako kwakamirira kuongororwa.",
       "completed": "Kunyoresa kwapera.",
-      "completedPay": "Kunyoresa kwapera. Bhadhara mari yekupinda pazasi kuti uve nechokwadi chenzvimbo yako."
+      "completedPay": "Kunyoresa kwapera. Bhadhara mari yekupinda pazasi kuti uve nechokwadi chenzvimbo yako.",
+      "gender": "Bonde",
+      "genderFemale": "Mukadzi",
+      "genderMale": "Murume",
+      "genderOther": "Zvimwe",
+      "genderPreferNotToSay": "Handidi kutaura",
+      "dateOfBirth": "Zuva rekuzvarwa",
+      "dateOfBirthHint": "YYYY-MM-DD",
+      "genderRequired": "Sarudza bonde rako. Rinoshandiswa mumapoka ebonde nemhedzisiro.",
+      "dateOfBirthInvalid": "Isa zuva rako rekuzvarwa se YYYY-MM-DD, semuenzaniso 1990-05-17.",
+      "notOpen": "Kunyoresa kwemujaho uyu hakuna kuvhurwa.",
+      "errors": {
+        "REGISTRATION_NOT_OPEN": "Kunyoresa kwemujaho uyu hakuna kuvhurwa.",
+        "CATEGORY_FULL": "Boka iri razara. Sarudza rimwe boka.",
+        "CATEGORY_AGE_INELIGIBLE": "Makore ako pazuva remujaho haaenderane nemakore eboka iri. Sarudza rimwe boka.",
+        "CATEGORY_GENDER_INELIGIBLE": "Boka iri harisi rebonde rawasarudza. Sarudza rimwe boka."
+      }
+    },
+    "withdraw": {
+      "action": "Buda mumujaho uyu",
+      "title": "Wobuda mumujaho uyu here?",
+      "body": "Nzvimbo yako inosunungurwa yopiwa mumhanyi anotevera pamutsara wekumirira. Unogona kunyoresa zvakare kana kunyoresa kuchiri kuvhurika. Kana wakabhadhara, murongi achaongorora kudzoserwa kwemari.",
+      "confirm": "Buda",
+      "cancel": "Chengeta kunyoresa kwangu",
+      "done": "Wabuda mumujaho.",
+      "failed": "Hatina kukwanisa kubvisa kunyoresa kwako. Ndapota edza zvakare."
     }
   },
   "operations": {
@@ -475,7 +501,8 @@
       "PAYMENT_WAIVED": "Murongi akuregerera mari yekupinda.",
       "PAYMENT_NOT_AVAILABLE_FOR_STATUS": "Kubhadhara kunovhurika kana kunyoresa kwako kwawana nzvimbo yakasimbiswa.",
       "REFUND_STATE_CONFLICT": "Kunyoresa uku kwakadzoserwa mari. Bata murongi wemujaho."
-    }
+    },
+    "coveredByPromo": "Kodhi yako yepromo inobhadhara mari yose yekunyoresa. Kunyoresa kwako kwave kunyorwa sekusingabhadharwe."
   },
   "tabs": {
     "home": "Kumba",
@@ -647,7 +674,8 @@
       "RECORD_UNDO_WINDOW_EXPIRED": "Papfuura maminitsi anopfuura 5 kubva pachinyorwa ichi. Kumbira mutungamiriri wemujaho kuti achigadzirise.",
       "GUN_TIME_OFFICIAL_NOW_ONLY": "Vakuru vanogona kutangisa boka panguva iripo chete.",
       "OFFLINE_CAPTURE_BEFORE_GUN": "Chinyorwa ichi chiri pamberi pekunge mumhanyi atanga.",
-      "OFFLINE_CAPTURE_OUT_OF_RANGE": "Chinyorwa ichi chakareba zvakanyanya kana chiri munguva inouya."
+      "OFFLINE_CAPTURE_OUT_OF_RANGE": "Chinyorwa ichi chakareba zvakanyanya kana chiri munguva inouya.",
+      "CHECK_IN_PAYMENT_REQUIRED": "Mumhanyi uyu haana kubhadhara mari yekunyoresa. Kumbira murongi kuti asimbise kana kuregerera kubhadhara asati anyorwa kuti asvika."
     }
   },
   "settings": {

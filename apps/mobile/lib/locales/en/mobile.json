@@ -264,7 +264,8 @@
       "cancelled": "Your registration was cancelled",
       "dns": "Marked as did not start",
       "dnf": "Marked as did not finish",
-      "finished": "Finished"
+      "finished": "Finished",
+      "disqualified": "You were disqualified from this race"
     },
     "register": {
       "title": "Register for {{name}}",
@@ -303,7 +304,32 @@
       "waitlisted": "You have been added to the waitlist.",
       "pendingReview": "Your registration is pending review.",
       "completed": "Registration completed.",
-      "completedPay": "Registration completed. Pay the entry fee below to secure your place."
+      "completedPay": "Registration completed. Pay the entry fee below to secure your place.",
+      "gender": "Gender",
+      "genderFemale": "Female",
+      "genderMale": "Male",
+      "genderOther": "Other",
+      "genderPreferNotToSay": "Prefer not to say",
+      "dateOfBirth": "Date of birth",
+      "dateOfBirthHint": "YYYY-MM-DD",
+      "genderRequired": "Select your gender. It is used for gender categories and results.",
+      "dateOfBirthInvalid": "Enter your date of birth as YYYY-MM-DD, for example 1990-05-17.",
+      "notOpen": "Registration for this race is not open.",
+      "errors": {
+        "REGISTRATION_NOT_OPEN": "Registration for this race is not open.",
+        "CATEGORY_FULL": "This category is full. Choose another category.",
+        "CATEGORY_AGE_INELIGIBLE": "Your age on race day is outside this category's age range. Choose another category.",
+        "CATEGORY_GENDER_INELIGIBLE": "This category is not open to the gender you selected. Choose another category."
+      }
+    },
+    "withdraw": {
+      "action": "Withdraw from this race",
+      "title": "Withdraw from this race?",
+      "body": "Your place is released and offered to the next athlete on the waitlist. You can register again while registration is open. If you paid, the organizer reviews a refund.",
+      "confirm": "Withdraw",
+      "cancel": "Keep my entry",
+      "done": "You have withdrawn from the race.",
+      "failed": "We could not withdraw your entry. Please try again."
     }
   },
   "operations": {
@@ -475,7 +501,8 @@
       "PAYMENT_WAIVED": "The organizer waived the entry fee for you.",
       "PAYMENT_NOT_AVAILABLE_FOR_STATUS": "Payment opens once your registration has a confirmed place.",
       "REFUND_STATE_CONFLICT": "This entry was refunded. Contact the race organizer."
-    }
+    },
+    "coveredByPromo": "Your promo code covers the whole entry fee. Your entry is now marked as waived."
   },
   "tabs": {
     "home": "Home",
@@ -647,7 +674,8 @@
       "RECORD_UNDO_WINDOW_EXPIRED": "It is more than 5 minutes since this entry. Ask a race admin to correct it.",
       "GUN_TIME_OFFICIAL_NOW_ONLY": "Officials can only start a wave at the current time.",
       "OFFLINE_CAPTURE_BEFORE_GUN": "This capture is earlier than the athlete's start.",
-      "OFFLINE_CAPTURE_OUT_OF_RANGE": "This capture is too old or in the future."
+      "OFFLINE_CAPTURE_OUT_OF_RANGE": "This capture is too old or in the future.",
+      "CHECK_IN_PAYMENT_REQUIRED": "This athlete has not paid the entry fee. Ask the organizer to verify or waive the payment before checking them in."
     }
   },
   "settings": {

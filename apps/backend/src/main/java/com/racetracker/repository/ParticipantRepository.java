@@ -306,6 +306,25 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     List<Participant> findByRaceIdAndStatusInOrderByRegisteredAtAsc(UUID raceId, Collection<Participant.ParticipantStatus> statuses);
 
+    List<Participant> findByRaceIdAndStatusOrderByWaitlistPositionAscRegisteredAtAsc(UUID raceId,
+                                                                                     Participant.ParticipantStatus status);
+
+    long countByRaceIdAndCategoryIdAndStatusIn(UUID raceId, UUID categoryId,
+                                               Collection<Participant.ParticipantStatus> statuses);
+
+    @Query("""
+        select p from Participant p
+        join fetch p.race
+        left join fetch p.category
+        left join fetch p.team
+        where p.race.id = :raceId
+          and p.status = :status
+          and (p.paymentStatus is null or p.paymentStatus not in :settled)
+    """)
+    List<Participant> findByRaceIdAndStatusWithUnsettledPayment(@Param("raceId") UUID raceId,
+                                                                @Param("status") Participant.ParticipantStatus status,
+                                                                @Param("settled") Collection<Participant.PaymentStatus> settled);
+
     Optional<Participant> findByRaceIdAndBibNumber(UUID raceId, String bibNumber);
 
     Optional<Participant> findByRaceIdAndRfidTag(UUID raceId, String rfidTag);

@@ -37,6 +37,9 @@ import java.util.List;
 @Service
 public class PaymentServiceImpl implements PaymentService {
 
+    private static final String PROMO_REFERENCE_PREFIX = "PROMO:";
+    private static final String PROMO_PROVIDER = "PROMO_CODE";
+
     private static final String PROVIDER = "PESEPAY";
 
     private final PaymentRepository paymentRepository;
@@ -82,6 +85,9 @@ public class PaymentServiceImpl implements PaymentService {
                                     String actorEmail, boolean athleteSelfService) {
         CheckoutDraft draft = transactionTemplate.execute(status ->
             stageCheckout(raceId, participantId, promoCode, actorEmail, athleteSelfService));
+        if (draft.coveredByPromo() != null) {
+            return draft.coveredByPromo();
+        }
         RaceTrackerProperties.Payments payments = properties.getPayments();
 
         PesepayClient.InitiateResult result;
@@ -128,10 +134,6 @@ public class PaymentServiceImpl implements PaymentService {
             throw new ConflictException("Payment opens once this registration has a confirmed place",
                 "PAYMENT_NOT_AVAILABLE_FOR_STATUS");
         }
-        RaceTrackerProperties.Payments payments = properties.getPayments();
-        if (isBlank(payments.getResultUrl()) || isBlank(payments.getReturnUrl())) {
-            throw new ApiException("Payment result/return URLs are not configured");
-        }
         Race race = participant.getRace();
 
         BigDecimal baseAmount = com.racetracker.service.RegistrationFees.current(participant, race);
@@ -143,11 +145,16 @@ public class PaymentServiceImpl implements PaymentService {
             promoCodeService.apply(promoCode, raceId, baseAmount);
         BigDecimal discount = applied == null ? BigDecimal.ZERO : applied.discount();
         BigDecimal payable = baseAmount.subtract(discount);
+        String currency = !isBlank(race.getCurrency()) ? race.getCurrency() : properties.getPayments().getCurrency();
         if (payable.signum() <= 0) {
-            throw new ApiException("This promo code covers the full registration fee; no online payment is required");
+            return new CheckoutDraft(null, BigDecimal.ZERO, currency, race.getName(), null,
+                waiveWithPromo(participant, applied, baseAmount, currency));
+        }
+        RaceTrackerProperties.Payments payments = properties.getPayments();
+        if (isBlank(payments.getResultUrl()) || isBlank(payments.getReturnUrl())) {
+            throw new ApiException("Payment result/return URLs are not configured");
         }
 
-        String currency = !isBlank(race.getCurrency()) ? race.getCurrency() : payments.getCurrency();
         String merchantReference = "RACE-" + raceId + "-P-" + participantId + "-" + UUID.randomUUID().toString().substring(0, 8);
 
         Payment payment = paymentRepository.save(Payment.builder()
@@ -162,7 +169,27 @@ public class PaymentServiceImpl implements PaymentService {
             .status(Payment.PaymentStatus.PENDING)
             .build());
 
-        return new CheckoutDraft(payment.getId(), payable, currency, race.getName(), merchantReference);
+        return new CheckoutDraft(payment.getId(), payable, currency, race.getName(), merchantReference, null);
+    }
+
+    private PaymentDto waiveWithPromo(Participant participant, com.racetracker.service.PromoCodeService.AppliedPromo applied,
+                                      BigDecimal baseAmount, String currency) {
+        participant.setPaymentStatus(Participant.PaymentStatus.WAIVED);
+        participant.setPaymentReference(PROMO_REFERENCE_PREFIX + applied.code());
+        participant.setPaymentAmount(BigDecimal.ZERO);
+        participant.setPaymentVerifiedAt(OffsetDateTime.now());
+        participantRepository.save(participant);
+        promoCodeService.recordUse(applied.promoCodeId());
+
+        PaymentDto dto = new PaymentDto();
+        dto.setParticipantId(participant.getId());
+        dto.setProvider(PROMO_PROVIDER);
+        dto.setStatus(Participant.PaymentStatus.WAIVED.name());
+        dto.setAmount(baseAmount);
+        dto.setPayableAmount(BigDecimal.ZERO);
+        dto.setCurrency(currency);
+        dto.setReference(participant.getPaymentReference());
+        return dto;
     }
 
     private PaymentDto recordCheckoutStarted(UUID raceId, UUID participantId, UUID paymentId,
@@ -192,7 +219,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private record CheckoutDraft(UUID paymentId, BigDecimal payable, String currency, String raceName,
-                                 String merchantReference) {
+                                 String merchantReference, PaymentDto coveredByPromo) {
     }
 
     @Override

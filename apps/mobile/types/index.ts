@@ -236,14 +236,19 @@ export interface Registration {
   currency?: string | null;
   mediaPublicationConsent?: boolean;
   publicLocationSharing?: boolean;
+  canWithdraw?: boolean;
   teamId?: string;
   teamName?: string;
   rejectionReason?: string;
   waitlistPosition?: number;
 }
 
+export type RegistrationGender = 'MALE' | 'FEMALE' | 'OTHER' | 'PREFER_NOT_TO_SAY';
+
 export interface RaceRegistrationRequest {
   categoryId: string;
+  gender: RegistrationGender;
+  dateOfBirth: string;
   emergencyContact: Registration['emergencyContact'];
   waiverAccepted?: boolean;
   shirtSize?: string;

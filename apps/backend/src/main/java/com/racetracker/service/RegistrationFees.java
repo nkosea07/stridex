@@ -40,4 +40,16 @@ public final class RegistrationFees {
             ? participant.getCategory().getRegistrationFee()
             : race.getRegistrationFee();
     }
+
+    public static boolean requiresPayment(Participant participant, Race race) {
+        BigDecimal fee = current(participant, race);
+        return fee != null && fee.signum() > 0;
+    }
+
+    /** True when the participant owes an entry fee that has been neither paid nor waived. */
+    public static boolean owes(Participant participant, Race race) {
+        return requiresPayment(participant, race)
+            && participant.getPaymentStatus() != Participant.PaymentStatus.PAID
+            && participant.getPaymentStatus() != Participant.PaymentStatus.WAIVED;
+    }
 }

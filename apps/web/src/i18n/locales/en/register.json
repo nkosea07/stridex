@@ -99,5 +99,18 @@
   "legalPrefix": "I agree to the",
   "termsLink": "Terms and Conditions",
   "legalJoin": "and acknowledge the",
-  "errorLegal": "Please accept the Terms and Conditions and acknowledge the Privacy Policy to continue."
+  "errorLegal": "Please accept the Terms and Conditions and acknowledge the Privacy Policy to continue.",
+  "registrationGender": "Gender",
+  "registrationGenderSelect": "Select",
+  "registrationGenderFemale": "Female",
+  "registrationGenderMale": "Male",
+  "registrationGenderOther": "Other",
+  "registrationGenderPreferNotToSay": "Prefer not to say",
+  "registrationDateOfBirth": "Date of birth",
+  "registrationGenderRequired": "Select your gender. It is used for gender categories and results.",
+  "registrationDateOfBirthRequired": "Enter your date of birth. It is used for age categories and results.",
+  "errorRegistrationNotOpen": "Registration for this race is not open.",
+  "errorCategoryFull": "This category is full. Choose another category.",
+  "errorCategoryAge": "Your age on race day is outside this category’s age range. Choose another category.",
+  "errorCategoryGender": "This category is not open to the gender you selected. Choose another category."
 }

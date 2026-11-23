@@ -283,8 +283,10 @@ export function ParticipantsPage() {
       await participantsApi.checkIn(raceId, participantId)
       toast.success(t('participants:ui.participantCheckedIn'))
       await loadParticipants()
-    } catch {
-      toast.error(t('participants:ui.failedToCheckInParticipant'))
+    } catch (error) {
+      toast.error(error instanceof ApiError && error.code === 'CHECK_IN_PAYMENT_REQUIRED'
+        ? t('participants:ui.checkInPaymentRequired')
+        : t('participants:ui.failedToCheckInParticipant'))
     }
   }
 
@@ -330,7 +332,10 @@ export function ParticipantsPage() {
     const promoCode = window.prompt(t('participants:payment.promoPrompt')) ?? undefined
     try {
       const payment = await participantsApi.startCheckout(raceId, participantId, promoCode || undefined)
-      if (payment.checkoutUrl) {
+      if (payment.status === 'WAIVED') {
+        toast.success(t('participants:payment.coveredByPromo'))
+        await loadParticipants()
+      } else if (payment.checkoutUrl) {
         window.open(payment.checkoutUrl, '_blank', 'noopener')
         toast.success(t('participants:ui.paymentCheckoutOpenedInANew'))
       } else {

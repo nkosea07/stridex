@@ -264,7 +264,8 @@
       "cancelled": "Jou inskrywing is gekanselleer",
       "dns": "Gemerk as nie begin nie",
       "dnf": "Gemerk as nie voltooi nie",
-      "finished": "Klaar"
+      "finished": "Klaar",
+      "disqualified": "Jy is uit hierdie wedloop gediskwalifiseer"
     },
     "register": {
       "title": "Skryf in vir {{name}}",
@@ -303,7 +304,32 @@
       "waitlisted": "Jy is by die waglys gevoeg.",
       "pendingReview": "Jou inskrywing wag op hersiening.",
       "completed": "Inskrywing voltooi.",
-      "completedPay": "Inskrywing voltooi. Betaal die inskrywingsfooi hieronder om jou plek te verseker."
+      "completedPay": "Inskrywing voltooi. Betaal die inskrywingsfooi hieronder om jou plek te verseker.",
+      "gender": "Geslag",
+      "genderFemale": "Vroulik",
+      "genderMale": "Manlik",
+      "genderOther": "Ander",
+      "genderPreferNotToSay": "Verkies om nie te sê nie",
+      "dateOfBirth": "Geboortedatum",
+      "dateOfBirthHint": "JJJJ-MM-DD",
+      "genderRequired": "Kies jou geslag. Dit word vir geslagskategorieë en uitslae gebruik.",
+      "dateOfBirthInvalid": "Voer jou geboortedatum in as JJJJ-MM-DD, byvoorbeeld 1990-05-17.",
+      "notOpen": "Inskrywings vir hierdie wedloop is nie oop nie.",
+      "errors": {
+        "REGISTRATION_NOT_OPEN": "Inskrywings vir hierdie wedloop is nie oop nie.",
+        "CATEGORY_FULL": "Hierdie kategorie is vol. Kies ’n ander kategorie.",
+        "CATEGORY_AGE_INELIGIBLE": "Jou ouderdom op wedloopdag val buite hierdie kategorie se ouderdomsgrense. Kies ’n ander kategorie.",
+        "CATEGORY_GENDER_INELIGIBLE": "Hierdie kategorie is nie oop vir die geslag wat jy gekies het nie. Kies ’n ander kategorie."
+      }
+    },
+    "withdraw": {
+      "action": "Onttrek uit hierdie wedloop",
+      "title": "Onttrek uit hierdie wedloop?",
+      "body": "Jou plek word vrygestel en aan die volgende atleet op die waglys aangebied. Jy kan weer inskryf solank inskrywings oop is. As jy betaal het, oorweeg die organiseerder ’n terugbetaling.",
+      "confirm": "Onttrek",
+      "cancel": "Hou my inskrywing",
+      "done": "Jy het uit die wedloop onttrek.",
+      "failed": "Ons kon nie jou inskrywing onttrek nie. Probeer asseblief weer."
     }
   },
   "operations": {
@@ -475,7 +501,8 @@
       "PAYMENT_WAIVED": "Die reëlaar het die inskrywingsfooi vir jou kwytgeskeld.",
       "PAYMENT_NOT_AVAILABLE_FOR_STATUS": "Betaling word beskikbaar sodra jou inskrywing ’n bevestigde plek het.",
       "REFUND_STATE_CONFLICT": "Hierdie inskrywing is terugbetaal. Kontak die wedloopreëlaar."
-    }
+    },
+    "coveredByPromo": "Jou promosiekode dek die hele inskrywingsfooi. Jou inskrywing is nou as vrygestel gemerk."
   },
   "tabs": {
     "home": "Tuis",
@@ -647,7 +674,8 @@
       "RECORD_UNDO_WINDOW_EXPIRED": "Dit is meer as 5 minute sedert hierdie inskrywing. Vra ’n wedloopadministrateur om dit reg te stel.",
       "GUN_TIME_OFFICIAL_NOW_ONLY": "Beamptes kan ’n golf slegs op die huidige tyd laat begin.",
       "OFFLINE_CAPTURE_BEFORE_GUN": "Hierdie vaslegging is vroeër as die atleet se begintyd.",
-      "OFFLINE_CAPTURE_OUT_OF_RANGE": "Hierdie vaslegging is te oud of in die toekoms."
+      "OFFLINE_CAPTURE_OUT_OF_RANGE": "Hierdie vaslegging is te oud of in die toekoms.",
+      "CHECK_IN_PAYMENT_REQUIRED": "Hierdie atleet het nie die inskrywingsfooi betaal nie. Vra die organiseerder om die betaling te bevestig of kwyt te skeld voordat jy hulle aanmeld."
     }
   },
   "settings": {

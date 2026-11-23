@@ -47,6 +47,9 @@ import java.util.stream.Collectors;
 @Service
 public class ResultServiceImpl implements ResultService {
 
+    private static final java.util.Set<Participant.PaymentStatus> SETTLED_PAYMENTS = java.util.EnumSet.of(
+        Participant.PaymentStatus.PAID, Participant.PaymentStatus.WAIVED);
+
     private final RaceRepository raceRepository;
     private final ParticipantRepository participantRepository;
     private final CheckpointRecordRepository checkpointRecordRepository;
@@ -159,7 +162,7 @@ public class ResultServiceImpl implements ResultService {
     public List<RaceResultDto> getMyResults() {
         capabilityAuthorizationService.require(UserCapabilityType.ATHLETE);
         User user = resolveCurrentUser();
-        return collectAllResultPages(null, user.getId(), false);
+        return assemblePersistedResults(raceResultRepository.findAllByUserId(user.getId()));
     }
 
     /**
@@ -186,7 +189,12 @@ public class ResultServiceImpl implements ResultService {
     public RaceResultPageDto getMyResultsPage(int page, int size) {
         capabilityAuthorizationService.require(UserCapabilityType.ATHLETE);
         User user = resolveCurrentUser();
-        return resultPage(null, user.getId(), false, page, size, null);
+        if (page < 0 || size < 1) throw new ApiException("Page must be non-negative and size must be positive");
+        int boundedSize = Math.min(size, 100);
+        List<RaceResult> rows = raceResultRepository.findPageByUserId(user.getId(), PageRequest.of(page, boundedSize));
+        long total = raceResultRepository.countByUserId(user.getId());
+        return new RaceResultPageDto(assemblePersistedResults(rows), page, boundedSize, total,
+            total == 0 ? 0 : (int) ((total + boundedSize - 1) / boundedSize), 0L);
     }
 
     @Override
@@ -247,6 +255,14 @@ public class ResultServiceImpl implements ResultService {
             throw new ConflictException("Race must be completed before results can be published");
         }
         resultLock.assertOpen(race);
+        long unpaidFinishers = participantRepository.findByRaceIdAndStatusWithUnsettledPayment(raceId,
+                Participant.ParticipantStatus.FINISHED, SETTLED_PAYMENTS).stream()
+            .filter(participant -> com.racetracker.service.RegistrationFees.owes(participant, race))
+            .count();
+        if (unpaidFinishers > 0) {
+            throw new ConflictException(unpaidFinishers + " finisher(s) have not paid the entry fee. Verify or waive "
+                + "their payment, or change their status, before publishing.", "RESULTS_UNPAID_FINISHERS");
+        }
 
         List<RaceResultDto> computed = computeAllResults(raceId);
         raceResultRepository.deleteByRaceId(raceId);

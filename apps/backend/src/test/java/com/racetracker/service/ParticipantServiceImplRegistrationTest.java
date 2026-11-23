@@ -136,6 +136,8 @@ class ParticipantServiceImplRegistrationTest {
         contact.setPhone("0700000000");
         contact.setRelationship("Sibling");
         request.setEmergencyContact(contact);
+        request.setGender(Participant.Gender.FEMALE);
+        request.setDateOfBirth(java.time.LocalDate.of(1990, 5, 17));
         return request;
     }
 
@@ -718,10 +720,195 @@ class ParticipantServiceImplRegistrationTest {
     @Test
     void withdrawnEntriesShowAsCancelledToTheAthlete() {
         Participant entry = ownEntry(Participant.ParticipantStatus.WITHDRAWN);
-        when(participantRepository.findByUserIdOrderByRegisteredAtDesc(user.getId())).thenReturn(List.of(entry));
+        Participant disqualified = ownEntry(Participant.ParticipantStatus.DISQUALIFIED);
+        when(participantRepository.findByUserIdOrderByRegisteredAtDesc(user.getId())).thenReturn(List.of(entry, disqualified));
 
-        assertThat(service.getMyRegistrations()).singleElement()
-            .extracting(RegistrationDto::getStatus).isEqualTo("cancelled");
+        assertThat(service.getMyRegistrations()).extracting(RegistrationDto::getStatus)
+            .containsExactly("cancelled", "disqualified");
+    }
+
+    @Test
+    void registrationStoresGenderAndDateOfBirthForResults() {
+        when(participantRepository.countByRaceIdAndStatusIn(eq(raceId), any())).thenReturn(0L);
+        org.mockito.ArgumentCaptor<Participant> saved = org.mockito.ArgumentCaptor.forClass(Participant.class);
+
+        service.registerForRace(raceId, request());
+
+        verify(participantRepository).save(saved.capture());
+        assertThat(saved.getValue().getGender()).isEqualTo(Participant.Gender.FEMALE);
+        assertThat(saved.getValue().getDateOfBirth()).isEqualTo(java.time.LocalDate.of(1990, 5, 17));
+    }
+
+    @Test
+    void categoryGenderAndAgeLimitsAreEnforced() {
+        race.setRaceDate(java.time.LocalDate.of(2026, 12, 6));
+        category.setGender("MALE");
+        assertThatThrownBy(() -> service.registerForRace(raceId, request()))
+            .isInstanceOf(ApiException.class).extracting("code").isEqualTo("CATEGORY_GENDER_INELIGIBLE");
+
+        category.setGender("ANY");
+        category.setMinAge(18);
+        RaceRegistrationRequest junior = request();
+        junior.setDateOfBirth(java.time.LocalDate.of(2008, 12, 7));
+        assertThatThrownBy(() -> service.registerForRace(raceId, junior))
+            .isInstanceOf(ApiException.class).extracting("code").isEqualTo("CATEGORY_AGE_INELIGIBLE");
+
+        category.setMinAge(null);
+        category.setMaxAge(39);
+        RaceRegistrationRequest veteran = request();
+        veteran.setDateOfBirth(java.time.LocalDate.of(1986, 12, 6));
+        assertThatThrownBy(() -> service.registerForRace(raceId, veteran))
+            .isInstanceOf(ApiException.class).extracting("code").isEqualTo("CATEGORY_AGE_INELIGIBLE");
+        verify(participantRepository, never()).save(any());
+
+        RaceRegistrationRequest eligible = request();
+        eligible.setDateOfBirth(java.time.LocalDate.of(1986, 12, 7));
+        when(participantRepository.countByRaceIdAndStatusIn(eq(raceId), any())).thenReturn(0L);
+        assertThat(service.registerForRace(raceId, eligible).getStatus()).isEqualTo("pending");
+    }
+
+    @Test
+    void fullCategoryWaitlistsOrRejectsLikeAFullRace() {
+        category.setMaxParticipants(1);
+        when(participantRepository.countByRaceIdAndStatusIn(eq(raceId), any())).thenReturn(1L);
+        when(participantRepository.countByRaceIdAndCategoryIdAndStatusIn(eq(raceId), eq(categoryId), any())).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.registerForRace(raceId, request()))
+            .isInstanceOf(com.racetracker.exception.ConflictException.class).extracting("code").isEqualTo("CATEGORY_FULL");
+
+        race.setWaitlistEnabled(true);
+        assertThat(service.registerForRace(raceId, request()).getStatus()).isEqualTo("waitlisted");
+    }
+
+    @Test
+    void approvalRespectsCategoryCapacity() {
+        category.setMaxParticipants(2);
+        Participant waiting = reviewable(Participant.PaymentStatus.WAIVED);
+        waiting.setStatus(Participant.ParticipantStatus.WAITLISTED);
+        waiting.setWaitlistPosition(1);
+        when(participantRepository.countByRaceIdAndStatusIn(eq(raceId), any())).thenReturn(0L);
+        when(participantRepository.countByRaceIdAndCategoryIdAndStatusIn(eq(raceId), eq(categoryId), any())).thenReturn(2L);
+        RegistrationApprovalRequest approval = new RegistrationApprovalRequest();
+        approval.setDecision("APPROVE");
+
+        assertThatThrownBy(() -> service.reviewRegistration(raceId, waiting.getId(), approval, email))
+            .isInstanceOf(com.racetracker.exception.ConflictException.class).extracting("code").isEqualTo("CATEGORY_FULL");
+        assertThat(waiting.getStatus()).isEqualTo(Participant.ParticipantStatus.WAITLISTED);
+    }
+
+    @Test
+    void withdrawnAthleteCanRegisterAgainOnTheSameEntry() {
+        Participant previous = ownEntry(Participant.ParticipantStatus.WITHDRAWN);
+        previous.setStatusReason("Withdrawn by the athlete");
+        previous.setPaymentStatus(Participant.PaymentStatus.PAID);
+        previous.setAthleteCode("ATH-KEEP");
+        when(participantRepository.findByRaceIdAndUserId(raceId, user.getId())).thenReturn(Optional.of(previous));
+        when(participantRepository.countByRaceIdAndStatusIn(eq(raceId), any())).thenReturn(0L);
+
+        RegistrationDto dto = service.registerForRace(raceId, request());
+
+        assertThat(dto.getId()).isEqualTo(previous.getId());
+        assertThat(previous.getStatus()).isEqualTo(Participant.ParticipantStatus.REGISTERED);
+        assertThat(previous.getStatusReason()).isNull();
+        assertThat(previous.getPaymentStatus()).isEqualTo(Participant.PaymentStatus.PAID);
+        assertThat(previous.getAthleteCode()).isEqualTo("ATH-KEEP");
+        verify(registrationAnswerRepository).deleteByParticipantId(previous.getId());
+    }
+
+    @Test
+    void activeEntryStillBlocksASecondRegistration() {
+        Participant active = ownEntry(Participant.ParticipantStatus.CONFIRMED);
+        when(participantRepository.findByRaceIdAndUserId(raceId, user.getId())).thenReturn(Optional.of(active));
+
+        assertThatThrownBy(() -> service.registerForRace(raceId, request()))
+            .isInstanceOf(com.racetracker.exception.ConflictException.class)
+            .hasMessageContaining("already registered");
+    }
+
+    @Test
+    void withdrawalOffersTheFreedPlaceToTheNextEligibleWaitlistedAthlete() {
+        race.setMaxParticipants(2);
+        RaceCategory fullCategory = RaceCategory.builder().id(UUID.randomUUID()).race(race).name("Elite").maxParticipants(1).build();
+        Participant leaving = ownEntry(Participant.ParticipantStatus.CONFIRMED);
+        Participant blocked = waitlisted(fullCategory, 1);
+        Participant next = waitlisted(category, 2);
+        User nextUser = User.builder().id(UUID.randomUUID()).email("next@example.com").build();
+        next.setUser(nextUser);
+        when(participantRepository.countByRaceIdAndStatusIn(eq(raceId), any())).thenReturn(1L);
+        when(participantRepository.countByRaceIdAndCategoryIdAndStatusIn(eq(raceId), eq(fullCategory.getId()), any())).thenReturn(1L);
+        when(participantRepository.findByRaceIdAndStatusOrderByWaitlistPositionAscRegisteredAtAsc(
+            raceId, Participant.ParticipantStatus.WAITLISTED)).thenReturn(List.of(blocked, next));
+
+        service.cancelRegistration(leaving.getId());
+
+        assertThat(blocked.getStatus()).isEqualTo(Participant.ParticipantStatus.WAITLISTED);
+        assertThat(next.getStatus()).isEqualTo(Participant.ParticipantStatus.REGISTERED);
+        assertThat(next.getWaitlistPosition()).isNull();
+        verify(notificationService).notifyLocalized(eq(nextUser.getId()), any(), eq("registration.place_offered"), any(), any());
+    }
+
+    @Test
+    void withdrawingAPaidEntryAsksOrganizersToReviewARefund() {
+        User organizer = User.builder().id(UUID.randomUUID()).email("organizer@example.com").build();
+        race.setCreatedBy(organizer);
+        Participant leaving = ownEntry(Participant.ParticipantStatus.REGISTERED);
+        leaving.setFirstName("Ada");
+        leaving.setLastName("Runner");
+        leaving.setPaymentStatus(Participant.PaymentStatus.PAID);
+
+        service.cancelRegistration(leaving.getId());
+
+        verify(notificationService).notifyLocalized(eq(organizer.getId()), any(), eq("registration.withdrawn_paid"),
+            eq(new Object[] {"Test Marathon", "Ada Runner"}), any());
+        assertThat(leaving.getPaymentStatus()).isEqualTo(Participant.PaymentStatus.PAID);
+    }
+
+    @Test
+    void checkInRequiresTheEntryFeeToBeSettled() {
+        race.setRegistrationFee(new BigDecimal("20.00"));
+        Participant unpaid = staffEntry(Participant.PaymentStatus.UNPAID);
+        assertThatThrownBy(() -> service.checkIn(raceId, unpaid.getId()))
+            .isInstanceOf(com.racetracker.exception.ConflictException.class)
+            .extracting("code").isEqualTo("CHECK_IN_PAYMENT_REQUIRED");
+        assertThat(unpaid.getCheckedInAt()).isNull();
+
+        Participant waived = staffEntry(Participant.PaymentStatus.WAIVED);
+        service.checkIn(raceId, waived.getId());
+        assertThat(waived.getStatus()).isEqualTo(Participant.ParticipantStatus.CHECKED_IN);
+    }
+
+    @Test
+    void registrationsSayWhetherTheAthleteCanStillWithdraw() {
+        Participant open = ownEntry(Participant.ParticipantStatus.CONFIRMED);
+        Participant checkedIn = ownEntry(Participant.ParticipantStatus.CHECKED_IN);
+        when(participantRepository.findByUserIdOrderByRegisteredAtDesc(user.getId())).thenReturn(List.of(open, checkedIn));
+
+        List<RegistrationDto> registrations = service.getMyRegistrations();
+
+        assertThat(registrations).extracting(RegistrationDto::isCanWithdraw).containsExactly(true, false);
+        race.setStatus(Race.RaceStatus.IN_PROGRESS);
+        assertThat(service.getMyRegistrations()).extracting(RegistrationDto::isCanWithdraw).containsExactly(false, false);
+    }
+
+    private Participant waitlisted(RaceCategory waitingCategory, int position) {
+        Participant participant = new Participant();
+        participant.setId(UUID.randomUUID());
+        participant.setRace(race);
+        participant.setCategory(waitingCategory);
+        participant.setStatus(Participant.ParticipantStatus.WAITLISTED);
+        participant.setWaitlistPosition(position);
+        return participant;
+    }
+
+    private Participant staffEntry(Participant.PaymentStatus paymentStatus) {
+        Participant participant = new Participant();
+        participant.setId(UUID.randomUUID());
+        participant.setRace(race);
+        participant.setCategory(category);
+        participant.setStatus(Participant.ParticipantStatus.REGISTERED);
+        participant.setPaymentStatus(paymentStatus);
+        lenient().when(participantRepository.findByRaceIdAndIdForUpdate(raceId, participant.getId())).thenReturn(Optional.of(participant));
+        return participant;
     }
 
     private Participant reviewable(Participant.PaymentStatus paymentStatus) {

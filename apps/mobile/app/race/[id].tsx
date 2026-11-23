@@ -15,9 +15,24 @@ import { CapabilityGate } from '@/components/CapabilityGate';
 import { RequestErrorState } from '@/components/RequestErrorState';
 import { RaceGalleryPreview } from '@/components/RaceGalleryPreview';
 import { formatCurrency, formatDate, formatDistanceKm, formatNumber, statusTranslationKey } from '@/lib/format';
-import type { PublicRaceResult, Registration, RegistrationField } from '@/types';
+import type { PublicRaceResult, Registration, RegistrationField, RegistrationGender } from '@/types';
+import { isPastIsoDate } from '@/lib/registrationForm';
 
 const DEFAULT_BANNER = 'https://images.unsplash.com/photo-1513593771513-7b58b6c4af38?w=800';
+
+const GENDER_OPTIONS: { value: RegistrationGender; labelKey: string }[] = [
+  { value: 'FEMALE', labelKey: 'mobile:race.register.genderFemale' },
+  { value: 'MALE', labelKey: 'mobile:race.register.genderMale' },
+  { value: 'OTHER', labelKey: 'mobile:race.register.genderOther' },
+  { value: 'PREFER_NOT_TO_SAY', labelKey: 'mobile:race.register.genderPreferNotToSay' },
+];
+
+const REGISTRATION_ERROR_CODES = new Set([
+  'REGISTRATION_NOT_OPEN',
+  'CATEGORY_FULL',
+  'CATEGORY_AGE_INELIGIBLE',
+  'CATEGORY_GENDER_INELIGIBLE',
+]);
 
 function formatTime(value?: string) {
   if (!value) return '-';
@@ -85,6 +100,9 @@ function RaceDetailScreenContent() {
   const [waiverAccepted, setWaiverAccepted] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [mediaPublicationConsent, setMediaPublicationConsent] = useState(false);
+  const [gender, setGender] = useState<RegistrationGender | ''>('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [withdrawing, setWithdrawing] = useState(false);
   const [myRegistration, setMyRegistration] = useState<Registration | null>(null);
   const [savingMediaConsent, setSavingMediaConsent] = useState(false);
   const [savingLocationSharing, setSavingLocationSharing] = useState(false);
@@ -113,16 +131,23 @@ function RaceDetailScreenContent() {
   }, [routeId, canRegister, loadMyRegistration]);
 
   const registrationState = String(myRegistration?.status ?? '').toLowerCase();
+  const registrationOpen = String(race?.status ?? '').toLowerCase() === 'registration_open';
   const paymentDue = Boolean(myRegistration
     && Number(myRegistration.amountDue ?? 0) > 0
     && (!myRegistration.paymentStatus || myRegistration.paymentStatus === 'UNPAID' || myRegistration.paymentStatus === 'PENDING')
-    && !['rejected', 'waitlisted', 'cancelled'].includes(registrationState));
+    && !['rejected', 'waitlisted', 'cancelled', 'disqualified'].includes(registrationState));
 
   const startPayment = async () => {
     if (!myRegistration || !routeId || paying) return;
     setPaying(true);
     try {
       const checkout = await api.startPaymentCheckout(routeId, myRegistration.id, promoCode);
+      if (checkout.status === 'WAIVED') {
+        const refreshed = await loadMyRegistration().catch(() => null);
+        if (refreshed) setMyRegistration(refreshed);
+        Alert.alert(t('mobile:payment.title'), t('mobile:payment.coveredByPromo'));
+        return;
+      }
       if (!checkout.checkoutUrl) {
         Alert.alert(t('mobile:payment.title'), t('mobile:payment.unavailable'));
         return;
@@ -320,6 +345,8 @@ function RaceDetailScreenContent() {
 
     setSelectedCategoryId(String(firstCategory.id));
     setMediaPublicationConsent(false);
+    setGender('');
+    setDateOfBirth('');
     setContact({
       name: user ? `${user.firstName} ${user.lastName}`.trim() : '',
       phone: user?.phone || '',
@@ -341,6 +368,14 @@ function RaceDetailScreenContent() {
       Alert.alert(t('mobile:race.register.failedTitle'), t('mobile:race.register.selectCategory'));
       return;
     }
+    if (!gender) {
+      Alert.alert(t('mobile:race.register.failedTitle'), t('mobile:race.register.genderRequired'));
+      return;
+    }
+    if (!isPastIsoDate(dateOfBirth)) {
+      Alert.alert(t('mobile:race.register.failedTitle'), t('mobile:race.register.dateOfBirthInvalid'));
+      return;
+    }
     if (race?.requireWaiver && !waiverAccepted) {
       Alert.alert(t('mobile:race.register.failedTitle'), t('mobile:race.register.acceptWaiver'));
       return;
@@ -351,6 +386,8 @@ function RaceDetailScreenContent() {
     if (!routeId) return;
     const registration = await api.registerForRace(routeId, {
         categoryId: selectedCategoryId,
+        gender,
+        dateOfBirth: dateOfBirth.trim(),
         emergencyContact: {
           name: contact.name,
           phone: contact.phone,
@@ -382,10 +419,36 @@ function RaceDetailScreenContent() {
     } catch (error: any) {
       Alert.alert(t('mobile:race.register.failedTitle'), error?.isNetworkError
         ? t('mobile:payment.network')
-        : t('mobile:race.register.failed'));
+        : REGISTRATION_ERROR_CODES.has(error?.code)
+          ? t(`mobile:race.register.errors.${error.code}`)
+          : t('mobile:race.register.failed'));
     } finally {
       setIsRegistering(false);
     }
+  };
+
+  const withdrawFromRace = () => {
+    if (!myRegistration || withdrawing) return;
+    Alert.alert(t('mobile:race.withdraw.title'), t('mobile:race.withdraw.body'), [
+      { text: t('mobile:race.withdraw.cancel'), style: 'cancel' },
+      {
+        text: t('mobile:race.withdraw.confirm'),
+        style: 'destructive',
+        onPress: async () => {
+          setWithdrawing(true);
+          try {
+            await api.cancelRegistration(myRegistration.id);
+            const refreshed = await loadMyRegistration().catch(() => null);
+            setMyRegistration(refreshed);
+            Alert.alert(t('mobile:race.withdraw.title'), t('mobile:race.withdraw.done'));
+          } catch {
+            Alert.alert(t('mobile:race.withdraw.title'), t('mobile:race.withdraw.failed'));
+          } finally {
+            setWithdrawing(false);
+          }
+        },
+      },
+    ]);
   };
 
   const toggleFollow = async (participantId: string) => {
@@ -658,7 +721,13 @@ function RaceDetailScreenContent() {
             )}
           </View>
         )}
-        {canRegister && myRegistration && (
+        {canRegister && myRegistration?.canWithdraw && (
+          <TouchableOpacity style={styles.withdrawButton} onPress={withdrawFromRace} disabled={withdrawing}
+            accessibilityRole="button" accessibilityState={{ busy: withdrawing, disabled: withdrawing }}>
+            <Text style={styles.withdrawButtonText}>{t('mobile:race.withdraw.action')}</Text>
+          </TouchableOpacity>
+        )}
+        {canRegister && myRegistration && registrationState !== 'cancelled' && (
           <View style={styles.switchRow}>
             <Switch
               value={myRegistration.mediaPublicationConsent === true}
@@ -669,7 +738,7 @@ function RaceDetailScreenContent() {
             <Text style={styles.registrationNotice}>{t('common:mediaPublicationManage')}</Text>
           </View>
         )}
-        {canRegister && myRegistration && (
+        {canRegister && myRegistration && registrationState !== 'cancelled' && (
           <View style={styles.switchRow}>
             <Switch
               value={myRegistration.publicLocationSharing !== false}
@@ -684,10 +753,14 @@ function RaceDetailScreenContent() {
             </View>
           </View>
         )}
-        {canRegister && myRegistration ? null : canRegister ? (
-          <TouchableOpacity style={styles.registerButton} onPress={openRegistration} disabled={isRegistering} accessibilityRole="button" accessibilityLabel={t('mobile:race.registerNow')} accessibilityState={{ busy: isRegistering, disabled: isRegistering }}>
-            <Text style={styles.registerButtonText}>{isRegistering ? t('mobile:race.registering') : t('mobile:race.registerNow')}</Text>
-          </TouchableOpacity>
+        {canRegister && myRegistration && registrationState !== 'cancelled' ? null : canRegister ? (
+          registrationOpen ? (
+            <TouchableOpacity style={styles.registerButton} onPress={openRegistration} disabled={isRegistering} accessibilityRole="button" accessibilityLabel={t('mobile:race.registerNow')} accessibilityState={{ busy: isRegistering, disabled: isRegistering }}>
+              <Text style={styles.registerButtonText}>{isRegistering ? t('mobile:race.registering') : t('mobile:race.registerNow')}</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.registrationNotice}>{t('mobile:race.register.notOpen')}</Text>
+          )
         ) : (
           <Text style={styles.registrationNotice}>
             {user ? t('mobile:race.spectatorOnly') : t('mobile:race.athleteSignIn')}
@@ -715,6 +788,37 @@ function RaceDetailScreenContent() {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              <Text style={styles.fieldLabel}>{t('mobile:race.register.gender')}</Text>
+              <View style={styles.optionRow} accessibilityRole="radiogroup">
+                {GENDER_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[styles.optionChip, gender === option.value && styles.optionChipActive]}
+                    onPress={() => setGender(option.value)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: gender === option.value }}
+                  >
+                    <Text style={[styles.optionChipText, gender === option.value && styles.optionChipTextActive]}>
+                      {t(option.labelKey)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.fieldLabel}>{t('mobile:race.register.dateOfBirth')}</Text>
+              <TextInput
+                style={styles.input}
+                value={dateOfBirth}
+                onChangeText={setDateOfBirth}
+                placeholder={t('mobile:race.register.dateOfBirthHint')}
+                placeholderTextColor="#9CA3AF"
+                keyboardType="numbers-and-punctuation"
+                maxLength={10}
+                autoCorrect={false}
+                accessibilityLabel={t('mobile:race.register.dateOfBirth')}
+                accessibilityHint={t('mobile:race.register.dateOfBirthHint')}
+              />
 
               <Text style={styles.fieldLabel}>{t('mobile:race.register.contactName')}</Text>
               <TextInput
@@ -1098,6 +1202,19 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
+  },
+  withdrawButton: {
+    borderWidth: 1,
+    borderColor: '#DC2626',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  withdrawButtonText: {
+    color: '#DC2626',
+    fontSize: 15,
+    fontWeight: '600',
   },
   registerButton: {
     backgroundColor: '#0F766E',

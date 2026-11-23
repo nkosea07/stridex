@@ -306,6 +306,32 @@ class ParticipantImportProcessorTest {
     }
 
     @Test
+    void importedEntriesOweTheirCategoryFee() throws Exception {
+        Path csv = tempDir.resolve("category-fee.csv");
+        ImportJob job = job(csv);
+        UUID paidCategoryId = UUID.randomUUID();
+        com.racetracker.model.RaceCategory paidCategory = com.racetracker.model.RaceCategory.builder()
+            .id(paidCategoryId).race(job.getRace()).name("10K").registrationFee(new BigDecimal("15.00")).build();
+        when(raceCategoryRepository.findById(paidCategoryId)).thenReturn(Optional.of(paidCategory));
+        Files.writeString(csv, "email,firstName,lastName,categoryId\n"
+            + "paid@example.com,Ada,Runner," + paidCategoryId + "\n"
+            + "free@example.com,Bea,Fast,\n");
+        when(importJobRepository.findByIdForUpdate(jobId)).thenReturn(Optional.of(job));
+        java.util.List<Participant> imported = new java.util.ArrayList<>();
+        doAnswer(inv -> {
+            imported.add(inv.getArgument(3));
+            job.setProcessedRows(inv.getArgument(2));
+            job.setSuccessCount(job.getSuccessCount() + 1);
+            return null;
+        }).when(rowService).importRow(eq(jobId), eq(1), anyInt(), any(Participant.class));
+
+        processor.runJob(jobId);
+
+        assertThat(imported).extracting(Participant::getPaymentStatus)
+            .containsExactly(Participant.PaymentStatus.UNPAID, Participant.PaymentStatus.WAIVED);
+    }
+
+    @Test
     void explicitFalseTrackingBooleanIsImported() throws Exception {
         Path csv = tempDir.resolve("false-boolean.csv");
         Files.writeString(csv, "email,firstName,lastName,isTrackingEnabled\n"
