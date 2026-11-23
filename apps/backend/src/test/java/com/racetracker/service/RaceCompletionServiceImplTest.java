@@ -36,6 +36,7 @@ class RaceCompletionServiceImplTest {
     @Mock private ParticipantRepository participantRepository;
     @Mock private CheckpointRepository checkpointRepository;
     @Mock private RaceStageRepository raceStageRepository;
+    @Mock private com.racetracker.service.AuditEventService auditEventService;
 
     private RaceCompletionServiceImpl service;
     private final UUID raceId = UUID.randomUUID();
@@ -43,7 +44,7 @@ class RaceCompletionServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new RaceCompletionServiceImpl(raceRepository, participantRepository,
-            checkpointRepository, raceStageRepository, 24, 60);
+            checkpointRepository, raceStageRepository, auditEventService, 24, 60);
     }
 
     @Test
@@ -63,8 +64,42 @@ class RaceCompletionServiceImplTest {
         assertThat(completed.getStatus()).isEqualTo(Race.RaceStatus.COMPLETED);
         assertThat(completed.getCompletedAt()).isNotNull();
         assertThat(starter.getStatus()).isEqualTo(Participant.ParticipantStatus.DNF);
+        assertThat(starter.getStatusReason()).isEqualTo("Did not finish before the race was completed");
         verify(raceRepository).save(race);
         verify(participantRepository).saveAll(List.of(starter));
+    }
+
+    @Test
+    void completeRace_marksEntrantsWhoNeverStartedAsDnsAndAuditsTheResolution() {
+        Race race = new Race();
+        race.setId(raceId);
+        race.setStatus(Race.RaceStatus.IN_PROGRESS);
+        Participant starter = Participant.builder().id(UUID.randomUUID())
+            .status(Participant.ParticipantStatus.STARTED).build();
+        Participant noShow = Participant.builder().id(UUID.randomUUID())
+            .status(Participant.ParticipantStatus.CHECKED_IN).build();
+        Participant unconfirmed = Participant.builder().id(UUID.randomUUID())
+            .status(Participant.ParticipantStatus.REGISTERED).build();
+
+        when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
+        when(participantRepository.findByRaceIdAndStatusOrderByRegisteredAtAsc(
+            raceId, Participant.ParticipantStatus.STARTED)).thenReturn(List.of(starter));
+        when(participantRepository.findByRaceIdAndStatusInOrderByRegisteredAtAsc(eq(raceId), any()))
+            .thenAnswer(invocation -> {
+                java.util.Collection<Participant.ParticipantStatus> statuses = invocation.getArgument(1);
+                assertThat(statuses).containsExactlyInAnyOrder(Participant.ParticipantStatus.REGISTERED,
+                    Participant.ParticipantStatus.CONFIRMED, Participant.ParticipantStatus.CHECKED_IN);
+                return List.of(noShow, unconfirmed);
+            });
+
+        service.completeRace(raceId);
+
+        assertThat(noShow.getStatus()).isEqualTo(Participant.ParticipantStatus.DNS);
+        assertThat(unconfirmed.getStatus()).isEqualTo(Participant.ParticipantStatus.DNS);
+        assertThat(noShow.getStatusReason()).isEqualTo("Did not start before the race was completed");
+        verify(participantRepository).saveAll(List.of(starter, noShow, unconfirmed));
+        verify(auditEventService).recordForActor(eq("RACE_COMPLETION_STATUSES_RESOLVED"), any(), eq("RACE"),
+            eq(raceId.toString()), eq("SUCCESS"), eq(java.util.Map.of("dnf", 1, "dns", 2)));
     }
 
     @Test
@@ -82,6 +117,7 @@ class RaceCompletionServiceImplTest {
 
         verify(raceRepository, never()).save(any(Race.class));
         verify(participantRepository, never()).saveAll(any());
+        org.mockito.Mockito.verifyNoInteractions(auditEventService);
     }
 
     @Test

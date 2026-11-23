@@ -110,7 +110,8 @@
     "confirmed": "Kuqinisekisiwe",
     "checkedIn": "Ufikile",
     "started": "Uqalile",
-    "unknown": "Isimo asitholakali"
+    "unknown": "Isimo asitholakali",
+    "withdrawn": "Uzikhiphile"
   },
   "races": {
     "searchLabel": "Sesha imijaho",

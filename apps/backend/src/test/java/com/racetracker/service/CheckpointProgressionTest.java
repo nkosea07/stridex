@@ -84,6 +84,7 @@ class CheckpointProgressionTest {
         assertThat(CheckpointProgression.isTimeableEntrant(ParticipantStatus.WAITLISTED)).isFalse();
         assertThat(CheckpointProgression.isTimeableEntrant(ParticipantStatus.PENDING_REVIEW)).isFalse();
         assertThat(CheckpointProgression.isTimeableEntrant(ParticipantStatus.REJECTED)).isFalse();
+        assertThat(CheckpointProgression.isTimeableEntrant(ParticipantStatus.WITHDRAWN)).isFalse();
     }
 
     @Test

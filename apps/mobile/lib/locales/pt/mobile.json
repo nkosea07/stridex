@@ -110,7 +110,8 @@
     "confirmed": "Confirmado",
     "checkedIn": "Check-in feito",
     "started": "Partiu",
-    "unknown": "Estado indisponível"
+    "unknown": "Estado indisponível",
+    "withdrawn": "Desistiu"
   },
   "races": {
     "searchLabel": "Pesquisar corridas",

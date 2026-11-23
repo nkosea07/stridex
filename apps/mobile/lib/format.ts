@@ -55,6 +55,7 @@ const statusTranslationKeys: Record<string, string> = {
   PENDING_REVIEW: 'mobile:status.pendingReview',
   WAITLISTED: 'mobile:status.waitlisted',
   REJECTED: 'mobile:status.rejected',
+  WITHDRAWN: 'mobile:status.withdrawn',
   CONFIRMED: 'mobile:status.confirmed',
   CHECKED_IN: 'mobile:status.checkedIn',
   STARTED: 'mobile:status.started',

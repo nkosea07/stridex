@@ -29,6 +29,7 @@ const statusColors: Record<ParticipantStatus, string> = {
   PENDING_REVIEW: 'bg-warning/20 text-warning-foreground',
   WAITLISTED: 'bg-info/20 text-info',
   REJECTED: 'bg-destructive/20 text-destructive',
+  WITHDRAWN: 'bg-muted text-muted-foreground',
 }
 
 const paymentColors: Record<string, string> = {
@@ -565,6 +566,7 @@ export function ParticipantsPage() {
             <SelectItem value="PENDING_REVIEW">{t('participants:ui.pendingReview')}</SelectItem>
             <SelectItem value="WAITLISTED">{t('participants:ui.waitlisted')}</SelectItem>
             <SelectItem value="REJECTED">{t('participants:ui.rejected')}</SelectItem>
+            <SelectItem value="WITHDRAWN">{t('participants:ui.withdrawn')}</SelectItem>
           </SelectContent>
         </Select>
       </div>

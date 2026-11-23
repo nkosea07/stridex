@@ -502,7 +502,7 @@ class PaymentServiceImplRefundTest {
         when(participantRepository.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
 
         for (Participant.ParticipantStatus status : java.util.List.of(Participant.ParticipantStatus.WAITLISTED,
-            Participant.ParticipantStatus.REJECTED)) {
+            Participant.ParticipantStatus.REJECTED, Participant.ParticipantStatus.WITHDRAWN)) {
             participant.setStatus(status);
             assertThatThrownBy(() -> service.startCheckout(raceId, participantId, null, "athlete@example.com", true))
                 .isInstanceOf(ConflictException.class)

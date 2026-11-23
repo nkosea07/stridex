@@ -110,7 +110,8 @@
     "confirmed": "Zvasimbiswa",
     "checkedIn": "Asvika",
     "started": "Atanga",
-    "unknown": "Mamiriro haawanikwe"
+    "unknown": "Mamiriro haawanikwe",
+    "withdrawn": "Azvibvisa"
   },
   "races": {
     "searchLabel": "Tsvaga mijaho",

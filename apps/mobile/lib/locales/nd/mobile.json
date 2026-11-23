@@ -110,7 +110,8 @@
     "confirmed": "Kuqinisekisiwe",
     "checkedIn": "Ufikile",
     "started": "Uqalile",
-    "unknown": "Isimo kasaziwa"
+    "unknown": "Isimo kasaziwa",
+    "withdrawn": "Uzikhiphile"
   },
   "races": {
     "searchLabel": "Dinga imijaho",

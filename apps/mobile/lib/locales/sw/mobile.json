@@ -110,7 +110,8 @@
     "confirmed": "Imethibitishwa",
     "checkedIn": "Amejiandikisha kufika",
     "started": "Ameanza",
-    "unknown": "Hali haipatikani"
+    "unknown": "Hali haipatikani",
+    "withdrawn": "Amejiondoa"
   },
   "races": {
     "searchLabel": "Tafuta mbio",

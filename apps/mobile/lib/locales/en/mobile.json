@@ -110,7 +110,8 @@
     "confirmed": "Confirmed",
     "checkedIn": "Checked in",
     "started": "Started",
-    "unknown": "Status unavailable"
+    "unknown": "Status unavailable",
+    "withdrawn": "Withdrawn"
   },
   "races": {
     "searchLabel": "Search races",

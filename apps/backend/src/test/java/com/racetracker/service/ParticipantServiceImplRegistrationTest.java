@@ -607,6 +607,146 @@ class ParticipantServiceImplRegistrationTest {
     }
 
     @Test
+    void registrationRequiresTheRaceToBeOpen() {
+        for (Race.RaceStatus status : List.of(Race.RaceStatus.DRAFT, Race.RaceStatus.REGISTRATION_CLOSED,
+            Race.RaceStatus.IN_PROGRESS, Race.RaceStatus.COMPLETED, Race.RaceStatus.CANCELLED)) {
+            race.setStatus(status);
+            assertThatThrownBy(() -> service.registerForRace(raceId, request()))
+                .isInstanceOf(ApiException.class)
+                .extracting("code").isEqualTo("REGISTRATION_NOT_OPEN");
+        }
+        verify(participantRepository, never()).save(any());
+    }
+
+    @Test
+    void categoryFeeIsChargedEvenWhenTheRaceHasNoFee() {
+        category.setRegistrationFee(new BigDecimal("30.00"));
+        when(participantRepository.countByRaceIdAndStatusIn(eq(raceId), any())).thenReturn(0L);
+
+        RegistrationDto dto = service.registerForRace(raceId, request());
+
+        assertThat(dto.getPaymentStatus()).isEqualTo("UNPAID");
+        assertThat(dto.getAmountDue()).isEqualByComparingTo("30.00");
+    }
+
+    @Test
+    void freeCategoryInAPaidRaceIsWaived() {
+        race.setRegistrationFee(new BigDecimal("25.00"));
+        category.setRegistrationFee(BigDecimal.ZERO);
+        when(participantRepository.countByRaceIdAndStatusIn(eq(raceId), any())).thenReturn(0L);
+
+        RegistrationDto dto = service.registerForRace(raceId, request());
+
+        assertThat(dto.getPaymentStatus()).isEqualTo("WAIVED");
+    }
+
+    @Test
+    void approvalUsesTheFeeTheParticipantActuallyOwes() {
+        category.setRegistrationFee(new BigDecimal("30.00"));
+        Participant owes = reviewable(Participant.PaymentStatus.UNPAID);
+        RegistrationApprovalRequest approval = new RegistrationApprovalRequest();
+        approval.setDecision("APPROVE");
+
+        assertThatThrownBy(() -> service.reviewRegistration(raceId, owes.getId(), approval, email))
+            .isInstanceOf(ApiException.class)
+            .hasMessageContaining("Payment must be verified");
+
+        race.setRegistrationFee(new BigDecimal("25.00"));
+        category.setRegistrationFee(BigDecimal.ZERO);
+        Participant free = reviewable(Participant.PaymentStatus.UNPAID);
+        when(participantMapper.toDto(any(Participant.class))).thenReturn(new ParticipantDto());
+
+        service.reviewRegistration(raceId, free.getId(), approval, email);
+
+        assertThat(free.getStatus()).isEqualTo(Participant.ParticipantStatus.CONFIRMED);
+    }
+
+    @Test
+    void athleteWithdrawalMarksTheEntryWithdrawnAndRecordsTheChange() {
+        Participant entry = ownEntry(Participant.ParticipantStatus.WAITLISTED);
+        entry.setWaitlistPosition(3);
+
+        service.cancelRegistration(entry.getId());
+
+        assertThat(entry.getStatus()).isEqualTo(Participant.ParticipantStatus.WITHDRAWN);
+        assertThat(entry.getStatusReason()).isEqualTo("Withdrawn by the athlete");
+        assertThat(entry.getWaitlistPosition()).isNull();
+        verify(participantChangeControl).verifyAndRecord(any(), eq(entry), eq("Withdrawn by the athlete"));
+        verify(participantRepository).save(entry);
+    }
+
+    @Test
+    void athleteCannotWithdrawToChangeAnOfficialResult() {
+        for (Participant.ParticipantStatus status : List.of(Participant.ParticipantStatus.DISQUALIFIED,
+            Participant.ParticipantStatus.DNF, Participant.ParticipantStatus.DNS, Participant.ParticipantStatus.FINISHED,
+            Participant.ParticipantStatus.STARTED, Participant.ParticipantStatus.CHECKED_IN,
+            Participant.ParticipantStatus.REJECTED, Participant.ParticipantStatus.WITHDRAWN)) {
+            Participant entry = ownEntry(status);
+            assertThatThrownBy(() -> service.cancelRegistration(entry.getId()))
+                .isInstanceOf(com.racetracker.exception.ConflictException.class)
+                .extracting("code").isEqualTo("REGISTRATION_NOT_CANCELLABLE");
+            assertThat(entry.getStatus()).isEqualTo(status);
+        }
+        verify(participantRepository, never()).save(any());
+        verifyNoInteractions(participantChangeControl);
+    }
+
+    @Test
+    void athleteCannotWithdrawOnceTheRaceHasStarted() {
+        for (Race.RaceStatus status : List.of(Race.RaceStatus.IN_PROGRESS, Race.RaceStatus.COMPLETED,
+            Race.RaceStatus.CANCELLED)) {
+            race.setStatus(status);
+            Participant entry = ownEntry(Participant.ParticipantStatus.CONFIRMED);
+            assertThatThrownBy(() -> service.cancelRegistration(entry.getId()))
+                .isInstanceOf(com.racetracker.exception.ConflictException.class)
+                .extracting("code").isEqualTo("REGISTRATION_NOT_CANCELLABLE");
+        }
+        verify(participantRepository, never()).save(any());
+    }
+
+    @Test
+    void athleteCannotWithdrawSomeoneElsesEntry() {
+        Participant entry = ownEntry(Participant.ParticipantStatus.CONFIRMED);
+        User other = User.builder().id(UUID.randomUUID()).email("other@example.com").build();
+        entry.setUser(other);
+
+        assertThatThrownBy(() -> service.cancelRegistration(entry.getId()))
+            .isInstanceOf(com.racetracker.exception.ResourceNotFoundException.class);
+        assertThat(entry.getStatus()).isEqualTo(Participant.ParticipantStatus.CONFIRMED);
+    }
+
+    @Test
+    void withdrawnEntriesShowAsCancelledToTheAthlete() {
+        Participant entry = ownEntry(Participant.ParticipantStatus.WITHDRAWN);
+        when(participantRepository.findByUserIdOrderByRegisteredAtDesc(user.getId())).thenReturn(List.of(entry));
+
+        assertThat(service.getMyRegistrations()).singleElement()
+            .extracting(RegistrationDto::getStatus).isEqualTo("cancelled");
+    }
+
+    private Participant reviewable(Participant.PaymentStatus paymentStatus) {
+        Participant participant = new Participant();
+        participant.setId(UUID.randomUUID());
+        participant.setRace(race);
+        participant.setCategory(category);
+        participant.setStatus(Participant.ParticipantStatus.PENDING_REVIEW);
+        participant.setPaymentStatus(paymentStatus);
+        when(participantRepository.findByRaceIdAndIdForUpdate(raceId, participant.getId())).thenReturn(Optional.of(participant));
+        return participant;
+    }
+
+    private Participant ownEntry(Participant.ParticipantStatus status) {
+        Participant participant = new Participant();
+        participant.setId(UUID.randomUUID());
+        participant.setRace(race);
+        participant.setCategory(category);
+        participant.setUser(user);
+        participant.setStatus(status);
+        lenient().when(participantRepository.findByIdForUpdate(participant.getId())).thenReturn(Optional.of(participant));
+        return participant;
+    }
+
+    @Test
     void staffSearchRejectsEmptyOrOverlongQueries() {
         assertThatThrownBy(() -> service.searchForStaff(raceId, " %% "))
             .isInstanceOf(ApiException.class).extracting("code").isEqualTo("PARTICIPANT_SEARCH_INVALID");

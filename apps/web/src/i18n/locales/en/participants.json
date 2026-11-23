@@ -90,7 +90,8 @@
     "failedToAddParticipant": "Failed to add participant",
     "searchByNameEmailOrBib": "Search by name, email, or bib...",
     "filterByStatus": "Filter by status",
-    "select": "Select"
+    "select": "Select",
+    "withdrawn": "Withdrawn"
   },
   "penalties": {
     "save": "Save",

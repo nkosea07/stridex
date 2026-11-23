@@ -110,7 +110,8 @@
     "confirmed": "Confirmé",
     "checkedIn": "Enregistré",
     "started": "Parti",
-    "unknown": "Statut indisponible"
+    "unknown": "Statut indisponible",
+    "withdrawn": "Retiré"
   },
   "races": {
     "searchLabel": "Rechercher des courses",

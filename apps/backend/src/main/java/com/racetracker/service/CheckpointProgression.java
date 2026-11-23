@@ -28,7 +28,8 @@ public class CheckpointProgression {
     private static final Set<ParticipantStatus> NON_ENTRANTS = EnumSet.of(
         ParticipantStatus.PENDING_REVIEW,
         ParticipantStatus.WAITLISTED,
-        ParticipantStatus.REJECTED
+        ParticipantStatus.REJECTED,
+        ParticipantStatus.WITHDRAWN
     );
 
     private static final Set<ParticipantStatus> CUTOFF_DNF_ELIGIBLE = EnumSet.of(
@@ -87,7 +88,7 @@ public class CheckpointProgression {
     }
 
     /**
-     * Pending-approval, waitlisted, and rejected registrations are not in the race, so timing
+     * Pending-approval, waitlisted, rejected, and withdrawn registrations are not in the race, so timing
      * paths must not create checkpoint records for them.
      */
     public static boolean isTimeableEntrant(ParticipantStatus status) {
