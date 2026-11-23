@@ -9,5 +9,6 @@
   "FINISHED": "Finished",
   "PENDING_REVIEW": "Pending review",
   "WAITLISTED": "Waitlisted",
-  "REJECTED": "Rejected"
+  "REJECTED": "Rejected",
+  "WITHDRAWN": "Withdrawn"
 }

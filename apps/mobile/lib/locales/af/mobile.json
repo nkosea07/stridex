@@ -110,7 +110,8 @@
     "confirmed": "Bevestig",
     "checkedIn": "Aangemeld",
     "started": "Begin",
-    "unknown": "Status nie beskikbaar nie"
+    "unknown": "Status nie beskikbaar nie",
+    "withdrawn": "Onttrek"
   },
   "races": {
     "searchLabel": "Soek wedlope",

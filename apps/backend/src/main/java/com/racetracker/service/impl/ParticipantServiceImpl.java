@@ -55,6 +55,21 @@ public class ParticipantServiceImpl implements ParticipantService {
 
     private static final int MAX_PARTICIPANT_EXPORT_ROWS = 10_000;
 
+    private static final String WITHDRAWN_BY_ATHLETE = "Withdrawn by the athlete";
+
+    private static final EnumSet<Participant.ParticipantStatus> CANCELLABLE_STATUSES = EnumSet.of(
+        Participant.ParticipantStatus.REGISTERED,
+        Participant.ParticipantStatus.CONFIRMED,
+        Participant.ParticipantStatus.PENDING_REVIEW,
+        Participant.ParticipantStatus.WAITLISTED
+    );
+
+    private static final EnumSet<Race.RaceStatus> RACE_STATUSES_BLOCKING_CANCELLATION = EnumSet.of(
+        Race.RaceStatus.IN_PROGRESS,
+        Race.RaceStatus.COMPLETED,
+        Race.RaceStatus.CANCELLED
+    );
+
     private static final EnumSet<Participant.ParticipantStatus> OCCUPYING_STATUSES = EnumSet.of(
         Participant.ParticipantStatus.REGISTERED,
         Participant.ParticipantStatus.CONFIRMED,
@@ -182,7 +197,7 @@ public class ParticipantServiceImpl implements ParticipantService {
             participant.setRegisteredAt(OffsetDateTime.now());
         }
         if (participant.getPaymentStatus() == null) {
-            participant.setPaymentStatus(defaultPaymentStatus(race));
+            participant.setPaymentStatus(defaultPaymentStatus(participant, race));
         }
         participantIdentityService.assign(participant);
 
@@ -527,7 +542,6 @@ public class ParticipantServiceImpl implements ParticipantService {
         participant.setIsTrackingEnabled(true);
         participant.setShirtSize(request.getShirtSize());
         participant.setWaitlistPosition(waitlistPosition);
-        participant.setPaymentStatus(defaultPaymentStatus(race));
         if (request.getClubName() != null && !request.getClubName().isBlank()) {
             participant.setClubName(request.getClubName().trim());
         }
@@ -536,6 +550,7 @@ public class ParticipantServiceImpl implements ParticipantService {
             participant.setWaiverVersion(race.getWaiverVersion());
         }
         participant.setTeam(resolveRegistrationTeam(race, user, request));
+        participant.setPaymentStatus(defaultPaymentStatus(participant, race));
         participantIdentityService.assign(participant);
 
         Participant saved = participantRepository.save(participant);
@@ -562,21 +577,24 @@ public class ParticipantServiceImpl implements ParticipantService {
     public void cancelRegistration(UUID registrationId) {
         capabilityAuthorizationService.require(com.racetracker.model.UserCapabilityType.ATHLETE);
         User user = resolveCurrentUser();
-        Participant participant = participantRepository.findById(registrationId)
+        Participant participant = participantRepository.findByIdForUpdate(registrationId)
             .orElseThrow(() -> new ResourceNotFoundException("Registration not found"));
 
         if (participant.getUser() == null || !user.getId().equals(participant.getUser().getId())) {
-            throw new UnauthorizedException("You are not allowed to cancel this registration");
+            throw new ResourceNotFoundException("Registration not found");
         }
 
-        if (participant.getStatus() == Participant.ParticipantStatus.STARTED
-            || participant.getStatus() == Participant.ParticipantStatus.FINISHED
-            || participant.getStatus() == Participant.ParticipantStatus.CHECKED_IN) {
-            throw new ApiException("Registration can no longer be cancelled");
+        Race race = participant.getRace();
+        if (!CANCELLABLE_STATUSES.contains(participant.getStatus())
+            || race == null || RACE_STATUSES_BLOCKING_CANCELLATION.contains(race.getStatus())) {
+            throw new ConflictException("Registration can no longer be cancelled", "REGISTRATION_NOT_CANCELLABLE");
         }
 
-        participant.setStatus(Participant.ParticipantStatus.DNS);
+        com.racetracker.service.ParticipantChangeControl.Snapshot before = participantChangeControl.snapshot(participant);
+        participant.setStatus(Participant.ParticipantStatus.WITHDRAWN);
+        participant.setStatusReason(WITHDRAWN_BY_ATHLETE);
         participant.setWaitlistPosition(null);
+        participantChangeControl.verifyAndRecord(before, participant, WITHDRAWN_BY_ATHLETE);
         participantRepository.save(participant);
     }
 
@@ -603,7 +621,7 @@ public class ParticipantServiceImpl implements ParticipantService {
                 if (!alreadyOccupying && isRaceFull(race) && !Boolean.TRUE.equals(request.getForce())) {
                     throw new ConflictException("Race is full; waitlist or increase capacity before approving");
                 }
-                if (race.getRegistrationFee() != null && race.getRegistrationFee().compareTo(BigDecimal.ZERO) > 0
+                if (requiresPayment(participant, race)
                     && !Boolean.TRUE.equals(request.getForce())
                     && participant.getPaymentStatus() != Participant.PaymentStatus.PAID
                     && participant.getPaymentStatus() != Participant.PaymentStatus.WAIVED) {
@@ -796,10 +814,8 @@ public class ParticipantServiceImpl implements ParticipantService {
         if (!Boolean.TRUE.equals(race.getIsPublicRegistration())) {
             throw new ApiException("Public registration is not available for this race");
         }
-        if (race.getStatus() == Race.RaceStatus.CANCELLED
-            || race.getStatus() == Race.RaceStatus.COMPLETED
-            || race.getStatus() == Race.RaceStatus.IN_PROGRESS) {
-            throw new ApiException("Registration is not open for this race");
+        if (race.getStatus() != Race.RaceStatus.REGISTRATION_OPEN) {
+            throw new ApiException("Registration is not open for this race", "REGISTRATION_NOT_OPEN");
         }
 
         OffsetDateTime now = OffsetDateTime.now();
@@ -826,7 +842,8 @@ public class ParticipantServiceImpl implements ParticipantService {
             || status == Participant.ParticipantStatus.FINISHED
             || status == Participant.ParticipantStatus.DNF
             || status == Participant.ParticipantStatus.DNS
-            || status == Participant.ParticipantStatus.DISQUALIFIED) {
+            || status == Participant.ParticipantStatus.DISQUALIFIED
+            || status == Participant.ParticipantStatus.WITHDRAWN) {
             throw new ApiException("Registration cannot be reviewed in its current state");
         }
     }
@@ -836,11 +853,13 @@ public class ParticipantServiceImpl implements ParticipantService {
         return (max == null ? 0 : max) + 1;
     }
 
-    private Participant.PaymentStatus defaultPaymentStatus(Race race) {
-        if (race.getRegistrationFee() == null || race.getRegistrationFee().compareTo(BigDecimal.ZERO) <= 0) {
-            return Participant.PaymentStatus.WAIVED;
-        }
-        return Participant.PaymentStatus.UNPAID;
+    private Participant.PaymentStatus defaultPaymentStatus(Participant participant, Race race) {
+        return requiresPayment(participant, race) ? Participant.PaymentStatus.UNPAID : Participant.PaymentStatus.WAIVED;
+    }
+
+    private boolean requiresPayment(Participant participant, Race race) {
+        BigDecimal fee = com.racetracker.service.RegistrationFees.current(participant, race);
+        return fee != null && fee.signum() > 0;
     }
 
     private Map<UUID, String> validateAnswers(UUID raceId, List<RegistrationAnswerRequest> requests) {
@@ -1188,6 +1207,7 @@ public class ParticipantServiceImpl implements ParticipantService {
             case PENDING_REVIEW -> "pending_review";
             case WAITLISTED -> "waitlisted";
             case REJECTED -> "rejected";
+            case WITHDRAWN -> "cancelled";
             case DNS -> "dns";
             case DNF -> "dnf";
             case FINISHED -> "finished";

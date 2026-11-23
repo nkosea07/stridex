@@ -46,7 +46,8 @@ public class TrackingServiceImpl implements TrackingService {
     private static final Set<Participant.ParticipantStatus> NON_ENTRANTS = EnumSet.of(
         Participant.ParticipantStatus.PENDING_REVIEW,
         Participant.ParticipantStatus.WAITLISTED,
-        Participant.ParticipantStatus.REJECTED
+        Participant.ParticipantStatus.REJECTED,
+        Participant.ParticipantStatus.WITHDRAWN
     );
     private static final Set<Participant.ParticipantStatus> TRACKING_FINISHED = EnumSet.of(
         Participant.ParticipantStatus.FINISHED,

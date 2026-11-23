@@ -193,7 +193,7 @@ export interface Registration {
   waitlistPosition?: number
 }
 
-export type ParticipantStatus = 'REGISTERED' | 'CONFIRMED' | 'CHECKED_IN' | 'STARTED' | 'DNF' | 'DNS' | 'DISQUALIFIED' | 'FINISHED' | 'PENDING_REVIEW' | 'WAITLISTED' | 'REJECTED'
+export type ParticipantStatus = 'REGISTERED' | 'CONFIRMED' | 'CHECKED_IN' | 'STARTED' | 'DNF' | 'DNS' | 'DISQUALIFIED' | 'FINISHED' | 'PENDING_REVIEW' | 'WAITLISTED' | 'REJECTED' | 'WITHDRAWN'
 export type Gender = 'MALE' | 'FEMALE' | 'OTHER' | 'PREFER_NOT_TO_SAY'
 export type ParticipantCredentialType = 'RFID_UHF_TIMING' | 'QR_TICKET' | 'NFC_GATE' | 'BARCODE_GATEPASS'
 export type ParticipantCredentialStatus = 'ACTIVE' | 'REVOKED'

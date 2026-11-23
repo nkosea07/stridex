@@ -174,3 +174,16 @@ release:
   SOS sandboxed, entry fees are for a physical event).
 - **Known limitations (accepted):** videos open in the browser (no in-app player); the public
   media list is not paginated and media is served `no-store`.
+
+## 10. Registration-to-results flow audit (2026-11-23)
+
+21 findings are logged in [`docs/FLOW_AUDIT_2026_11_23.md`](FLOW_AUDIT_2026_11_23.md).
+The six High items are **Done**:
+- published results list rejected and waitlisted sign-ups;
+- positions ignore wave and chip starts;
+- athlete cancellation can rewrite DQ or DNF to DNS;
+- inconsistent fee rules;
+- closed and draft races still accept registrations;
+- non-starters are never set to DNS at completion.
+
+The Medium and Low items, FL-07 to FL-21, remain **Pending**. FL-12 is partly done: the `WITHDRAWN` status exists.

@@ -210,7 +210,7 @@ public class Participant {
 
     public enum ParticipantStatus {
         REGISTERED, CONFIRMED, CHECKED_IN, STARTED, DNF, DNS, DISQUALIFIED, FINISHED,
-        PENDING_REVIEW, WAITLISTED, REJECTED
+        PENDING_REVIEW, WAITLISTED, REJECTED, WITHDRAWN
     }
 
     public enum PaymentStatus {

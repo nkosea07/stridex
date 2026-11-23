@@ -123,6 +123,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
         if (participant.getStatus() == Participant.ParticipantStatus.REJECTED
             || participant.getStatus() == Participant.ParticipantStatus.WAITLISTED
+            || participant.getStatus() == Participant.ParticipantStatus.WITHDRAWN
             || participant.getStatus() == Participant.ParticipantStatus.DISQUALIFIED) {
             throw new ConflictException("Payment opens once this registration has a confirmed place",
                 "PAYMENT_NOT_AVAILABLE_FOR_STATUS");
