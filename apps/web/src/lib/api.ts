@@ -696,6 +696,12 @@ export const participantsApi = {
       buildContractPath(API_CONTRACT.endpoints.myRegistrationMediaConsent, { participantId }), {
         method: 'PUT', body: JSON.stringify({ consented }),
       }),
+
+  updateLocationSharing: (participantId: string, enabled: boolean) =>
+    fetchApi<{ participantId: string; enabled: boolean }>(
+      buildContractPath(API_CONTRACT.endpoints.myRegistrationLocationSharing, { participantId }), {
+        method: 'PUT', body: JSON.stringify({ enabled }),
+      }),
 }
 
 // Registration fields / teams API

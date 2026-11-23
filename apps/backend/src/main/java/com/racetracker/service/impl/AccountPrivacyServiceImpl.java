@@ -158,6 +158,7 @@ public class AccountPrivacyServiceImpl implements AccountPrivacyService {
             entry.put("mediaPublicationConsentAt", participant.getMediaPublicationConsentAt());
             entry.put("mediaPublicationConsentVersion", participant.getMediaPublicationConsentVersion());
             entry.put("trackingEnabled", participant.getIsTrackingEnabled());
+            entry.put("publicLocationSharing", participant.isPublicLocationSharing());
             entry.put("paymentStatus", participant.getPaymentStatus() != null ? participant.getPaymentStatus().name() : null);
             registrations.add(entry);
         }

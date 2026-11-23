@@ -6,5 +6,9 @@
   "language": "Mutauro",
   "actions": {
     "cancel": "Kanzura"
-  }
+  },
+  "locationSharingManage": "Ratidza vaoni nzvimbo yandiri izvozvi",
+  "locationSharingHint": "Varongi vemujaho vanogara vachiona nzvimbo yauri kana kutevera kwakabatidzwa, kuti uchengeteke.",
+  "locationSharingSaved": "Sarudzo yekugovana nzvimbo yachengetwa.",
+  "locationSharingFailed": "Hazvina kugoneka kuvandudza kugovana nzvimbo."
 }

@@ -36,6 +36,19 @@ describe('athlete self-service API', () => {
     expect(checkout.checkoutUrl).toBe('https://pay.example/checkout/1')
   })
 
+  it('lets the athlete stop and resume public location sharing for an entry', async () => {
+    const { api } = await import('../lib/api.ts')
+    const fetchMock = respond({ participantId: 'entry-1', enabled: false })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await api.updateLocationSharing('entry-1', false)
+
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/participants\/my-registrations\/entry-1\/location-sharing$/)
+    expect(fetchMock.mock.calls[0][1].method).toBe('PUT')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ enabled: false })
+    expect(result.enabled).toBe(false)
+  })
+
   it('submits a result query and surfaces the open-query limit code', async () => {
     const { api } = await import('../lib/api.ts')
     const ok = respond({ id: 'q1', raceId: 'race-1', participantId: 'entry-1', message: 'Missing 10 km split', status: 'OPEN' })

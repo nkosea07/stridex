@@ -9,7 +9,8 @@
     "relatedPrivacy": "Lees ons privaatheidsbeleid",
     "relatedTerms": "Lees ons bepalings en voorwaardes",
     "footerLegal": "Regsinligting",
-    "englishOnly": "Hierdie dokument is slegs in Engels beskikbaar. Die Engelse weergawe is die amptelike een."
+    "englishOnly": "Hierdie dokument is slegs in Engels beskikbaar. Die Engelse weergawe is die amptelike een.",
+    "accountDeletion": "Skrap jou rekening"
   },
   "privacy": {
     "title": "Privaatheidsbeleid"
@@ -34,5 +35,8 @@
     "suffix": ".",
     "errorTitle": "Fout",
     "required": "Aanvaar asseblief die bepalings en voorwaardes en die privaatheidsbeleid om voort te gaan."
+  },
+  "accountDeletion": {
+    "title": "Skrap jou rekening"
   }
 }

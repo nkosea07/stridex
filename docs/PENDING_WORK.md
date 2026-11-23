@@ -161,5 +161,14 @@ release:
 - **Translation review — Pending.** Native-speaker review of all non-English mobile strings.
 - **Store work — Pending.** Listings, screenshots, Apple privacy labels and Google data safety
   (location, install id, photos).
+- **Store blockers needing owner input — Pending.** App icon and splash artwork (`app.json` has
+  none); real `operatorName`, `operatorAddress` and `contactEmail` in `packages/contracts/contract.json`
+  (the privacy policy and the `/account-deletion` page show the placeholders); legal review of the
+  account deletion page's retention wording.
+- **Store console declarations — Pending.** Google Play: foreground service (location) declaration
+  with a short video, Health apps declaration (blood type, conditions, allergies), Data safety, account
+  deletion URL `<web>/account-deletion`, app access credentials. App Store Connect: privacy labels matching
+  `ios.privacyManifests`, age rating, review notes (demo athlete account, demo race, sample checkpoint QR,
+  SOS sandboxed, entry fees are for a physical event).
 - **Known limitations (accepted):** videos open in the browser (no in-app player); the public
   media list is not paginated and media is served `no-store`.

@@ -755,5 +755,20 @@
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
     "retry": "Try again"
+  },
+  "trackingNotification": {
+    "title": "Race tracking is on",
+    "body": "Your location is shared with the race organizers while tracking is on."
+  },
+  "locationDisclosure": {
+    "title": "Share your location during the race",
+    "body": "Race Tracker collects your precise location while race tracking is on, including when the app is in the background or the screen is locked. It is used to record your route and progress, and your live position is shared with the race organizers and, unless you turn it off on the race page, with spectators on the public race map. Tracking stops when you stop it or when your race ends.",
+    "accept": "Continue",
+    "decline": "Not now"
+  },
+  "locationPermission": {
+    "deniedTitle": "Location access is off",
+    "deniedBody": "Race tracking needs your location. Allow location access for Race Tracker in your device settings, then try again.",
+    "openSettings": "Open settings"
   }
 }

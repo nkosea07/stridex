@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Alert, ActivityIndicator, AppState, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Alert, ActivityIndicator, AppState, Linking, TouchableOpacity } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Location from 'expo-location';
@@ -7,6 +7,7 @@ import { api, getNonEmptyRouteId } from '@/lib/api';
 import { RaceMap, useMapTheme, type MapLine, type MapPin } from '@/components/RaceMap';
 import type { Checkpoint, Race } from '@/types';
 import { freshSosFix } from '@/lib/sos';
+import { LocationPermissionError, needsLocationDisclosure } from '@/lib/tracking-service';
 import { HUD } from '@/components/HUD';
 import { BottomDrawer } from '@/components/BottomDrawer';
 import { Ionicons } from '@expo/vector-icons';
@@ -162,17 +163,46 @@ function TrackingScreenContent() {
     };
   }, [routeRaceId, currentRace]);
 
+  const beginTracking = async (race: Race) => {
+    try {
+      await startTracking(race);
+    } catch (error) {
+      if (error instanceof LocationPermissionError) {
+        Alert.alert(
+          t('mobile:locationPermission.deniedTitle'),
+          t('mobile:locationPermission.deniedBody'),
+          [
+            { text: t('common:actions.cancel'), style: 'cancel' },
+            { text: t('mobile:locationPermission.openSettings'), onPress: () => { void Linking.openSettings(); } },
+          ],
+        );
+        return;
+      }
+      Alert.alert(t('mobile:ui.tracking.error'), t('mobile:ui.tracking.failedToStartTrackingPleaseEnable'));
+    }
+  };
+
   const handleStartTracking = async () => {
     if (!selectedRace) {
       Alert.alert(t('mobile:ui.tracking.noRaceSelected'), t('mobile:ui.tracking.chooseARaceFromMyRaces'));
       return;
     }
 
-    try {
-      await startTracking(selectedRace);
-    } catch {
-      Alert.alert(t('mobile:ui.tracking.error'), t('mobile:ui.tracking.failedToStartTrackingPleaseEnable'));
+    const race = selectedRace;
+    const disclose = await needsLocationDisclosure().catch(() => true);
+    if (!disclose) {
+      await beginTracking(race);
+      return;
     }
+    Alert.alert(
+      t('mobile:locationDisclosure.title'),
+      t('mobile:locationDisclosure.body'),
+      [
+        { text: t('mobile:locationDisclosure.decline'), style: 'cancel' },
+        { text: t('mobile:locationDisclosure.accept'), onPress: () => { void beginTracking(race); } },
+      ],
+      { cancelable: false },
+    );
   };
 
   const handleStopTracking = () => {

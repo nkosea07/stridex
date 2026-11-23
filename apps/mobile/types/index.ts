@@ -235,6 +235,7 @@ export interface Registration {
   amountDue?: number | null;
   currency?: string | null;
   mediaPublicationConsent?: boolean;
+  publicLocationSharing?: boolean;
   teamId?: string;
   teamName?: string;
   rejectionReason?: string;

@@ -757,5 +757,20 @@
     "zoomIn": "Aproximar",
     "zoomOut": "Afastar",
     "retry": "Tentar novamente"
+  },
+  "trackingNotification": {
+    "title": "Acompanhamento da corrida ativo",
+    "body": "A sua localização é partilhada com os organizadores enquanto o acompanhamento estiver ativo."
+  },
+  "locationDisclosure": {
+    "title": "Partilhar a sua localização durante a corrida",
+    "body": "O Race Tracker recolhe a sua localização precisa enquanto o acompanhamento da corrida está ativo, incluindo quando a app está em segundo plano ou o ecrã está bloqueado. É usada para registar o seu percurso e progresso, e a sua posição em direto é partilhada com os organizadores e, a menos que desative esta opção na página da corrida, com os espectadores no mapa público da corrida. O acompanhamento para quando o parar ou quando a sua corrida terminar.",
+    "accept": "Continuar",
+    "decline": "Agora não"
+  },
+  "locationPermission": {
+    "deniedTitle": "Acesso à localização desativado",
+    "deniedBody": "O acompanhamento da corrida precisa da sua localização. Permita o acesso à localização para o Race Tracker nas definições do dispositivo e tente novamente.",
+    "openSettings": "Abrir definições"
   }
 }

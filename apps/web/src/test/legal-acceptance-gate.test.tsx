@@ -69,6 +69,9 @@ describe('LegalAcceptanceGate', () => {
   it('lets users read the documents while acceptance is pending', () => {
     renderAt(API_CONTRACT.legal.termsPath)
     expect(screen.getByText('App content')).toBeTruthy()
+    cleanup()
+    renderAt(API_CONTRACT.legal.accountDeletionPath)
+    expect(screen.getByText('App content')).toBeTruthy()
   })
 
   it('does not block signed-out visitors', () => {

@@ -755,5 +755,20 @@
     "zoomIn": "Sondeza",
     "zoomOut": "Hlehlisa",
     "retry": "Zama futhi"
+  },
+  "trackingNotification": {
+    "title": "Ukulandelela umjaho kuvuliwe",
+    "body": "Indawo yakho yabelwana nabahleli bomjaho ngesikhathi ukulandelela kuvuliwe."
+  },
+  "locationDisclosure": {
+    "title": "Yabelana ngendawo yakho ngesikhathi somjaho",
+    "body": "I-Race Tracker iqoqa indawo yakho eqondile ngesikhathi ukulandelela umjaho kuvuliwe, ngisho noma uhlelo lokusebenza lusemuva noma isikrini sikhiyiwe. Isetshenziselwa ukurekhoda umzila wakho nenqubekelaphambili, futhi indawo yakho yamanje yabelwana nabahleli bomjaho futhi, ngaphandle uma ukuvala ekhasini lomjaho, nababukeli emephini yomphakathi yomjaho. Ukulandelela kuyama uma ukumisa noma uma umjaho wakho uphela.",
+    "accept": "Qhubeka",
+    "decline": "Hhayi manje"
+  },
+  "locationPermission": {
+    "deniedTitle": "Ukufinyelela endaweni kuvaliwe",
+    "deniedBody": "Ukulandelela umjaho kudinga indawo yakho. Vumela i-Race Tracker ukufinyelela endaweni kuzilungiselelo zedivayisi yakho, bese uzama futhi.",
+    "openSettings": "Vula izilungiselelo"
   }
 }

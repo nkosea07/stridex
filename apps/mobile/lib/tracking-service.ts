@@ -19,6 +19,26 @@ export const DEFAULT_OPTIONS: TrackingOptions = {
   distanceInterval: 10, // 10 meters
 };
 
+export interface TrackingNotification {
+  title: string;
+  body: string;
+}
+
+export class LocationPermissionError extends Error {
+  readonly canAskAgain: boolean;
+
+  constructor(canAskAgain: boolean) {
+    super('Location permission denied');
+    this.name = 'LocationPermissionError';
+    this.canAskAgain = canAskAgain;
+  }
+}
+
+export const needsLocationDisclosure = async (): Promise<boolean> => {
+  const permission = await Location.getForegroundPermissionsAsync();
+  return !permission.granted;
+};
+
 export const BATTERY_SAVER_OPTIONS: TrackingOptions = {
   accuracy: Location.Accuracy.Balanced,
   timeInterval: 60000, // 1 minute
@@ -547,6 +567,7 @@ export const clearLocalTrackingData = async (): Promise<void> => {
 
 export const startBackgroundTracking = async (
   raceId: string,
+  notification: TrackingNotification,
   options: TrackingOptions = DEFAULT_OPTIONS,
   batterySaver = false,
 ) => {
@@ -555,11 +576,8 @@ export const startBackgroundTracking = async (
     throw new Error('Local tracking data is quarantined until cleanup succeeds.');
   }
 
-  const { status: foreground } = await Location.requestForegroundPermissionsAsync();
-  if (foreground !== 'granted') throw new Error('Foreground location permission denied');
-
-  const { status: background } = await Location.requestBackgroundPermissionsAsync();
-  if (background !== 'granted') throw new Error('Background location permission denied');
+  const permission = await Location.requestForegroundPermissionsAsync();
+  if (permission.status !== 'granted') throw new LocationPermissionError(permission.canAskAgain);
 
   await setActiveRaceId(raceId, batterySaver);
 
@@ -569,8 +587,8 @@ export const startBackgroundTracking = async (
       timeInterval: options.timeInterval,
       distanceInterval: options.distanceInterval,
       foregroundService: {
-        notificationTitle: 'Race Tracking Active',
-        notificationBody: 'Your location is being shared with race organizers.',
+        notificationTitle: notification.title,
+        notificationBody: notification.body,
         notificationColor: '#2563EB',
       },
       pausesUpdatesAutomatically: false,

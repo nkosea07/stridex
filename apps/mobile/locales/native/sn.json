@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSLocationWhenInUseUsageDescription": "Race Tracker inoshandisa nzvimbo yauri kana kutevera mujaho kwakabatidzwa, kunyange skrini yakakiyiwa, kuti inyore nzira yako uye igovane nzvimbo yauri izvozvi nevarongi vemujaho uye, kunze kwekunge wazvidzima, nevaoni pamepu yemujaho.",
+    "NSLocationAlwaysAndWhenInUseUsageDescription": "Race Tracker inoshandisa nzvimbo yauri panguva yemujaho, kunyange app yakavharwa kana isiri kushandiswa, kuti irambe ichinyora nzira yako uye igovane nzvimbo yauri izvozvi nevarongi vemujaho uye, kunze kwekunge wazvidzima, nevaoni pamepu yemujaho.",
+    "NSLocationAlwaysUsageDescription": "Race Tracker inoshandisa nzvimbo yauri panguva yemujaho, kunyange app yakavharwa kana isiri kushandiswa, kuti irambe ichinyora nzira yako uye igovane nzvimbo yauri izvozvi nevarongi vemujaho uye, kunze kwekunge wazvidzima, nevaoni pamepu yemujaho.",
+    "NSCameraUsageDescription": "Race Tracker inoshandisa kamera kuverenga makodhi eQR panzvimbo dzekutarisa uye pakunyoresa."
+  }
+}

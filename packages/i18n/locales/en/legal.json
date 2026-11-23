@@ -9,7 +9,8 @@
     "relatedPrivacy": "Read our Privacy Policy",
     "relatedTerms": "Read our Terms and Conditions",
     "footerLegal": "Legal",
-    "englishOnly": "This document is available in English only. The English version is the official one."
+    "englishOnly": "This document is available in English only. The English version is the official one.",
+    "accountDeletion": "Delete your account"
   },
   "privacy": {
     "title": "Privacy Policy",
@@ -339,5 +340,65 @@
     "suffix": ".",
     "errorTitle": "Error",
     "required": "Please accept the Terms and Conditions and Privacy Policy to continue."
+  },
+  "accountDeletion": {
+    "title": "Delete your account",
+    "summary": "How to delete your Race Tracker account and the personal information linked to it, and what we keep afterwards. Race Tracker is operated by {{operatorName}}.",
+    "sections": [
+      {
+        "id": "in-the-app",
+        "title": "1. Delete your account in the app",
+        "items": [
+          "Open the Race Tracker app on your phone and sign in.",
+          "Go to Profile and tap Delete account.",
+          "Enter your password and tap Delete my account."
+        ]
+      },
+      {
+        "id": "on-the-web",
+        "title": "2. Delete your account on the website",
+        "items": [
+          "Sign in to Race Tracker on this website.",
+          "Open Settings from your account menu.",
+          "Under Delete account, enter your password, type the confirmation word, and submit."
+        ]
+      },
+      {
+        "id": "no-access",
+        "title": "3. If you cannot sign in",
+        "paragraphs": [
+          "Email {{contactEmail}} from the email address on your account and ask us to delete it. We may ask you to confirm that the account is yours before we act on the request."
+        ]
+      },
+      {
+        "id": "deleted",
+        "title": "4. What we delete",
+        "items": [
+          "Your profile: name, email address, phone number and password.",
+          "Personal details on your race entries: date of birth, gender, nationality, emergency contacts, medical information, shirt size, club and team, bib number and timing tag.",
+          "Your GPS location history.",
+          "Race photos and videos linked to your entries.",
+          "The athletes you follow, your notifications, the devices registered for push notifications, and your two-factor sign-in settings."
+        ]
+      },
+      {
+        "id": "kept",
+        "title": "5. What we keep",
+        "items": [
+          "Race results and checkpoint times, shown as Anonymous Runner, so that race results stay accurate.",
+          "Emergency (SOS) alerts, with your name and contact details removed, for safety and legal reasons.",
+          "Payment and refund records linked to the anonymized entry, where accounting or tax law requires us to keep them.",
+          "Security and audit records of actions on the account, which we keep to prevent fraud and meet legal obligations."
+        ]
+      },
+      {
+        "id": "timing",
+        "title": "6. When it happens",
+        "paragraphs": [
+          "Your account is deactivated as soon as you ask for it to be deleted. Your personal information is erased or anonymized {{graceDays}} days later. Until then, you can cancel the deletion from the sign-in page with Cancel a pending account deletion.",
+          "Separately from account deletion, detailed GPS location traces are deleted {{gpsRetentionDays}} days after they are recorded."
+        ]
+      }
+    ]
   }
 }

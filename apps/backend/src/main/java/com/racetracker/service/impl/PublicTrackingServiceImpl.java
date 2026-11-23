@@ -278,7 +278,7 @@ public class PublicTrackingServiceImpl implements PublicTrackingService {
         Participant participant = participantRepository.findByRaceIdAndId(raceId, participantId)
             .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
 
-        if (!Boolean.TRUE.equals(participant.getIsTrackingEnabled())) {
+        if (!Boolean.TRUE.equals(participant.getIsTrackingEnabled()) || !participant.isPublicLocationSharing()) {
             return new PublicParticipantTrackResponse(List.of());
         }
 

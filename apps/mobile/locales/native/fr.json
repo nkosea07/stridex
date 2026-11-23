@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSLocationWhenInUseUsageDescription": "Race Tracker utilise votre position pendant le suivi de course, y compris lorsque l’écran est verrouillé, pour enregistrer votre parcours et partager votre position en direct avec les organisateurs et, sauf si vous le désactivez, avec les spectateurs sur la carte de la course.",
+    "NSLocationAlwaysAndWhenInUseUsageDescription": "Race Tracker utilise votre position pendant une course, même lorsque l’app est fermée ou inutilisée, pour continuer à enregistrer votre parcours et partager votre position en direct avec les organisateurs et, sauf si vous le désactivez, avec les spectateurs sur la carte de la course.",
+    "NSLocationAlwaysUsageDescription": "Race Tracker utilise votre position pendant une course, même lorsque l’app est fermée ou inutilisée, pour continuer à enregistrer votre parcours et partager votre position en direct avec les organisateurs et, sauf si vous le désactivez, avec les spectateurs sur la carte de la course.",
+    "NSCameraUsageDescription": "Race Tracker utilise l’appareil photo pour scanner les codes QR des points de contrôle et de l’enregistrement."
+  }
+}

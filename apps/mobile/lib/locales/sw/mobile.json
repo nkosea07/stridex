@@ -755,5 +755,20 @@
     "zoomIn": "Kuza",
     "zoomOut": "Punguza",
     "retry": "Jaribu tena"
+  },
+  "trackingNotification": {
+    "title": "Ufuatiliaji wa mbio umewashwa",
+    "body": "Eneo lako linashirikiwa na waandaaji wa mbio wakati ufuatiliaji umewashwa."
+  },
+  "locationDisclosure": {
+    "title": "Shiriki eneo lako wakati wa mbio",
+    "body": "Race Tracker hukusanya eneo lako sahihi wakati ufuatiliaji wa mbio umewashwa, hata programu ikiwa chinichini au skrini imefungwa. Linatumika kurekodi njia na maendeleo yako, na mahali ulipo sasa hushirikiwa na waandaaji wa mbio na, usipozima kwenye ukurasa wa mbio, na watazamaji kwenye ramani ya umma ya mbio. Ufuatiliaji husimama unapousimamisha au mbio zako zinapoisha.",
+    "accept": "Endelea",
+    "decline": "Si sasa"
+  },
+  "locationPermission": {
+    "deniedTitle": "Ufikiaji wa eneo umezimwa",
+    "deniedBody": "Ufuatiliaji wa mbio unahitaji eneo lako. Ruhusu Race Tracker kufikia eneo katika mipangilio ya kifaa chako, kisha ujaribu tena.",
+    "openSettings": "Fungua mipangilio"
   }
 }

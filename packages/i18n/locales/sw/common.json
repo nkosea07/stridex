@@ -6,5 +6,9 @@
   "language": "Lugha",
   "actions": {
     "cancel": "Ghairi"
-  }
+  },
+  "locationSharingManage": "Onyesha watazamaji mahali nilipo sasa",
+  "locationSharingHint": "Waandaaji wa mbio huona mahali ulipo kila wakati ufuatiliaji umewashwa, kwa usalama.",
+  "locationSharingSaved": "Chaguo la kushiriki eneo limehifadhiwa.",
+  "locationSharingFailed": "Imeshindwa kusasisha kushiriki eneo."
 }

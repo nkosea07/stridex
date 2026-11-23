@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as Location from 'expo-location';
 import { api } from '@/lib/api';
+import i18n from '@/lib/i18n';
 import { 
   startBackgroundTracking, 
   stopBackgroundTracking, 
@@ -175,7 +176,10 @@ export const useTrackingStore = create<ExtendedTrackingState>((set, get) => ({
     await initDb();
 
     const options = get().batterySaver ? BATTERY_SAVER_OPTIONS : DEFAULT_OPTIONS;
-    await startBackgroundTracking(race.id, options, get().batterySaver);
+    await startBackgroundTracking(race.id, {
+      title: i18n.t('mobile:trackingNotification.title'),
+      body: i18n.t('mobile:trackingNotification.body'),
+    }, options, get().batterySaver);
 
     const startTime = new Date();
     set({ currentRace: race, isTracking: true, locations: [], checkpointRecords: [], startTime });

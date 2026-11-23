@@ -909,6 +909,13 @@ class ApiClient {
     });
   }
 
+  async updateLocationSharing(participantId: string, enabled: boolean): Promise<{ participantId: string; enabled: boolean }> {
+    return this.request(buildContractPath(API_CONTRACT.endpoints.myRegistrationLocationSharing, { participantId }), {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    });
+  }
+
   // Tracking endpoints
   async sendLocation(raceId: string, location: GpsLocation): Promise<void> {
     return this.request<void>(buildContractPath(API_CONTRACT.endpoints.trackingLocation, { raceId }), {

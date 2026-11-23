@@ -6,5 +6,9 @@
   "language": "Taal",
   "actions": {
     "cancel": "Kanselleer"
-  }
+  },
+  "locationSharingManage": "Wys my lewendige posisie aan toeskouers",
+  "locationSharingHint": "Wedloop-organiseerders sien altyd jou posisie terwyl volging aan is, vir veiligheid.",
+  "locationSharingSaved": "Liggingdeelkeuse gestoor.",
+  "locationSharingFailed": "Kon nie liggingdeling bywerk nie."
 }

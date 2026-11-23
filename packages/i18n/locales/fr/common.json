@@ -6,5 +6,9 @@
   "language": "Langue",
   "actions": {
     "cancel": "Annuler"
-  }
+  },
+  "locationSharingManage": "Montrer ma position en direct aux spectateurs",
+  "locationSharingHint": "Les organisateurs voient toujours votre position pendant le suivi, pour votre sécurité.",
+  "locationSharingSaved": "Choix de partage de position enregistré.",
+  "locationSharingFailed": "Impossible de mettre à jour le partage de position."
 }

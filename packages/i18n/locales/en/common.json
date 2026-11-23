@@ -155,5 +155,9 @@
   "importCompleted": "Import finished: {{success}} added, {{skipped}} skipped.",
   "importFailed": "The import failed. Open the import history for details.",
   "importSubmitting": "Starting import…",
-  "race": "Race"
+  "race": "Race",
+  "locationSharingManage": "Show my live position to spectators",
+  "locationSharingHint": "Race organizers always see your position while tracking is on, for safety.",
+  "locationSharingSaved": "Location sharing choice saved.",
+  "locationSharingFailed": "Could not update location sharing."
 }

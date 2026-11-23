@@ -141,6 +141,33 @@ class PublicTrackingServiceTrackTest {
     }
 
     @Test
+    void athleteTrackEmptyWhenAthleteStopsPublicSharing() {
+        RaceRepository races = mock(RaceRepository.class);
+        ParticipantRepository participants = mock(ParticipantRepository.class);
+        GpsLocationRepository gps = mock(GpsLocationRepository.class);
+
+        UUID raceId = UUID.randomUUID();
+        UUID participantId = UUID.randomUUID();
+        Race race = new Race();
+        race.setId(raceId);
+        race.setStatus(Race.RaceStatus.IN_PROGRESS);
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setRace(race);
+        participant.setIsTrackingEnabled(true);
+        participant.setPublicLocationSharing(false);
+
+        when(races.findByIdForPublicVisibility(raceId)).thenReturn(Optional.of(race));
+        when(participants.findByRaceIdAndId(raceId, participantId)).thenReturn(Optional.of(participant));
+
+        var response = newService(races, participants, gps, mock(CheckpointRecordRepository.class),
+            mock(RaceFeedRevisionRepository.class)).getAthleteTrack(raceId, participantId);
+
+        assertThat(response.getPoints()).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(gps);
+    }
+
+    @Test
     void athleteTrackingSplitsCarryNumericPaceData() {
         RaceRepository races = mock(RaceRepository.class);
         ParticipantRepository participants = mock(ParticipantRepository.class);

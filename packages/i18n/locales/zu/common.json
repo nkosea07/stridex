@@ -6,5 +6,9 @@
   "language": "Ulimi",
   "actions": {
     "cancel": "Khansela"
-  }
+  },
+  "locationSharingManage": "Bonisa ababukeli indawo yami yamanje",
+  "locationSharingHint": "Abahleli bomjaho bahlala bebona indawo yakho ngesikhathi ukulandelela kuvuliwe, ukuze uphephe.",
+  "locationSharingSaved": "Ukukhetha kokwabelana ngendawo kulondoloziwe.",
+  "locationSharingFailed": "Akukwazanga ukubuyekeza ukwabelana ngendawo."
 }

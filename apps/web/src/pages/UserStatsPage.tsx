@@ -4,7 +4,7 @@ import { AlertCircle, MapPin, RefreshCcw, UserMinus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ResultQueryDialog } from '@/components/results/ResultQueryDialog'
 import { favoritesApi, participantsApi, resultsApi } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
@@ -19,6 +19,7 @@ type MyRegistration = {
   raceId: string
   status: string
   mediaPublicationConsent?: boolean
+  publicLocationSharing?: boolean
 }
 
 type SessionSnapshot = {
@@ -46,6 +47,7 @@ export function UserStatsPage() {
   const [hasLoadError, setHasLoadError] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [savingMediaConsentId, setSavingMediaConsentId] = useState<string | null>(null)
+  const [savingLocationSharingId, setSavingLocationSharingId] = useState<string | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -135,6 +137,24 @@ export function UserStatsPage() {
     }
   }
 
+  const handleLocationSharing = async (registration: MyRegistration, enabled: boolean) => {
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => sessionRef.current.userId === requestSession.userId
+      && getSessionGeneration() === requestSession.generation
+    setSavingLocationSharingId(registration.id)
+    try {
+      await participantsApi.updateLocationSharing(registration.id, enabled)
+      if (!isCurrentSession()) return
+      setRegistrations((current) => current.map((item) => item.id === registration.id
+        ? { ...item, publicLocationSharing: enabled } : item))
+      toast.success(t('common:locationSharingSaved'))
+    } catch {
+      if (isCurrentSession()) toast.error(t('common:locationSharingFailed'))
+    } finally {
+      if (isCurrentSession()) setSavingLocationSharingId(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -156,6 +176,26 @@ export function UserStatsPage() {
                 disabled={savingMediaConsentId === registration.id}
                 aria-label={t('common:mediaPublicationManage')}
                 onCheckedChange={(value) => void handleMediaConsent(registration, value)} />
+            </div>
+          ))}
+        </CardContent>
+      </Card>}
+
+      {isAthleteMode && registrations.length > 0 && <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t('common:locationSharingManage')}</CardTitle>
+          <CardDescription>{t('common:locationSharingHint')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {registrations.map((registration) => (
+            <div key={registration.id} className="flex items-center justify-between gap-4 rounded-xl border border-border p-3">
+              <Link className="text-sm font-medium underline-offset-2 hover:underline" to={`/race/${registration.raceId}`}>
+                {t('nav:race')} · {registration.raceId}
+              </Link>
+              <Switch checked={registration.publicLocationSharing !== false}
+                disabled={savingLocationSharingId === registration.id}
+                aria-label={t('common:locationSharingManage')}
+                onCheckedChange={(value) => void handleLocationSharing(registration, value)} />
             </div>
           ))}
         </CardContent>
