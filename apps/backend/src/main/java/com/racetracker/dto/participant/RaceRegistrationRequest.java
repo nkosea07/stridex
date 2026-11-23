@@ -1,10 +1,13 @@
 package com.racetracker.dto.participant;
 
+import com.racetracker.model.Participant;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,6 +19,13 @@ public class RaceRegistrationRequest {
 
     @NotNull
     private EmergencyContact emergencyContact;
+
+    @NotNull
+    @Past
+    private LocalDate dateOfBirth;
+
+    @NotNull
+    private Participant.Gender gender;
 
     private Boolean waiverAccepted;
 

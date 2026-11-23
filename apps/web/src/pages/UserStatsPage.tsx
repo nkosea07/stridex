@@ -12,6 +12,7 @@ import type { AthleteHistoryEntry, FavoriteAthlete, PersonalBest, RaceResult } f
 import { getPreferredCapability, useAuth } from '@/contexts/AuthContext'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Switch } from '@/components/ui/switch'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatNumber } from '@/lib/format'
 
 type MyRegistration = {
@@ -20,7 +21,11 @@ type MyRegistration = {
   status: string
   mediaPublicationConsent?: boolean
   publicLocationSharing?: boolean
+  canWithdraw?: boolean
 }
+
+const ENTRY_STATUSES = new Set(['pending', 'pending_review', 'confirmed', 'waitlisted', 'cancelled', 'rejected',
+  'dns', 'dnf', 'finished', 'disqualified'])
 
 type SessionSnapshot = {
   userId: string | null
@@ -48,6 +53,8 @@ export function UserStatsPage() {
   const [reloadKey, setReloadKey] = useState(0)
   const [savingMediaConsentId, setSavingMediaConsentId] = useState<string | null>(null)
   const [savingLocationSharingId, setSavingLocationSharingId] = useState<string | null>(null)
+  const [withdrawTarget, setWithdrawTarget] = useState<MyRegistration | null>(null)
+  const [isWithdrawing, setIsWithdrawing] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -155,6 +162,27 @@ export function UserStatsPage() {
     }
   }
 
+  const handleWithdraw = async () => {
+    const registration = withdrawTarget
+    if (!registration) return
+    const requestSession = sessionRef.current
+    const isCurrentSession = () => sessionRef.current.userId === requestSession.userId
+      && getSessionGeneration() === requestSession.generation
+    setIsWithdrawing(true)
+    try {
+      await participantsApi.withdraw(registration.id)
+      if (!isCurrentSession()) return
+      setRegistrations((current) => current.map((item) => item.id === registration.id
+        ? { ...item, status: 'cancelled', canWithdraw: false } : item))
+      toast.success(t('nav:withdrawEntryDone'))
+      setWithdrawTarget(null)
+    } catch {
+      if (isCurrentSession()) toast.error(t('nav:withdrawEntryFailed'))
+    } finally {
+      if (isCurrentSession()) setIsWithdrawing(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -163,6 +191,49 @@ export function UserStatsPage() {
           {t(isSpectatorMode ? 'nav:followingDescription' : 'nav:myPerformanceDescription')}
         </p>
       </div>
+
+      {isAthleteMode && registrations.length > 0 && <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t('nav:raceEntries')}</CardTitle>
+          <CardDescription>{t('nav:raceEntriesDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {registrations.map((registration) => (
+            <div key={registration.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <Link className="text-sm font-medium underline-offset-2 hover:underline" to={`/race/${registration.raceId}`}>
+                  {t('nav:race')} · {registration.raceId}
+                </Link>
+                {ENTRY_STATUSES.has(registration.status) && (
+                  <Badge variant="secondary">{t(`nav:entryStatus.${registration.status}`)}</Badge>
+                )}
+              </div>
+              {registration.canWithdraw && (
+                <Button variant="outline" size="sm" onClick={() => setWithdrawTarget(registration)}>
+                  {t('nav:withdrawEntry')}
+                </Button>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>}
+
+      <Dialog open={withdrawTarget !== null} onOpenChange={(open) => { if (!open && !isWithdrawing) setWithdrawTarget(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('nav:withdrawEntryTitle')}</DialogTitle>
+            <DialogDescription>{t('nav:withdrawEntryBody')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWithdrawTarget(null)} disabled={isWithdrawing}>
+              {t('nav:withdrawEntryCancel')}
+            </Button>
+            <Button variant="destructive" onClick={() => void handleWithdraw()} disabled={isWithdrawing} aria-busy={isWithdrawing}>
+              {t('nav:withdrawEntryConfirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isAthleteMode && registrations.length > 0 && <Card>
         <CardHeader><CardTitle className="text-base">{t('common:mediaPublicationManage')}</CardTitle></CardHeader>

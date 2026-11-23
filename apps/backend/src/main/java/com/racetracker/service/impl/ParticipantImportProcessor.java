@@ -26,7 +26,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -289,7 +288,6 @@ public class ParticipantImportProcessor {
         } catch (IllegalArgumentException invalid) {
             throw new IllegalArgumentException("Invalid isTrackingEnabled (use true/false)");
         }
-        participant.setPaymentStatus(defaultPaymentStatus(race));
         String dob = cell(row, index, "dateOfBirth");
         if (dob != null && !dob.isBlank()) {
             LocalDate dateOfBirth;
@@ -313,6 +311,8 @@ public class ParticipantImportProcessor {
             }
             participant.setCategory(resolveCategory(race.getId(), parsedCategoryId));
         }
+        participant.setPaymentStatus(com.racetracker.service.RegistrationFees.requiresPayment(participant, race)
+            ? Participant.PaymentStatus.UNPAID : Participant.PaymentStatus.WAIVED);
         participant.setRegisteredAt(OffsetDateTime.now());
         return participant;
     }
@@ -436,13 +436,6 @@ public class ParticipantImportProcessor {
             return false;
         }
         throw new IllegalArgumentException("Invalid boolean value");
-    }
-
-    private Participant.PaymentStatus defaultPaymentStatus(Race race) {
-        if (race.getRegistrationFee() == null || race.getRegistrationFee().compareTo(BigDecimal.ZERO) <= 0) {
-            return Participant.PaymentStatus.WAIVED;
-        }
-        return Participant.PaymentStatus.UNPAID;
     }
 
     private RaceCategory resolveCategory(UUID raceId, UUID categoryId) {

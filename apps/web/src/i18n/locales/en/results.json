@@ -114,7 +114,8 @@
     "failedToPublishResults": "Failed to publish results",
     "failedToExportResults": "Failed to export results",
     "searchByNameOrBib": "Search by name or bib...",
-    "gender": "Gender"
+    "gender": "Gender",
+    "publishBlockedUnpaidFinishers": "Some finishers have not paid the entry fee. Verify or waive their payment, or change their status, then publish again."
   },
   "speedKmh": "{{value}} km/h",
   "exportFormat": "Export format",

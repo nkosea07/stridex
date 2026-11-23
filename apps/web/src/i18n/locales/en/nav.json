@@ -206,5 +206,26 @@
   "smsUnavailable": "SMS is unavailable in this release.",
   "raceSetup": "Stages & sponsors",
   "dataProcessingWithdrawHint": "To withdraw it, delete your account below.",
-  "close": "Close"
+  "close": "Close",
+  "raceEntries": "Your race entries",
+  "raceEntriesDescription": "Withdraw before race day if you can no longer take part. If you paid, the organizer reviews a refund.",
+  "withdrawEntry": "Withdraw",
+  "withdrawEntryTitle": "Withdraw from this race?",
+  "withdrawEntryBody": "Your place is released and offered to the next athlete on the waitlist. You can register again while registration is open. If you paid, the organizer reviews a refund.",
+  "withdrawEntryConfirm": "Withdraw",
+  "withdrawEntryCancel": "Keep my entry",
+  "withdrawEntryDone": "You have withdrawn from the race.",
+  "withdrawEntryFailed": "We could not withdraw your entry. Please try again.",
+  "entryStatus": {
+    "pending": "Registered",
+    "pending_review": "Waiting for review",
+    "confirmed": "Confirmed",
+    "waitlisted": "Waitlisted",
+    "cancelled": "Withdrawn",
+    "rejected": "Not approved",
+    "dns": "Did not start",
+    "dnf": "Did not finish",
+    "finished": "Finished",
+    "disqualified": "Disqualified"
+  }
 }

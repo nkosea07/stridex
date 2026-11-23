@@ -183,6 +183,7 @@ export interface Registration {
   registrationDate?: string
   mediaPublicationConsent?: boolean
   publicLocationSharing?: boolean
+  canWithdraw?: boolean
   emergencyContact?: { name?: string; phone?: string; relationship?: string }
   shirtSize?: string
   paymentStatus?: PaymentStatus

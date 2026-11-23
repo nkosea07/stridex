@@ -264,7 +264,8 @@
       "cancelled": "Votre inscription a été annulée",
       "dns": "Marqué non partant",
       "dnf": "Marqué abandon",
-      "finished": "Arrivé"
+      "finished": "Arrivé",
+      "disqualified": "Vous avez été disqualifié de cette course"
     },
     "register": {
       "title": "S’inscrire à {{name}}",
@@ -303,7 +304,32 @@
       "waitlisted": "Vous avez été ajouté à la liste d’attente.",
       "pendingReview": "Votre inscription est en attente d’examen.",
       "completed": "Inscription terminée.",
-      "completedPay": "Inscription terminée. Payez les frais d’inscription ci-dessous pour confirmer votre place."
+      "completedPay": "Inscription terminée. Payez les frais d’inscription ci-dessous pour confirmer votre place.",
+      "gender": "Genre",
+      "genderFemale": "Femme",
+      "genderMale": "Homme",
+      "genderOther": "Autre",
+      "genderPreferNotToSay": "Je préfère ne pas répondre",
+      "dateOfBirth": "Date de naissance",
+      "dateOfBirthHint": "AAAA-MM-JJ",
+      "genderRequired": "Choisissez votre genre. Il sert aux catégories par genre et aux résultats.",
+      "dateOfBirthInvalid": "Saisissez votre date de naissance au format AAAA-MM-JJ, par exemple 1990-05-17.",
+      "notOpen": "Les inscriptions à cette course ne sont pas ouvertes.",
+      "errors": {
+        "REGISTRATION_NOT_OPEN": "Les inscriptions à cette course ne sont pas ouvertes.",
+        "CATEGORY_FULL": "Cette catégorie est complète. Choisissez-en une autre.",
+        "CATEGORY_AGE_INELIGIBLE": "Votre âge le jour de la course ne correspond pas à cette catégorie. Choisissez-en une autre.",
+        "CATEGORY_GENDER_INELIGIBLE": "Cette catégorie n’est pas ouverte au genre choisi. Choisissez-en une autre."
+      }
+    },
+    "withdraw": {
+      "action": "Se retirer de cette course",
+      "title": "Se retirer de cette course ?",
+      "body": "Votre place est libérée et proposée à l’athlète suivant sur la liste d’attente. Vous pouvez vous réinscrire tant que les inscriptions sont ouvertes. Si vous avez payé, l’organisateur examine un remboursement.",
+      "confirm": "Se retirer",
+      "cancel": "Garder mon inscription",
+      "done": "Vous vous êtes retiré de la course.",
+      "failed": "Impossible de retirer votre inscription. Veuillez réessayer."
     }
   },
   "operations": {
@@ -475,7 +501,8 @@
       "PAYMENT_WAIVED": "L’organisateur vous a dispensé des frais d’inscription.",
       "PAYMENT_NOT_AVAILABLE_FOR_STATUS": "Le paiement s’ouvre une fois votre place confirmée.",
       "REFUND_STATE_CONFLICT": "Cette inscription a été remboursée. Contactez l’organisateur."
-    }
+    },
+    "coveredByPromo": "Votre code promo couvre la totalité des frais d’inscription. Votre inscription est désormais marquée comme exonérée."
   },
   "tabs": {
     "home": "Accueil",
@@ -649,7 +676,8 @@
       "RECORD_UNDO_WINDOW_EXPIRED": "Cette saisie date de plus de 5 minutes. Demandez à un administrateur de la course de la corriger.",
       "GUN_TIME_OFFICIAL_NOW_ONLY": "Les officiels ne peuvent donner le départ d’une vague qu’à l’heure actuelle.",
       "OFFLINE_CAPTURE_BEFORE_GUN": "Cette saisie est antérieure au départ de l’athlète.",
-      "OFFLINE_CAPTURE_OUT_OF_RANGE": "Cette saisie est trop ancienne ou dans le futur."
+      "OFFLINE_CAPTURE_OUT_OF_RANGE": "Cette saisie est trop ancienne ou dans le futur.",
+      "CHECK_IN_PAYMENT_REQUIRED": "Cet athlète n’a pas payé les frais d’inscription. Demandez à l’organisateur de valider ou d’exonérer le paiement avant l’enregistrement."
     }
   },
   "settings": {

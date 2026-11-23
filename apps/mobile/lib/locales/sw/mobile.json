@@ -264,7 +264,8 @@
       "cancelled": "Usajili wako umeghairiwa",
       "dns": "Umewekwa kama hukuanza",
       "dnf": "Umewekwa kama hukumaliza",
-      "finished": "Umemaliza"
+      "finished": "Umemaliza",
+      "disqualified": "Umeondolewa kwenye mbio hizi"
     },
     "register": {
       "title": "Jisajili kwa {{name}}",
@@ -303,7 +304,32 @@
       "waitlisted": "Umeongezwa kwenye orodha ya kusubiri.",
       "pendingReview": "Usajili wako unasubiri ukaguzi.",
       "completed": "Usajili umekamilika.",
-      "completedPay": "Usajili umekamilika. Lipa ada ya kushiriki hapa chini ili kuhakikisha nafasi yako."
+      "completedPay": "Usajili umekamilika. Lipa ada ya kushiriki hapa chini ili kuhakikisha nafasi yako.",
+      "gender": "Jinsia",
+      "genderFemale": "Mwanamke",
+      "genderMale": "Mwanamume",
+      "genderOther": "Nyingine",
+      "genderPreferNotToSay": "Sipendi kusema",
+      "dateOfBirth": "Tarehe ya kuzaliwa",
+      "dateOfBirthHint": "YYYY-MM-DD",
+      "genderRequired": "Chagua jinsia yako. Inatumika kwa makundi ya jinsia na matokeo.",
+      "dateOfBirthInvalid": "Weka tarehe yako ya kuzaliwa kama YYYY-MM-DD, kwa mfano 1990-05-17.",
+      "notOpen": "Usajili wa mbio hizi haujafunguliwa.",
+      "errors": {
+        "REGISTRATION_NOT_OPEN": "Usajili wa mbio hizi haujafunguliwa.",
+        "CATEGORY_FULL": "Kundi hili limejaa. Chagua kundi jingine.",
+        "CATEGORY_AGE_INELIGIBLE": "Umri wako siku ya mbio uko nje ya kiwango cha umri wa kundi hili. Chagua kundi jingine.",
+        "CATEGORY_GENDER_INELIGIBLE": "Kundi hili halijafunguliwa kwa jinsia uliyochagua. Chagua kundi jingine."
+      }
+    },
+    "withdraw": {
+      "action": "Jiondoe kwenye mbio hizi",
+      "title": "Ujiondoe kwenye mbio hizi?",
+      "body": "Nafasi yako itaachiwa na kupewa mwanariadha anayefuata kwenye orodha ya kusubiri. Unaweza kujisajili tena wakati usajili uko wazi. Ikiwa ulilipa, mratibu atakagua urejeshaji wa pesa.",
+      "confirm": "Jiondoe",
+      "cancel": "Baki na usajili wangu",
+      "done": "Umejiondoa kwenye mbio.",
+      "failed": "Hatukuweza kuondoa usajili wako. Tafadhali jaribu tena."
     }
   },
   "operations": {
@@ -475,7 +501,8 @@
       "PAYMENT_WAIVED": "Mratibu amekusamehe ada ya kushiriki.",
       "PAYMENT_NOT_AVAILABLE_FOR_STATUS": "Malipo yatafunguliwa pindi usajili wako utakapopata nafasi iliyothibitishwa.",
       "REFUND_STATE_CONFLICT": "Usajili huu ulirejeshewa pesa. Wasiliana na mratibu wa mbio."
-    }
+    },
+    "coveredByPromo": "Msimbo wako wa ofa unalipia ada yote ya usajili. Usajili wako sasa umewekwa kama umesamehewa ada."
   },
   "tabs": {
     "home": "Mwanzo",
@@ -647,7 +674,8 @@
       "RECORD_UNDO_WINDOW_EXPIRED": "Zimepita zaidi ya dakika 5 tangu rekodi hii. Muombe msimamizi wa mbio airekebishe.",
       "GUN_TIME_OFFICIAL_NOW_ONLY": "Maafisa wanaweza kuanzisha kundi kwa muda wa sasa pekee.",
       "OFFLINE_CAPTURE_BEFORE_GUN": "Rekodi hii ni ya kabla ya mwanariadha kuanza.",
-      "OFFLINE_CAPTURE_OUT_OF_RANGE": "Rekodi hii ni ya zamani mno au ya wakati ujao."
+      "OFFLINE_CAPTURE_OUT_OF_RANGE": "Rekodi hii ni ya zamani mno au ya wakati ujao.",
+      "CHECK_IN_PAYMENT_REQUIRED": "Mwanariadha huyu hajalipa ada ya usajili. Mwombe mratibu athibitishe au asamehe malipo kabla ya kumsajili kufika."
     }
   },
   "settings": {

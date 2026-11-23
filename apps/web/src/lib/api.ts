@@ -691,6 +691,9 @@ export const participantsApi = {
 
   myRegistrations: () => fetchApi<Registration[]>(API_CONTRACT.endpoints.myRegistrations),
 
+  withdraw: (registrationId: string) =>
+    fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.registrationDelete, { registrationId }), { method: 'DELETE' }),
+
   updateMediaConsent: (participantId: string, consented: boolean) =>
     fetchApi<{ participantId: string; consented: boolean }>(
       buildContractPath(API_CONTRACT.endpoints.myRegistrationMediaConsent, { participantId }), {
@@ -734,6 +737,8 @@ export const registrationApi = {
 
 export interface PublicRegistrationPayload {
   categoryId: string
+  gender: 'MALE' | 'FEMALE' | 'OTHER' | 'PREFER_NOT_TO_SAY'
+  dateOfBirth: string
   emergencyContact: { name?: string; phone?: string; relationship?: string }
   waiverAccepted?: boolean
   mediaPublicationConsent?: boolean

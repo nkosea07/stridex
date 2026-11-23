@@ -245,6 +245,9 @@ public class ParticipantServiceImpl implements ParticipantService {
             && participant.getStatus() != Participant.ParticipantStatus.CONFIRMED) {
             throw new ConflictException("Participant is not eligible for check-in", "CHECK_IN_NOT_ELIGIBLE");
         }
+        if (com.racetracker.service.RegistrationFees.owes(participant, participant.getRace())) {
+            throw new ConflictException("The entry fee has not been paid or waived", "CHECK_IN_PAYMENT_REQUIRED");
+        }
         participant.setCheckedInAt(OffsetDateTime.now());
         participant.setStatus(Participant.ParticipantStatus.CHECKED_IN);
         Participant saved = participantRepository.save(participant);
@@ -487,13 +490,15 @@ public class ParticipantServiceImpl implements ParticipantService {
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
         User user = resolveCurrentUser();
 
-        if (participantRepository.existsByRaceIdAndUserId(raceId, user.getId())) {
+        Participant previous = participantRepository.findByRaceIdAndUserId(raceId, user.getId()).orElse(null);
+        if (previous != null && previous.getStatus() != Participant.ParticipantStatus.WITHDRAWN) {
             throw new ConflictException("You are already registered for this race");
         }
 
         validateRegistrationOpen(race);
 
         RaceCategory category = resolveCategory(raceId, request.getCategoryId());
+        assertCategoryEligible(category, race, request.getGender(), request.getDateOfBirth());
 
         if (Boolean.TRUE.equals(race.getRequireWaiver())
             && !Boolean.TRUE.equals(request.getWaiverAccepted())) {
@@ -502,12 +507,15 @@ public class ParticipantServiceImpl implements ParticipantService {
 
         Map<UUID, String> answers = validateAnswers(raceId, request.getAnswers());
 
-        boolean full = isRaceFull(race);
+        boolean raceFull = isRaceFull(race);
+        boolean categoryFull = isCategoryFull(raceId, category);
         Participant.ParticipantStatus status;
         Integer waitlistPosition = null;
-        if (full) {
+        if (raceFull || categoryFull) {
             if (!Boolean.TRUE.equals(race.getWaitlistEnabled())) {
-                throw new ConflictException("This race is full");
+                throw raceFull
+                    ? new ConflictException("This race is full")
+                    : new ConflictException("This category is full", "CATEGORY_FULL");
             }
             status = Participant.ParticipantStatus.WAITLISTED;
             waitlistPosition = nextWaitlistPosition(raceId);
@@ -517,10 +525,15 @@ public class ParticipantServiceImpl implements ParticipantService {
             status = Participant.ParticipantStatus.REGISTERED;
         }
 
-        Participant participant = new Participant();
+        Participant participant = previous != null ? previous : new Participant();
+        if (previous != null) {
+            clearPreviousEntry(previous);
+        }
         participant.setRace(race);
         participant.setCategory(category);
         participant.setUser(user);
+        participant.setGender(request.getGender());
+        participant.setDateOfBirth(request.getDateOfBirth());
         participant.setFirstName(user.getFirstName());
         participant.setLastName(user.getLastName());
         participant.setEmail(user.getEmail());
@@ -532,6 +545,9 @@ public class ParticipantServiceImpl implements ParticipantService {
             participant.setMediaPublicationConsentAt(OffsetDateTime.now());
             participant.setMediaPublicationConsentVersion(
                 com.racetracker.service.MediaConsentService.CURRENT_MEDIA_PUBLICATION_CONSENT_VERSION);
+        } else {
+            participant.setMediaPublicationConsentAt(null);
+            participant.setMediaPublicationConsentVersion(null);
         }
         participant.setBloodType(request.getBloodType());
         participant.setMedicalConditions(request.getMedicalConditions());
@@ -542,18 +558,22 @@ public class ParticipantServiceImpl implements ParticipantService {
         participant.setIsTrackingEnabled(true);
         participant.setShirtSize(request.getShirtSize());
         participant.setWaitlistPosition(waitlistPosition);
-        if (request.getClubName() != null && !request.getClubName().isBlank()) {
-            participant.setClubName(request.getClubName().trim());
-        }
+        participant.setClubName(request.getClubName() != null && !request.getClubName().isBlank()
+            ? request.getClubName().trim() : null);
         if (Boolean.TRUE.equals(race.getRequireWaiver())) {
             participant.setWaiverAcceptedAt(OffsetDateTime.now());
             participant.setWaiverVersion(race.getWaiverVersion());
         }
         participant.setTeam(resolveRegistrationTeam(race, user, request));
-        participant.setPaymentStatus(defaultPaymentStatus(participant, race));
+        if (participant.getPaymentStatus() != Participant.PaymentStatus.PAID) {
+            participant.setPaymentStatus(defaultPaymentStatus(participant, race));
+        }
         participantIdentityService.assign(participant);
 
         Participant saved = participantRepository.save(participant);
+        if (previous != null) {
+            registrationAnswerRepository.deleteByParticipantId(saved.getId());
+        }
         saveAnswers(saved, answers);
 
         RegistrationDto dto = toRegistrationDto(saved);
@@ -590,12 +610,116 @@ public class ParticipantServiceImpl implements ParticipantService {
             throw new ConflictException("Registration can no longer be cancelled", "REGISTRATION_NOT_CANCELLABLE");
         }
 
+        Participant.ParticipantStatus previousStatus = participant.getStatus();
         com.racetracker.service.ParticipantChangeControl.Snapshot before = participantChangeControl.snapshot(participant);
         participant.setStatus(Participant.ParticipantStatus.WITHDRAWN);
         participant.setStatusReason(WITHDRAWN_BY_ATHLETE);
         participant.setWaitlistPosition(null);
         participantChangeControl.verifyAndRecord(before, participant, WITHDRAWN_BY_ATHLETE);
         participantRepository.save(participant);
+
+        if (OCCUPYING_STATUSES.contains(previousStatus)) {
+            promoteFromWaitlist(race.getId());
+        }
+        if (participant.getPaymentStatus() == Participant.PaymentStatus.PAID) {
+            notifyOrganizersAfterCommit(race, participant, "registration.withdrawn_paid",
+                raceName(participant), participantName(participant));
+        }
+    }
+
+    private void promoteFromWaitlist(UUID raceId) {
+        Race race = raceRepository.findByIdForUpdate(raceId).orElse(null);
+        if (race == null || isRaceFull(race)) {
+            return;
+        }
+        for (Participant waiting : participantRepository.findByRaceIdAndStatusOrderByWaitlistPositionAscRegisteredAtAsc(
+            raceId, Participant.ParticipantStatus.WAITLISTED)) {
+            if (isCategoryFull(raceId, waiting.getCategory())) {
+                continue;
+            }
+            waiting.setStatus(Boolean.TRUE.equals(race.getRequireApproval())
+                ? Participant.ParticipantStatus.PENDING_REVIEW
+                : Participant.ParticipantStatus.REGISTERED);
+            waiting.setWaitlistPosition(null);
+            Participant promoted = participantRepository.save(waiting);
+            runAfterCommit(() -> notifyParticipant(promoted, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
+                "registration.place_offered", raceName(promoted)));
+            return;
+        }
+    }
+
+    private void clearPreviousEntry(Participant previous) {
+        previous.setStatusReason(null);
+        previous.setCheckedInAt(null);
+        previous.setApprovedAt(null);
+        previous.setApprovedBy(null);
+        previous.setRejectionReason(null);
+        previous.setWaitlistPosition(null);
+    }
+
+    private void assertCategoryEligible(RaceCategory category, Race race, Participant.Gender gender, java.time.LocalDate dateOfBirth) {
+        String required = category.getGender() == null ? "ANY" : category.getGender().trim().toUpperCase(Locale.ROOT);
+        if ((required.equals("MALE") || required.equals("FEMALE")) && (gender == null || !gender.name().equals(required))) {
+            throw new ApiException("This category is not open to the gender you selected", "CATEGORY_GENDER_INELIGIBLE");
+        }
+        if (category.getMinAge() == null && category.getMaxAge() == null) {
+            return;
+        }
+        if (dateOfBirth == null) {
+            throw new ApiException("A date of birth is required for this category", "CATEGORY_AGE_INELIGIBLE");
+        }
+        java.time.LocalDate on = race.getRaceDate() != null ? race.getRaceDate() : java.time.LocalDate.now();
+        int age = java.time.Period.between(dateOfBirth, on).getYears();
+        if ((category.getMinAge() != null && age < category.getMinAge())
+            || (category.getMaxAge() != null && age > category.getMaxAge())) {
+            throw new ApiException("Your age on race day is outside this category's age range", "CATEGORY_AGE_INELIGIBLE");
+        }
+    }
+
+    private boolean isCategoryFull(UUID raceId, RaceCategory category) {
+        if (category == null || category.getMaxParticipants() == null) {
+            return false;
+        }
+        return participantRepository.countByRaceIdAndCategoryIdAndStatusIn(raceId, category.getId(), OCCUPYING_STATUSES)
+            >= category.getMaxParticipants();
+    }
+
+    private void notifyOrganizersAfterCommit(Race race, Participant participant, String templateCode, Object... args) {
+        java.util.Set<UUID> organizers = new java.util.LinkedHashSet<>();
+        if (race.getCreatedBy() != null) {
+            organizers.add(race.getCreatedBy().getId());
+        }
+        if (race.getAdmins() != null) {
+            race.getAdmins().forEach(admin -> organizers.add(admin.getId()));
+        }
+        Map<String, String> data = notificationData(participant, "REGISTRATION");
+        runAfterCommit(() -> organizers.forEach(organizerId -> {
+            try {
+                notificationService.notifyLocalized(organizerId, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
+                    templateCode, args, data);
+            } catch (RuntimeException ex) {
+                // Notification delivery must never break registration flows.
+            }
+        }));
+    }
+
+    private void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
+    }
+
+    private String participantName(Participant participant) {
+        return java.util.stream.Stream.of(participant.getFirstName(), participant.getLastName())
+            .filter(part -> part != null && !part.isBlank())
+            .collect(java.util.stream.Collectors.joining(" "));
     }
 
     @Override
@@ -620,6 +744,10 @@ public class ParticipantServiceImpl implements ParticipantService {
                 boolean alreadyOccupying = OCCUPYING_STATUSES.contains(participant.getStatus());
                 if (!alreadyOccupying && isRaceFull(race) && !Boolean.TRUE.equals(request.getForce())) {
                     throw new ConflictException("Race is full; waitlist or increase capacity before approving");
+                }
+                if (!alreadyOccupying && isCategoryFull(raceId, participant.getCategory()) && !Boolean.TRUE.equals(request.getForce())) {
+                    throw new ConflictException("Category is full; waitlist or increase its capacity before approving",
+                        "CATEGORY_FULL");
                 }
                 if (requiresPayment(participant, race)
                     && !Boolean.TRUE.equals(request.getForce())
@@ -858,8 +986,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     }
 
     private boolean requiresPayment(Participant participant, Race race) {
-        BigDecimal fee = com.racetracker.service.RegistrationFees.current(participant, race);
-        return fee != null && fee.signum() > 0;
+        return com.racetracker.service.RegistrationFees.requiresPayment(participant, race);
     }
 
     private Map<UUID, String> validateAnswers(UUID raceId, List<RegistrationAnswerRequest> requests) {
@@ -1127,6 +1254,9 @@ public class ParticipantServiceImpl implements ParticipantService {
         dto.setRegistrationDate(participant.getRegisteredAt());
         dto.setMediaPublicationConsent(participant.getMediaPublicationConsentAt() != null);
         dto.setPublicLocationSharing(participant.isPublicLocationSharing());
+        dto.setCanWithdraw(CANCELLABLE_STATUSES.contains(participant.getStatus())
+            && participant.getRace() != null
+            && !RACE_STATUSES_BLOCKING_CANCELLATION.contains(participant.getRace().getStatus()));
         dto.setShirtSize(participant.getShirtSize());
         dto.setPaymentStatus(participant.getPaymentStatus() != null ? participant.getPaymentStatus().name() : null);
         dto.setPaymentAmount(participant.getPaymentAmount());
@@ -1211,7 +1341,7 @@ public class ParticipantServiceImpl implements ParticipantService {
             case DNS -> "dns";
             case DNF -> "dnf";
             case FINISHED -> "finished";
-            case DISQUALIFIED -> "cancelled";
+            case DISQUALIFIED -> "disqualified";
             case REGISTERED -> "pending";
         };
     }

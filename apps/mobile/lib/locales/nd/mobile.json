@@ -264,7 +264,8 @@
       "cancelled": "Ukubhalisa kwakho kukhanseliwe",
       "dns": "Ubhalwe njengongaqalanga",
       "dnf": "Ubhalwe njengongaqedanga",
-      "finished": "Uqedile"
+      "finished": "Uqedile",
+      "disqualified": "Ukhutshiwe kulo mjaho"
     },
     "register": {
       "title": "Bhalisela {{name}}",
@@ -303,7 +304,32 @@
       "waitlisted": "Ungezelelwe ohlwini lokulinda.",
       "pendingReview": "Ukubhalisa kwakho kulinde ukuhlolwa.",
       "completed": "Ukubhalisa kuphelile.",
-      "completedPay": "Ukubhalisa kuphelile. Bhadala imali yokungena ngezansi ukuze uqinisekise indawo yakho."
+      "completedPay": "Ukubhalisa kuphelile. Bhadala imali yokungena ngezansi ukuze uqinisekise indawo yakho.",
+      "gender": "Ubulili",
+      "genderFemale": "Owesifazana",
+      "genderMale": "Owesilisa",
+      "genderOther": "Okunye",
+      "genderPreferNotToSay": "Angithandi ukutsho",
+      "dateOfBirth": "Ilanga lokuzalwa",
+      "dateOfBirthHint": "YYYY-MM-DD",
+      "genderRequired": "Khetha ubulili bakho. Busetshenziswa ezigabeni zobulili lemiphumela.",
+      "dateOfBirthInvalid": "Faka ilanga lakho lokuzalwa njenge-YYYY-MM-DD, isibonelo 1990-05-17.",
+      "notOpen": "Ukubhalisa kulo mjaho kakuvulwanga.",
+      "errors": {
+        "REGISTRATION_NOT_OPEN": "Ukubhalisa kulo mjaho kakuvulwanga.",
+        "CATEGORY_FULL": "Lesi isigaba sigcwele. Khetha esinye isigaba.",
+        "CATEGORY_AGE_INELIGIBLE": "Iminyaka yakho ngelanga lomjaho ingaphandle kweminyaka evunyelwe kulesi isigaba. Khetha esinye isigaba.",
+        "CATEGORY_GENDER_INELIGIBLE": "Lesi isigaba kasivulelwanga ubulili obukhethileyo. Khetha esinye isigaba."
+      }
+    },
+    "withdraw": {
+      "action": "Phuma kulo mjaho",
+      "title": "Uyaphuma kulo mjaho?",
+      "body": "Indawo yakho iyakhululwa inikwe umgijimi olandelayo ohlwini lokulinda. Ungaphinda ubhalise nxa ukubhalisa kusavulekile. Nxa ubhadalile, umhleli uzahlola ukubuyiselwa kwemali.",
+      "confirm": "Phuma",
+      "cancel": "Gcina ukubhalisa kwami",
+      "done": "Usuphumile emjahweni.",
+      "failed": "Asikwanelanga ukususa ukubhalisa kwakho. Ngicela uzame njalo."
     }
   },
   "operations": {
@@ -475,7 +501,8 @@
       "PAYMENT_WAIVED": "Umhleli ukuxolele imali yokungena.",
       "PAYMENT_NOT_AVAILABLE_FOR_STATUS": "Ukubhadala kuyavuleka nxa ukubhalisa kwakho sekuthole indawo eqinisekisiweyo.",
       "REFUND_STATE_CONFLICT": "Ukubhalisa lokhu kubuyiselwe imali. Thinta umhleli womjaho."
-    }
+    },
+    "coveredByPromo": "Ikhodi yakho yephromo ibhadala yonke imali yokubhalisa. Ukubhalisa kwakho khathesi kubhalwe njengokuxolelwe ukubhadala."
   },
   "tabs": {
     "home": "Ekhaya",
@@ -647,7 +674,8 @@
       "RECORD_UNDO_WINDOW_EXPIRED": "Sekudlule imizuzu edlula engu-5 kusukela kokubhaliweyo lokhu. Cela umphathi womjaho ukuthi akulungise.",
       "GUN_TIME_OFFICIAL_NOW_ONLY": "Izikhulu zingaqalisa iqembu ngesikhathi sakhathesi kuphela.",
       "OFFLINE_CAPTURE_BEFORE_GUN": "Okubhaliweyo lokhu kungaphambi kokuthi umgijimi aqale.",
-      "OFFLINE_CAPTURE_OUT_OF_RANGE": "Okubhaliweyo lokhu kudala kakhulu kumbe kusesikhathini esizayo."
+      "OFFLINE_CAPTURE_OUT_OF_RANGE": "Okubhaliweyo lokhu kudala kakhulu kumbe kusesikhathini esizayo.",
+      "CHECK_IN_PAYMENT_REQUIRED": "Umgijimi lo kabhadalanga imali yokubhalisa. Cela umhleli aqinisekise kumbe axolele ukubhadala ngaphambi kokumbhala ukuthi ufikile."
     }
   },
   "settings": {

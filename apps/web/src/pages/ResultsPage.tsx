@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { resultsApi } from '@/lib/api'
+import { ApiError, resultsApi } from '@/lib/api'
 import type { RaceResult, RankingEntry } from '@/types'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
@@ -114,8 +114,10 @@ export function ResultsPage() {
       toast.success(t('results:ui.resultsPublished'))
       setReleaseRefresh((value) => value + 1)
       await loadResults()
-    } catch {
-      toast.error(t('results:ui.failedToPublishResults'))
+    } catch (error) {
+      toast.error(error instanceof ApiError && error.code === 'RESULTS_UNPAID_FINISHERS'
+        ? t('results:ui.publishBlockedUnpaidFinishers')
+        : t('results:ui.failedToPublishResults'))
     }
   }
 

@@ -1,6 +1,11 @@
 # Registration-to-results flow audit (2026-11-23)
 
-Status: the six High findings (FL-01 to FL-06) are fixed on branch `fix/registration-results-high`; the rest are open.
+Status:
+- **Fixed:**
+  - High findings FL-01 to FL-06, merged in PR #66;
+  - Medium findings FL-07 to FL-12, plus FL-13, on branch `fix/registration-results-medium`.
+- **Partly fixed:** FL-20.
+- **Open:** the other Low findings.
 
 Scope: the athlete journey end to end. This covers race setup, public registration (web and mobile), payment, organizer review, bib allocation, check-in, timing, race completion, result calculation, publishing and certification, and athlete-facing results. Each stage was traced through the backend services, the shared contract and both clients. Every finding below was confirmed by reading the code at the referenced line; none has been reproduced against a running stack yet.
 
@@ -19,20 +24,20 @@ Code paths are relative to the repository root:
 | FL-04 | Payment | Fee rules disagree: category, team and early-bird fees are skipped or block approval | High | Fixed |
 | FL-05 | Registration | Races in `REGISTRATION_CLOSED` or `DRAFT` still accept registrations | High | Fixed |
 | FL-06 | Completion | Entrants who never started stay `REGISTERED`, `CONFIRMED` or `CHECKED_IN` after completion and publish as "in progress" | High | Fixed |
-| FL-07 | Check-in / timing | Unpaid entries can check in, be timed and receive official results and certificates | Medium | Open |
-| FL-08 | Registration | Category age, gender and capacity limits are stored but never enforced | Medium | Open |
-| FL-09 | Registration / results | Self-registration never captures gender or date of birth, so gender and age-group results don't work for app and web sign-ups | Medium | Open |
-| FL-10 | Athlete results | "My results" is always recalculated live and can differ from the published and certified results | Medium | Open |
-| FL-11 | Payment | A 100% promo code is a dead end: checkout refuses, and nothing marks the entry paid or waived | Medium | Open |
-| FL-12 | Registration | The cancellation model is incomplete: no UI, a status that means "did not start", no waitlist promotion, no refund path | Medium | Open |
-| FL-13 | Athlete UI | A disqualified athlete is told their registration was cancelled | Low | Open |
+| FL-07 | Check-in / timing | Unpaid entries can check in, be timed and receive official results and certificates | Medium | Fixed |
+| FL-08 | Registration | Category age, gender and capacity limits are stored but never enforced | Medium | Fixed |
+| FL-09 | Registration / results | Self-registration never captures gender or date of birth, so gender and age-group results don't work for app and web sign-ups | Medium | Fixed |
+| FL-10 | Athlete results | "My results" is always recalculated live and can differ from the published and certified results | Medium | Fixed |
+| FL-11 | Payment | A 100% promo code is a dead end: checkout refuses, and nothing marks the entry paid or waived | Medium | Fixed |
+| FL-12 | Registration | The cancellation model is incomplete: no UI, a status that means "did not start", no waitlist promotion, no refund path | Medium | Fixed |
+| FL-13 | Athlete UI | A disqualified athlete is told their registration was cancelled | Low | Fixed |
 | FL-14 | Notifications | "Results published" notifications go to rejected, waitlisted and cancelled registrations | Low | Open |
 | FL-15 | Bibs | Bibs are allocated at registration for waitlisted, pending and unpaid entries and never released | Low | Open |
 | FL-16 | Web results | The Publish button shows for staff who can't publish and isn't tied to race status; failures show a generic error | Low | Open |
 | FL-17 | Results | Tied finish times get different positions | Low | Open |
 | FL-18 | Payment | Failed or cancelled checkouts leave the entry `PENDING` | Low | Open |
 | FL-19 | Registration | Registration free-text fields have no size or content validation | Low | Open |
-| FL-20 | Waitlist | No automatic waitlist promotion or notice when a place frees | Low | Open |
+| FL-20 | Waitlist | No automatic waitlist promotion or notice when a place frees | Low | Partly fixed |
 | FL-21 | Check-in | The check-in QR exists only on printed bibs; athletes can't show it from the app | Info | Open |
 
 ## High
@@ -119,6 +124,12 @@ Three different rules decide whether a registration must be paid for:
 
 ### FL-07: Unpaid entries can race and receive official results
 
+**Fixed:**
+- **Check-in:** refuses entries that owe a fee that is neither paid nor waived (`CHECK_IN_PAYMENT_REQUIRED`). Staff resolve this by verifying or waiving the payment.
+- **Publishing:** refused while a finisher still owes the fee (`RESULTS_UNPAID_FINISHERS`).
+- **Imports:** imported entries now use the same fee rule.
+
+
 Check-in accepts `REGISTERED` and `CONFIRMED` regardless of payment, [ParticipantServiceImpl.java:222](../apps/backend/src/main/java/com/racetracker/service/impl/ParticipantServiceImpl.java#L222). Timing treats `REGISTERED` as timeable, [CheckpointProgression.java:21](../apps/backend/src/main/java/com/racetracker/service/CheckpointProgression.java#L21). Payment is enforced only by the approval step, which most races skip.
 
 - **Impact:** in a paid race without approval, an athlete who never paid can check in, run, finish, be ranked, and download a certificate.
@@ -126,12 +137,20 @@ Check-in accepts `REGISTERED` and `CONFIRMED` regardless of payment, [Participan
 
 ### FL-08: Category age, gender and capacity limits aren't enforced
 
+**Fixed:**
+- **Self-registration:** enforces category gender (`CATEGORY_GENDER_INELIGIBLE`), age on race day (`CATEGORY_AGE_INELIGIBLE`) and capacity. A full category waitlists the athlete, or refuses with `CATEGORY_FULL` when the race has no waitlist.
+- **Approval:** respects category capacity unless forced.
+
+
 `RaceCategory` stores `minAge`, `maxAge`, `gender` and `maxParticipants`. `resolveCategory`, [ParticipantServiceImpl.java:1282](../apps/backend/src/main/java/com/racetracker/service/impl/ParticipantServiceImpl.java#L1282), checks only that the category belongs to the race, and nothing else reads those fields.
 
 - **Impact:** a category can exceed its capacity, and athletes can enter categories they aren't eligible for.
 - **Fix:** enforce category capacity, counting with the same occupying statuses as race capacity (and waitlisting when full). Enforce age and gender once FL-09 captures the data.
 
 ### FL-09: Self-registration never captures gender or date of birth
+
+**Fixed:** registration requires gender and date of birth (web and mobile forms, with mobile validating YYYY-MM-DD) and stores them on the entry.
+
 
 `User` has no gender or date-of-birth fields. `RaceRegistrationRequest` has neither, and `registerForRace` copies only name, email and phone. Only organizer-created or imported participants have them.
 
@@ -144,6 +163,9 @@ Check-in accepts `REGISTERED` and `CONFIRMED` regardless of payment, [Participan
 
 ### FL-10: "My results" ignores the published results
 
+**Fixed:** "My results" (list and page) now reads only published result snapshots, the same source as History and the public results.
+
+
 `getMyResultsPage`, [ResultServiceImpl.java:186](../apps/backend/src/main/java/com/racetracker/service/impl/ResultServiceImpl.java#L186), always recalculates live: `resultPage(null, userId, publishedOnly=false)` never uses the snapshot. `getMyHistory`, however, reads the published rows.
 
 - **Impact:**
@@ -154,12 +176,22 @@ Check-in accepts `REGISTERED` and `CONFIRMED` regardless of payment, [Participan
 
 ### FL-11: A 100% promo code leaves the entry unpaid
 
+**Fixed:** when a promo code covers the whole fee, the entry is marked `WAIVED` with reference `PROMO:<code>`, the promo use is recorded, and checkout returns status `WAIVED` without calling the payment provider. Both apps show a confirmation.
+
+
 When a promo code covers the whole fee, checkout throws "no online payment is required", [PaymentServiceImpl.java:146](../apps/backend/src/main/java/com/racetracker/service/impl/PaymentServiceImpl.java#L146). Nothing then marks the entry `WAIVED` or records the promo use.
 
 - **Impact:** the athlete stays `UNPAID`. Approval, if the race requires it, stays blocked until an organizer verifies the payment by hand.
 - **Fix:** when the payable amount is 0, mark the entry `WAIVED` with the promo code as the reference, record the promo use, and return success.
 
 ### FL-12: The cancellation model is incomplete
+
+**Fixed:**
+- **Withdraw action:** athletes can withdraw from the mobile race page and from the web "Your race entries" card, after confirming. The server decides who can withdraw (`canWithdraw`).
+- **Waitlist:** withdrawing an entry that held a place offers it to the next waitlisted athlete whose category has room.
+- **Refunds:** withdrawing a paid entry notifies the race organizers to review a refund.
+- **Registering again:** a withdrawn athlete can register again and reuses the same entry.
+
 
 The API client defines `cancelRegistration`, but neither app calls it. The backend endpoint:
 - sets `DNS` ("did not start"), not a cancelled or withdrawn state;
@@ -178,6 +210,9 @@ The API client defines `cancelRegistration`, but neither app calls it. The backe
 ## Low
 
 ### FL-13: Disqualification shown to the athlete as "cancelled"
+
+**Fixed:** `DISQUALIFIED` now maps to `disqualified`, with labels in both apps.
+
 
 `mapRegistrationStatus` maps `DISQUALIFIED` to `cancelled`, [ParticipantServiceImpl.java:1184](../apps/backend/src/main/java/com/racetracker/service/impl/ParticipantServiceImpl.java#L1184). Mobile then says "Your registration was cancelled". `REGISTERED` maps to `pending`, so a paid entry in a race without approval shows "Pending" in My races until check-in.
 
@@ -220,6 +255,9 @@ Checkout sets the participant to `PENDING`, [PaymentServiceImpl.java:177](../app
 **Fix:** add Bean Validation limits, and require at least the emergency contact's name and phone.
 
 ### FL-20: No waitlist promotion
+
+**Partly fixed:** withdrawals now promote the next eligible waitlisted athlete (FL-12). Rejections and capacity increases still don't.
+
 
 When a place frees, through rejection, cancellation or a capacity increase, nothing offers it to the waitlist or tells the next athlete. Organizers have to approve waitlisted entries by hand.
 

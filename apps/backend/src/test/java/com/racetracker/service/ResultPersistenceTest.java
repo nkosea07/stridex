@@ -154,6 +154,61 @@ class ResultPersistenceTest {
     }
 
     @Test
+    void publishIsBlockedWhileAFinisherOwesTheEntryFee() {
+        Race race = completedRace();
+        race.setRegistrationFee(new java.math.BigDecimal("20.00"));
+        when(raceRepository.findByIdForUpdate(raceId)).thenReturn(Optional.of(race));
+        Participant unpaid = Participant.builder().id(participantId).race(race)
+            .status(Participant.ParticipantStatus.FINISHED).paymentStatus(Participant.PaymentStatus.UNPAID).build();
+        when(participantRepository.findByRaceIdAndStatusWithUnsettledPayment(eq(raceId),
+            eq(Participant.ParticipantStatus.FINISHED), any())).thenReturn(List.of(unpaid));
+
+        assertThatThrownBy(() -> resultService.publish(raceId))
+            .isInstanceOf(ConflictException.class)
+            .extracting("code").isEqualTo("RESULTS_UNPAID_FINISHERS");
+        verify(raceResultRepository, never()).deleteByRaceId(any());
+        assertThat(race.getResultsPublishedAt()).isNull();
+    }
+
+    @Test
+    void athleteResultsComeOnlyFromPublishedSnapshots() {
+        UUID userId = UUID.randomUUID();
+        com.racetracker.model.User athlete = new com.racetracker.model.User();
+        athlete.setId(userId);
+        athlete.setEmail("athlete@example.test");
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("athlete@example.test", null, List.of()));
+        try {
+            when(userRepository.findByEmailIgnoreCase("athlete@example.test")).thenReturn(Optional.of(athlete));
+            Race race = completedRace();
+            race.setResultsPublishedAt(OffsetDateTime.now());
+            Participant participant = Participant.builder().id(participantId).race(race)
+                .status(Participant.ParticipantStatus.FINISHED).build();
+            RaceResult persisted = RaceResult.builder().participant(participant).race(race)
+                .chipTime(Duration.ofMinutes(95)).overallPosition(7).isOfficial(true).isDisqualified(false)
+                .penaltySeconds(0).build();
+            when(raceResultRepository.findPageByUserId(eq(userId), any(Pageable.class))).thenReturn(List.of(persisted));
+            when(raceResultRepository.countByUserId(userId)).thenReturn(1L);
+            when(raceResultRepository.findAllByUserId(userId)).thenReturn(List.of(persisted));
+            when(checkpointRecordRepository.findByParticipantIdInOrderByRecordedAtAsc(List.of(participantId)))
+                .thenReturn(List.of());
+
+            RaceResultPageDto page = resultService.getMyResultsPage(0, 20);
+            List<com.racetracker.dto.result.RaceResultDto> all = resultService.getMyResults();
+
+            assertThat(page.items()).singleElement().satisfies(result -> {
+                assertThat(result.getOverallPosition()).isEqualTo(7);
+                assertThat(result.getTotalTime()).isEqualTo("01:35:00");
+            });
+            assertThat(page.totalElements()).isEqualTo(1L);
+            assertThat(all).hasSize(1);
+            verify(participantRepository, never()).findResultRows(any(), any(), anyBoolean(), any(), any());
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
     void servedResultsComeFromPersistedRowsOncePublished() {
         Race race = completedRace();
         race.setResultsPublishedAt(OffsetDateTime.now());
