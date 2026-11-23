@@ -99,6 +99,16 @@ public class ProductionConfigurationValidator implements ApplicationRunner {
         if (pushEnabled && (pushServiceAccountJson == null || pushServiceAccountJson.isBlank())) {
             throw new IllegalStateException("Production push notifications require FCM_SERVICE_ACCOUNT_JSON");
         }
+        if (pushEnabled) {
+            RaceTrackerProperties.Apns apns = raceTrackerProperties.getPush().getApns();
+            if (apns == null || !apns.isConfigured()) {
+                throw new IllegalStateException(
+                    "Production push notifications require APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY and APNS_BUNDLE_ID for iOS devices");
+            }
+            if (apns.isSandbox()) {
+                throw new IllegalStateException("Production push notifications must not use the APNs sandbox (APNS_SANDBOX=false)");
+            }
+        }
         RaceTrackerProperties.Email email = raceTrackerProperties.getEmail();
         if (email != null && email.isEnabled()
             && (isBlank(mailHost) || isPlaceholder(mailHost) || isBlank(email.getFromAddress()) || isPlaceholder(email.getFromAddress()))) {

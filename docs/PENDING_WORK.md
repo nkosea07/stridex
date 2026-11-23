@@ -156,7 +156,9 @@ release:
   provider for `EXPO_PUBLIC_MAP_TILE_URL` (mobile defaults to Leaflet on OpenStreetMap's public
   tiles) or Google Maps keys if `EXPO_PUBLIC_MAP_PROVIDER` is `native`/`google`; `APP_LINKS_IOS_APP_IDS`, `APP_LINKS_ANDROID_PACKAGE`,
   `APP_LINKS_ANDROID_SHA256_FINGERPRINTS` (`.env.pilot`) and `EXPO_PUBLIC_WEB_URL` (app build)
-  for in-app email links; FCM credentials for push; `MOBILE_IOS_STORE_URL` /
+  for in-app email links; push credentials (Firebase `google-services.json` as the EAS
+  `GOOGLE_SERVICES_JSON` file variable, `FCM_SERVICE_ACCOUNT_JSON`, and an APNs auth key as
+  `APNS_KEY_ID` / `APNS_TEAM_ID` / `APNS_PRIVATE_KEY`); `MOBILE_IOS_STORE_URL` /
   `MOBILE_ANDROID_STORE_URL` for the update screen.
 - **Translation review — Pending.** Native-speaker review of all non-English mobile strings.
 - **Store work — Pending.** Listings, screenshots, Apple privacy labels and Google data safety

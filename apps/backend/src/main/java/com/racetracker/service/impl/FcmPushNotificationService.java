@@ -12,6 +12,7 @@ import com.google.firebase.messaging.SendResponse;
 import com.racetracker.config.RaceTrackerProperties;
 import com.racetracker.repository.PushDeviceRepository;
 import com.racetracker.service.PushNotificationService;
+import com.racetracker.service.PushPlatform;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -67,6 +68,11 @@ public class FcmPushNotificationService implements PushNotificationService {
     @Override
     public boolean isAvailable() {
         return messaging != null;
+    }
+
+    @Override
+    public boolean supports(String platform) {
+        return !PushPlatform.isIos(platform);
     }
 
     @Override

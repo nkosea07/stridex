@@ -128,6 +128,25 @@ public class RaceTrackerProperties {
         private boolean enabled = false;
         private String serviceAccountJson;
         private String projectId;
+        private Apns apns = new Apns();
+    }
+
+    @Getter
+    @Setter
+    public static class Apns {
+        private String keyId;
+        private String teamId;
+        private String privateKey;
+        private String bundleId = "com.racetracker.app";
+        private boolean sandbox = false;
+
+        public boolean isConfigured() {
+            return hasText(keyId) && hasText(teamId) && hasText(privateKey) && hasText(bundleId);
+        }
+
+        private static boolean hasText(String value) {
+            return value != null && !value.isBlank();
+        }
     }
 
     @Getter

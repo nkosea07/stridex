@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.mock;
 
@@ -26,6 +27,15 @@ class FcmPushNotificationServiceTest {
 
         assertThatCode(() -> service.sendToTokens(List.of("token-a", "token-b"), "Title", "Body", Map.of("k", "v")))
             .doesNotThrowAnyException();
+    }
+
+    @Test
+    void deliversToEveryPlatformExceptIos() {
+        FcmPushNotificationService service = newService(new RaceTrackerProperties());
+
+        assertThat(service.supports("android")).isTrue();
+        assertThat(service.supports(null)).isTrue();
+        assertThat(service.supports(" iOS ")).isFalse();
     }
 
     @Test

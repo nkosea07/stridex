@@ -11,6 +11,11 @@ public interface PushNotificationService {
     boolean isAvailable();
 
     /**
+     * Whether this provider delivers to devices registered with the given client platform.
+     */
+    boolean supports(String platform);
+
+    /**
      * Sends a push notification to the given device tokens and returns how many the provider
      * accepted. Returns 0 without throwing when push is disabled or misconfigured; provider
      * transport errors propagate so callers can record and retry them.

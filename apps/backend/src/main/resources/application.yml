@@ -221,6 +221,12 @@ racetracker:
     enabled: ${PUSH_ENABLED:false}
     service-account-json: ${FCM_SERVICE_ACCOUNT_JSON:}
     project-id: ${FCM_PROJECT_ID:}
+    apns:
+      key-id: ${APNS_KEY_ID:}
+      team-id: ${APNS_TEAM_ID:}
+      private-key: ${APNS_PRIVATE_KEY:}
+      bundle-id: ${APNS_BUNDLE_ID:com.racetracker.app}
+      sandbox: ${APNS_SANDBOX:false}
   notifications:
     sms-enabled: ${SMS_ENABLED:false}
     whatsapp-enabled: ${WHATSAPP_ENABLED:false}
