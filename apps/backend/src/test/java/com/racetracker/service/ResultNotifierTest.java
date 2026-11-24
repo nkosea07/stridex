@@ -47,4 +47,24 @@ class ResultNotifierTest {
             eq("RESULTS_OFFICIAL"), any(), any());
         verify(notifications, never()).notifyLocalized(eq(null), any(), any(), any(), any());
     }
+
+    @Test
+    void registrationsThatNeverHadAPlaceAreNotToldAboutResults() {
+        User finisher = User.builder().id(UUID.randomUUID()).build();
+        when(races.findById(raceId)).thenReturn(Optional.of(Race.builder().id(raceId).name("City 10K").build()));
+        java.util.List<Participant> entries = new java.util.ArrayList<>();
+        entries.add(Participant.builder().id(UUID.randomUUID()).user(finisher).status(Participant.ParticipantStatus.FINISHED).build());
+        for (Participant.ParticipantStatus status : java.util.List.of(Participant.ParticipantStatus.REJECTED,
+            Participant.ParticipantStatus.WAITLISTED, Participant.ParticipantStatus.PENDING_REVIEW,
+            Participant.ParticipantStatus.WITHDRAWN)) {
+            entries.add(Participant.builder().id(UUID.randomUUID()).user(User.builder().id(UUID.randomUUID()).build())
+                .status(status).build());
+        }
+        when(participants.findByRaceId(raceId)).thenReturn(entries);
+
+        notifier.resultsPublished(raceId, 1, false);
+
+        verify(notifications, times(1)).notifyLocalized(any(), any(), any(), any(), any());
+        verify(notifications).notifyLocalized(eq(finisher.getId()), any(), eq("RESULTS_PROVISIONAL"), any(), any());
+    }
 }

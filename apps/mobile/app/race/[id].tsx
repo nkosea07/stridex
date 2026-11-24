@@ -103,6 +103,8 @@ function RaceDetailScreenContent() {
   const [gender, setGender] = useState<RegistrationGender | ''>('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
+  const [checkInQrOpen, setCheckInQrOpen] = useState(false);
+  const [checkInQrImage, setCheckInQrImage] = useState<string | null>(null);
   const [myRegistration, setMyRegistration] = useState<Registration | null>(null);
   const [savingMediaConsent, setSavingMediaConsent] = useState(false);
   const [savingLocationSharing, setSavingLocationSharing] = useState(false);
@@ -427,6 +429,19 @@ function RaceDetailScreenContent() {
     }
   };
 
+  const openCheckInQr = async () => {
+    if (!myRegistration) return;
+    setCheckInQrImage(null);
+    setCheckInQrOpen(true);
+    try {
+      const qr = await api.getCheckInQr(myRegistration.id);
+      setCheckInQrImage(`data:image/png;base64,${qr.imagePngBase64}`);
+    } catch {
+      setCheckInQrOpen(false);
+      Alert.alert(t('mobile:race.checkInQr.title'), t('mobile:race.checkInQr.failed'));
+    }
+  };
+
   const withdrawFromRace = () => {
     if (!myRegistration || withdrawing) return;
     Alert.alert(t('mobile:race.withdraw.title'), t('mobile:race.withdraw.body'), [
@@ -721,6 +736,12 @@ function RaceDetailScreenContent() {
             )}
           </View>
         )}
+        {canRegister && myRegistration?.checkInQrAvailable && (
+          <TouchableOpacity style={styles.checkInQrButton} onPress={() => void openCheckInQr()}
+            accessibilityRole="button" accessibilityLabel={t('mobile:race.checkInQr.action')}>
+            <Text style={styles.checkInQrButtonText}>{t('mobile:race.checkInQr.action')}</Text>
+          </TouchableOpacity>
+        )}
         {canRegister && myRegistration?.canWithdraw && (
           <TouchableOpacity style={styles.withdrawButton} onPress={withdrawFromRace} disabled={withdrawing}
             accessibilityRole="button" accessibilityState={{ busy: withdrawing, disabled: withdrawing }}>
@@ -767,6 +788,26 @@ function RaceDetailScreenContent() {
           </Text>
         )}
       </View>
+
+      <Modal visible={checkInQrOpen} animationType="slide" transparent onRequestClose={() => setCheckInQrOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, styles.checkInQrCard]}>
+            <Text style={styles.modalTitle}>{t('mobile:race.checkInQr.title')}</Text>
+            <Text style={styles.registrationNotice}>{t('mobile:race.checkInQr.body')}</Text>
+            <View style={styles.checkInQrFrame} accessibilityLiveRegion="polite">
+              {checkInQrImage ? (
+                <Image source={{ uri: checkInQrImage }} style={styles.checkInQrImage}
+                  accessible accessibilityLabel={t('mobile:race.checkInQr.alt')} />
+              ) : (
+                <ActivityIndicator color="#0F766E" />
+              )}
+            </View>
+            <TouchableOpacity style={styles.registerButton} onPress={() => setCheckInQrOpen(false)} accessibilityRole="button">
+              <Text style={styles.registerButtonText}>{t('mobile:race.checkInQr.close')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={isRegisterOpen} animationType="slide" transparent onRequestClose={() => setIsRegisterOpen(false)}>
         <View style={styles.modalOverlay}>
@@ -1202,6 +1243,37 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
+  },
+  checkInQrButton: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#0F766E',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  checkInQrButtonText: {
+    color: '#0F766E',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  checkInQrCard: {
+    alignItems: 'stretch',
+    gap: 12,
+  },
+  checkInQrFrame: {
+    alignSelf: 'center',
+    width: 264,
+    height: 264,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+  },
+  checkInQrImage: {
+    width: 256,
+    height: 256,
   },
   withdrawButton: {
     borderWidth: 1,

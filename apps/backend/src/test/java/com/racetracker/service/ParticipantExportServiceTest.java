@@ -46,7 +46,8 @@ class ParticipantExportServiceTest {
         mock(RegistrationEmailService.class), mock(NotificationService.class), mock(ParticipantImportProcessor.class),
         mock(CapabilityAuthorizationService.class), guard, mock(ParticipantIdentityService.class),
         mock(com.racetracker.service.impl.ImportSourceStore.class),
-        mock(com.racetracker.service.ParticipantChangeControl.class));
+        mock(com.racetracker.service.ParticipantChangeControl.class),
+        mock(com.racetracker.service.impl.RegistrationCapacity.class));
 
     @Test
     void csvKeepsV1HeaderAndEscaping() {

@@ -108,6 +108,7 @@
     "raceMediaAttestNonPerson": "/races/:raceId/media/:mediaId/attest-non-person",
     "myRegistrationMediaConsent": "/participants/my-registrations/:participantId/media-consent",
     "myRegistrationLocationSharing": "/participants/my-registrations/:participantId/location-sharing",
+    "myRegistrationCheckInQr": "/participants/my-registrations/:participantId/check-in-qr",
     "raceMediaReject": "/races/:raceId/media/:mediaId/reject",
     "raceMediaDelete": "/races/:raceId/media/:mediaId",
     "publicRaceMedia": "/public/races/:raceId/media",

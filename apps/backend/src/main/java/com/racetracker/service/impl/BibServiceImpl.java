@@ -147,14 +147,14 @@ public class BibServiceImpl implements BibService {
             .setMarginBottom(20));
 
         // QR Code (Athlete ID or Profile Link)
-        byte[] qrCode = generateQrCode("AMS-PARTICIPANT-" + participant.getId(), 100);
+        byte[] qrCode = generateQrCode(com.racetracker.service.CheckInQr.content(participant.getId()), 100);
         ImageData imageData = ImageDataFactory.create(qrCode);
         Image image = new Image(imageData);
         image.setHorizontalAlignment(HorizontalAlignment.CENTER);
         document.add(image);
 
         byte[] barcode = generateBarcode(participant.getAthleteCode() == null
-            ? "AMS-PARTICIPANT-" + participant.getId() : participant.getAthleteCode(), 520, 90);
+            ? com.racetracker.service.CheckInQr.content(participant.getId()) : participant.getAthleteCode(), 520, 90);
         Image barcodeImage = new Image(ImageDataFactory.create(barcode));
         barcodeImage.setHorizontalAlignment(HorizontalAlignment.CENTER);
         barcodeImage.setMarginTop(8);

@@ -2,8 +2,10 @@ package com.racetracker.dto.participant;
 
 import com.racetracker.model.Participant;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Past;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -18,6 +20,7 @@ public class RaceRegistrationRequest {
     private UUID categoryId;
 
     @NotNull
+    @Valid
     private EmergencyContact emergencyContact;
 
     @NotNull
@@ -31,18 +34,24 @@ public class RaceRegistrationRequest {
 
     private Boolean mediaPublicationConsent;
 
+    @Size(max = 5)
     private String bloodType;
 
+    @Size(max = 2000)
     private String medicalConditions;
 
+    @Size(max = 2000)
     private String allergies;
 
+    @Size(max = 20)
     private String shirtSize;
 
     private UUID teamId;
 
+    @Size(max = 200)
     private String clubName;
 
+    @Size(max = 200)
     private String teamName;
 
     private List<@Valid RegistrationAnswerRequest> answers;
@@ -50,8 +59,15 @@ public class RaceRegistrationRequest {
     @Getter
     @Setter
     public static class EmergencyContact {
+        @NotBlank
+        @Size(max = 200)
         private String name;
+
+        @NotBlank
+        @Size(max = 20)
         private String phone;
+
+        @Size(max = 50)
         private String relationship;
     }
 }

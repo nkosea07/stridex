@@ -20,10 +20,13 @@ public class RaceCategoryServiceImpl implements RaceCategoryService {
 
     private final RaceRepository raceRepository;
     private final RaceCategoryRepository categoryRepository;
+    private final RegistrationCapacity registrationCapacity;
 
-    public RaceCategoryServiceImpl(RaceRepository raceRepository, RaceCategoryRepository categoryRepository) {
+    public RaceCategoryServiceImpl(RaceRepository raceRepository, RaceCategoryRepository categoryRepository,
+                                   RegistrationCapacity registrationCapacity) {
         this.raceRepository = raceRepository;
         this.categoryRepository = categoryRepository;
+        this.registrationCapacity = registrationCapacity;
     }
 
     @Override
@@ -63,9 +66,14 @@ public class RaceCategoryServiceImpl implements RaceCategoryService {
         category.setMaxAge(request.getMaxAge());
         category.setGender(normalizeGender(request.getGender()));
         category.setBibPrefix(request.getBibPrefix());
+        Integer previousCapacity = category.getMaxParticipants();
         category.setMaxParticipants(request.getMaxParticipants());
         category.setRegistrationFee(request.getRegistrationFee());
-        return toDto(categoryRepository.save(category));
+        RaceCategory saved = categoryRepository.save(category);
+        if (RaceServiceImpl.capacityGrew(previousCapacity, saved.getMaxParticipants())) {
+            registrationCapacity.fillFreedPlaces(raceId);
+        }
+        return toDto(saved);
     }
 
     @Override

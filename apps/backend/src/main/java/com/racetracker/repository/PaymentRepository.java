@@ -19,6 +19,8 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 
     List<Payment> findByParticipantIdAndStatusOrderByCreatedAtDesc(UUID participantId, Payment.PaymentStatus status);
 
+    boolean existsByParticipantIdAndStatus(UUID participantId, Payment.PaymentStatus status);
+
     @Query(value = """
         SELECT DISTINCT p.participant_id FROM payments p
         WHERE p.race_id = :raceId AND p.status = 'COMPLETED'

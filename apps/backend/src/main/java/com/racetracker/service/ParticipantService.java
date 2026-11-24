@@ -34,6 +34,8 @@ public interface ParticipantService {
     List<RegistrationDto> getMyRegistrations();
     void cancelRegistration(UUID registrationId);
 
+    com.racetracker.dto.participant.CheckInQrDto getMyCheckInQr(UUID participantId);
+
     ParticipantDto reviewRegistration(UUID raceId, UUID participantId, RegistrationApprovalRequest request, String actorEmail);
     ParticipantDto verifyPayment(UUID raceId, UUID participantId, PaymentVerifyRequest request, String actorEmail);
 

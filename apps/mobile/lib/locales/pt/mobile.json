@@ -330,6 +330,14 @@
       "cancel": "Manter a inscrição",
       "done": "Desistiu da corrida.",
       "failed": "Não foi possível cancelar a sua inscrição. Tente novamente."
+    },
+    "checkInQr": {
+      "action": "Mostrar QR de check-in",
+      "title": "O seu código QR de check-in",
+      "body": "Mostre este código no balcão de check-in no dia da corrida. A equipa digitaliza-o para fazer o seu check-in.",
+      "alt": "Código QR de check-in",
+      "failed": "Não foi possível carregar o seu código QR de check-in. Tente novamente.",
+      "close": "Fechar"
     }
   },
   "operations": {

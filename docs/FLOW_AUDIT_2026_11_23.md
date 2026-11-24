@@ -1,11 +1,9 @@
 # Registration-to-results flow audit (2026-11-23)
 
-Status:
-- **Fixed:**
-  - High findings FL-01 to FL-06, merged in PR #66;
-  - Medium findings FL-07 to FL-12, plus FL-13, on branch `fix/registration-results-medium`.
-- **Partly fixed:** FL-20.
-- **Open:** the other Low findings.
+Status: all 21 findings are fixed.
+- **High findings, FL-01 to FL-06:** merged in PR #66.
+- **Medium findings, FL-07 to FL-12, and FL-13:** merged in PR #67.
+- **Low and Info findings, FL-14 to FL-21:** on branch `fix/registration-results-low`.
 
 Scope: the athlete journey end to end. This covers race setup, public registration (web and mobile), payment, organizer review, bib allocation, check-in, timing, race completion, result calculation, publishing and certification, and athlete-facing results. Each stage was traced through the backend services, the shared contract and both clients. Every finding below was confirmed by reading the code at the referenced line; none has been reproduced against a running stack yet.
 
@@ -31,14 +29,14 @@ Code paths are relative to the repository root:
 | FL-11 | Payment | A 100% promo code is a dead end: checkout refuses, and nothing marks the entry paid or waived | Medium | Fixed |
 | FL-12 | Registration | The cancellation model is incomplete: no UI, a status that means "did not start", no waitlist promotion, no refund path | Medium | Fixed |
 | FL-13 | Athlete UI | A disqualified athlete is told their registration was cancelled | Low | Fixed |
-| FL-14 | Notifications | "Results published" notifications go to rejected, waitlisted and cancelled registrations | Low | Open |
-| FL-15 | Bibs | Bibs are allocated at registration for waitlisted, pending and unpaid entries and never released | Low | Open |
-| FL-16 | Web results | The Publish button shows for staff who can't publish and isn't tied to race status; failures show a generic error | Low | Open |
-| FL-17 | Results | Tied finish times get different positions | Low | Open |
-| FL-18 | Payment | Failed or cancelled checkouts leave the entry `PENDING` | Low | Open |
-| FL-19 | Registration | Registration free-text fields have no size or content validation | Low | Open |
-| FL-20 | Waitlist | No automatic waitlist promotion or notice when a place frees | Low | Partly fixed |
-| FL-21 | Check-in | The check-in QR exists only on printed bibs; athletes can't show it from the app | Info | Open |
+| FL-14 | Notifications | "Results published" notifications go to rejected, waitlisted and cancelled registrations | Low | Fixed |
+| FL-15 | Bibs | Bibs are allocated at registration for waitlisted, pending and unpaid entries and never released | Low | Fixed |
+| FL-16 | Web results | The Publish button shows for staff who can't publish and isn't tied to race status; failures show a generic error | Low | Fixed |
+| FL-17 | Results | Tied finish times get different positions | Low | Fixed |
+| FL-18 | Payment | Failed or cancelled checkouts leave the entry `PENDING` | Low | Fixed |
+| FL-19 | Registration | Registration free-text fields have no size or content validation | Low | Fixed |
+| FL-20 | Waitlist | No automatic waitlist promotion or notice when a place frees | Low | Fixed |
+| FL-21 | Check-in | The check-in QR exists only on printed bibs; athletes can't show it from the app | Info | Fixed |
 
 ## High
 
@@ -220,11 +218,20 @@ The API client defines `cancelRegistration`, but neither app calls it. The backe
 
 ### FL-14: Results notifications go to non-entrants
 
+**Fixed:** results notifications skip pending-review, waitlisted, rejected and withdrawn registrations.
+
+
 `ResultNotifier.resultsPublished`, [ResultNotifier.java:40](../apps/backend/src/main/java/com/racetracker/service/ResultNotifier.java#L40), notifies every participant who has an account. That includes rejected, waitlisted and cancelled registrations.
 
 **Fix:** notify entrants only, using the FL-01 status set.
 
 ### FL-15: Bibs allocated before a place is confirmed
+
+**Fixed:**
+- **When bibs are allocated:** only to entries that hold a place, including on approval and waitlist promotion.
+- **When they are released:** on rejection, waitlisting and withdrawal.
+- **Category prefixes:** a category prefix that differs from the race prefix has its own sequence, continuing from the highest bib already issued with that prefix.
+
 
 `ParticipantIdentityService.assign`, [ParticipantIdentityService.java:22](../apps/backend/src/main/java/com/racetracker/service/impl/ParticipantIdentityService.java#L22), allocates a bib at registration for every status. Rejected and cancelled entries keep theirs. Category prefixes share one race-wide sequence.
 
@@ -232,11 +239,17 @@ The API client defines `cancelRegistration`, but neither app calls it. The backe
 
 ### FL-16: The Publish button ignores permissions and race state
 
+**Fixed:** the Publish button shows only to race managers once the race is `COMPLETED`, and a failure caused by unpaid finishers shows its own message.
+
+
 The web Results page shows Publish to everyone who can open it, [ResultsPage.tsx:228](../apps/web/src/pages/ResultsPage.tsx#L228). That includes volunteers and officials, who get a 403. The button also shows before the race is `COMPLETED`. Every failure shows a generic "failed to publish" message, hiding the backend reason, for example "Race must be completed before results can be published".
 
 **Fix:** show the button only for managers on completed races, and display the API's error.
 
 ### FL-17: Tied times get different positions
+
+**Fixed:** positions use standard competition ranking (`rank()`) over elapsed time truncated to whole seconds, so equal times share a position and the next runner skips a place. Finishers with no known start rank after the timed finishers, ordered by finish time. Covered by `ResultRankingPostgresTest`.
+
 
 The ranking uses `row_number()`, so finishers with identical times get different positions, ordered by participant ID.
 
@@ -244,11 +257,17 @@ The ranking uses `row_number()`, so finishers with identical times get different
 
 ### FL-18: A failed checkout leaves the entry `PENDING`
 
+**Fixed:** a failed or cancelled checkout returns the entry to `UNPAID`, unless another checkout is still open.
+
+
 Checkout sets the participant to `PENDING`, [PaymentServiceImpl.java:177](../apps/backend/src/main/java/com/racetracker/service/impl/PaymentServiceImpl.java#L177). `FAILED` and `CANCELLED` callbacks update only the payment record, so organizers see "pending" for entries whose payment failed. The athlete can still retry.
 
 **Fix:** go back to `UNPAID` when the only open payment fails or is cancelled.
 
 ### FL-19: Registration fields aren't validated
+
+**Fixed:** the emergency contact's name and phone are required, and every free-text field has a size limit matching its database column, so overlong values return a validation error instead of a server error.
+
 
 `RaceRegistrationRequest` requires `emergencyContact`, but not its name or phone. Medical, club, team and shirt fields have no `@Size` limits.
 
@@ -256,8 +275,7 @@ Checkout sets the participant to `PENDING`, [PaymentServiceImpl.java:177](../app
 
 ### FL-20: No waitlist promotion
 
-**Partly fixed:** withdrawals now promote the next eligible waitlisted athlete (FL-12). Rejections and capacity increases still don't.
-
+**Fixed:** a shared `RegistrationCapacity` component offers every freed place to the waitlist, in waitlist order and skipping athletes whose category is still full. It runs after a withdrawal, after a rejection or waitlisting of an entry that held a place, and when an organizer raises the race or category limit. It stops once the race has started. Promoted athletes are notified and get a bib when they hold a place.
 
 When a place frees, through rejection, cancellation or a capacity increase, nothing offers it to the waitlist or tells the next athlete. Organizers have to approve waitlisted entries by hand.
 
@@ -266,6 +284,12 @@ When a place frees, through rejection, cancellation or a capacity increase, noth
 ## Info
 
 ### FL-21: The check-in QR exists only on printed bibs
+
+**Fixed:**
+- **New endpoint:** `GET /participants/my-registrations/:participantId/check-in-qr` (owner only) returns the code for an entry that can be checked in.
+- **In the apps:** both show it, on the mobile race page and in the web "Your race entries" card.
+- **In email:** the registration-received and confirmed emails embed it.
+
 
 The `AMS-PARTICIPANT-<id>` QR that QR check-in expects is printed only on bib PDFs (`BibServiceImpl`). Athletes can't show it in the app, and bib pickup usually happens at check-in. Staff can still search by name or bib.
 

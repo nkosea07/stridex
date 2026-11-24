@@ -22,6 +22,7 @@ public class RegistrationDto {
     private boolean mediaPublicationConsent;
     private boolean publicLocationSharing;
     private boolean canWithdraw;
+    private boolean checkInQrAvailable;
     private EmergencyContact emergencyContact;
     private String shirtSize;
     private String paymentStatus;

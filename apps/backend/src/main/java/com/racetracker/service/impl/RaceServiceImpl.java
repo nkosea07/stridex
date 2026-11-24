@@ -46,6 +46,7 @@ public class RaceServiceImpl implements RaceService {
     private final RaceCompletionService raceCompletionService;
     private final RaceAccessGuard raceAccessGuard;
     private final AuditEventService auditEventService;
+    private final RegistrationCapacity registrationCapacity;
 
     public RaceServiceImpl(
         RaceRepository raceRepository,
@@ -54,7 +55,8 @@ public class RaceServiceImpl implements RaceService {
         UserRepository userRepository,
         RaceCompletionService raceCompletionService,
         RaceAccessGuard raceAccessGuard,
-        AuditEventService auditEventService
+        AuditEventService auditEventService,
+        RegistrationCapacity registrationCapacity
     ) {
         this.raceRepository = raceRepository;
         this.raceMapper = raceMapper;
@@ -63,6 +65,7 @@ public class RaceServiceImpl implements RaceService {
         this.raceCompletionService = raceCompletionService;
         this.raceAccessGuard = raceAccessGuard;
         this.auditEventService = auditEventService;
+        this.registrationCapacity = registrationCapacity;
     }
 
     @Override
@@ -226,6 +229,7 @@ public class RaceServiceImpl implements RaceService {
         Race race = raceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Race not found"));
         raceAccessGuard.assertCanManage(race);
+        Integer previousCapacity = race.getMaxParticipants();
 
         applyCommonFields(request, race);
 
@@ -235,6 +239,9 @@ public class RaceServiceImpl implements RaceService {
         }
 
         Race saved = raceRepository.save(race);
+        if (capacityGrew(previousCapacity, saved.getMaxParticipants())) {
+            registrationCapacity.fillFreedPlaces(saved.getId());
+        }
         return raceMapper.toDto(saved);
     }
 
@@ -314,6 +321,10 @@ public class RaceServiceImpl implements RaceService {
             "RACE_ADMIN_ASSIGNED", actorEmail, "RACE", raceId.toString(), "SUCCESS",
             java.util.Map.of("assignedUserId", userId.toString())
         );
+    }
+
+    static boolean capacityGrew(Integer previous, Integer current) {
+        return previous != null && (current == null || current > previous);
     }
 
     private void assertTransitionAllowed(Race.RaceStatus from, Race.RaceStatus to) {

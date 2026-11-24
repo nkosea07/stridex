@@ -20,6 +20,10 @@
             <p th:text="#{email.common.greeting(${firstName})}">Hello</p>
             <p th:text="#{email.registrationApproved.intro(${raceName})}">Approved</p>
             <p th:if="${bibNumber}" th:text="#{email.registrationApproved.bib(${bibNumber})}">Bib</p>
+            <div th:if="${checkInQr}" style="text-align: center; margin: 16px 0;">
+                <img src="cid:checkInQr" width="200" height="200" alt="Check-in QR code" th:alt="#{email.checkInQr.alt}"/>
+                <p th:text="#{email.checkInQr.caption}">Show this code at check-in.</p>
+            </div>
             <p th:text="#{email.registrationApproved.closing}">See you</p>
             <p><span th:text="#{email.common.thanks}">Thank you,</span><br/><span th:text="#{email.common.team}">The Race Tracker Team</span></p>
         </div>

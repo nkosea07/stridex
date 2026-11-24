@@ -9,8 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { ApiError, resultsApi } from '@/lib/api'
-import type { RaceResult, RankingEntry } from '@/types'
+import { ApiError, racesApi, resultsApi } from '@/lib/api'
+import type { RaceResult, RaceStatus, RankingEntry } from '@/types'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { ResultReleasePanel } from '@/components/results/ResultReleasePanel'
@@ -33,6 +33,7 @@ export function ResultsPage() {
   const [activeTab, setActiveTab] = useState('overall')
   const [teamRankings, setTeamRankings] = useState<RankingEntry[]>([])
   const [countryRankings, setCountryRankings] = useState<RankingEntry[]>([])
+  const [raceStatus, setRaceStatus] = useState<RaceStatus | null>(null)
   const [rankingsLoading, setRankingsLoading] = useState(false)
 
   useEffect(() => {
@@ -105,6 +106,16 @@ export function ResultsPage() {
 
   const { user } = useAuth()
   const canManageResults = isAdminRole(user?.role)
+  const canPublish = canManageResults && raceStatus === 'COMPLETED'
+
+  useEffect(() => {
+    if (!raceId || !canManageResults) return
+    let active = true
+    racesApi.get(raceId)
+      .then((race) => { if (active) setRaceStatus(race.status) })
+      .catch(() => { if (active) setRaceStatus(null) })
+    return () => { active = false }
+  }, [raceId, canManageResults])
   const [releaseRefresh, setReleaseRefresh] = useState(0)
 
   const handlePublishResults = async () => {
@@ -227,7 +238,9 @@ export function ResultsPage() {
               <DropdownMenuItem onClick={() => void handleExportResults('pdf')}>{t('results:ui.pdf')}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button onClick={() => void handlePublishResults()}><Send className="mr-2 h-4 w-4" />{t('results:ui.publishResults')}</Button>
+          {canPublish && (
+            <Button onClick={() => void handlePublishResults()}><Send className="mr-2 h-4 w-4" />{t('results:ui.publishResults')}</Button>
+          )}
         </div>
       </div>
 

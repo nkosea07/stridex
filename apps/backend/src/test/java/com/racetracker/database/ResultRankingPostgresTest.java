@@ -126,6 +126,46 @@ class ResultRankingPostgresTest {
         }
     }
 
+    @Test
+    void finishersWithTheSameTimeShareAPosition() throws Exception {
+        UUID raceId = UUID.randomUUID();
+        UUID waveOne = UUID.randomUUID();
+        UUID waveTwo = UUID.randomUUID();
+        UUID finish = UUID.randomUUID();
+        try (Connection connection = DriverManager.getConnection(url, username, password)) {
+            execute(connection, "INSERT INTO races (id, name, race_type, race_date, start_time, timezone, status) "
+                + "VALUES (?, 'Tie Test', '10K', DATE '2026-11-22', TIME '08:00', 'UTC', 'COMPLETED')", raceId);
+            execute(connection, "INSERT INTO race_waves (id, race_id, name, started_at) VALUES "
+                + "(?, ?, 'Wave 1', TIMESTAMPTZ '2026-11-22 08:00:00+00')", waveOne, raceId);
+            execute(connection, "INSERT INTO race_waves (id, race_id, name, started_at) VALUES "
+                + "(?, ?, 'Wave 2', TIMESTAMPTZ '2026-11-22 08:05:00+00')", waveTwo, raceId);
+            execute(connection, "INSERT INTO checkpoints (id, race_id, name, checkpoint_type, order_index) "
+                + "VALUES (?, ?, 'Finish', 'FINISH', 1)", finish, raceId);
+
+            UUID fastest = participant(connection, raceId, waveOne, "FINISHED", "A");
+            UUID tiedEarly = participant(connection, raceId, waveOne, "FINISHED", "B");
+            UUID tiedLate = participant(connection, raceId, waveTwo, "FINISHED", "C");
+            UUID after = participant(connection, raceId, waveOne, "FINISHED", "D");
+            record(connection, raceId, fastest, finish, "2026-11-22 08:40:00+00");
+            record(connection, raceId, tiedEarly, finish, "2026-11-22 08:45:00.200+00");
+            record(connection, raceId, tiedLate, finish, "2026-11-22 08:50:00.700+00");
+            record(connection, raceId, after, finish, "2026-11-22 08:46:00+00");
+
+            Map<UUID, Long> positions = new LinkedHashMap<>();
+            try (PreparedStatement rows = prepare(connection, "findResultRows", raceId);
+                 ResultSet resultSet = rows.executeQuery()) {
+                while (resultSet.next()) {
+                    positions.put(resultSet.getObject("participantId", UUID.class), (Long) resultSet.getObject("overallPosition"));
+                }
+            }
+
+            assertThat(positions.get(fastest)).isEqualTo(1L);
+            assertThat(positions.get(tiedEarly)).isEqualTo(2L);
+            assertThat(positions.get(tiedLate)).isEqualTo(2L);
+            assertThat(positions.get(after)).isEqualTo(4L);
+        }
+    }
+
     private static UUID participant(Connection connection, UUID raceId, UUID waveId, String status, String name) throws Exception {
         UUID id = UUID.randomUUID();
         execute(connection, "INSERT INTO participants (id, race_id, wave_id, first_name, last_name, email, athlete_code, status) "

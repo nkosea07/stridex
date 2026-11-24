@@ -84,6 +84,7 @@ export type EndpointKey =
   | 'raceMediaAttestNonPerson'
   | 'myRegistrationMediaConsent'
   | 'myRegistrationLocationSharing'
+  | 'myRegistrationCheckInQr'
   | 'raceMediaReject'
   | 'raceMediaDelete'
   | 'publicRaceMedia'

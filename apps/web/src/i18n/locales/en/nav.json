@@ -227,5 +227,11 @@
     "dnf": "Did not finish",
     "finished": "Finished",
     "disqualified": "Disqualified"
-  }
+  },
+  "checkInQr": "Check-in QR",
+  "checkInQrTitle": "Your check-in QR code",
+  "checkInQrBody": "Show this code at the check-in desk on race day. Staff scan it to check you in.",
+  "checkInQrAlt": "Check-in QR code",
+  "checkInQrLoading": "Loading your QR code…",
+  "checkInQrFailed": "We could not load your check-in QR code. Please try again."
 }

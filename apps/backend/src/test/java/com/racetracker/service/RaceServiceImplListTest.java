@@ -49,7 +49,8 @@ class RaceServiceImplListTest {
     @BeforeEach
     void setUp() {
         service = new RaceServiceImpl(raceRepository, raceMapper, registrationFieldRepository, userRepository,
-            raceCompletionService, raceAccessGuard, auditEventService);
+            raceCompletionService, raceAccessGuard, auditEventService,
+            org.mockito.Mockito.mock(com.racetracker.service.impl.RegistrationCapacity.class));
     }
 
     @AfterEach

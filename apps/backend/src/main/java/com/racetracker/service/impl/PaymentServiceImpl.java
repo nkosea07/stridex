@@ -526,12 +526,14 @@ public class PaymentServiceImpl implements PaymentService {
             case "FAILED" -> {
                 payment.setStatus(Payment.PaymentStatus.FAILED);
                 paymentRepository.save(payment);
+                reopenUnpaidEntry(payment.getParticipant());
                 notifyPayment(payment.getParticipant(), com.racetracker.model.Notification.NotificationType.ALERT,
                     "payment.failed", raceName(payment.getParticipant()));
             }
             case "CANCELLED" -> {
                 payment.setStatus(Payment.PaymentStatus.CANCELLED);
                 paymentRepository.save(payment);
+                reopenUnpaidEntry(payment.getParticipant());
             }
             case "REVERSED" -> {
                 if (!reversalCaseRepository.existsById(payment.getId())) {
@@ -545,6 +547,15 @@ public class PaymentServiceImpl implements PaymentService {
             }
             default -> log.info("Pesepay transaction {} still pending with status {}", payment.getProviderRef(), normalized);
         }
+    }
+
+    private void reopenUnpaidEntry(Participant participant) {
+        if (participant == null || participant.getPaymentStatus() != Participant.PaymentStatus.PENDING
+            || paymentRepository.existsByParticipantIdAndStatus(participant.getId(), Payment.PaymentStatus.PENDING)) {
+            return;
+        }
+        participant.setPaymentStatus(Participant.PaymentStatus.UNPAID);
+        participantRepository.save(participant);
     }
 
     private PaymentDto toDto(Payment payment) {

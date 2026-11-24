@@ -47,7 +47,8 @@ class RaceServiceImplCloneTest {
     @BeforeEach
     void setUp() {
         service = new RaceServiceImpl(raceRepository, raceMapper, registrationFieldRepository, userRepository,
-            raceCompletionService, raceAccessGuard, auditEventService);
+            raceCompletionService, raceAccessGuard, auditEventService,
+            org.mockito.Mockito.mock(com.racetracker.service.impl.RegistrationCapacity.class));
         lenient().when(raceMapper.toDto(any(Race.class))).thenReturn(new RaceDto());
         lenient().when(raceRepository.save(any(Race.class))).thenAnswer(inv -> inv.getArgument(0));
     }

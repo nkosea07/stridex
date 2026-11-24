@@ -691,6 +691,9 @@ export const participantsApi = {
 
   myRegistrations: () => fetchApi<Registration[]>(API_CONTRACT.endpoints.myRegistrations),
 
+  checkInQr: (participantId: string) =>
+    fetchApi<import('@/types').CheckInQr>(buildContractPath(API_CONTRACT.endpoints.myRegistrationCheckInQr, { participantId })),
+
   withdraw: (registrationId: string) =>
     fetchApi<void>(buildContractPath(API_CONTRACT.endpoints.registrationDelete, { registrationId }), { method: 'DELETE' }),
 
