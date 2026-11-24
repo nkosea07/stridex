@@ -330,6 +330,14 @@
       "cancel": "Hou my inskrywing",
       "done": "Jy het uit die wedloop onttrek.",
       "failed": "Ons kon nie jou inskrywing onttrek nie. Probeer asseblief weer."
+    },
+    "checkInQr": {
+      "action": "Wys aanmeld-QR-kode",
+      "title": "Jou aanmeld-QR-kode",
+      "body": "Wys hierdie kode by die aanmeldtoonbank op wedloopdag. Personeel skandeer dit om jou aan te meld.",
+      "alt": "Aanmeld-QR-kode",
+      "failed": "Ons kon nie jou aanmeld-QR-kode laai nie. Probeer asseblief weer.",
+      "close": "Maak toe"
     }
   },
   "operations": {

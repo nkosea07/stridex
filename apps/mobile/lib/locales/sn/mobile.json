@@ -330,6 +330,14 @@
       "cancel": "Chengeta kunyoresa kwangu",
       "done": "Wabuda mumujaho.",
       "failed": "Hatina kukwanisa kubvisa kunyoresa kwako. Ndapota edza zvakare."
+    },
+    "checkInQr": {
+      "action": "Ratidza QR yekupinda",
+      "title": "Kodhi yako yeQR yekupinda",
+      "body": "Ratidza kodhi iyi patafura yekupinda pazuva remujaho. Vashandi vanoiverenga kuti vakunyore kuti wasvika.",
+      "alt": "Kodhi yeQR yekupinda",
+      "failed": "Hatina kukwanisa kuvhura kodhi yako yeQR yekupinda. Ndapota edza zvakare.",
+      "close": "Vhara"
     }
   },
   "operations": {

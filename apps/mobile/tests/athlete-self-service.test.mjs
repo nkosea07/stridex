@@ -49,6 +49,24 @@ describe('athlete self-service API', () => {
     expect(result.enabled).toBe(false)
   })
 
+  it('loads the check-in QR for the athlete entry', async () => {
+    const { api } = await import('../lib/api.ts')
+    const fetchMock = respond({ participantId: 'entry-1', content: 'AMS-PARTICIPANT-entry-1', imagePngBase64: 'iVBORw0KGgo=' })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const qr = await api.getCheckInQr('entry-1')
+
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/participants\/my-registrations\/entry-1\/check-in-qr$/)
+    expect(qr).toEqual({ participantId: 'entry-1', content: 'AMS-PARTICIPANT-entry-1', imagePngBase64: 'iVBORw0KGgo=' })
+  })
+
+  it('rejects a check-in QR response without an image', async () => {
+    const { api } = await import('../lib/api.ts')
+    vi.stubGlobal('fetch', respond({ participantId: 'entry-1', content: 'AMS-PARTICIPANT-entry-1' }))
+
+    await expect(api.getCheckInQr('entry-1')).rejects.toThrow(/missing required fields/)
+  })
+
   it('submits a result query and surfaces the open-query limit code', async () => {
     const { api } = await import('../lib/api.ts')
     const ok = respond({ id: 'q1', raceId: 'race-1', participantId: 'entry-1', message: 'Missing 10 km split', status: 'OPEN' })

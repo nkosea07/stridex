@@ -330,6 +330,14 @@
       "cancel": "Keep my entry",
       "done": "You have withdrawn from the race.",
       "failed": "We could not withdraw your entry. Please try again."
+    },
+    "checkInQr": {
+      "action": "Show check-in QR",
+      "title": "Your check-in QR code",
+      "body": "Show this code at the check-in desk on race day. Staff scan it to check you in.",
+      "alt": "Check-in QR code",
+      "failed": "We could not load your check-in QR code. Please try again.",
+      "close": "Close"
     }
   },
   "operations": {

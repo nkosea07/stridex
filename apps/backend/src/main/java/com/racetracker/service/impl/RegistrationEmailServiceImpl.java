@@ -22,6 +22,10 @@ import java.nio.charset.StandardCharsets;
 @RequiredArgsConstructor
 public class RegistrationEmailServiceImpl implements RegistrationEmailService {
 
+    private static final java.util.Set<String> CHECK_IN_QR_TEMPLATES = java.util.Set.of("registration-received", "registration-approved");
+    private static final String CHECK_IN_QR_CONTENT_ID = "checkInQr";
+    private static final int CHECK_IN_QR_SIZE = 240;
+
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
     private final RaceTrackerProperties raceTrackerProperties;
@@ -70,15 +74,22 @@ public class RegistrationEmailServiceImpl implements RegistrationEmailService {
         context.setVariable("bibNumber", participant.getBibNumber());
         context.setVariable("rejectionReason", participant.getRejectionReason());
         context.setVariable("waitlistPosition", participant.getWaitlistPosition());
+        boolean includeCheckInQr = CHECK_IN_QR_TEMPLATES.contains(template)
+            && com.racetracker.service.CheckInQr.available(participant);
+        context.setVariable("checkInQr", includeCheckInQr);
 
         try {
             String html = templateEngine.process(template, context);
             MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, StandardCharsets.UTF_8.name());
+            MimeMessageHelper helper = new MimeMessageHelper(message, includeCheckInQr, StandardCharsets.UTF_8.name());
             helper.setFrom(raceTrackerProperties.getEmail().getFromAddress());
             helper.setTo(participant.getEmail());
             helper.setSubject(subject);
             helper.setText(html, true);
+            if (includeCheckInQr) {
+                helper.addInline(CHECK_IN_QR_CONTENT_ID, new org.springframework.core.io.ByteArrayResource(
+                    com.racetracker.service.CheckInQr.png(participant.getId(), CHECK_IN_QR_SIZE)), "image/png");
+            }
             mailSender.send(message);
             log.info("Registration email sent to {} ({})", participant.getEmail(), template);
         } catch (MessagingException e) {

@@ -193,8 +193,11 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
                    t.start_time, t.finish_at, t.penalty_seconds,
                    CASE
                        WHEN t.start_time IS NULL OR t.finish_at IS NULL OR t.finish_at < t.start_time THEN NULL
-                       ELSE t.finish_at - t.start_time + make_interval(secs => t.penalty_seconds)
+                       ELSE date_trunc('second', t.finish_at - t.start_time + make_interval(secs => t.penalty_seconds))
                    END AS elapsed,
+                   CASE
+                       WHEN t.start_time IS NULL OR t.finish_at IS NULL OR t.finish_at < t.start_time THEN t.finish_at
+                   END AS untimed_finish,
                    CASE
                        WHEN t.date_of_birth IS NULL THEN 'UNKNOWN'
                        WHEN date_part('year', age(t.race_date, t.date_of_birth)) < 20 THEN 'U20'
@@ -208,10 +211,10 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
             FROM timed t
         ), finishers AS (
             SELECT b.participant_id,
-                   row_number() OVER (PARTITION BY b.race_id ORDER BY b.elapsed NULLS LAST, b.finish_at, b.participant_id) AS overall_position,
-                   row_number() OVER (PARTITION BY b.race_id, b.gender ORDER BY b.elapsed NULLS LAST, b.finish_at, b.participant_id) AS gender_position,
-                   row_number() OVER (PARTITION BY b.race_id, b.category_id ORDER BY b.elapsed NULLS LAST, b.finish_at, b.participant_id) AS category_position,
-                   row_number() OVER (PARTITION BY b.race_id, b.age_group ORDER BY b.elapsed NULLS LAST, b.finish_at, b.participant_id) AS age_group_position
+                   rank() OVER (PARTITION BY b.race_id ORDER BY b.elapsed NULLS LAST, b.untimed_finish) AS overall_position,
+                   rank() OVER (PARTITION BY b.race_id, b.gender ORDER BY b.elapsed NULLS LAST, b.untimed_finish) AS gender_position,
+                   rank() OVER (PARTITION BY b.race_id, b.category_id ORDER BY b.elapsed NULLS LAST, b.untimed_finish) AS category_position,
+                   rank() OVER (PARTITION BY b.race_id, b.age_group ORDER BY b.elapsed NULLS LAST, b.untimed_finish) AS age_group_position
             FROM base b
             WHERE b.status = 'FINISHED' AND b.finish_at IS NOT NULL
         )
@@ -311,6 +314,9 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     long countByRaceIdAndCategoryIdAndStatusIn(UUID raceId, UUID categoryId,
                                                Collection<Participant.ParticipantStatus> statuses);
+
+    @Query("select p.bibNumber from Participant p where p.race.id = :raceId and p.bibNumber like :pattern escape '\\'")
+    List<String> findBibNumbersByRaceIdLike(@Param("raceId") UUID raceId, @Param("pattern") String pattern);
 
     @Query("""
         select p from Participant p

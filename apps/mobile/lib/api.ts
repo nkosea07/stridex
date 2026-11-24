@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import type {
+  CheckInQr,
   AuthResponse,
   CapabilityUpdateRequest,
   FavoriteAthlete,
@@ -894,6 +895,15 @@ class ApiClient {
       body: JSON.stringify(data),
     });
     return parseRegistration(response);
+  }
+
+  async getCheckInQr(participantId: string): Promise<CheckInQr> {
+    const qr = parseRequiredRecord(await this.request<unknown>(
+      buildContractPath(API_CONTRACT.endpoints.myRegistrationCheckInQr, { participantId })), 'Check-in QR response was malformed.');
+    if (typeof qr.imagePngBase64 !== 'string' || !qr.imagePngBase64 || typeof qr.content !== 'string') {
+      throw new Error('Check-in QR response was missing required fields.');
+    }
+    return { participantId, content: qr.content, imagePngBase64: qr.imagePngBase64 };
   }
 
   async cancelRegistration(registrationId: string): Promise<void> {

@@ -40,7 +40,7 @@ public class ResultNotifier {
         List<Participant> participants = participantRepository.findByRaceId(raceId);
         int sent = 0;
         for (Participant participant : participants) {
-            if (participant.getUser() == null) {
+            if (participant.getUser() == null || !CheckpointProgression.isTimeableEntrant(participant.getStatus())) {
                 continue;
             }
             try {

@@ -330,6 +330,14 @@
       "cancel": "Gcina ukubhalisa kwami",
       "done": "Usuhoxile emjahweni.",
       "failed": "Asikwazanga ukuhoxisa ukubhalisa kwakho. Sicela uzame futhi."
+    },
+    "checkInQr": {
+      "action": "Bonisa i-QR yokungena",
+      "title": "Ikhodi yakho ye-QR yokungena",
+      "body": "Bonisa le khodi etafuleni lokungena ngosuku lomjaho. Abasebenzi bayayiskena ukuze bakubhalise ukuthi ufikile.",
+      "alt": "Ikhodi ye-QR yokungena",
+      "failed": "Asikwazanga ukulayisha ikhodi yakho ye-QR yokungena. Sicela uzame futhi.",
+      "close": "Vala"
     }
   },
   "operations": {

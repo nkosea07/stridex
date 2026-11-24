@@ -237,6 +237,7 @@ export interface Registration {
   mediaPublicationConsent?: boolean;
   publicLocationSharing?: boolean;
   canWithdraw?: boolean;
+  checkInQrAvailable?: boolean;
   teamId?: string;
   teamName?: string;
   rejectionReason?: string;
@@ -421,6 +422,12 @@ export interface ResultQuery {
   resolutionNote?: string | null;
   createdAt?: string | null;
   resolvedAt?: string | null;
+}
+
+export interface CheckInQr {
+  participantId: string;
+  content: string;
+  imagePngBase64: string;
 }
 
 export interface PaymentCheckout {

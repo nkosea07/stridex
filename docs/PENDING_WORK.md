@@ -186,5 +186,5 @@ The six High items are **Done**:
 - closed and draft races still accept registrations;
 - non-starters are never set to DNS at completion.
 
-The Medium items, FL-07 to FL-12, are **Done**, along with FL-13. FL-20 is partly done: withdrawals promote from the waitlist.
-The remaining Low items stay **Pending**: FL-14 to FL-19 and FL-21.
+The Medium items, FL-07 to FL-12, are **Done**, along with FL-13.
+The Low and Info items, FL-14 to FL-21, are **Done**.

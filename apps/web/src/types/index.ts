@@ -120,6 +120,12 @@ export interface AppNotification {
   timestamp?: string
 }
 
+export interface CheckInQr {
+  participantId: string
+  content: string
+  imagePngBase64: string
+}
+
 export interface Payment {
   id: string
   participantId: string
@@ -184,6 +190,7 @@ export interface Registration {
   mediaPublicationConsent?: boolean
   publicLocationSharing?: boolean
   canWithdraw?: boolean
+  checkInQrAvailable?: boolean
   emergencyContact?: { name?: string; phone?: string; relationship?: string }
   shirtSize?: string
   paymentStatus?: PaymentStatus

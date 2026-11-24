@@ -88,7 +88,9 @@ class ParticipantServiceImplRegistrationTest {
             participantCredentialService, teamRepository, registrationFieldRepository,
             registrationAnswerRepository, registrationEmailService, notificationService, importProcessor,
             capabilityAuthorizationService, raceAccessGuard, participantIdentityService, importSourceStore,
-            participantChangeControl
+            participantChangeControl,
+            new com.racetracker.service.impl.RegistrationCapacity(participantRepository, raceRepository,
+                participantIdentityService, notificationService)
         );
 
         user = User.builder()
@@ -535,7 +537,7 @@ class ParticipantServiceImplRegistrationTest {
             participantCredentialService, teamRepository, registrationFieldRepository,
             registrationAnswerRepository, registrationEmailService, notificationService, importProcessor,
             capabilityAuthorizationService, raceAccessGuard, participantIdentityService, importSourceStore,
-            participantChangeControl);
+            participantChangeControl, org.mockito.Mockito.mock(com.racetracker.service.impl.RegistrationCapacity.class));
         when(raceRepository.findById(raceId)).thenReturn(Optional.of(race));
         when(importJobRepository.save(any(com.racetracker.model.ImportJob.class))).thenAnswer(inv -> {
             com.racetracker.model.ImportJob job = inv.getArgument(0);
@@ -667,10 +669,12 @@ class ParticipantServiceImplRegistrationTest {
     void athleteWithdrawalMarksTheEntryWithdrawnAndRecordsTheChange() {
         Participant entry = ownEntry(Participant.ParticipantStatus.WAITLISTED);
         entry.setWaitlistPosition(3);
+        entry.setBibNumber("0042");
 
         service.cancelRegistration(entry.getId());
 
         assertThat(entry.getStatus()).isEqualTo(Participant.ParticipantStatus.WITHDRAWN);
+        assertThat(entry.getBibNumber()).isNull();
         assertThat(entry.getStatusReason()).isEqualTo("Withdrawn by the athlete");
         assertThat(entry.getWaitlistPosition()).isNull();
         verify(participantChangeControl).verifyAndRecord(any(), eq(entry), eq("Withdrawn by the athlete"));
@@ -888,6 +892,67 @@ class ParticipantServiceImplRegistrationTest {
         assertThat(registrations).extracting(RegistrationDto::isCanWithdraw).containsExactly(true, false);
         race.setStatus(Race.RaceStatus.IN_PROGRESS);
         assertThat(service.getMyRegistrations()).extracting(RegistrationDto::isCanWithdraw).containsExactly(false, false);
+    }
+
+    @Test
+    void approvalAllocatesTheBibAndRejectionReleasesItAndOffersThePlace() {
+        Participant approved = reviewable(Participant.PaymentStatus.WAIVED);
+        RegistrationApprovalRequest approve = new RegistrationApprovalRequest();
+        approve.setDecision("APPROVE");
+        when(participantRepository.countByRaceIdAndStatusIn(eq(raceId), any())).thenReturn(1L);
+        when(participantMapper.toDto(any(Participant.class))).thenReturn(new ParticipantDto());
+
+        service.reviewRegistration(raceId, approved.getId(), approve, email);
+
+        verify(participantIdentityService).assign(approved);
+
+        race.setWaitlistEnabled(true);
+        Participant rejected = reviewable(Participant.PaymentStatus.WAIVED);
+        rejected.setBibNumber("0005");
+        Participant next = waitlisted(category, 1);
+        when(participantRepository.findByRaceIdAndStatusOrderByWaitlistPositionAscRegisteredAtAsc(
+            raceId, Participant.ParticipantStatus.WAITLISTED)).thenReturn(List.of(next));
+        RegistrationApprovalRequest reject = new RegistrationApprovalRequest();
+        reject.setDecision("REJECT");
+
+        service.reviewRegistration(raceId, rejected.getId(), reject, email);
+
+        assertThat(rejected.getBibNumber()).isNull();
+        assertThat(next.getStatus()).isEqualTo(Participant.ParticipantStatus.REGISTERED);
+        verify(participantIdentityService).assign(next);
+    }
+
+    @Test
+    void athleteGetsACheckInQrOnlyForTheirOwnEntryThatCanBeCheckedIn() {
+        Participant entry = ownEntry(Participant.ParticipantStatus.CONFIRMED);
+        when(participantRepository.findById(entry.getId())).thenReturn(Optional.of(entry));
+
+        var qr = service.getMyCheckInQr(entry.getId());
+
+        assertThat(qr.content()).isEqualTo("AMS-PARTICIPANT-" + entry.getId());
+        byte[] png = java.util.Base64.getDecoder().decode(qr.imagePngBase64());
+        assertThat(png).startsWith((byte) 0x89, (byte) 'P', (byte) 'N', (byte) 'G');
+
+        Participant waiting = ownEntry(Participant.ParticipantStatus.WAITLISTED);
+        when(participantRepository.findById(waiting.getId())).thenReturn(Optional.of(waiting));
+        assertThatThrownBy(() -> service.getMyCheckInQr(waiting.getId()))
+            .isInstanceOf(com.racetracker.exception.ConflictException.class)
+            .extracting("code").isEqualTo("CHECK_IN_QR_UNAVAILABLE");
+
+        Participant someoneElse = ownEntry(Participant.ParticipantStatus.CONFIRMED);
+        someoneElse.setUser(User.builder().id(UUID.randomUUID()).email("other@example.com").build());
+        when(participantRepository.findById(someoneElse.getId())).thenReturn(Optional.of(someoneElse));
+        assertThatThrownBy(() -> service.getMyCheckInQr(someoneElse.getId()))
+            .isInstanceOf(com.racetracker.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    void registrationsSayWhetherACheckInQrIsAvailable() {
+        Participant confirmed = ownEntry(Participant.ParticipantStatus.CONFIRMED);
+        Participant pending = ownEntry(Participant.ParticipantStatus.PENDING_REVIEW);
+        when(participantRepository.findByUserIdOrderByRegisteredAtDesc(user.getId())).thenReturn(List.of(confirmed, pending));
+
+        assertThat(service.getMyRegistrations()).extracting(RegistrationDto::isCheckInQrAvailable).containsExactly(true, false);
     }
 
     private Participant waitlisted(RaceCategory waitingCategory, int position) {

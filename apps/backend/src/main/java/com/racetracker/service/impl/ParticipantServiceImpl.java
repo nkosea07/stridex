@@ -56,6 +56,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     private static final int MAX_PARTICIPANT_EXPORT_ROWS = 10_000;
 
     private static final String WITHDRAWN_BY_ATHLETE = "Withdrawn by the athlete";
+    private static final int CHECK_IN_QR_SIZE = 320;
 
     private static final EnumSet<Participant.ParticipantStatus> CANCELLABLE_STATUSES = EnumSet.of(
         Participant.ParticipantStatus.REGISTERED,
@@ -70,14 +71,8 @@ public class ParticipantServiceImpl implements ParticipantService {
         Race.RaceStatus.CANCELLED
     );
 
-    private static final EnumSet<Participant.ParticipantStatus> OCCUPYING_STATUSES = EnumSet.of(
-        Participant.ParticipantStatus.REGISTERED,
-        Participant.ParticipantStatus.CONFIRMED,
-        Participant.ParticipantStatus.CHECKED_IN,
-        Participant.ParticipantStatus.STARTED,
-        Participant.ParticipantStatus.FINISHED,
-        Participant.ParticipantStatus.PENDING_REVIEW
-    );
+    private static final java.util.Set<Participant.ParticipantStatus> OCCUPYING_STATUSES =
+        RegistrationCapacity.OCCUPYING_STATUSES;
 
     private final ParticipantRepository participantRepository;
     private final RaceRepository raceRepository;
@@ -100,6 +95,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     private final ParticipantIdentityService participantIdentityService;
 
     private final com.racetracker.service.ParticipantChangeControl participantChangeControl;
+    private final RegistrationCapacity registrationCapacity;
 
     public ParticipantServiceImpl(
         ParticipantRepository participantRepository,
@@ -121,7 +117,8 @@ public class ParticipantServiceImpl implements ParticipantService {
         RaceAccessGuard raceAccessGuard,
         ParticipantIdentityService participantIdentityService,
         ImportSourceStore importSourceStore,
-        com.racetracker.service.ParticipantChangeControl participantChangeControl
+        com.racetracker.service.ParticipantChangeControl participantChangeControl,
+        RegistrationCapacity registrationCapacity
     ) {
         this.participantRepository = participantRepository;
         this.raceRepository = raceRepository;
@@ -143,6 +140,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         this.participantIdentityService = participantIdentityService;
         this.importSourceStore = importSourceStore;
         this.participantChangeControl = participantChangeControl;
+        this.registrationCapacity = registrationCapacity;
     }
 
     @Override
@@ -287,9 +285,8 @@ public class ParticipantServiceImpl implements ParticipantService {
             throw new ApiException("A check-in QR code is required", "QR_CHECK_IN_CODE_REQUIRED");
         }
         String normalized = code.trim();
-        String prefix = "AMS-PARTICIPANT-";
-        if (normalized.startsWith(prefix)) {
-            normalized = normalized.substring(prefix.length());
+        if (normalized.startsWith(com.racetracker.service.CheckInQr.PREFIX)) {
+            normalized = normalized.substring(com.racetracker.service.CheckInQr.PREFIX.length());
         }
         UUID participantId;
         try {
@@ -615,11 +612,12 @@ public class ParticipantServiceImpl implements ParticipantService {
         participant.setStatus(Participant.ParticipantStatus.WITHDRAWN);
         participant.setStatusReason(WITHDRAWN_BY_ATHLETE);
         participant.setWaitlistPosition(null);
+        participant.setBibNumber(null);
         participantChangeControl.verifyAndRecord(before, participant, WITHDRAWN_BY_ATHLETE);
         participantRepository.save(participant);
 
         if (OCCUPYING_STATUSES.contains(previousStatus)) {
-            promoteFromWaitlist(race.getId());
+            registrationCapacity.fillFreedPlaces(race.getId());
         }
         if (participant.getPaymentStatus() == Participant.PaymentStatus.PAID) {
             notifyOrganizersAfterCommit(race, participant, "registration.withdrawn_paid",
@@ -627,25 +625,20 @@ public class ParticipantServiceImpl implements ParticipantService {
         }
     }
 
-    private void promoteFromWaitlist(UUID raceId) {
-        Race race = raceRepository.findByIdForUpdate(raceId).orElse(null);
-        if (race == null || isRaceFull(race)) {
-            return;
+    @Override
+    @Transactional(readOnly = true)
+    public com.racetracker.dto.participant.CheckInQrDto getMyCheckInQr(UUID participantId) {
+        capabilityAuthorizationService.require(com.racetracker.model.UserCapabilityType.ATHLETE);
+        User user = resolveCurrentUser();
+        Participant participant = participantRepository.findById(participantId)
+            .filter(found -> found.getUser() != null && user.getId().equals(found.getUser().getId()))
+            .orElseThrow(() -> new ResourceNotFoundException("Registration not found"));
+        if (!com.racetracker.service.CheckInQr.available(participant)) {
+            throw new ConflictException("Check-in is not available for this registration", "CHECK_IN_QR_UNAVAILABLE");
         }
-        for (Participant waiting : participantRepository.findByRaceIdAndStatusOrderByWaitlistPositionAscRegisteredAtAsc(
-            raceId, Participant.ParticipantStatus.WAITLISTED)) {
-            if (isCategoryFull(raceId, waiting.getCategory())) {
-                continue;
-            }
-            waiting.setStatus(Boolean.TRUE.equals(race.getRequireApproval())
-                ? Participant.ParticipantStatus.PENDING_REVIEW
-                : Participant.ParticipantStatus.REGISTERED);
-            waiting.setWaitlistPosition(null);
-            Participant promoted = participantRepository.save(waiting);
-            runAfterCommit(() -> notifyParticipant(promoted, com.racetracker.model.Notification.NotificationType.RACE_UPDATE,
-                "registration.place_offered", raceName(promoted)));
-            return;
-        }
+        return new com.racetracker.dto.participant.CheckInQrDto(participantId,
+            com.racetracker.service.CheckInQr.content(participantId),
+            java.util.Base64.getEncoder().encodeToString(com.racetracker.service.CheckInQr.png(participantId, CHECK_IN_QR_SIZE)));
     }
 
     private void clearPreviousEntry(Participant previous) {
@@ -677,11 +670,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     }
 
     private boolean isCategoryFull(UUID raceId, RaceCategory category) {
-        if (category == null || category.getMaxParticipants() == null) {
-            return false;
-        }
-        return participantRepository.countByRaceIdAndCategoryIdAndStatusIn(raceId, category.getId(), OCCUPYING_STATUSES)
-            >= category.getMaxParticipants();
+        return registrationCapacity.isCategoryFull(raceId, category);
     }
 
     private void notifyOrganizersAfterCommit(Race race, Participant participant, String templateCode, Object... args) {
@@ -738,6 +727,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         ensureReviewable(participant);
         UUID actorId = resolveUserId(actorEmail);
         String decision = request.getDecision() == null ? "" : request.getDecision().trim().toUpperCase(Locale.ROOT);
+        boolean heldPlace = OCCUPYING_STATUSES.contains(participant.getStatus());
 
         switch (decision) {
             case "APPROVE", "APPROVED", "CONFIRM", "CONFIRMED" -> {
@@ -760,6 +750,7 @@ public class ParticipantServiceImpl implements ParticipantService {
                 participant.setApprovedBy(actorId);
                 participant.setRejectionReason(null);
                 participant.setWaitlistPosition(null);
+                participantIdentityService.assign(participant);
             }
             case "REJECT", "REJECTED" -> {
                 participant.setStatus(Participant.ParticipantStatus.REJECTED);
@@ -767,6 +758,7 @@ public class ParticipantServiceImpl implements ParticipantService {
                 participant.setApprovedAt(null);
                 participant.setRejectionReason(request.getReason());
                 participant.setWaitlistPosition(null);
+                participant.setBibNumber(null);
             }
             case "WAITLIST", "WAITLISTED" -> {
                 boolean alreadyWaitlisted = participant.getStatus() == Participant.ParticipantStatus.WAITLISTED
@@ -777,11 +769,15 @@ public class ParticipantServiceImpl implements ParticipantService {
                 if (!alreadyWaitlisted) {
                     participant.setWaitlistPosition(nextWaitlistPosition(raceId));
                 }
+                participant.setBibNumber(null);
             }
             default -> throw new ApiException("Unknown registration decision: " + request.getDecision());
         }
 
         Participant saved = participantRepository.save(participant);
+        if (heldPlace && !OCCUPYING_STATUSES.contains(saved.getStatus())) {
+            registrationCapacity.fillFreedPlaces(raceId);
+        }
         sendReviewEmailAfterCommit(saved);
         return participantMapper.toDto(saved);
     }
@@ -956,11 +952,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     }
 
     private boolean isRaceFull(Race race) {
-        if (race.getMaxParticipants() == null) {
-            return false;
-        }
-        long occupying = participantRepository.countByRaceIdAndStatusIn(race.getId(), OCCUPYING_STATUSES);
-        return occupying >= race.getMaxParticipants();
+        return registrationCapacity.isRaceFull(race);
     }
 
     private void ensureReviewable(Participant participant) {
@@ -1254,6 +1246,7 @@ public class ParticipantServiceImpl implements ParticipantService {
         dto.setRegistrationDate(participant.getRegisteredAt());
         dto.setMediaPublicationConsent(participant.getMediaPublicationConsentAt() != null);
         dto.setPublicLocationSharing(participant.isPublicLocationSharing());
+        dto.setCheckInQrAvailable(com.racetracker.service.CheckInQr.available(participant));
         dto.setCanWithdraw(CANCELLABLE_STATUSES.contains(participant.getStatus())
             && participant.getRace() != null
             && !RACE_STATUSES_BLOCKING_CANCELLATION.contains(participant.getRace().getStatus()));

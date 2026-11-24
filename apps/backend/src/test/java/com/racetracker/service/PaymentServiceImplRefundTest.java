@@ -325,6 +325,38 @@ class PaymentServiceImplRefundTest {
     }
 
     @Test
+    void failedOrCancelledCheckoutReturnsTheEntryToUnpaid() {
+        for (String outcome : java.util.List.of("FAILED", "CANCELLED")) {
+            Payment payment = payment(Payment.PaymentStatus.PENDING);
+            payment.getParticipant().setPaymentStatus(Participant.PaymentStatus.PENDING);
+            properties.getPayments().setIntegrationKey("secret");
+            when(paymentRepository.findByProviderAndProviderRef("PESEPAY", "PROV-1")).thenReturn(Optional.of(payment));
+            when(paymentRepository.findByIdForUpdate(payment.getId())).thenReturn(Optional.of(payment));
+            when(pesepayClient.checkStatus("PROV-1")).thenReturn(outcome);
+            when(paymentRepository.existsByParticipantIdAndStatus(participantId, Payment.PaymentStatus.PENDING)).thenReturn(false);
+
+            service.handlePesepayCallback("secret", "{\"referenceNumber\":\"PROV-1\"}");
+
+            assertThat(payment.getParticipant().getPaymentStatus()).as(outcome).isEqualTo(Participant.PaymentStatus.UNPAID);
+        }
+    }
+
+    @Test
+    void anotherOpenCheckoutKeepsTheEntryPending() {
+        Payment payment = payment(Payment.PaymentStatus.PENDING);
+        payment.getParticipant().setPaymentStatus(Participant.PaymentStatus.PENDING);
+        properties.getPayments().setIntegrationKey("secret");
+        when(paymentRepository.findByProviderAndProviderRef("PESEPAY", "PROV-1")).thenReturn(Optional.of(payment));
+        when(paymentRepository.findByIdForUpdate(payment.getId())).thenReturn(Optional.of(payment));
+        when(pesepayClient.checkStatus("PROV-1")).thenReturn("FAILED");
+        when(paymentRepository.existsByParticipantIdAndStatus(participantId, Payment.PaymentStatus.PENDING)).thenReturn(true);
+
+        service.handlePesepayCallback("secret", "{\"referenceNumber\":\"PROV-1\"}");
+
+        assertThat(payment.getParticipant().getPaymentStatus()).isEqualTo(Participant.PaymentStatus.PENDING);
+    }
+
+    @Test
     void lateFailedCallbackCannotDowngradeCompletedPayment() {
         Payment payment = payment(Payment.PaymentStatus.COMPLETED);
         properties.getPayments().setIntegrationKey("secret");

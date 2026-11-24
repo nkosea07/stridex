@@ -330,6 +330,14 @@
       "cancel": "Garder mon inscription",
       "done": "Vous vous êtes retiré de la course.",
       "failed": "Impossible de retirer votre inscription. Veuillez réessayer."
+    },
+    "checkInQr": {
+      "action": "Afficher le QR d’enregistrement",
+      "title": "Votre code QR d’enregistrement",
+      "body": "Présentez ce code au comptoir d’enregistrement le jour de la course. Le personnel le scanne pour vous enregistrer.",
+      "alt": "Code QR d’enregistrement",
+      "failed": "Impossible de charger votre code QR d’enregistrement. Veuillez réessayer.",
+      "close": "Fermer"
     }
   },
   "operations": {

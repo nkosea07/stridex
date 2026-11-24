@@ -330,6 +330,14 @@
       "cancel": "Baki na usajili wangu",
       "done": "Umejiondoa kwenye mbio.",
       "failed": "Hatukuweza kuondoa usajili wako. Tafadhali jaribu tena."
+    },
+    "checkInQr": {
+      "action": "Onyesha QR ya kuingia",
+      "title": "Msimbo wako wa QR wa kuingia",
+      "body": "Onyesha msimbo huu kwenye meza ya kuingia siku ya mbio. Wahudumu wataukagua ili kukusajili kuwa umefika.",
+      "alt": "Msimbo wa QR wa kuingia",
+      "failed": "Hatukuweza kupakia msimbo wako wa QR wa kuingia. Tafadhali jaribu tena.",
+      "close": "Funga"
     }
   },
   "operations": {

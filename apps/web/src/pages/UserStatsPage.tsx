@@ -22,6 +22,7 @@ type MyRegistration = {
   mediaPublicationConsent?: boolean
   publicLocationSharing?: boolean
   canWithdraw?: boolean
+  checkInQrAvailable?: boolean
 }
 
 const ENTRY_STATUSES = new Set(['pending', 'pending_review', 'confirmed', 'waitlisted', 'cancelled', 'rejected',
@@ -54,6 +55,7 @@ export function UserStatsPage() {
   const [savingMediaConsentId, setSavingMediaConsentId] = useState<string | null>(null)
   const [savingLocationSharingId, setSavingLocationSharingId] = useState<string | null>(null)
   const [withdrawTarget, setWithdrawTarget] = useState<MyRegistration | null>(null)
+  const [checkInQr, setCheckInQr] = useState<{ registration: MyRegistration; image: string | null } | null>(null)
   const [isWithdrawing, setIsWithdrawing] = useState(false)
 
   useEffect(() => {
@@ -162,6 +164,18 @@ export function UserStatsPage() {
     }
   }
 
+  const showCheckInQr = async (registration: MyRegistration) => {
+    setCheckInQr({ registration, image: null })
+    try {
+      const qr = await participantsApi.checkInQr(registration.id)
+      setCheckInQr((current) => current?.registration.id === registration.id
+        ? { registration, image: `data:image/png;base64,${qr.imagePngBase64}` } : current)
+    } catch {
+      setCheckInQr(null)
+      toast.error(t('nav:checkInQrFailed'))
+    }
+  }
+
   const handleWithdraw = async () => {
     const registration = withdrawTarget
     if (!registration) return
@@ -208,15 +222,36 @@ export function UserStatsPage() {
                   <Badge variant="secondary">{t(`nav:entryStatus.${registration.status}`)}</Badge>
                 )}
               </div>
-              {registration.canWithdraw && (
-                <Button variant="outline" size="sm" onClick={() => setWithdrawTarget(registration)}>
-                  {t('nav:withdrawEntry')}
-                </Button>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {registration.checkInQrAvailable && (
+                  <Button variant="secondary" size="sm" onClick={() => void showCheckInQr(registration)}>
+                    {t('nav:checkInQr')}
+                  </Button>
+                )}
+                {registration.canWithdraw && (
+                  <Button variant="outline" size="sm" onClick={() => setWithdrawTarget(registration)}>
+                    {t('nav:withdrawEntry')}
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </CardContent>
       </Card>}
+
+      <Dialog open={checkInQr !== null} onOpenChange={(open) => { if (!open) setCheckInQr(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('nav:checkInQrTitle')}</DialogTitle>
+            <DialogDescription>{t('nav:checkInQrBody')}</DialogDescription>
+          </DialogHeader>
+          <div className="flex min-h-64 items-center justify-center" aria-live="polite">
+            {checkInQr?.image
+              ? <img src={checkInQr.image} alt={t('nav:checkInQrAlt')} className="h-64 w-64 rounded-lg bg-white p-2" />
+              : <p className="text-sm text-muted-foreground">{t('nav:checkInQrLoading')}</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={withdrawTarget !== null} onOpenChange={(open) => { if (!open && !isWithdrawing) setWithdrawTarget(null) }}>
         <DialogContent>

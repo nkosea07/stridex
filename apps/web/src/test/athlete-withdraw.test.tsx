@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   participantsApi: {
     myRegistrations: vi.fn(),
     withdraw: vi.fn(),
+    checkInQr: vi.fn(),
     updateMediaConsent: vi.fn(),
     updateLocationSharing: vi.fn(),
   },
@@ -82,6 +83,24 @@ describe('athlete race entries', () => {
     await waitFor(() => expect(screen.getByText('Withdrawn')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: 'Withdraw' })).toBeNull()
     expect(mocks.toast.success).toHaveBeenCalledWith('You have withdrawn from the race.')
+  })
+
+  it('shows the check-in QR for entries that can be checked in', async () => {
+    mocks.participantsApi.myRegistrations.mockResolvedValue([
+      { id: 'entry-1', raceId: 'race-1', status: 'confirmed', canWithdraw: true, checkInQrAvailable: true },
+      { id: 'entry-2', raceId: 'race-2', status: 'waitlisted', canWithdraw: true, checkInQrAvailable: false },
+    ])
+    mocks.participantsApi.checkInQr.mockResolvedValue({ participantId: 'entry-1', content: 'AMS-PARTICIPANT-entry-1',
+      imagePngBase64: 'iVBORw0KGgo=' })
+    render(<MemoryRouter><UserStatsPage /></MemoryRouter>)
+
+    const buttons = await screen.findAllByRole('button', { name: 'Check-in QR' })
+    expect(buttons).toHaveLength(1)
+    fireEvent.click(buttons[0])
+
+    const image = await screen.findByRole('img', { name: 'Check-in QR code' })
+    expect(image).toHaveAttribute('src', 'data:image/png;base64,iVBORw0KGgo=')
+    expect(mocks.participantsApi.checkInQr).toHaveBeenCalledWith('entry-1')
   })
 
   it('keeps the entry when the athlete cancels the confirmation', async () => {
